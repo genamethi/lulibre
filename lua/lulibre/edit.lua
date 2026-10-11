@@ -535,7 +535,7 @@ function M.summary(r)
   if #r.failed > 0 then
     s = s .. (", %d failed: %s"):format(#r.failed, r.failed[1].error or "?")
   end
-  return r.applied > 0 and s .. "  (u undoes)" or s
+  return r.applied > 0 and s .. ("  (%s undoes)"):format(lulibre.hint("undo")) or s
 end
 
 --- Recent batches, newest first:

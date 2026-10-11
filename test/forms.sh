@@ -51,7 +51,7 @@ $cdb add "$t/src/knots.pdf" --title "Knots" --authors "Ann Lee" --tags "math, to
 $cdb add "$t/src/sieve.pdf" --title "Sieve" --authors "Jane Roe" >/dev/null 2>&1
 $cdb add "$t/src/rings.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
 $cdb add --duplicates "$t/src/rings2.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
-$cdb set_metadata 1 --field publisher:Acme >/dev/null 2>&1
+$cdb set_metadata 1 --field publisher:Acme --field series:Lectures >/dev/null 2>&1
 
 run() { "$bin" --clean -L "$lib" "$@"; }
 lua() { printf '%s\n' "$1" > "$t/s.lua"; run run "$t/s.lua" 2>&1; }
@@ -108,6 +108,18 @@ shown "the form shows the blank to be written" "(blank)"
 k w
 shown "the change is written"                 "changed 1 book"
 expect "the tags are gone"                    "" "$(field 1 tags)"
+k Escape # clears the message line, so the next "changed" is the next write's
+sleep 0.2
+k e
+shown "the edit form opens again"             "edit  1  Knots"
+shown "its hint names the keys"               "c clear"
+k j j j c
+shown "c blanks the field under the cursor"   "cleared"
+k "?"
+shown "? lists the form's keys"               "blank the field"
+k q w
+shown "and the blank is written"              "changed 1 book"
+expect "the series is gone"                   "" "$(field 1 series)"
 k BSpace
 wait_for "all books"
 

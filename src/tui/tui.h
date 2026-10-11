@@ -69,6 +69,9 @@ size_t dr_wrap(const char *s, size_t len, int maxw);
 /* A key is a code point or NCKEY_* value, plus modifier bits. */
 #define KEY_CTRL (1u << 30)
 #define KEY_ALT (1u << 29)
+/* <Leader> in a binding: whichever key the `leader` option names when the
+ * key arrives, so changing the option moves every such binding at once */
+#define KEY_LEADER (1u << 28)
 
 enum mode {
   MODE_NORMAL = 1,
@@ -89,6 +92,7 @@ struct binding {
 struct keymap {
   struct binding *b;
   int n, cap;
+  uint32_t leader; /* the key KEY_LEADER matches; 0 for none */
   uint32_t pending[KEYSEQ_MAX];
   int npending;
 };
@@ -102,6 +106,15 @@ int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char 
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
 const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
 void keymap_free(struct keymap *km);
+/* For a hint on screen: the keys the global keymap has for a command line
+ * in normal mode, or ":command" when it has none. The text is good until
+ * four more calls. */
+const char *key_hint(const char *command);
+/* Set what <Leader> stands for, from the option's text. */
+void keymap_set_leader(struct keymap *km, const char *spec);
+/* The keys a command line is bound to in this mode, written as a person
+ * would type them into `out`; 0 when it has no binding. */
+int keymap_key_of(const struct keymap *km, unsigned mode, const char *command, sbuf *out);
 void keymap_defaults(struct keymap *km);
 extern struct keymap tui_keymap;
 /* Register the built-in commands and keys; safe to call more than once. */

@@ -6,6 +6,22 @@
 #include "app.h"
 #include "core/util.h"
 
+int app_apply_cli(struct app *app, char **err) {
+  if (app->cli_library && config_set(&app->cfg, "library", app->cli_library, err)) return -1;
+  for (int k = 0; k < app->ncli_sets; k++) {
+    const char *eq = strchr(app->cli_sets[k], '=');
+    if (!eq) {
+      *err = xasprintf("-o wants name=value, got '%s'", app->cli_sets[k]);
+      return -1;
+    }
+    char *name = xstrndup(app->cli_sets[k], (size_t)(eq - app->cli_sets[k]));
+    int rc = config_set(&app->cfg, name, eq + 1, err);
+    free(name);
+    if (rc) return -1;
+  }
+  return 0;
+}
+
 int app_jobs(const struct app *app) {
   int n = app->cfg.jobs;
   if (n <= 0) n = (int)uv_available_parallelism();

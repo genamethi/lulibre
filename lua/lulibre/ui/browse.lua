@@ -5,7 +5,7 @@ local M = {}
 
 M.facets = { "author", "subject", "series", "publisher", "year", "format" }
 
-local HELP = "l open  h close  / find  s sort  f facet"
+local keys = require("lulibre.ui.keys").of("browse")
 
 local function quote(s)
   return '"' .. tostring(s):gsub('"', '\\"') .. '"'
@@ -134,7 +134,7 @@ function M.run(args)
   end
   local rows = build()
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, side = "left", width = 0.27, moves = true,
+    title = title(), help = keys:hint("open", "find", "facet"), side = "left", width = 0.27, moves = true,
     columns = { { facet, -1 }, { "", 5 } }, rows = rows,
   }
 
@@ -170,15 +170,18 @@ function M.run(args)
     local key, row = p:wait()
     if not key then return end
     local node = shown[row]
+    local act = keys:action(key)
     if key == "<Move>" then
       apply(node)
-    elseif key == "<CR>" or key == "l" or key == "<Right>" then
+    elseif act == "help" then
+      keys:show("browse")
+    elseif act == "toggle" or act == "open" then
       if node and node.children and #node.children > 0 then
-        if key == "<CR>" then open[node.path] = not open[node.path] or nil else open[node.path] = true end
+        if act == "toggle" then open[node.path] = not open[node.path] or nil else open[node.path] = true end
         refresh(node)
       end
       apply(node)
-    elseif key == "h" or key == "<Left>" then
+    elseif act == "close" then
       if node and node.path then
         if open[node.path] then
           open[node.path] = nil
@@ -195,17 +198,17 @@ function M.run(args)
           end
         end
       end
-    elseif key == "s" then
+    elseif act == "sort" then
       by_name = not by_name
       refresh(node)
-    elseif key == "f" or key == "F" then
+    elseif act == "facet" or act == "facet_back" then
       local at = 1
       for i, f in ipairs(M.facets) do
         if f == facet then at = i end
       end
-      switch(M.facets[(at - 1 + (key == "f" and 1 or -1)) % #M.facets + 1])
+      switch(M.facets[(at - 1 + (act == "facet" and 1 or -1)) % #M.facets + 1])
       apply(shown[1])
-    elseif key == "/" then
+    elseif act == "find" then
       if facet == "subject" then
         -- look through the whole tree, not only what is opened
         local function all(list)

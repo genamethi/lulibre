@@ -8,7 +8,7 @@ local template = require "lulibre.template"
 
 local M = {}
 
-local HELP = "p pattern   s source   w write   P propose   m mark matches   S save rule   L load rule   q close"
+local keys = require("lulibre.ui.keys").of("capture")
 
 local function basename(path)
   return ((path or ""):gsub("^.*/", ""):gsub("%.%w+$", ""))
@@ -144,7 +144,7 @@ function M.run(args)
 
   recompute()
   local cols, rows, title = view()
-  local p <close> = lulibre.panel { title = title, help = HELP, follow = true, columns = cols, rows = rows, height = 0.45 }
+  local p <close> = lulibre.panel { title = title, help = keys:hint("pattern", "source", "write", "propose"), follow = true, columns = cols, rows = rows, height = 0.45 }
   local function refresh()
     cols, rows, title = view()
     p:columns(cols)
@@ -155,7 +155,10 @@ function M.run(args)
   while true do
     local key = p:wait()
     if not key then return end
-    if key == "p" or key == "<CR>" then
+    local act = keys:action(key)
+    if act == "help" then
+      keys:show("capture")
+    elseif act == "pattern" then
       local saved, sugg = M.rules(), {}
       for name, rule in pairs(saved) do sugg[#sugg + 1] = { text = rule.spec, detail = name } end
       sugg[#sugg + 1] = { text = "%author% - %title%", detail = "example" }
@@ -172,7 +175,7 @@ function M.run(args)
       }
       spec = v or before
       recompute()
-    elseif key == "s" then
+    elseif act == "source" then
       local names = {}
       for i, s in ipairs(M.sources) do names[i] = s.name end
       local pick = lulibre.pick(names, { title = "run the pattern against" })
@@ -180,11 +183,11 @@ function M.run(args)
         source = pick
         recompute()
       end
-    elseif key == "L" then
+    elseif act == "load" then
       local saved, names = M.rules(), {}
       for name, rule in pairs(saved) do names[#names + 1] = { text = name, detail = rule.spec } end
       if #names == 0 then
-        lulibre.notify("no saved rules yet: S saves the current pattern")
+        lulibre.notify(("no saved rules yet: %s saves the current pattern"):format(keys:key("save") or "save"))
       else
         local pick = lulibre.pick(names, { title = "rules" })
         if pick then
@@ -192,31 +195,31 @@ function M.run(args)
           recompute()
         end
       end
-    elseif key == "S" and compiled then
+    elseif act == "save" and compiled then
       local name = lulibre.input { prompt = "save this pattern as: " }
       if name and name ~= "" then
         M.save_rule(name, source, spec)
         lulibre.notify("saved rule " .. name)
       end
-    elseif key == "m" and results then
+    elseif act == "mark" and results then
       local n = 0
       for _, r in ipairs(results) do
         lulibre.mark(r.id, r.fields ~= nil)
         if r.fields then n = n + 1 end
       end
       lulibre.notify(("%d marked"):format(n))
-    elseif (key == "w" or key == "P") and results then
+    elseif (act == "write" or act == "propose") and results then
       local changes = changes_of(results)
       if #changes == 0 then
         lulibre.notify("the pattern matches nothing here")
-      elseif key == "P" then
+      elseif act == "propose" then
         local n = 0
         for _, c in ipairs(changes) do
           if proposals.add(c.id, c.field, c.value, { op = c.op, source = "capture: " .. spec, confidence = 0.7 }) then
             n = n + 1
           end
         end
-        lulibre.notify(("%d proposals added; :review to go through them"):format(n))
+        lulibre.notify(("%d proposals added; %s goes through them"):format(n, lulibre.hint("review")))
       else
         p:close()
         local r = edit.apply(changes, { label = "capture: " .. spec })

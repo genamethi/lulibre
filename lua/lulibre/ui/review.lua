@@ -11,7 +11,7 @@ local suggest = require "lulibre.suggest"
 
 local M = {}
 
-local HELP = "a accept   r reject   e edit   x other fields   X all   A accept all above…   R reject rest   w write   q close"
+local keys = require("lulibre.ui.keys").of("review")
 
 -- the fields a book opens up to, in the order they are shown
 M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "identifiers" }
@@ -109,7 +109,7 @@ function M.run()
       proposals.count("pending", scope), proposals.count("accepted", scope))
   end
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, follow = true, height = 0.42,
+    title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows,
   }
@@ -134,36 +134,12 @@ function M.run()
     local item = items[row]
     local pr = item and not item.heading and not item.plain and item or nil
     local keep = key_of(item) -- where the cursor should be after the rows change
-    if key == "w" then
-      if proposals.count("accepted", scope) == 0 then
-        lulibre.notify("nothing accepted yet: a accepts the proposal under the cursor")
-      else
-        p:close()
-        local r = proposals.apply_accepted(scope)
-        lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
-        return
-      end
-    elseif item and key == "x" then
-      open[item.book] = not open[item.book] or nil
-    elseif key == "X" then
-      local any = next(open) ~= nil
-      open = {}
-      if not any then
-        for _, it in ipairs(items) do
-          if it.heading then open[it.book] = true end
-        end
-      end
-    elseif pr and key == "a" then
-      if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
-      keep = key_of(items[row + 1]) or keep
-    elseif pr and key == "r" then
-      proposals.set_status(pr.id, "rejected")
-      -- an opened book shows the field as it stands in the proposal's place
-      keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
-    elseif pr and (key == "e" or key == "<CR>") then
-      local v = ask(pr.book, pr.field, pr.value)
-      local book = v and lulibre.book(pr.book)
-      if book then
+    local act = keys:action(key)
+    -- what a field is to become: v is what was typed, "" to blank it
+    local function answer(v)
+      if pr then
+        local book = lulibre.book(pr.book)
+        if not book then return end
         -- an empty answer blanks the field, which only "set" can mean
         local op = v == "" and "set" or pr.op
         local ok, to = pcall(edit.resolve, book, pr.field, op, v)
@@ -178,12 +154,8 @@ function M.run()
           pr.value, pr.op = v, op
           proposals.accept(pr)
         end
-      end
-    elseif item and item.plain and (key == "e" or key == "<CR>" or key == "a") then
-      -- a field nothing was proposed for: what is typed becomes an accepted proposal
-      local book = lulibre.book(item.book)
-      local v = book and ask(item.book, item.field, edit.current(book, item.field))
-      if v then
+      else
+        -- a field nothing was proposed for: the answer becomes an accepted proposal
         for _, c in ipairs(edit.typed(item.book, item.field, v)) do
           local ok, added, pid = pcall(proposals.add, c.id, c.field, c.value, { op = c.op, source = "typed", confidence = 1 })
           if not ok then
@@ -194,7 +166,45 @@ function M.run()
           end
         end
       end
-    elseif key == "A" then
+    end
+    if act == "help" then
+      keys:show("review")
+    elseif act == "write" then
+      if proposals.count("accepted", scope) == 0 then
+        lulibre.notify(("nothing accepted yet: %s accepts the proposal under the cursor"):format(keys:key("accept") or "accept"))
+      else
+        p:close()
+        local r = proposals.apply_accepted(scope)
+        lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+        return
+      end
+    elseif item and act == "expand" then
+      open[item.book] = not open[item.book] or nil
+    elseif act == "expand_all" then
+      local any = next(open) ~= nil
+      open = {}
+      if not any then
+        for _, it in ipairs(items) do
+          if it.heading then open[it.book] = true end
+        end
+      end
+    elseif pr and act == "accept" then
+      if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
+      keep = key_of(items[row + 1]) or keep
+    elseif pr and act == "reject" then
+      proposals.set_status(pr.id, "rejected")
+      -- an opened book shows the field as it stands in the proposal's place
+      keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
+    elseif pr and act == "edit" then
+      local v = ask(pr.book, pr.field, pr.value)
+      if v then answer(v) end
+    elseif item and item.plain and (act == "edit" or act == "accept") then
+      local book = lulibre.book(item.book)
+      local v = book and ask(item.book, item.field, edit.current(book, item.field))
+      if v then answer(v) end
+    elseif item and not item.heading and act == "clear" then
+      answer("")
+    elseif act == "accept_above" then
       local v = lulibre.input { prompt = "accept every pending proposal with confidence at least: ", default = "0.8" }
       local floor = tonumber(v or "")
       if floor then
@@ -211,9 +221,9 @@ function M.run()
             n = n + 1
           end
         end
-        lulibre.notify(("accepted %d; w writes them"):format(n))
+        lulibre.notify(("accepted %d; %s writes them"):format(n, keys:key("write") or "write"))
       end
-    elseif key == "R" then
+    elseif act == "reject_rest" then
       if lulibre.confirm("reject every proposal still pending?") then
         lulibre.store("UPDATE proposals SET status = 'rejected' WHERE status = 'pending' AND " ..
           (scope == "sync" and "book < 0" or "book > 0"))

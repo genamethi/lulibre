@@ -734,7 +734,8 @@ static void draw_status(struct tui *t, int y) {
                                     sched_live(t->app) == 1 ? "" : "s");
   if (t->progress) sb_printf(&right, "%s   ", t->progress);
   uint64_t unseen = log_errors() - t->errors_seen;
-  if (unseen) sb_printf(&right, "%llu error%s (`)   ", (unsigned long long)unseen, unseen == 1 ? "" : "s");
+  if (unseen) sb_printf(&right, "%llu error%s (%s)   ", (unsigned long long)unseen, unseen == 1 ? "" : "s",
+                        key_hint("console"));
   if (t->ix) sb_printf(&right, "indexing %d/%d   ", t->ix_done, t->ix_total);
   if (r->search) sb_printf(&right, "/%s: %d   ", r->search, r->nhits);
   if (r->nmarks) sb_printf(&right, "%d marked   ", r->nmarks);
@@ -763,7 +764,7 @@ static void draw_status(struct tui *t, int y) {
     fx += dr_text(n, y, fx, end - fx, "filter ");
     dr_style(n, C_DEFAULT, theme.bar_bg, A_BOLD);
     fx += dr_text(n, y, fx, end - fx, r->filter);
-    char *hint = xasprintf("   %d of %d   <BS> shows all", r->n, r->total);
+    char *hint = xasprintf("   %d of %d   %s shows all", r->n, r->total, key_hint("filter"));
     if (!r->running && fx + dr_width(hint, strlen(hint)) <= end) {
       dr_style(n, theme.dim, theme.bar_bg, 0);
       dr_text(n, y, fx, end - fx, hint);
@@ -877,8 +878,12 @@ static void draw_tabs(struct tui *t) {
     dr_style(n, theme.border, theme.bar_bg, 0);
     if (i == 0) x += dr_text(n, 0, x, t->cols_n - x, "│");
   }
-  const char *hint = t->rows.source ? "S add   X add and remove   D drop   1 library"
-                                    : "2 shows what is waiting in the sync folder";
+  char hint[200];
+  if (t->rows.source)
+    snprintf(hint, sizeof hint, "%s add   %s add and remove   %s drop   %s library", key_hint("sync add"),
+             key_hint("sync move"), key_hint("sync drop"), key_hint("source library"));
+  else
+    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("sync"));
   int hw = dr_width(hint, strlen(hint));
   if (x + hw + 3 < t->cols_n) {
     dr_style(n, theme.dim, theme.bar_bg, 0);
@@ -893,6 +898,7 @@ static void render(struct tui *t) {
   t->cols_n = (int)cols;
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
+  keymap_set_leader(t->km, t->app->cfg.leader);
   if (t->rows_n >= 4 && t->cols_n >= 20) {
     int top = tabs_shown(t) ? 1 : 0;
     wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});

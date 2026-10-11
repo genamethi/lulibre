@@ -114,8 +114,43 @@ name can be dragged over on the page and pasted with `<C-v>`.
 
 The edit form, review, capture, duplicates, orphans and the tree browser are
 panels. `j` `k` `gg` `G` and paging move within one; `q` or `Esc` closes it;
-`Tab`, `:` and `<C-w>` keep their meaning. Its own keys are shown in its
-title bar.
+`Tab`, `:` and `<C-w>` keep their meaning. The title bar shows a panel's
+main keys, and `?` lists all of them with what each does.
+
+A panel's keys can be changed. Each has named actions (`?` lists them), and
+`lulibre.map` with the panel's name in place of the modes puts a key on one:
+
+```lua
+lulibre.map("review", "y", "accept")   -- y accepts, and is the key the hint shows
+lulibre.map("review", "a", "")         -- a no longer does anything in review
+```
+
+The panels are `edit`, `review`, `dupes`, `orphans`, `capture` and `browse`.
+Moving and closing (`j k gg G q Esc`) are the same in every panel and are
+not configurable, nor are the keys of the line being typed or of a picker.
+
+## The leader key
+
+`<Leader>` in a binding stands for the key the option `leader` names, `\` by
+default. Changing the option moves every `<Leader>` binding at once.
+
+```lua
+lulibre.o.leader = ","
+lulibre.map("n", "<Leader>i", "index")     -- ,i
+```
+
+| Key | Command | |
+|---|---|---|
+| `<Leader>R` | `reload-cfg` | read `init.lua` again |
+
+`:reload-cfg` first puts every key back to the built-in ones, so a binding
+you took out of `init.lua` is gone, then runs the file. Options keep their
+values unless the file sets them, and what the command line set (`-L`, `-o`)
+is applied on top again. The library and index are chosen at start; changing
+them needs a restart.
+
+Hints on screen (the status line, the tab line, messages such as "u undoes")
+name the keys as they are bound now.
 
 ## Your own
 

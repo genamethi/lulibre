@@ -6,7 +6,7 @@ local suggest = require "lulibre.suggest"
 
 local M = {}
 
-local HELP = "Enter edit   Space next suggestion   a fill gaps   x clear   w write   q cancel"
+local keys = require("lulibre.ui.keys").of("edit")
 
 local function is_gap(field, value)
   if value == "" then return true end
@@ -56,7 +56,7 @@ function M.run()
   local title = #books == 1 and ("edit  %d  %s"):format(ids[1], books[1].title or "")
     or ("edit  %d books"):format(#books)
   local p <close> = lulibre.panel {
-    title = title, help = HELP, height = 0.38,
+    title = title, help = keys:hint("edit", "suggest", "clear", "write"), height = 0.38,
     columns = { { "Field", 12 }, { "Now", -3 }, { "New", -3 }, { "From", 26 } },
     rows = rows(),
   }
@@ -65,8 +65,11 @@ function M.run()
     local key, row = p:wait()
     if not key then return end
     local field = edit.fields[row]
-    if key == "w" then break end
-    if field and (key == "<CR>" or key == "e" or key == "i") then
+    local act = keys:action(key)
+    if act == "write" then break end
+    if act == "help" then
+      keys:show("edit")
+    elseif field and act == "edit" then
       local list = edit.separator[field]
       local v = lulibre.input {
         prompt = field .. (list and #books > 1 and " (+add, -remove, or a new value): " or ": "),
@@ -81,22 +84,29 @@ function M.run()
         if ok then new[field], from[field] = v, "typed"
         else lulibre.notify(tostring(err), "error") end
       end
-    elseif field and key == "<Space>" then
+    elseif field and act == "suggest" then
       -- step through what the files and related books suggest
       local picks = {}
       for _, s in ipairs(suggestions(field)) do
         if s.kind ~= "library" then picks[#picks + 1] = s end
       end
       if #picks == 0 then
-        lulibre.notify("nothing to suggest for " .. field .. "; Enter to type a value")
+        lulibre.notify(("nothing to suggest for %s; %s to type a value"):format(field, keys:key("edit") or "edit"))
       else
         at[field] = (at[field] or 0) % #picks + 1
         new[field] = picks[at[field]].text
         from[field] = ("%d/%d  %s"):format(at[field], #picks, picks[at[field]].detail or "")
       end
-    elseif field and key == "x" then
+    elseif field and act == "revert" then
       new[field], from[field], at[field] = nil, nil, nil
-    elseif key == "a" then
+    elseif field and act == "clear" then
+      if now(field) == "" then
+        new[field], from[field], at[field] = nil, nil, nil
+        lulibre.notify(field .. " is empty already")
+      else
+        new[field], from[field], at[field] = "", "cleared", nil
+      end
+    elseif act == "fill" then
       -- take the best suggestion from the files for every field that is empty
       local filled = 0
       for _, f in ipairs(edit.fields) do
@@ -111,8 +121,8 @@ function M.run()
           end
         end
       end
-      lulibre.notify(filled > 0 and ("filled %d field%s; w writes them"):format(filled, filled == 1 and "" or "s")
-        or "no gaps the files could fill")
+      lulibre.notify(filled > 0 and ("filled %d field%s; %s writes them"):format(filled, filled == 1 and "" or "s",
+        keys:key("write") or ":w") or "no gaps the files could fill")
     end
     p:rows(rows())
   end

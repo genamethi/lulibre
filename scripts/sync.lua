@@ -35,7 +35,8 @@ if what == "" or what == "scan" then
     return
   end
   lulibre.source("sync")
-  lulibre.notify(msg .. "   (S adds the selection, X adds and removes; gl is the library)")
+  lulibre.notify(msg .. ("   (%s adds the selection, %s adds and removes; %s is the library)"):format(
+    lulibre.hint("sync add"), lulibre.hint("sync move"), lulibre.hint("source library")))
   -- read the new files' title pages, if wanted
   if r.new > 0 and lulibre.policy("sync_propose", ("propose metadata for the %d new files from their title pages?"):format(r.new)) then
     lulibre.index { filter = "in:sync" }
@@ -54,7 +55,7 @@ if lulibre.headless or rest ~= "" then
   ids = lulibre.ids("in:sync " .. (rest == "all" and "" or rest))
 else
   if lulibre.source() ~= "sync" then
-    lulibre.notify("the list is showing the library; gS shows the sync folder", "error")
+    lulibre.notify(("the list is showing the library; %s shows the sync folder"):format(lulibre.hint("sync")), "error")
     return
   end
   ids = lulibre.selection()
@@ -70,8 +71,8 @@ if what == "move" and not lulibre.headless then
   end
 end
 if what == "drop" then
-  if not lulibre.headless and not lulibre.confirm(("take %d file%s out of the sync folder without adding %s? (u puts %s back)"):format(
-      #ids, #ids == 1 and "" or "s", #ids == 1 and "it" or "them", #ids == 1 and "it" or "them")) then
+  if not lulibre.headless and not lulibre.confirm(("take %d file%s out of the sync folder without adding %s? (%s puts %s back)"):format(
+      #ids, #ids == 1 and "" or "s", #ids == 1 and "it" or "them", lulibre.hint("undo"), #ids == 1 and "it" or "them")) then
     return
   end
   local out = sync.drop(ids)
