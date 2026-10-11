@@ -45,6 +45,19 @@ function M.from_doc(doc)
     if lab.jstor then add("identifiers", "jstor:" .. lab.jstor, "cover sheet", sure) end
   end
 
+  -- a thesis cover follows a template, which also survives OCR
+  local th = titlepage.thesis(doc.pages and doc.pages[1] or doc.lines)
+  if th then
+    if th.authors and #th.authors > 0 then
+      local people = {}
+      for i, a in ipairs(th.authors) do people[i] = names.titlecase(a) end
+      add("authors", join(people), "thesis cover", 0.8)
+    end
+    if th.title and not junk.title(th.title) then add("title", names.title_caps(th.title), "thesis cover", 0.75) end
+    if th.year then add("pubdate", th.year, "thesis cover", 0.75) end
+    if th.institution then add("publisher", th.institution, "thesis cover", 0.7) end
+  end
+
   -- the title page
   local tp = doc.pages and titlepage.classify_pages(doc.pages) or titlepage.classify(doc.lines or {})
   local conf = tp.arxiv and 0.85 or 0.55

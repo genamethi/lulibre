@@ -44,6 +44,11 @@ Scripts do not change the library; they *propose*, and you review.
     :run normalize-tags          one spelling for subjects that exist under two
     :run bib-import FILE         what a .bib file says about books it matches
 
+`propose` reads the first pages: an arXiv stamp, a cover sheet that labels
+its fields (JSTOR's "Author(s):"), a thesis cover (title above "by", author
+after it, institution, year), or failing those the largest type on the page.
+Each proposal carries where it came from and how sure it is.
+
 `gr` lists the proposals book by book, with the current value beside each;
 the list and preview follow the cursor, so the title page is in view.
 

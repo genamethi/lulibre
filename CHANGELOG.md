@@ -6,6 +6,10 @@ written in `src/version.h`.
 ## 0.2.0 (in development, branch `0.2.0`)
 
 Added
+- Thesis and dissertation cover pages are read by rule (title above "by",
+  author after it, degree, program, institution, year, advisor), following
+  Choudhury et al., JCDL 2020. It needs no font information, so it also works
+  on pages read by OCR.
 
 ## 0.1.0-alpha.2
 

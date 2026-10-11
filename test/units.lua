@@ -430,5 +430,26 @@ do
     { "Herbert S. Wilf", true, "1982" })
 end
 
+-- thesis cover pages, by rule (works on OCR text: no font sizes needed)
+do
+  local th = titlepage.thesis {
+    "ON THE STRUCTURE OF", "FINITE WIDGETS", "by", "Jane Q. Roe",
+    "B.S., Some State University (1961)", "Submitted in partial fulfillment of the requirements",
+    "for the degree of", "Doctor of Philosophy in Mathematics", "at the",
+    "MASSACHUSETTS INSTITUTE OF TECHNOLOGY", "June, 1968", "Certified by", "Arthur B. Guide", "Thesis Supervisor",
+  }
+  eq("thesis: title and author either side of by", { th.title, th.authors }, { "ON THE STRUCTURE OF FINITE WIDGETS", { "Jane Q. Roe" } })
+  eq("thesis: degree, program, year", { th.degree, th.program, th.year }, { "Doctor of Philosophy", "Mathematics", "1968" })
+  eq("thesis: institution, advisor", { th.institution, th.advisor }, { "MASSACHUSETTS INSTITUTE OF TECHNOLOGY", "Arthur B. Guide" })
+  local vt = titlepage.thesis {
+    "Soil Moisture and Yield", "by John Smith", "Dissertation submitted to the Faculty of the",
+    "Virginia Polytechnic Institute and State University", "in partial fulfillment of the requirements for the degree of",
+    "MASTER OF SCIENCE", "in", "Agronomy", "APPROVED:", "R. T. Chair, Chairman", "August 1974", "Blacksburg, Virginia",
+  }
+  eq("thesis: by on the author's line", { vt.title, vt.authors, vt.year }, { "Soil Moisture and Yield", { "John Smith" }, "1974" })
+  eq("thesis: faculty of the", vt.institution, "Virginia Polytechnic Institute and State University")
+  eq("an article is not a thesis", titlepage.thesis { "A Note on Sieves", "by", "P. Erdos", "Received May 1950" }, nil)
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end
