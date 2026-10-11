@@ -118,6 +118,19 @@ function M.run()
       keys:show("orphans", panels.also())
     elseif act == "peek" then
       peek()
+    elseif act == "take" then
+      -- a record whose file is gone, and another book that is the same work
+      -- and has it: what the record says is offered to that book
+      local from = item and type(item.book) == "table" and lulibre.book(item.book.id)
+      local to = from and item.twin and lulibre.book(item.twin.id)
+      if not to then
+        lulibre.notify("this works on a record with no file that has a copy in the library to give its values to")
+      elseif dupes.pull(from, to) == 0 then
+        lulibre.notify(("book %d says nothing that book %d does not"):format(from.id, to.id))
+      else
+        panels.over(p, require("lulibre.ui.review").run, { ids = { to.id } })
+        refresh()
+      end
     elseif act == "edit" or act == "review" then
       if not id or not lulibre.book(id) then
         lulibre.notify("this row has no book in the library to " .. act)

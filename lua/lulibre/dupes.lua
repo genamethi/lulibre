@@ -141,6 +141,26 @@ function M.gather(groups)
   return changes
 end
 
+--- Propose for one book what another book's record says: every field where
+-- `from` has a value and `to` has none or a different one (tags and
+-- identifiers are proposed as additions). Nothing is written: the
+-- proposals wait in review, where each is accepted or not. Returns how many
+-- were made.
+function M.pull(from, to)
+  local proposals = require "lulibre.proposals"
+  local n = 0
+  for _, field in ipairs(edit.fields) do
+    local theirs, mine = edit.current(from, field), edit.current(to, field)
+    if theirs ~= "" and theirs ~= mine and (field ~= "series_index" or from.series) then
+      local op = (field == "tags" or field == "identifiers") and "add" or "set"
+      local ok, added = pcall(proposals.add, to.id, field, theirs,
+        { op = op, source = ("book %d"):format(from.id), confidence = mine == "" and 0.9 or 0.5, again = true, as_is = true })
+      if ok and added then n = n + 1 end
+    end
+  end
+  return n
+end
+
 --- Turn gathered changes into proposals, so that removing a record loses
 -- nothing it knew. `what` names where they came from ("duplicate", "record
 -- with no file"). Returns how many proposals were new.
