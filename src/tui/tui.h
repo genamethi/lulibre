@@ -127,6 +127,7 @@ void le_free(struct lineedit *le);
 struct rows {
   sqlite3_int64 *ids;
   int n;
+  int total;         /* how many the source holds, filter or no filter */
   int cur, top;
   int anchor; /* visual mode anchor row, -1 when not selecting */
   char *filter;
@@ -247,7 +248,9 @@ int list_page_rows(struct tui *t); /* visible rows in the list view */
  * moves the list to the row's book. Movement keys are handled here; every
  * other key is handed to whoever is listening. */
 struct panel;
-enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD };
+/* HEAD and NOTE rows show their first cell across the whole width: a
+ * heading, and text too long for a column. */
+enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD, PSTYLE_NOTE };
 /* key is NULL when the panel has closed */
 typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud);
 
@@ -261,6 +264,9 @@ void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud);
 void panel_set_title(struct panel *p, const char *title);
 void panel_set_help(struct panel *p, const char *help);
 void panel_set_follow(struct panel *p, int follow);
+/* For a panel that follows: 1, and the book its cursor row stands for (0
+ * when that row is not a book). 0 for a panel that does not follow. */
+int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
 /* width > 0: that many columns; width <= 0: a share of what is left */

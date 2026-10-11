@@ -192,12 +192,41 @@ static int l_current_ui(lua_State *L) {
 }
 ON_UI(l_current)
 
+/* With the cursor in a panel that follows the list (review, duplicates,
+ * orphans), "the book under the cursor" is the one that panel's row stands
+ * for. The list normally sits on the same book; when it cannot (the book was
+ * removed, or the filter leaves it out) the list's own cursor is on some
+ * other book, and acting on that one instead would be a nasty surprise. */
+static void selection_under_panel(lua_State *L, struct tui *t) {
+  sqlite3_int64 id;
+  if (!t->focus || t->focus->cls != &view_panel || !panel_points_at(t->focus->state, &id)) return;
+  if (id == rows_current(t) && id != 0) return;
+  if (id == 0) {
+    lua_pushliteral(L, "the row under the cursor is not a book: nothing is selected");
+    lua_error(L);
+  }
+  if (rows_goto_id(t, id)) {
+    preview_book_changed(t);
+    return;
+  }
+  lua_pushfstring(L, "book %I is not in the list any more (removed, or the filter leaves it out): nothing is selected",
+                  (lua_Integer)id);
+  lua_error(L);
+}
+
 static int l_selection_ui(lua_State *L) {
   struct tui *t = lapi_app(L)->tui;
   lua_newtable(L);
   if (!t) return 1;
   int n;
   sqlite3_int64 *ids = rows_selection(t, &n);
+  /* a range or marks say for themselves what is meant; the cursor alone does not */
+  int by_cursor = t->mode != MODE_VISUAL && (n == 0 || (n == 1 && !rows_marked(t, ids[0])));
+  if (by_cursor) {
+    free(ids);
+    selection_under_panel(L, t); /* raises, or leaves the list on the panel's book */
+    ids = rows_selection(t, &n);
+  }
   for (int i = 0; i < n; i++) {
     lua_pushinteger(L, ids[i]);
     lua_rawseti(L, -2, i + 1);

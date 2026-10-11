@@ -31,7 +31,7 @@ function M.run()
   local options = {} -- "book field" -> suggestions, read once
 
   local function proposal_row(book, pr)
-    local shown = pr.value
+    local shown = pr.value == "" and edit.BLANK or pr.value
     if pr.op == "add" then shown = "+ " .. shown elseif pr.op == "remove" then shown = "- " .. shown end
     return {
       pr.status == "accepted" and "✓" or "", pr.field, edit.current(book, pr.field), shown,
@@ -162,15 +162,21 @@ function M.run()
       keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
     elseif pr and (key == "e" or key == "<CR>") then
       local v = ask(pr.book, pr.field, pr.value)
-      if v and v ~= "" then
-        local book = lulibre.book(pr.book)
-        local ok, err = pcall(edit.resolve, book, pr.field, pr.op, v)
-        if ok then
-          proposals.set_value(pr.id, v)
-          pr.value = v
-          proposals.accept(pr)
+      local book = v and lulibre.book(pr.book)
+      if book then
+        -- an empty answer blanks the field, which only "set" can mean
+        local op = v == "" and "set" or pr.op
+        local ok, to = pcall(edit.resolve, book, pr.field, op, v)
+        if not ok then
+          lulibre.notify(tostring(to), "error")
+        elseif to == edit.current(book, pr.field) then
+          proposals.set_status(pr.id, "rejected")
+          lulibre.notify(("%s already reads that way: the proposal is dropped"):format(pr.field))
+          keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
         else
-          lulibre.notify(tostring(err), "error")
+          proposals.set_value(pr.id, v, op)
+          pr.value, pr.op = v, op
+          proposals.accept(pr)
         end
       end
     elseif item and item.plain and (key == "e" or key == "<CR>" or key == "a") then

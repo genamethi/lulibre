@@ -23,7 +23,8 @@
  * and <C-w> keep their usual meaning. Every other key is returned by wait()
  * in the notation key maps use ("a", "<CR>", "<Space>", "<C-x>").
  * A column is a title, or {title, width}: width in columns, or 0 or less
- * for a share of what is left. Row styles: dim accent ok warn error head. */
+ * for a share of what is left. Row styles: dim accent ok warn error, and
+ * head and note, whose first cell is shown across the whole width. */
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -135,7 +136,7 @@ static struct lpanel *check(lua_State *L) {
 }
 
 static int style_of(lua_State *L, int idx) {
-  static const char *const names[] = {"normal", "dim", "accent", "ok", "warn", "error", "head", NULL};
+  static const char *const names[] = {"normal", "dim", "accent", "ok", "warn", "error", "head", "note", NULL};
   lua_getfield(L, idx, "style");
   int style = PSTYLE_NORMAL;
   if (lua_isstring(L, -1)) {

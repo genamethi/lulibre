@@ -143,8 +143,14 @@ int panel_cursor(const struct panel *p) {
 
 static void follow(struct panel *p) {
   if (!p->follow || !p->open || p->cur < 0 || p->cur >= p->nrows) return;
-  sqlite3_int64 id = p->rows[p->cur].id;
-  if (id > 0 && id != rows_current(p->t) && rows_goto_id(p->t, id)) preview_book_changed(p->t);
+  sqlite3_int64 id = p->rows[p->cur].id; /* negative for a file staged from the sync folder */
+  if (id != 0 && id != rows_current(p->t) && rows_goto_id(p->t, id)) preview_book_changed(p->t);
+}
+
+int panel_points_at(const struct panel *p, sqlite3_int64 *id) {
+  if (!p->follow || !p->open) return 0;
+  *id = p->cur >= 0 && p->cur < p->nrows ? p->rows[p->cur].id : 0;
+  return 1;
 }
 
 void panel_set_cursor(struct panel *p, int row) {
@@ -224,7 +230,7 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
 
 static int style_color(int style) {
   switch (style) {
-    case PSTYLE_DIM: return theme.dim;
+    case PSTYLE_DIM: case PSTYLE_NOTE: return theme.dim;
     case PSTYLE_ACCENT: case PSTYLE_HEAD: return theme.accent;
     case PSTYLE_OK: return theme.ok;
     case PSTYLE_WARN: return theme.warn;
@@ -282,7 +288,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     dr_style(n, C_DEFAULT, bg, 0);
     if (current) dr_fill(n, y, r.x, r.w);
     dr_style(n, style_color(row->style), bg, row->style == PSTYLE_HEAD ? A_BOLD : 0);
-    if (row->style == PSTYLE_HEAD) { /* a heading spans the row */
+    if (row->style == PSTYLE_HEAD || row->style == PSTYLE_NOTE) { /* these span the row */
       dr_text(n, y, x[0], r.w - 2, row->ncells ? row->cells[0] : "");
       continue;
     }

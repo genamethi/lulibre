@@ -48,7 +48,7 @@ function M.run()
     for i, field in ipairs(edit.fields) do
       local cur = now(field)
       out[i] = { field, cur == nil and ("(%d different values)"):format(#books) or cur,
-        new[field] or "", from[field] or "", style = new[field] and "ok" or nil }
+        new[field] == "" and edit.BLANK or new[field] or "", from[field] or "", style = new[field] and "ok" or nil }
     end
     return out
   end

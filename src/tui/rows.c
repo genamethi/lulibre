@@ -129,6 +129,15 @@ static void land_list(struct tui *t, struct lquery *lq) {
   lq->ids = NULL;
   r->took = lq->took;
   r->want_id = 0;
+  r->total = r->n;
+  sqlite3_stmt *st;
+  if (r->filter && r->filter[0] &&
+      sqlite3_prepare_v2(t->app->db.h, r->source ? "SELECT count(*) FROM books WHERE id < 0"
+                                                 : "SELECT count(*) FROM books WHERE id > 0",
+                         -1, &st, NULL) == SQLITE_OK) {
+    if (sqlite3_step(st) == SQLITE_ROW) r->total = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+  }
   log_debug("list: %d %s for \"%s\" in %.1f ms", r->n, r->source ? "staged files" : "books",
             r->filter ? r->filter : "", r->took * 1000);
   if (!keep || !rows_goto_id(t, keep)) clamp(t);

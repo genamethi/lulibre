@@ -323,11 +323,14 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       }
       return;
     case NCKEY_BACKSPACE:
-      if (t->line.text.len == 0) { /* backspacing out of an empty prompt leaves it */
+      if (t->line.text.len == 0) {
+        /* A field that has been emptied stays open: Enter then answers with
+         * nothing, which is how a value is blanked. The other prompts are
+         * left by backspacing out of them. */
+        if (t->prompt == PROMPT_INPUT) return;
         if (t->prompt == PROMPT_FILTER) rows_set_filter(t, "");
         if (t->prompt == PROMPT_SEARCH) rows_search_end(t, "", 0);
-        if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
-        else prompt_close(t);
+        prompt_close(t);
         return;
       }
       break;
@@ -646,8 +649,18 @@ static void draw_status(struct tui *t, int y) {
     dr_style(n, theme.error, theme.bar_bg, 0);
     dr_text(n, y, x + 1, avail, r->error ? r->error : r->search_error);
   } else if (r->filter && r->filter[0]) {
-    dr_style(n, C_DEFAULT, theme.bar_bg, 0);
-    dr_text(n, y, x + 1, avail, r->filter);
+    /* a narrowed list says so, and how to get everything back */
+    int end = x + 1 + avail, fx = x + 1;
+    dr_style(n, theme.warn, theme.bar_bg, A_BOLD);
+    fx += dr_text(n, y, fx, end - fx, "filter ");
+    dr_style(n, C_DEFAULT, theme.bar_bg, A_BOLD);
+    fx += dr_text(n, y, fx, end - fx, r->filter);
+    char *hint = xasprintf("   %d of %d   <BS> shows all", r->n, r->total);
+    if (!r->running && fx + dr_width(hint, strlen(hint)) <= end) {
+      dr_style(n, theme.dim, theme.bar_bg, 0);
+      dr_text(n, y, fx, end - fx, hint);
+    }
+    free(hint);
   } else {
     dr_style(n, theme.dim, theme.bar_bg, 0);
     dr_text(n, y, x + 1, avail, r->source ? "every file in the sync folder" : "all books");
