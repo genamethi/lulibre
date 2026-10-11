@@ -77,6 +77,21 @@ function M.run()
       keys:show("duplicates", panels.also())
     elseif act == "peek" then
       peek()
+    elseif g and act == "take" then
+      -- what this copy's record says, offered to the copy being kept
+      if not b or b.id == g.keep then
+        lulibre.notify(("this is the copy being kept: put the cursor on the copy to take from (%s chooses which is kept)"):format(
+          keys:key("keep") or "keep"))
+      else
+        local from, to = lulibre.book(b.id), lulibre.book(g.keep)
+        local n = from and to and dupes.pull(from, to) or 0
+        if n == 0 then
+          lulibre.notify(("book %d says nothing that book %d does not"):format(b.id, g.keep))
+        else
+          panels.over(p, require("lulibre.ui.review").run, { ids = { g.keep } })
+          refresh()
+        end
+      end
     elseif id and act == "edit" then
       panels.over(p, require("lulibre.ui.edit").run, { ids = { id } })
       refresh()

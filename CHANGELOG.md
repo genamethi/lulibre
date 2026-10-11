@@ -70,6 +70,9 @@ Added
 - From duplicates and orphans, `e` opens the edit form for the row's book
   and `r` the review of its proposals; the panel steps aside meanwhile and
   comes back up to date. `:review FILTER` reviews only the matching books.
+- `t` in duplicates and orphans takes from the row under the cursor: what
+  its record says and the kept copy's (or the book that has the file) does
+  not is proposed for that one, and review opens on those proposals.
 - With the cursor in review, duplicates, orphans or capture, the preview's
   keys work (`P`, `]`, `[`, `J`, `K`), as do the copying keys and the
   console's. `p` shrinks the panel to give the preview room.

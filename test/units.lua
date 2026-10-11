@@ -539,6 +539,21 @@ do
   lulibre.store("DELETE FROM proposals WHERE book = 2 AND field = 'publisher'")
 end
 
+-- one record's values offered to another
+do
+  local dupes = require "lulibre.dupes"
+  local from, to = lulibre.book(2), lulibre.book(1) -- Notes, by Paul Erdős, 1996, with a subject; paper, by nobody
+  local n = dupes.pull(from, to)
+  local got = {}
+  for _, p in ipairs(lulibre.sql("SELECT field, op, value, source FROM proposals WHERE book = 1 AND source = 'book 2' ORDER BY field")) do
+    got[#got + 1] = p.field .. ":" .. p.op
+  end
+  eq("pull proposes what the other record has", { n >= 3, table.concat(got, " "):find("authors:set") ~= nil,
+    table.concat(got, " "):find("tags:add") ~= nil }, { true, true, true })
+  eq("and nothing the second time", dupes.pull(from, to), 0)
+  lulibre.store("DELETE FROM proposals WHERE source = 'book 2'")
+end
+
 -- keys: the screens' tables, and the global keymap as scripts see it
 do
   local screens = require "lulibre.ui.keys"

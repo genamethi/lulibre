@@ -226,7 +226,13 @@ k P
 shown "and back to text"                      "── text"
 k "?"
 shown "? says which of the list's keys work"  "ALSO HERE"
-k q q
+k q
+k j t
+shown "t offers the other copy's values to the kept one" "review  [0-9]* pending"
+shown "saying where each comes from"          "book 5"
+k q
+shown "and comes back to duplicates"          "duplicates  1 groups"
+k q
 
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done

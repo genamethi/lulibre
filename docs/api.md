@@ -208,7 +208,7 @@ its own documentation.
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
-| `lulibre.dupes` | identical files |
+| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another |
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |

@@ -170,6 +170,11 @@ one does not becomes proposals for the kept one.
 its proposals; the duplicates panel steps aside while they are open and
 comes back up to date. `p` gives the preview more room.
 
+`t` takes from the copy under the cursor: every field where its record says
+something the kept copy's does not is proposed for the kept copy, and review
+opens on those proposals, each marked with the book it came from. Accept
+what is wanted and `w` writes it; nothing is removed.
+
 ## Orphans: `go`
 
 | Found | Suggested |
@@ -180,7 +185,9 @@ comes back up to date. `p` gives the preview more room.
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
 `Space` changes a row's action, `w` carries them out. `e` and `r` open the
-edit form and the review for the row's book, as in duplicates. `x` opens the row
+edit form and the review for the row's book, as in duplicates, and `t` on a
+record whose file is gone offers what it says to the book that is the same
+work and has the file. `x` opens the row
 under the cursor to show what its columns cut short (the verdict in full,
 the whole path, where a link points); `X` opens every row. Removed records go to
 calibre's recycle bin (`u` brings them back); stray files are moved to
