@@ -54,6 +54,11 @@ static const struct opt_def opts[] = {
       "words and phrases, separated by commas, that are never proposed as an author (added to the "
       "built-in ones such as professor emeritus): \"visiting scholar, lecture notes\"",
       NULL),
+  OPT(subject_catchall, OPT_STR, "", NULL,
+      "subjects that file a book by its form, not its topic, named whole or by their last part "
+      "and separated by commas (added to general, papers, books, handbook, misc, other): they "
+      "are not learned from as a topic and not suggested ahead of real ones",
+      NULL),
   OPT(title_case, OPT_STR, "auto", "auto|never",
       "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
       NULL),

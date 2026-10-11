@@ -572,6 +572,10 @@ do
   eq("ranks and roles are never authors", { names.never("Professor Emeritus"), names.never("Lecture Notes"),
     names.never("David Mumford"), names.never("John Dean") }, { true, true, false, false })
   eq("so they are not names", { names.clean("Professor Emeritus"), names.clean("David Mumford") }, { nil, "David Mumford" })
+  -- words that are a rank in one place and a name in another stay names
+  eq("Dean, Senior, Reader, Fellow and Chair are people's names", { names.never("Dean Koontz"), names.never("Mary Senior"),
+    names.never("John Reader"), names.never("Anne Fellow"), names.clean("W. Reader"), names.clean("Dean Rickles") },
+    { false, false, false, false, "W. Reader", "Dean Rickles" })
   lulibre.o.never_authors = "visiting scholar, Brown and Harvard"
   eq("the option adds to them", { names.never("Brown and Harvard Universities"), names.never("Harvard Brown") }, { true, false })
   lulibre.o.never_authors = ""
@@ -600,6 +604,32 @@ do
     { "David Mumford", "first line, named twice", 0.85 })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
+end
+
+-- how far a record can be trusted, and the ones confirmed
+do
+  local quality = require "lulibre.quality"
+  local full = { title = "A Course in Arithmetic", author = "Jean-Pierre Serre", authors = { "Jean-Pierre Serre" },
+    tags = { "math/number-theory" }, year = 1973, idents = { isbn = "9780387900407" }, publisher = "Springer" }
+  eq("a complete record scores 1", (quality.score(full)), 1)
+  local s, why = quality.score { title = "S0025-5718-1975-0376583-0", author = "Unknown", authors = {}, tags = {}, idents = {} }
+  eq("a file name for a title and nothing else scores 0", { s, why[1] }, { 0, "the title looks like a file name or a heading" })
+  s, why = quality.score { title = "Notes on Sieves", author = "P. Erdos", authors = { "P. Erdos" }, tags = { "math/general" },
+    year = 1950, idents = {} }
+  eq("a catch-all subject counts for little", { s < 0.85, table.concat(why, "; "):find("catch%-all") ~= nil }, { true, true })
+  eq("which subjects are catch-alls", { quality.catchall("math/general"), quality.catchall("linguistics/papers"),
+    quality.catchall("math/number-theory") }, { true, true, false })
+  lulibre.o.subject_catchall = "to-read"
+  eq("the option adds to them", quality.catchall("math/to-read"), true)
+  lulibre.o.subject_catchall = ""
+  eq("odd characters and figures pull a title down",
+    (quality.score { title = "x__[3]==|| 2019 44 31", author = "A. Name", authors = { "A. Name" }, tags = {}, idents = {} }) < 0.3, true)
+  quality.set_good({ 2 }, true)
+  eq("a record can be confirmed", { quality.is_good(2), quality.is_good(1), quality.good_ids(), lulibre.count("is:good") }, { true, false, { 2 }, 1 })
+  local ranked = quality.ranked { good = true }
+  eq("ranked lists them with their scores", { #ranked, ranked[1].book.id, ranked[1].good }, { 1, 2, true })
+  quality.set_good({ 2 }, false)
+  eq("and unconfirmed", quality.is_good(2), false)
 end
 
 -- one record's values offered to another

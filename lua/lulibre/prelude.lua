@@ -187,6 +187,17 @@ lulibre.command("propose", script("propose"), "[filter]  propose metadata from t
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")
 lulibre.command("sync", script("sync"),
   "[add | move | drop] [filter]  the sync folder: show it; add the selection; add and delete; drop without adding")
+lulibre.command("good", function(args)
+  local quality = require "lulibre.quality"
+  if args == "add" or args == "remove" then
+    local ids = lulibre.selection()
+    quality.set_good(ids, args == "add")
+    lulibre.notify(("%s %d record%s %s known good"):format(args == "add" and "confirmed" or "took", #ids,
+      #ids == 1 and "" or "s", args == "add" and "as" or "out of the"))
+  else
+    require("lulibre.ui.good").run()
+  end
+end, "[add | remove]  the records by how complete they look, to confirm the right ones; add and remove act on the selection")
 lulibre.command("orphans", screen("lulibre.ui.orphans"),
   "records with no file and files with no record: check, then clean up")
 lulibre.command("browse", function(args) require("lulibre.ui.browse").run(args) end,

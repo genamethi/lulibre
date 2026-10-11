@@ -231,7 +231,7 @@ static int store_authorizer(void *ud, int action, const char *a, const char *b, 
     case SQLITE_UPDATE:
     case SQLITE_DELETE:
       return a && (!strcmp(a, "proposals") || !strcmp(a, "journal") || !strcmp(a, "kv") ||
-                   !strcmp(a, "staged"))
+                   !strcmp(a, "staged") || !strcmp(a, "good") || !strcmp(a, "terms"))
                ? SQLITE_OK : SQLITE_DENY;
     case SQLITE_SELECT:
     case SQLITE_READ:
@@ -253,7 +253,7 @@ static int run_sql(lua_State *L, int writable) {
   if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
   if (prc) {
     lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write the proposals, journal, kv and staged tables"
+                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, kv, staged, good, terms"
                         : err);
     free(err);
     return lua_error(L);

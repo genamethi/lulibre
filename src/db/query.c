@@ -59,6 +59,8 @@ static const struct { const char *name, *sql; } is_tests[] = {
                 " OR b.title LIKE '%.dvi' OR b.title LIKE '%.tex' OR b.title LIKE '%.ps')"},
   /* a title in capitals (as far as A to Z go): what :titlecase is for */
   {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
+  /* confirmed as right by the user (:good) */
+  {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},

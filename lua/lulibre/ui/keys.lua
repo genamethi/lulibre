@@ -69,6 +69,14 @@ local DEFAULTS = {
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "do it", "carry out the actions" },
   },
+  good = {
+    { "confirm", { "<Space>", "<CR>" }, "confirm", "confirm the record as right, or take that back" },
+    { "confirm_above", { "A" }, "confirm all above…", "confirm every record at or above a score you give" },
+    { "view", { "v" }, "view", "show the records still to confirm, the confirmed ones, or all" },
+    { "edit", { "e" }, "edit", "open the edit form for the record" },
+    { "learn", { "L" }, "learn", "learn each subject's telling phrases from the confirmed records" },
+    { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
+  },
   capture = {
     { "pattern", { "p", "<CR>" }, "pattern", "type the pattern; the table follows as you type" },
     { "source", { "s" }, "source", "choose what the pattern is run against" },

@@ -266,6 +266,16 @@ k q
 shown "and comes back to duplicates"          "duplicates  1 groups"
 k q
 
+# ---- known good: the records by score, confirmed one at a time or in bulk
+k g k
+shown "known good opens, best records first"  "known good  0 confirmed of"
+k Space
+shown "Space confirms a record"               "known good  1 confirmed of"
+k v
+shown "v shows the confirmed ones"            "showing: confirmed"
+k q
+expect "is:good finds it"                     1 "$(run query -c is:good 2>/dev/null)"
+
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
 expect "the interface exits cleanly"          0 "$(cat "$t/rc" 2>/dev/null)"
