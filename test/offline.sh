@@ -16,6 +16,8 @@ if [ -z "${LULIBRE_OFFLINE_NS:-}" ]; then
   unshare -rn true 2>/dev/null || { echo "offline: cannot create a network namespace, skipping"; exit 0; }
   exec unshare -rn env LULIBRE_OFFLINE_NS=1 sh "$0" "$bin"
 fi
+"$bin" --clean run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1 || {
+  echo "offline: the luv rock is not installed for this Lua version, skipping"; exit 0; }
 ip link set lo up 2>/dev/null || { echo "offline: no loopback in the namespace, skipping"; exit 0; }
 
 t=$(mktemp -d)
