@@ -63,10 +63,17 @@ In the command line, a filter, a search, or a field of the edit form:
 | `<C-v>` | paste what was last copied, as one line |
 | the terminal's own paste | the same: line breaks become spaces, nothing is submitted |
 | `<PageUp>` `<PageDown>` | scroll the preview without leaving the field |
-| `Tab` | take the highlighted suggestion |
+| `Tab` | take the highlighted suggestion or completion |
+| `<C-n>` `<C-p>` | move through the completions |
 | `<C-a>` `<C-e>` `<C-u>` `<C-k>` `<C-w>` | start, end, delete to start, to end, a word back |
-| `<Up>` `<Down>` | history, or the suggestion list |
+| `<Up>` `<Down>` | history: entries that start with what has been typed (in a field: the suggestion list) |
 | `Enter` · `Esc` | accept · cancel |
+
+The command line completes as you type: command names, then what each
+command takes (`:set` option names and their allowed values, `:run` script
+names, `:sort` keys); `&` and `/` complete the filter language (`au` →
+`author:`, `is:d` → `is:dupe`). History is kept between sessions, separately
+for commands, filters and searches.
 
 The mouse still works in the preview while a field is open, so a title or a
 name can be dragged over on the page and pasted with `<C-v>`.

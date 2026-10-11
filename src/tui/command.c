@@ -88,6 +88,12 @@ void tui_exec(struct tui *t, const char *line) {
   else lapi_spawn_ref(t->app, c->lua_ref, c->name, e);
 }
 
+const char *command_at(int i, const char **help) {
+  if (i < 0 || i >= ncmds) return NULL;
+  if (help) *help = cmds[i].help;
+  return cmds[i].name;
+}
+
 /* ---- helpers ---- */
 
 static int arg_is(const char *args, const char *word) {

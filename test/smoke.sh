@@ -110,6 +110,33 @@ if command -v tmux >/dev/null; then
   shown "tui picker sets a filter"   'author:="Unknown"'
   $T send-keys -t t Escape : ; $T send-keys -t t -l 'lua lulibre.count("")' ; $T send-keys -t t Enter
   shown "tui :lua"                   "^2 *$"
+  # the command line: completion and history
+  $T send-keys -t t : ; $T send-keys -t t -l "so"
+  shown "commands complete by prefix"    "source "
+  $T send-keys -t t Tab ; $T send-keys -t t -l " -y"
+  shown "and so do their arguments"      " [-]year "
+  $T send-keys -t t Tab
+  shown "Tab takes the completion"       "^:sort -year"
+  $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t -l "set oc" ; $T send-keys -t t Tab ; $T send-keys -t t -l "a" ; $T send-keys -t t Tab
+  shown "options and their values complete" "^:set ocr=auto"
+  $T send-keys -t t Escape
+  sleep 0.2
+  $T send-keys -t t '&' ; $T send-keys -t t C-u ; $T send-keys -t t -l "is:mar" ; $T send-keys -t t Tab
+  shown "the filter language completes"  "^&is:marked"
+  $T send-keys -t t Escape
+  sleep 0.2
+  $T send-keys -t t : ; $T send-keys -t t -l "echo first one" ; $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t -l "echo second" ; $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t Up
+  shown "Up recalls the last command"    "^:echo second"
+  $T send-keys -t t Up
+  shown "and the one before"             "^:echo first one"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "so" ; $T send-keys -t t Up
+  shown "Up finds what starts as typed"  "^:sort -year"
+  $T send-keys -t t Escape
+  sleep 0.2
+
   # the mouse: select text in the preview, paste it into a field
   mouse() { $T send-keys -t t -l "$(printf "$@")"; sleep 0.3; }
   row=$($T capture-pane -p -t t | grep -n 'A Note on Sieve' | head -1 | cut -d: -f1)
@@ -160,6 +187,10 @@ if command -v tmux >/dev/null; then
     $T new-session -d -s t -x 120 -y 30 \
       "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
     shown "source tabs appear"           " 1  Library  2 "
+    $T send-keys -t t : ; $T send-keys -t t Up
+    shown "history is kept between sessions" "^:echo "
+    $T send-keys -t t Escape
+    sleep 0.2
     shown "and name the sync folder"     " 2  Sync folder  0 "
     $T send-keys -t t 2
     shown "2 shows the sync folder"      " SYNC "

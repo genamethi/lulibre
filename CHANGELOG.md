@@ -15,6 +15,12 @@ Added
 - With a sync folder set, a tab line shows `1 Library` and `2 Sync folder`
   with their counts and which one the list is showing; `1`, `2` or a click
   switch, and the keys that act on staged files are shown beside it.
+- The command line completes: command names, option names and their values
+  for `:set`, scripts for `:run`, the arguments of other commands, and the
+  filter language at `&` and `/`. `Tab` takes the highlighted completion,
+  `<C-n>` `<C-p>` move through them.
+- History for the command, filter and search lines, kept between sessions.
+  `Up` and `Down` recall entries that start with what has been typed.
 
 ## 0.1.0-alpha.2
 

@@ -1,6 +1,7 @@
 #include "db/query.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -399,6 +400,34 @@ fail:
   sb_free(&sql);
   query_free(q);
   return -1;
+}
+
+void query_words(void (*fn)(const char *word, void *ud), void *ud) {
+  char buf[64];
+  for (size_t i = 0; i < ARRAY_LEN(fields); i++) {
+    if (strlen(fields[i].name) < 2) continue; /* one-letter aliases would only crowd the list */
+    snprintf(buf, sizeof buf, "%s:", fields[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(is_tests); i++) {
+    snprintf(buf, sizeof buf, "is:%s", is_tests[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(has_tests); i++) {
+    snprintf(buf, sizeof buf, "has:%s", has_tests[i].name);
+    fn(buf, ud);
+    snprintf(buf, sizeof buf, "no:%s", has_tests[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(sort_keys); i++) {
+    snprintf(buf, sizeof buf, "sort:%s", sort_keys[i].name);
+    fn(buf, ud);
+    snprintf(buf, sizeof buf, "sort:-%s", sort_keys[i].name);
+    fn(buf, ud);
+  }
+  fn("in:library", ud);
+  fn("in:sync", ud);
+  fn("in:all", ud);
 }
 
 void query_free(struct query *q) {
