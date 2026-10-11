@@ -77,6 +77,7 @@ shown() { # description, pattern
   fi
 }
 k() { for key; do $T send-keys -t t "$key"; done; }
+mouse() { $T send-keys -t t -l "$(printf "$@")"; sleep 0.3; }
 lit() { $T send-keys -t t -l "$1"; }
 
 run index >/dev/null 2>&1
@@ -170,6 +171,36 @@ shown "by id, book 2 comes first"             "by id"
 k g g j
 sleep 0.3
 shown "its cursor is on book 2"               "│ Sieve"
+# copying from the page leaves the cursor in review: the next key is review's
+row=$(screen | grep -n '│ Jane Roe' | tail -1 | cut -d: -f1)
+before=$(screen | sed -n "${row}p" | sed 's/Jane Roe.*//')
+col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
+mouse '\033[<0;%d;%dM' "$col" "$row"
+mouse '\033[<32;%d;%dM' "$((col + 7))" "$row"
+mouse '\033[<0;%d;%dm' "$((col + 7))" "$row"
+shown "a drag in the preview copies"          "copied 8 characters"
+k e
+shown "and e still edits the proposal in review" "^title: Sieve Notes"
+k Escape
+sleep 0.5
+# both clicks in one write: two that arrive a moment apart are not a double click
+mouse '\033[<0;%d;%dM\033[<0;%d;%dm\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row" "$col" "$row" "$col" "$row"
+shown "a double click copies a word"          "copied 4 characters"
+k e
+shown "and leaves the cursor in review too"   "^title: Sieve Notes"
+k Escape
+sleep 0.5
+k a
+shown "on a proposal, a accepts it"           "review  1 pending, 1 accepted"
+k a
+shown "on a book's line, a accepts all of the book's" "accepted 1 for book 3"
+shown "so that nothing is left pending"       "review  0 pending, 2 accepted"
+k a
+shown "and again takes them back"             "review  1 pending, 1 accepted"
+k g g j a
+shown "as it does on a single proposal"       "review  2 pending, 0 accepted"
+k g g j
+sleep 0.3
 k :; lit "remove"; k Enter
 shown "remove names the book review is on"    "remove book 2, Sieve"
 lit "y"; k Enter

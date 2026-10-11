@@ -259,6 +259,39 @@ function M.run(args)
           if it.heading then open[it.book] = true end
         end
       end
+    elseif item and item.heading and (act == "accept" or act == "reject") then
+      -- on a book's own line the key speaks for all of its proposals
+      local mine = {}
+      for _, q in ipairs(listed()) do
+        if q.book == item.book then mine[#mine + 1] = q end
+      end
+      local pending = 0
+      for _, q in ipairs(mine) do
+        if q.status == "pending" then pending = pending + 1 end
+      end
+      if act == "reject" then
+        for _, q in ipairs(mine) do
+          if q.status == "pending" then proposals.set_status(q.id, "rejected") end
+        end
+        lulibre.notify(("rejected the %d still pending for book %d"):format(pending, item.book))
+      elseif pending == 0 then
+        -- all decided already: a second press takes the acceptances back
+        for _, q in ipairs(mine) do proposals.set_status(q.id, "pending") end
+      else
+        -- one value per single-valued field: the surest wins (the list is ordered so)
+        local taken, n = {}, 0
+        for _, q in ipairs(mine) do
+          if q.status == "accepted" and q.op == "set" then taken[q.field] = true end
+        end
+        for _, q in ipairs(mine) do
+          if q.status == "pending" and not (q.op == "set" and taken[q.field]) then
+            proposals.accept(q)
+            if q.op == "set" then taken[q.field] = true end
+            n = n + 1
+          end
+        end
+        lulibre.notify(("accepted %d for book %d; %s writes them"):format(n, item.book, keys:key("write") or "write"))
+      end
     elseif pr and act == "accept" then
       if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
       keep = key_of(items[row + 1]) or keep

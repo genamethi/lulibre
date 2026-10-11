@@ -539,6 +539,34 @@ do
   lulibre.store("DELETE FROM proposals WHERE book = 2 AND field = 'publisher'")
 end
 
+-- by-lines
+do
+  eq("by A. Name", titlepage.byline("By David Foster Wallace"), "David Foster Wallace")
+  eq("capitals, a footnote mark", titlepage.byline("By ANDREW WILES*"), "ANDREW WILES")
+  eq("surname first", { titlepage.byline("by RIBET, K. A."), titlepage.byline("by Deligne, Pierre; Ribet, Kenneth A.") },
+    { "K. A. RIBET", "Pierre Deligne; Kenneth A. Ribet" })
+  eq("what trails the name is dropped", { titlepage.byline("by Ursula K LeGuin - from The Wind's Twelve Quarters"),
+    titlepage.byline("by Torbjorn Granlund and the GMP development team"), titlepage.byline("by Emil Artin:") },
+    { "Ursula K LeGuin", "Torbjorn Granlund", "Emil Artin" })
+  eq("by alone: the names are on the next line", titlepage.byline("  BY "), "")
+  eq("a sentence that begins with by is not a by-line", { titlepage.byline("by Gauss in 1801 in his book Disquisitiones"),
+    titlepage.byline("by I.R. Shafarevich [130]. This proof is"), titlepage.byline("by University of Arizona Library user"),
+    titlepage.byline("By General Stream of Consciousness we mean"), titlepage.byline("Bylaws of the Society") }, {})
+  local function line(text, size) return { text = text, size = size } end
+  local got = titlepage.classify { line("THE DEPRESSED PERSON", 20), line("By David Foster Wallace", 12), line("The depressed person was in terrible pain.", 10) }
+  eq("a by-line under the title names the author", { got.title, got.authors, got.byline },
+    { "THE DEPRESSED PERSON", { "David Foster Wallace" }, true })
+  got = titlepage.classify { line("AN INTRODUCTION TO SOMETHING", 18), line("by", 18), line("Jane Q. Public", 14), line("Abstract", 10) }
+  eq("by on a line of its own, as large as the title", { got.title, got.authors, got.byline },
+    { "AN INTRODUCTION TO SOMETHING", { "Jane Q. Public" }, true })
+  local authors
+  for _, c in ipairs(require("lulibre.extract").from_doc { lines = { line("HARMONIC ANALYSIS", 18), line("BY GEORGE W. MACKEY", 11) } }) do
+    if c.field == "authors" then authors = c end
+  end
+  eq("and is proposed with the page's word for it", { authors.value, authors.source, authors.confidence },
+    { "George W. Mackey", "by-line", 0.85 })
+end
+
 -- one record's values offered to another
 do
   local dupes = require "lulibre.dupes"

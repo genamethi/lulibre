@@ -47,7 +47,7 @@
 
 | | |
 |---|---|
-| click | select the row, focus the window |
+| click | select the row, focus the window (in the preview only a plain click does: one that starts a selection leaves the cursor where it was) |
 | wheel | scroll what it is over |
 | drag in the text preview | select text; it is copied when the button is released |
 | double click · triple click there | the word · the line |

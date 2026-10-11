@@ -35,8 +35,53 @@ local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+-- words that may stand in lower case inside a name
+local PARTICLE = {}
+for w in ("and de del della der den di da dos du la le van von zu y e"):gmatch("%S+") do PARTICLE[w] = true end
+
+-- "Surname, Given; Surname, Given" and "SURNAME, G. H." the right way round
+local function uninvert(s)
+  local pieces, n = {}, 0
+  for piece in s:gmatch("[^;]+") do
+    n = n + 1
+    pieces[n] = trim(piece)
+  end
+  local out = {}
+  for i, piece in ipairs(pieces) do
+    local family, given = piece:match("^([^,]+),%s*([^,]+)$")
+    if family and (n > 1 or given:match("^[%u%.%s%-]+$")) then out[i] = trim(given) .. " " .. trim(family)
+    else out[i] = piece end
+  end
+  return table.concat(out, "; ")
+end
+
+--- Is the line a by-line? Returns the names on it ("by A. Name" gives
+-- "A. Name"), "" for "by" standing alone above the names, or nil. A
+-- sentence that happens to begin with "by" is told apart by its length, its
+-- lower-case words, and brackets or figures in it.
+function M.byline(text)
+  local t = trim(text or "")
+  if t:lower() == "by" then return "" end
+  local rest = t:match("^[Bb][Yy]%s+(.+)$")
+  if not rest then return nil end
+  rest = rest:gsub("%s+[-–—]+%s+.*$", "")         -- "by U. K. Le Guin - from The Wind's Twelve Quarters"
+  rest = rest:gsub("%s+and the%s+.*$", "")          -- "by T. Granlund and the GMP development team"
+  rest = rest:gsub("[%*†‡§¶]", ""):gsub("[:,;.%s]+$", function(tail) return tail:find("%.") and "." or "" end)
+  if not rest:match("%u%.$") then rest = rest:gsub("%.$", "") end -- keep the dot of a final initial only
+  if #rest < 3 or #rest > 80 or rest:find("[%(%)%[%]%d]") or not rest:find("^[%u\128-\255]") then return nil end
+  local words, small = 0, 0
+  for w in rest:gmatch("%S+") do
+    words = words + 1
+    if w:find("^%l") and not PARTICLE[w:lower()] then small = small + 1 end
+  end
+  if words < 2 or words > 10 or small > 0 then return nil end
+  return uninvert(rest)
+end
+
 --- lines: as from lulibre.lines(id). Returns
--- { arxiv=, class=, subject=, title=, authors={...}, subject_source= }.
+-- { arxiv=, class=, subject=, title=, authors={...}, subject_source=,
+--   byline= } (byline: the authors were named by a "by" line, which is the
+-- page's own word for it).
 function M.classify(lines)
   local r = { authors = {} }
 
@@ -75,7 +120,10 @@ function M.classify(lines)
   for _, l in ipairs(body) do max = math.max(max, l.size) end
   local title, last = {}, 0
   for i, l in ipairs(body) do
-    if l.size >= max - 0.5 then
+    -- a by-line set as large as the title ends the title; it is not part of it
+    if M.byline(l.text) then
+      if #title > 0 then break end
+    elseif l.size >= max - 0.5 then
       title[#title + 1] = trim(l.text)
       last = i
     elseif #title > 0 then
@@ -87,13 +135,39 @@ function M.classify(lines)
   if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then r.title = cand end
 
   local author_lines = {}
-  for i = last + 1, #body do
-    local t = trim(body[i].text)
-    if any(t:lower(), PUBLISHER) then break end
-    if names.looks_like_authors(t) or body[i].super then
-      author_lines[#author_lines + 1] = t
-    elseif #author_lines > 0 then
+  -- a by-line under the title says who wrote it outright: "by A. Name", or
+  -- "by" alone with the names on the next line
+  for i = last + 1, math.min(#body, last + 10) do
+    local named = M.byline(body[i].text)
+    if named == "" and body[i + 1] then
+      local under = trim(body[i + 1].text):gsub("[%*†‡§¶]", "")
+      if under:find("^[%u\128-\255]") and #under < 100 and not any(under:lower(), PUBLISHER) then
+        author_lines[1] = uninvert(under)
+        -- several authors may run over the lines that follow
+        for k = i + 2, #body do
+          local t = trim(body[k].text)
+          if any(t:lower(), PUBLISHER) or not (names.looks_like_authors(t) or body[k].super) then break end
+          author_lines[#author_lines + 1] = t
+        end
+      end
       break
+    elseif named and named ~= "" then
+      author_lines[1] = named
+      break
+    end
+  end
+  if #author_lines > 0 and #names.validate(author_lines) > 0 then
+    r.byline = true
+  else
+    author_lines = {}
+    for i = last + 1, #body do
+      local t = trim(body[i].text)
+      if any(t:lower(), PUBLISHER) then break end
+      if names.looks_like_authors(t) or body[i].super then
+        author_lines[#author_lines + 1] = t
+      elseif #author_lines > 0 then
+        break
+      end
     end
   end
   r.authors = names.validate(author_lines)
@@ -121,7 +195,7 @@ function M.classify_pages(pages)
     if not best.subject and r.subject then best.subject, best.subject_source = r.subject, r.subject_source end
     if not best.arxiv and r.arxiv then best.arxiv, best.class = r.arxiv, r.class end
     if not best.title and r.title then
-      best.title, best.authors = r.title, r.authors
+      best.title, best.authors, best.byline = r.title, r.authors, r.byline
     end
     if best.title then break end
   end

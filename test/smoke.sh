@@ -142,8 +142,8 @@ if command -v tmux >/dev/null; then
   row=$($T capture-pane -p -t t | grep -n 'A Note on Sieve' | head -1 | cut -d: -f1)
   before=$($T capture-pane -p -t t | sed -n "${row}p" | sed 's/Sieve.*//')
   col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
-  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
-  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
+  # both clicks in one write: two that arrive a moment apart are not a double click
+  mouse '\033[<0;%d;%dM\033[<0;%d;%dm\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row" "$col" "$row" "$col" "$row"
   expect "double click copies the word"  "Sieve" "$($T show-buffer 2>/dev/null)"
   sleep 0.6 # or the next press would be a third click, which takes the line
   mouse '\033[<0;%d;%dM' "$col" "$row"
@@ -179,8 +179,7 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t Escape
   sleep 0.6
   row=$($T capture-pane -p -t t | grep -n 'NORMAL' | head -1 | cut -d: -f1)
-  mouse '\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row"
-  mouse '\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row"
+  mouse '\033[<0;4;%dM\033[<0;4;%dm\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row" "$row" "$row"
   expect "a double click takes the word under it" "NORMAL" "$($T show-buffer 2>/dev/null)"
   sleep 0.6
 
