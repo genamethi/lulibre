@@ -69,6 +69,11 @@ Added
 - Selecting text in the preview to copy it (a drag, a double click) no
   longer moves the cursor out of the window it was in, so in review the next
   key is still review's.
+- Authors from title pages: ranks and roles ("Professor Emeritus") are
+  never proposed, and the option `never_authors` adds terms of your own; a
+  page that opens with its author's name alone on the first line is read
+  that way (author 0.7, title from the next largest line); a name the
+  leading pages give twice is proposed with 0.15 more confidence.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

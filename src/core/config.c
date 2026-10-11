@@ -50,6 +50,10 @@ static const struct opt_def opts[] = {
       "proposes when the file is confident (0.8 or more) and says something different; any "
       "proposes whenever the file's best candidate differs",
       NULL),
+  OPT(never_authors, OPT_STR, "", NULL,
+      "words and phrases, separated by commas, that are never proposed as an author (added to the "
+      "built-in ones such as professor emeritus): \"visiting scholar, lecture notes\"",
+      NULL),
   OPT(title_case, OPT_STR, "auto", "auto|never",
       "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
       NULL),

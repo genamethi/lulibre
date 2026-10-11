@@ -30,6 +30,7 @@ o.library = "~/calibre-library"
 | `ocr_pages` `ocr_lang` | `3` `eng` | pages per file the OCR pass reads; tesseract language |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
+| `never_authors` | | words and phrases, separated by commas, never proposed as an author (added to the built-in ranks and roles) |
 | `title_case` | `auto` | `auto` · `never`: propose a title found in CAPITALS in title case |
 | `sync_dir` | | folder of files waiting to be added |
 | `orphans_dir` | | where stray files are set aside |

@@ -8,6 +8,7 @@ local subjects = require "lulibre.subjects"
 local titlepage = require "lulibre.titlepage"
 
 local titlecase = require "lulibre.titlecase"
+local edit = require "lulibre.edit"
 local M = {}
 
 local function join(list)
@@ -20,9 +21,40 @@ end
 -- lines= for page 1 alone), and the text of those pages.
 function M.from_doc(doc)
   local out = {}
+  -- How often a person's name stands in the leading pages: in an e-mail
+  -- address or a running head as well as on the title line, say. A name the
+  -- page gives twice is less likely to be a misreading of one line.
+  local flat
+  local function times(name)
+    if not flat then flat = " " .. lulibre.fold(doc.text or ""):gsub("[^%w]+", " ") .. " " end
+    local needle = " " .. lulibre.fold(name):gsub("[^%w]+", " "):gsub("^ ", ""):gsub(" $", "") .. " "
+    local n, from = 0, 1
+    while true do
+      local a, b = flat:find(needle, from, true)
+      if not a then break end
+      n, from = n + 1, b -- the closing space may open the next match
+    end
+    return n
+  end
   local function add(field, value, source, confidence)
     -- a title set in capitals is offered in title case (option title_case)
     if field == "title" and value then value = titlecase.proposed(value) end
+    if field == "authors" and value then
+      -- ranks, roles and whatever the option never_authors lists are not people
+      local people, twice = {}, true
+      for _, a in ipairs(edit.split("authors", value)) do
+        if not names.never(a) then
+          people[#people + 1] = a
+          -- (only for what reads as a person on more than its shape: a title
+          -- phrase mistaken for a name repeats through the text too)
+          if times(a) < 2 or not names.is_person(a, doc.text) then twice = false end
+        end
+      end
+      value = join(people)
+      if #people > 0 and twice and source ~= "embedded" and source ~= "cover sheet" then
+        source, confidence = source .. ", named twice", math.min(0.9, confidence + 0.15)
+      end
+    end
     if value and value ~= "" then
       out[#out + 1] = { field = field, value = value, source = source, confidence = confidence }
     end
@@ -65,13 +97,14 @@ function M.from_doc(doc)
   local tp = doc.pages and titlepage.classify_pages(doc.pages) or titlepage.classify(doc.lines or {})
   local conf = tp.arxiv and 0.85 or 0.55
   if tp.title and not junk.title(tp.title) then
-    add("title", names.title_caps(tp.title), "title page", conf)
+    add("title", names.title_caps(tp.title), "title page", tp.name_first and math.max(conf, 0.65) or conf)
   end
   if #tp.authors > 0 then
     local people = {}
     for i, a in ipairs(tp.authors) do people[i] = names.titlecase(a) end
     -- "by A. Name" is the page saying who wrote it, not a guess from the layout
     if tp.byline then add("authors", join(people), "by-line", math.max(conf, 0.85))
+    elseif tp.name_first then add("authors", join(people), "first line", math.max(conf, 0.7))
     else add("authors", join(people), "title page", conf) end
   end
   if tp.subject then add("tags", tp.subject, tp.subject_source, 0.9) end
