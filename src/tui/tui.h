@@ -212,6 +212,11 @@ void wm_resize(struct tui *t, int delta);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 void wm_undock(struct tui *t, void *state);
+/* Start an indexing run with these options and call done when it ends; if
+ * one is already under way, done is called when that one ends instead.
+ * Returns 0, or -1 with *err set. Interface thread. */
+int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
+              void *ud, char **err);
 /* The window showing this state, or NULL. */
 struct node *wm_leaf_of(struct tui *t, void *state);
 /* The window at a screen position, or NULL. */
@@ -362,6 +367,10 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  /* whoever asked to be told when the indexing run ends (tui_index) */
+  void (*ix_hook[8])(const struct index_stats *st, void *ud);
+  void *ix_hook_ud[8];
+  int nix_hook;
   int tab_x[3];         /* where the source tabs were drawn: columns of their edges */
   /* a terminal paste in progress (tui.c): keys held while they might be one
    * of its markers, and the text between the markers */

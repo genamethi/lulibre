@@ -64,6 +64,7 @@ Library books have positive ids; files staged from the sync folder negative ones
 | `lulibre.render(path, page [, width])` | *waits.* The page as a greyscale PGM string |
 | `lulibre.page_put(id, page, {text=, lines=, src=})` | replace a page's indexed text, as OCR does |
 | `lulibre.md5(path)` | *waits* the first time. Content hash, remembered in the index |
+| `lulibre.index([{filter=, force=, retry=}])` | *waits.* Extract text from new or changed files (all of them with `force`, only matching books with `filter`): `{ files=, queued=, ok=, failed=, missing=, seconds= }` |
 
 ## Changing the library
 
