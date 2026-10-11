@@ -35,6 +35,7 @@ o.library = "~/calibre-library"
 | `blitter` | `auto` | `auto` · `pixel` · `sextant` · `quadrant` · `half`: how page images are drawn |
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
+| `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |
 
@@ -77,6 +78,10 @@ lulibre.command("unlabelled", function(args)
   lulibre.filter("author:unknown no:tags " .. args)
 end, "[filter]  books with neither an author nor a subject")
 ```
+
+`<Leader>` in a key sequence is the `leader` option's key, and a panel's
+name in place of the modes binds one of that panel's actions; see
+[Keys](keys.md). `:reload-cfg` (`<Leader>R`) reads `init.lua` again.
 
 Scripts in `~/.config/lulibre/scripts/NAME.lua` run with `:run NAME` or
 `lulibre run NAME`; modules in `~/.config/lulibre/lua/` can be `require`d.

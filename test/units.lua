@@ -462,5 +462,32 @@ do
   eq("a bad filter is an error, not a hang", (pcall(lulibre.index, { filter = "nosuch:field" })), false)
 end
 
+-- keys: the screens' tables, and the global keymap as scripts see it
+do
+  local screens = require "lulibre.ui.keys"
+  local review = screens.of("review")
+  eq("a screen's key means an action", { review:action("a"), review:action("<CR>"), review:action("z") }, { "accept", "edit" })
+  eq("its hint names the keys in force", review:hint("accept", "write"), "a accept   w write   ? keys")
+  lulibre.map("review", "y", "accept")
+  eq("lulibre.map puts a key on a screen's action", { review:action("y"), review:action("a") }, { "accept", "accept" })
+  eq("and the hint shows the new key", review:hint("accept"), "y accept   ? keys")
+  lulibre.map("review", "a", "")
+  eq("an empty action frees a key", review:action("a"), nil)
+  eq("an unknown action is refused", (pcall(lulibre.map, "review", "y", "nosuch")), false)
+  screens.reset()
+  eq("reset puts the keys back", { review:action("a"), review:action("y") }, { "accept" })
+  eq("Enter is spelled out", screens.of("edit"):hint("edit"), "Enter edit   ? keys")
+  eq("the global key for a command", { lulibre.key("undo"), lulibre.key("preview graphic"), lulibre.key("no such") }, { "u", "P" })
+  eq("or the command, for a hint", { lulibre.hint("undo"), lulibre.hint("index") }, { "u", ":index" })
+  lulibre.map("n", "gU", "undo")
+  eq("a later binding is the one named", lulibre.key("undo"), "gU")
+  lulibre.map("n", "<Leader>z", "echo led")
+  local found
+  for _, m in ipairs(lulibre.maps()) do
+    if m.command == "echo led" then found = m end
+  end
+  eq("lulibre.maps lists bindings", found and found.modes, "n")
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

@@ -19,15 +19,17 @@ A form with one row per field for the selected book or books.
 | `Enter` | type a value; a popup ranks suggestions and `Tab` takes the highlighted one |
 | `Space` | step through what the file itself and related books suggest |
 | `a` | fill every empty field with the best suggestion from the file |
-| `x` | clear the pending value |
+| `c` | clear: blank the field |
+| `x` | revert: forget the change pending for the field |
 | `w` | write |
+| `?` | every key of the form |
 
 In a list field (authors, tags, identifiers) `+x, -y` adds and removes values
 and leaves the rest alone, which is how one tag is added to two hundred books.
 
-To blank a field, empty it (`<C-u>`, or backspace) and press `Enter`: the
-form shows `(blank)` where the value will be removed. The same works on a
-proposal in review.
+To blank a field press `c`, or empty it (`<C-u>`, or backspace) and press
+`Enter`: the form shows `(blank)` where the value will be removed. Both work
+in review too.
 
 ### Copying from the page
 

@@ -68,11 +68,14 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   if (wtags) dr_text(n, r.y, xtags, wtags, "Subject");
 
   if (R->n == 0) {
+    char nothing[160];
+    snprintf(nothing, sizeof nothing, "nothing is waiting in the sync folder (%s: the library)",
+             key_hint("source library"));
     dr_style(n, theme.dim, C_DEFAULT, 0);
     dr_text(n, r.y + 1 + (body > 2), r.x + 2, r.w - 2,
             R->running ? "loading…"
             : R->source ? (R->filter && R->filter[0] ? "no staged file matches this filter"
-                                                     : "nothing is waiting in the sync folder (gl: the library)")
+                                                     : nothing)
                         : "no books match this filter");
     return;
   }

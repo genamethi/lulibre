@@ -199,6 +199,36 @@ if command -v tmux >/dev/null; then
   i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
 
+  # keys from init.lua: a leader, a screen's own keys, and reading the file again
+  mkdir -p "$t/conf3"
+  cat > "$t/conf3/init.lua" <<'LUA'
+lulibre.o.leader = ","
+lulibre.map("n", "<Leader>e", "echo the leader works")
+lulibre.map("browse", "o", "open")
+LUA
+  $T new-session -d -s t -x 120 -y 30 \
+    "XDG_DATA_HOME='$t/data' '$bin' -C '$t/conf3' -L '$lib'; echo \$? > '$t/rc3'"
+  shown "tui starts with a configuration"  "NORMAL"
+  $T send-keys -t t , e
+  shown "a <Leader> binding runs"          "^the leader works *$"
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.notify("bound to " .. lulibre.key("echo the leader works"))'
+  $T send-keys -t t Enter
+  shown "and is named by the key it is on" "^bound to ,e *$"
+  $T send-keys -t t g t
+  shown "the tree browser opens"           "browse  "
+  $T send-keys -t t "?"
+  shown "? lists the screen's keys"        "KEYS HERE"
+  shown "a remapped key first, with what it does" "o  l  .*open the branch"
+  $T send-keys -t t q q
+  printf 'lulibre.map("n", "<Leader>e", "echo read again")\n' > "$t/conf3/init.lua"
+  $T send-keys -t t , R
+  shown "<Leader>R reads init.lua again"   "read .*init.lua again"
+  $T send-keys -t t , e
+  shown "and its bindings are the ones in force" "^read again *$"
+  $T send-keys -t t q
+  i=0; while [ ! -s "$t/rc3" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "and exits cleanly" 0 "$(cat "$t/rc3" 2>/dev/null)"
+
   # with a sync folder set, a tab line says which of the two the list shows
   if "$bin" --clean -L "$lib" run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1; then
     mkdir -p "$t/incoming"
@@ -207,7 +237,7 @@ if command -v tmux >/dev/null; then
       "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
     shown "source tabs appear"           " 1  Library  2 "
     $T send-keys -t t : ; $T send-keys -t t Up
-    shown "history is kept between sessions" "^:only"
+    shown "history is kept between sessions" "^:lua lulibre.notify"
     $T send-keys -t t Escape
     sleep 0.2
     shown "and name the sync folder"     " 2  Sync folder  0 "

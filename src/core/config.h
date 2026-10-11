@@ -19,6 +19,7 @@ struct config {
   char *preview;       /* what the preview shows first: text | image */
   int mouse;           /* 1: clicks and the wheel are ours; 0: left to the terminal */
   int review_open;     /* 1: the review screen starts with every book opened up */
+  char *leader;        /* the key <Leader> stands for in key bindings */
   char *server;        /* calibre content server URL, used for writes */
   char *user;
   char *password_file;

@@ -58,6 +58,8 @@ static const struct opt_def opts[] = {
       "1: click selects, the wheel scrolls (Shift selects text); 0: off", NULL),
   OPT(review_open, OPT_INT, "0", NULL,
       "1: the review screen starts with every book's other fields shown", NULL),
+  OPT(leader, OPT_STR, "\\", NULL,
+      "the key <Leader> stands for in key bindings, in key-map notation: \\, <Space>, ,", NULL),
 
   OPT(config_dir, OPT_PATH, "", NULL,
       "where init.lua, scripts/ and lua/ are looked for (default: ~/.config/lulibre). To start "

@@ -121,14 +121,9 @@ int main(int argc, char **argv) {
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
   if (!clean) lstate_run_init(&app);
-  if (library && config_set(&app.cfg, "library", library, &err)) die("%s", err);
-  for (int k = 0; k < nsets; k++) {
-    const char *eq = strchr(sets[k], '=');
-    if (!eq) die("-o wants name=value, got '%s'", sets[k]);
-    char *name = xstrndup(sets[k], (size_t)(eq - sets[k]));
-    if (config_set(&app.cfg, name, eq + 1, &err)) die("%s", err);
-    free(name);
-  }
+  app.cli_library = library;
+  for (int k = 0; k < nsets && k < (int)ARRAY_LEN(app.cli_sets); k++) app.cli_sets[app.ncli_sets++] = sets[k];
+  if (app_apply_cli(&app, &err)) die("%s", err);
   {
     const char *env = getenv("LULIBRE_LOG");
     const char *file = env && env[0] ? env : app.cfg.log_file;

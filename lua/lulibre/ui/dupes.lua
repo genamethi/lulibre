@@ -5,7 +5,7 @@ local edit = require "lulibre.edit"
 
 local M = {}
 
-local HELP = "Space keep this copy   s skip group   m mark the rest   f filter   D remove the rest   q close"
+local keys = require("lulibre.ui.keys").of("dupes")
 
 function M.run()
   local groups, stats = dupes.scan()
@@ -44,7 +44,7 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, follow = true, height = 0.5,
+    title = title(), help = keys:hint("keep", "skip", "remove"), follow = true, height = 0.5,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
   }
@@ -54,17 +54,20 @@ function M.run()
     local key, row = p:wait()
     if not key then return end
     local g, b = at[row] and at[row][1], at[row] and at[row][2]
-    if g and b and (key == "<Space>" or key == "<CR>") then
+    local act = keys:action(key)
+    if act == "help" then
+      keys:show("duplicates")
+    elseif g and b and act == "keep" then
       g.keep, g.skip = b.id, nil
-    elseif g and key == "s" then
+    elseif g and act == "skip" then
       g.skip = not g.skip or nil
-    elseif key == "m" then
+    elseif act == "mark" then
       local ids = dupes.surplus(groups)
       for _, id in ipairs(ids) do lulibre.mark(id, true) end
       lulibre.notify(("marked %d surplus books; they are now the selection"):format(#ids))
-    elseif key == "f" then
+    elseif act == "filter" then
       lulibre.filter("is:dupe")
-    elseif key == "D" then
+    elseif act == "remove" then
       local ids = dupes.surplus(groups)
       if #ids == 0 then
         lulibre.notify("nothing to remove")
@@ -76,7 +79,11 @@ function M.run()
         local carried = dupes.propose(dupes.gather(groups), "duplicate")
         local n, err = edit.remove(ids, { label = "duplicates" })
         local msg = ("removed %d duplicate book%s"):format(n, n == 1 and "" or "s")
-        if carried > 0 then msg = msg .. ("; %d things they knew are proposals for the kept copies (gr)"):format(carried) end
+        if carried > 0 then
+          -- say what was saved from the removed records, and where it went
+          msg = msg .. ("; %d value%s only they had (tags, dates and the like) %s proposed for the copies kept: %s reviews them"):format(
+            carried, carried == 1 and "" or "s", carried == 1 and "is" or "are", lulibre.hint("review"))
+        end
         lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or msg, err and "error" or nil)
         return
       end

@@ -23,6 +23,20 @@ Added
   `Up` and `Down` recall entries that start with what has been typed.
 - `lulibre.index{filter=, force=}` runs the indexer from a script and waits
   for it.
+- Every panel's keys can be changed: `lulibre.map("review", "y", "accept")`.
+  The title bar shows a panel's main keys and `?` lists them all, both
+  written from the keys in force.
+- `c` clears a field in the edit form and in review. In the edit form `x`,
+  which dropped the pending change, is now called revert.
+- `<Leader>` in key bindings, set by the option `leader` (default `\`).
+- `:reload-cfg` (`<Leader>R`) reads `init.lua` again.
+- Hints and messages name keys as they are bound now, not as they were
+  shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
+  same.
+
+Changed
+- After duplicates or orphan records are removed, the message says plainly
+  what was kept from them and where it went.
 
 ## 0.1.0-beta
 

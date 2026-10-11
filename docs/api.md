@@ -93,7 +93,10 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.jump(id)` | move the cursor to a book |
 | `lulibre.exec(line)` | run a command line |
 | `lulibre.command(name, fn [, help])` | define a `:` command; `fn(args)` runs as a task |
-| `lulibre.map(modes, keys, target)` | bind keys to a command line or a function |
+| `lulibre.map(modes, keys, target)` | bind keys to a command line or a function. With a panel's name for `modes` (`"review"`), put a key on one of its actions |
+| `lulibre.key(command [, mode])` | the keys bound to a command line (`"gr"`), or nil |
+| `lulibre.hint(command)` | the same for a message: the keys, or `":command"` when there are none |
+| `lulibre.maps()` | every global binding: `{ {modes=, keys=, command=}, ... }` |
 | `lulibre.input{prompt=, default=, suggestions=, separator=, on_change=}` | *waits.* A line of text, or nil |
 | `lulibre.confirm(question)` | *waits.* true for y or yes |
 | `lulibre.pick(items [, {title=}])` | *waits.* Fuzzy-pick one: item, index |
@@ -186,6 +189,7 @@ its own documentation.
 | `lulibre.dupes` | identical files |
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
+| `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
 | `lulibre.net` | arXiv and CrossRef lookups |
 | `lulibre.json` | encode, decode |
 

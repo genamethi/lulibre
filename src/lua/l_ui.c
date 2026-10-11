@@ -175,6 +175,43 @@ static int l_map_ui(lua_State *L) {
 }
 ON_UI(l_map)
 
+/* lulibre.key(command [, mode]): the keys bound to that command line, as
+ * they are typed ("gr", "<C-w>v"), or nil when nothing is. For messages
+ * that name a key, so they name the one in force. */
+static int l_key_ui(lua_State *L) {
+  const char *command = luaL_checkstring(L, 1);
+  const char *mode = luaL_optstring(L, 2, "n");
+  sbuf out = SBUF_INIT;
+  if (keymap_key_of(&tui_keymap, *mode == 'v' ? MODE_VISUAL : MODE_NORMAL, command, &out)) lua_pushstring(L, out.s);
+  else lua_pushnil(L);
+  sb_free(&out);
+  return 1;
+}
+ON_UI(l_key)
+
+/* lulibre.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... } */
+static int l_maps_ui(lua_State *L) {
+  lua_newtable(L);
+  int n = 0;
+  for (int i = 0; i < tui_keymap.n; i++) {
+    const struct binding *b = &tui_keymap.b[i];
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL))) continue; /* replaced by a later binding */
+    sbuf k = SBUF_INIT;
+    key_format(&k, b->keys, b->nkeys);
+    lua_createtable(L, 0, 3);
+    lua_pushstring(L, b->modes & MODE_NORMAL ? (b->modes & MODE_VISUAL ? "nv" : "n") : "v");
+    lua_setfield(L, -2, "modes");
+    lua_pushstring(L, k.s);
+    lua_setfield(L, -2, "keys");
+    lua_pushstring(L, b->command);
+    lua_setfield(L, -2, "command");
+    lua_rawseti(L, -2, ++n);
+    sb_free(&k);
+  }
+  return 1;
+}
+ON_UI(l_maps)
+
 static int l_exec_ui(lua_State *L) {
   tui_exec(need_tui(L), luaL_checkstring(L, 1));
   return 0;
@@ -736,6 +773,61 @@ static void c_lua(struct tui *t, const char *args) {
   bridge_lua(t->app, eval_line, xstrdup(args));
 }
 
+/* ---- :reload-cfg : read init.lua again ----
+ * Keys go back to the built-in ones first, so a binding taken out of
+ * init.lua is gone; options keep their values unless init.lua sets them, and
+ * what the command line set is applied on top again, as at start. */
+
+static void keys_reset_ui(void *arg) {
+  keymap_free(&tui_keymap);
+  keymap_defaults(&tui_keymap);
+}
+
+static void cli_again_ui(void *arg) {
+  struct app *app = arg;
+  char *err = NULL;
+  if (app_apply_cli(app, &err)) {
+    lapi_report(app, 1, err);
+    free(err);
+  }
+}
+
+static void reload_cfg(struct app *app, void *arg) { /* Lua thread */
+  char *path = arg;
+  lua_State *L = app->L;
+  bridge_ui(app, keys_reset_ui, NULL);
+  lua_getglobal(L, "require");
+  lua_pushliteral(L, "lulibre.ui.keys");
+  if (lua_pcall(L, 1, 1, 0) == LUA_OK) {
+    lua_getfield(L, -1, "reset");
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) lua_pop(L, 1);
+  }
+  lua_pop(L, 1);
+  if (luaL_dofile(L, path) != LUA_OK) {
+    lapi_report(app, 1, lua_tostring(L, -1));
+    lua_pop(L, 1);
+  } else {
+    char *msg = xasprintf("read %s again", path);
+    lapi_report(app, 0, msg);
+    free(msg);
+  }
+  bridge_ui(app, cli_again_ui, app);
+  bridge_redraw(app);
+  free(path);
+}
+
+static void c_reload_cfg(struct tui *t, const char *args) {
+  char *dir = config_dir_path(&t->app->cfg);
+  char *init = xasprintf("%s/init.lua", dir);
+  free(dir);
+  if (access(init, R_OK) != 0) {
+    tui_msg(t, 1, "there is no %s to read (lulibre config --write makes one)", init);
+    free(init);
+    return;
+  }
+  bridge_lua(t->app, reload_cfg, init);
+}
+
 static void message_line(const struct log_entry *e, void *ud) {
   time_t secs = (time_t)e->when;
   struct tm tm;
@@ -835,7 +927,8 @@ void l_ui_open(lua_State *L) {
     {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
-    {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log}, {NULL, NULL},
+    {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
+    {"key", l_key},       {"maps", l_maps},       {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
   lua_pushcfunction(L, l_print);
@@ -843,6 +936,7 @@ void l_ui_open(lua_State *L) {
 
   command_register("run", c_run, "[script [args]]  run a Lua script; no argument lists them");
   command_register("lua", c_lua, "code  run a line of Lua and show what it returns");
+  command_register("reload-cfg", c_reload_cfg, "read init.lua again: keys are reset first, options it sets take effect");
   command_register("messages", c_messages, "the log so far, in a pager");
   command_register("console", c_console, "[focus]  show or hide the log console");
   command_register("tasks", c_tasks, "scripts that are running");

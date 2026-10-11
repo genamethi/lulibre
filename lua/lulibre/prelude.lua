@@ -102,6 +102,25 @@ function lulibre.each(items, fn, opts)
   if errors[1] then error(errors[1], 0) end
 end
 
+--- For a message that names a key: the key a command line is bound to now,
+-- or ":command" when it has none.
+function lulibre.hint(command)
+  return lulibre.key(command) or (":" .. command)
+end
+
+-- Keys. lulibre.map binds a global key; given the name of a screen written
+-- in Lua instead of modes, it puts a key on one of that screen's actions:
+--   lulibre.map("nv", "gx", "run mine")       a command line or a function
+--   lulibre.map("review", "y", "accept")      see lulibre.ui.keys
+do
+  local map = lulibre.map
+  function lulibre.map(modes, key, target, help)
+    local screens = require "lulibre.ui.keys"
+    if type(modes) == "string" and screens.has(modes) then return screens.set(modes, key, target) end
+    return map(modes, key, target, help)
+  end
+end
+
 -- Screens and commands written in Lua. Each is loaded the first time it runs.
 local function screen(module)
   return function(args) require(module).run(args) end
@@ -180,7 +199,7 @@ lulibre.command("remove", function()
   for _, id in ipairs(ids) do lulibre.mark(id, false) end
   lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or ("removed %d book%s"):format(n, n == 1 and "" or "s"),
     err and "error" or nil)
-end, "remove the selected books from calibre (to its recycle bin; u puts them back)")
+end, "remove the selected books from calibre (to its recycle bin; :undo puts them back)")
 
 lulibre.command("yank", function(what)
   local ids = lulibre.selection()
