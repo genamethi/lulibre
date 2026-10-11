@@ -119,6 +119,11 @@ lulibre.command("undo", function(args)
     return
   end
   local note = r.skipped > 0 and ("; %d left alone because they changed again since"):format(r.skipped) or ""
+  if #r.failed > 0 then note = note .. "; " .. tostring(r.failed[1].error) end
+  if r.restored and #r.restored > 0 then
+    note = note .. ("; %d removed book%s restored from calibre's recycle bin"):format(#r.restored, #r.restored == 1 and "" or "s")
+    for _, id in ipairs(r.restored) do pcall(lulibre.mark, id, true) end
+  end
   lulibre.notify(("undid batch %d: %d book%s put back%s"):format(r.undid, r.applied, r.applied == 1 and "" or "s", note),
     #r.failed > 0 and "error" or nil)
 end, "[batch]  put back what the last change (or a given batch) did")
@@ -171,7 +176,7 @@ lulibre.command("remove", function()
   for _, id in ipairs(ids) do lulibre.mark(id, false) end
   lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or ("removed %d book%s"):format(n, n == 1 and "" or "s"),
     err and "error" or nil)
-end, "remove the selected books from calibre (they go to its recycle bin)")
+end, "remove the selected books from calibre (to its recycle bin; u puts them back)")
 
 lulibre.command("yank", function(what)
   local ids = lulibre.selection()

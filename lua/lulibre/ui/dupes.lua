@@ -74,7 +74,7 @@ function M.run()
         -- what the copies being removed know and the kept ones do not is
         -- kept as proposals for the kept ones
         local carried = dupes.propose(dupes.gather(groups), "duplicate")
-        local n, err = edit.remove(ids)
+        local n, err = edit.remove(ids, { label = "duplicates" })
         local msg = ("removed %d duplicate book%s"):format(n, n == 1 and "" or "s")
         if carried > 0 then msg = msg .. ("; %d things they knew are proposals for the kept copies (gr)"):format(carried) end
         lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or msg, err and "error" or nil)

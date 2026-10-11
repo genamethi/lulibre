@@ -398,25 +398,54 @@ function M.resolve_from(current, field, op, value)
   return M.resolve(fake, field, op, value)
 end
 
+-- The journal's field name for a removed book; `old` holds what it was.
+local REMOVED = "(removed)"
+
+local function snapshot(book)
+  local snap = { title = book.title, formats = book.formats }
+  for _, field in ipairs(M.fields) do snap[field] = M.current(book, field) end
+  return snap
+end
+
 --- Remove books from the library. Waits. calibre moves them to its recycle
--- bin (.caltrash in the library folder) rather than deleting them outright.
--- Returns how many were removed, and an error message if calibredb failed.
-function M.remove(ids)
+-- bin (.caltrash in the library folder) rather than deleting them, and each
+-- removal is journaled with what the record said, so M.undo can bring the
+-- book back for as long as calibre keeps it there. opts.label names the
+-- batch in the history. Returns how many were removed, and an error message
+-- if calibredb failed.
+function M.remove(ids, opts)
   local removed = 0
   for _, id in ipairs(ids) do
     if id < 0 then
-      return 0, "files staged from the sync folder are not in calibre; X (:sync move) adds and removes them"
+      return 0, "files staged from the sync folder are not in calibre; :sync drop takes them out of the folder"
     end
   end
+  if #ids == 0 then return 0 end
+  M.calibredb() -- stops here if the password file is missing
+  local json = require "lulibre.json"
+  local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
+  local label, now = opts and opts.label or "remove", os.time()
   for from = 1, #ids, 200 do
     local chunk = {}
-    for i = from, math.min(from + 199, #ids) do chunk[#chunk + 1] = tostring(ids[i]) end
+    for i = from, math.min(from + 199, #ids) do
+      local book = lulibre.book(ids[i])
+      if book then
+        chunk[#chunk + 1] = tostring(ids[i])
+        lulibre.store("INSERT INTO journal(batch, book, field, old, new, ts, label) VALUES(?, ?, ?, ?, '', ?, ?)",
+          batch, ids[i], REMOVED, json.encode(snapshot(book)), now, label)
+      end
+    end
     lulibre.progress(("removing %d/%d"):format(from + #chunk - 1, #ids))
     local args = M.calibredb()
     args[#args + 1] = "remove"
     args[#args + 1] = table.concat(chunk, ",")
     local r, e = lulibre.system(args, { timeout = 600000 })
-    if not r or r.code ~= 0 then
+    local good = r ~= nil and r.code == 0
+    for _, id in ipairs(chunk) do
+      lulibre.store("UPDATE journal SET status = ?, error = ? WHERE batch = ? AND book = ?",
+        good and "applied" or "failed", not good and failure(r, e) or nil, batch, tonumber(id))
+    end
+    if not good then
       lulibre.progress(nil)
       if removed > 0 then lulibre.reload() end
       return removed, failure(r, e)
@@ -426,6 +455,73 @@ function M.remove(ids)
   lulibre.progress(nil)
   if removed > 0 then lulibre.reload() end
   return removed
+end
+
+-- Bring one removed book back out of calibre's recycle bin: its files and
+-- cover are added again and its metadata (calibre's own record of it, kept
+-- beside the files) restored. The book gets a new id. Returns the id, or
+-- nil and why not.
+local function restore(id, snap)
+  local ok, uv = pcall(require, "luv")
+  if not ok then return nil, "putting a removed book back needs the luv rock" end
+  local dir = ("%s/.caltrash/b/%d"):format(lulibre.o.library, id)
+  local files, opf, cover = {}, nil, nil
+  local req = uv.fs_scandir(dir)
+  while req do
+    local name, kind = uv.fs_scandir_next(req)
+    if not name then break end
+    if name == "metadata.opf" then opf = dir .. "/" .. name
+    elseif name == "cover.jpg" then cover = dir .. "/" .. name
+    elseif kind == "file" then files[#files + 1] = dir .. "/" .. name end
+  end
+  table.sort(files)
+  local had_files = snap.formats and #snap.formats > 0
+  if #files == 0 and (had_files or not req) and not opf then
+    return nil, ("calibre's recycle bin no longer holds book %d (%s)"):format(id, snap.title or "?")
+  end
+
+  local args = M.calibredb()
+  args[#args + 1] = "add"
+  args[#args + 1] = "--duplicates"
+  args[#args + 1] = "--title"
+  args[#args + 1] = snap.title or "Unknown"
+  if snap.authors and snap.authors ~= "" then
+    args[#args + 1] = "--authors"
+    args[#args + 1] = snap.authors
+  end
+  if cover then
+    args[#args + 1] = "--cover"
+    args[#args + 1] = cover
+  end
+  if #files > 0 then args[#args + 1] = files[1] else args[#args + 1] = "--empty" end
+  local r, e = lulibre.system(args, { timeout = 300000 })
+  local new = r and r.code == 0 and tonumber((r.stdout .. r.stderr):match("Added book ids:%s*(%d+)"))
+  if not new then return nil, failure(r, e) end
+  for i = 2, #files do
+    local more = M.calibredb()
+    more[#more + 1] = "add_format"
+    more[#more + 1] = tostring(new)
+    more[#more + 1] = files[i]
+    lulibre.system(more, { timeout = 300000 })
+  end
+  -- the record: calibre's own copy of it if the bin has one, else what the journal kept
+  local meta = M.calibredb()
+  meta[#meta + 1] = "set_metadata"
+  meta[#meta + 1] = tostring(new)
+  if opf then
+    meta[#meta + 1] = opf
+  else
+    for _, field in ipairs(M.fields) do
+      local value = snap[field]
+      if value and value ~= "" and not (field == "series_index" and (snap.series or "") == "") then
+        meta[#meta + 1] = "--field"
+        meta[#meta + 1] = field .. ":" .. wire(field, value)
+      end
+    end
+  end
+  local mr, me = lulibre.system(meta, { timeout = 120000 })
+  if not mr or mr.code ~= 0 then return new, "the book is back, but not all of its metadata: " .. failure(mr, me) end
+  return new
 end
 
 --- One line for the message area about what apply() did.
@@ -443,7 +539,8 @@ end
 -- { {batch=, label=, ts=, books=, fields=, failed=, undone=}, ... }
 function M.history(limit)
   return lulibre.store([[SELECT batch, max(label) AS label, max(ts) AS ts, count(DISTINCT book) AS books,
-      count(*) AS fields, sum(status = 'failed') AS failed, min(undone) AS undone
+      count(*) AS fields, sum(status = 'failed') AS failed, min(undone) AS undone,
+      sum(field = '(removed)') AS removed
     FROM journal GROUP BY batch ORDER BY batch DESC LIMIT ?]], limit or 50)
 end
 
@@ -456,20 +553,39 @@ function M.undo(batch)
     if not last then return nil, "nothing to undo" end
     batch = last.batch
   end
-  local rows = lulibre.store("SELECT book, field, old, new FROM journal WHERE batch = ? AND status = 'applied' AND undone = 0", batch)
+  local rows = lulibre.store("SELECT id, book, field, old, new FROM journal WHERE batch = ? AND status = 'applied' AND undone = 0", batch)
   if #rows == 0 then return nil, "batch " .. batch .. " has nothing left to undo" end
   local changes, skipped = {}, 0
+  local restored, lost = {}, {}
   for _, row in ipairs(rows) do
+    if row.field == REMOVED then
+      -- a removed book comes back out of calibre's recycle bin
+      lulibre.progress(("putting back %d"):format(#restored + #lost + 1))
+      local new, why = restore(row.book, require("lulibre.json").decode(row.old))
+      if new then
+        restored[#restored + 1] = new
+        lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
+        if why then lost[#lost + 1] = { id = row.book, error = why } end
+      else
+        lost[#lost + 1] = { id = row.book, error = why }
+      end
+      goto next_row
+    end
     local book = lulibre.book(row.book)
     if book and M.current(book, row.field) == (row.new or "") then
       changes[#changes + 1] = { id = row.book, field = row.field, value = row.old or "", op = "set" }
     else
       skipped = skipped + 1
     end
+    ::next_row::
   end
+  lulibre.progress(nil)
+  if #restored + #lost > 0 then lulibre.reload() end
   local r = M.apply(changes, { label = "undo of " .. batch })
-  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ?", batch)
-  r.skipped, r.undid = skipped, batch
+  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field <> ?", batch, REMOVED)
+  r.skipped, r.undid, r.restored = skipped, batch, restored
+  r.applied = r.applied + #restored
+  for _, l in ipairs(lost) do table.insert(r.failed, l) end
   return r
 end
 

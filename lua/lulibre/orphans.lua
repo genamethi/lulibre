@@ -333,7 +333,7 @@ function M.apply(found)
   end
   lulibre.progress(nil)
   if #remove > 0 then
-    local n, err = edit.remove(remove)
+    local n, err = edit.remove(remove, { label = "orphans" })
     out.removed = n
     if err then table.insert(out.failed, err) end
   elseif out.reattached + out.added > 0 then
