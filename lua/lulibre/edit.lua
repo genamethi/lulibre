@@ -556,7 +556,7 @@ function M.undo(batch)
   local rows = lulibre.store("SELECT id, book, field, old, new FROM journal WHERE batch = ? AND status = 'applied' AND undone = 0", batch)
   if #rows == 0 then return nil, "batch " .. batch .. " has nothing left to undo" end
   local changes, skipped = {}, 0
-  local restored, lost = {}, {}
+  local restored, lost, staged_back = {}, {}, false
   for _, row in ipairs(rows) do
     if row.field == REMOVED then
       -- a removed book comes back out of calibre's recycle bin
@@ -566,6 +566,17 @@ function M.undo(batch)
         restored[#restored + 1] = new
         lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
         if why then lost[#lost + 1] = { id = row.book, error = why } end
+      else
+        lost[#lost + 1] = { id = row.book, error = why }
+      end
+      goto next_row
+    elseif row.field == "(dropped)" then
+      -- a file dropped from the sync folder goes back, with its staged metadata
+      local back, why = require("lulibre.sync").undrop(require("lulibre.json").decode(row.old))
+      if back then
+        restored[#restored + 1] = row.book
+        lulibre.store("UPDATE journal SET undone = 1, new = 'put back' WHERE id = ?", row.id)
+        staged_back = true
       else
         lost[#lost + 1] = { id = row.book, error = why }
       end
@@ -580,9 +591,10 @@ function M.undo(batch)
     ::next_row::
   end
   lulibre.progress(nil)
+  if staged_back then lulibre.stage_refresh() end
   if #restored + #lost > 0 then lulibre.reload() end
   local r = M.apply(changes, { label = "undo of " .. batch })
-  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field <> ?", batch, REMOVED)
+  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field NOT IN (?, '(dropped)')", batch, REMOVED)
   r.skipped, r.undid, r.restored = skipped, batch, restored
   r.applied = r.applied + #restored
   for _, l in ipairs(lost) do table.insert(r.failed, l) end

@@ -83,7 +83,7 @@ name can be dragged over on the page and pasted with `<C-v>`.
 | `go` | `orphans` | records without files, files without records, broken links |
 | `gS` | `sync` | read the sync folder and show it |
 | `gl` | `source library` | back to the library |
-| `S` `X` | `sync add` / `sync move` | staged files into the library |
+| `S` `X` `D` | `sync add` / `sync move` / `sync drop` | staged files into the library, or out of the folder |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |
 | | `remove` | remove the selection from calibre (to its recycle bin; `u` undoes) |
 | | `embed` | write calibre's metadata into the files themselves |

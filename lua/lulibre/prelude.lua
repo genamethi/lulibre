@@ -121,8 +121,12 @@ lulibre.command("undo", function(args)
   local note = r.skipped > 0 and ("; %d left alone because they changed again since"):format(r.skipped) or ""
   if #r.failed > 0 then note = note .. "; " .. tostring(r.failed[1].error) end
   if r.restored and #r.restored > 0 then
-    note = note .. ("; %d removed book%s restored from calibre's recycle bin"):format(#r.restored, #r.restored == 1 and "" or "s")
-    for _, id in ipairs(r.restored) do pcall(lulibre.mark, id, true) end
+    local staged = r.restored[1] < 0
+    note = note .. (staged and "; %d dropped file%s back in the sync folder"
+      or "; %d removed book%s restored from calibre's recycle bin"):format(#r.restored, #r.restored == 1 and "" or "s")
+    if not staged then
+      for _, id in ipairs(r.restored) do pcall(lulibre.mark, id, true) end
+    end
   end
   lulibre.notify(("undid batch %d: %d book%s put back%s"):format(r.undid, r.applied, r.applied == 1 and "" or "s", note),
     #r.failed > 0 and "error" or nil)
@@ -160,7 +164,7 @@ lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a 
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")
 lulibre.command("sync", script("sync"),
-  "[add | move] [filter]  the sync folder: show it; add the selection to the library; add and delete")
+  "[add | move | drop] [filter]  the sync folder: show it; add the selection; add and delete; drop without adding")
 lulibre.command("orphans", screen("lulibre.ui.orphans"),
   "records with no file and files with no record: check, then clean up")
 lulibre.command("browse", function(args) require("lulibre.ui.browse").run(args) end,

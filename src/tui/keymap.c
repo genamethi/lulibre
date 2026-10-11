@@ -220,6 +220,7 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "gl", "source library"},
     {MODE_NORMAL | MODE_VISUAL, "S", "sync add"},
     {MODE_NORMAL | MODE_VISUAL, "X", "sync move"},
+    {MODE_NORMAL | MODE_VISUAL, "D", "sync drop"},
     {MODE_NORMAL, "u", "undo"},
     {MODE_NORMAL | MODE_VISUAL, "yb", "yank bib"},
     {MODE_NORMAL | MODE_VISUAL, "yk", "yank key"},
