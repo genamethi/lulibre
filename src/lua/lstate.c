@@ -117,6 +117,7 @@ lua_State *lstate_new(struct app *app) {
   l_doc_open(L);
   l_proc_open(L);
   l_hash_open(L);
+  l_index_open(L);
   l_theme_open(L);
   l_match_open(L);
   l_ui_open(L);

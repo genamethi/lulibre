@@ -908,6 +908,10 @@ static void ix_done(struct indexer *ix, const struct index_stats *st, void *ud) 
   struct index_stats s = *st; /* st lives inside the indexer being freed */
   indexer_free(t->ix);
   t->ix = NULL;
+  /* tell whoever was waiting, even when leaving: their memory is theirs to free */
+  int nhook = t->nix_hook;
+  t->nix_hook = 0;
+  for (int i = 0; i < nhook; i++) t->ix_hook[i](&s, t->ix_hook_ud[i]);
   if (t->quit) return;
   if (s.queued)
     tui_msg(t, 0, "indexed %d files in %.1fs (%d could not be read)", s.ok, s.elapsed, s.failed);
@@ -936,6 +940,23 @@ void tui_start_index(struct tui *t, int force) {
     free(err);
   }
   tui_dirty(t);
+}
+
+int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
+              void *ud, char **err) {
+  if (t->nix_hook == 8) {
+    *err = xstrdup("too many scripts are waiting for the indexer");
+    return -1;
+  }
+  if (!t->ix) {
+    t->ix_done = t->ix_total = t->ix_failed = 0;
+    t->ix = indexer_start(t->app->loop, &t->app->db, o, ix_progress, ix_done, t, err);
+    if (!t->ix) return -1;
+    tui_dirty(t);
+  }
+  t->ix_hook[t->nix_hook] = done;
+  t->ix_hook_ud[t->nix_hook++] = ud;
+  return 0;
 }
 
 /* Calibre changed underneath us (the content server, calibredb, another

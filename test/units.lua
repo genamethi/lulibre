@@ -451,5 +451,16 @@ do
   eq("an article is not a thesis", titlepage.thesis { "A Note on Sieves", "by", "P. Erdos", "Received May 1950" }, nil)
 end
 
+-- indexing from a script
+do
+  local r = lulibre.index()
+  eq("index returns what it did", { type(r.files), type(r.ok), type(r.seconds), r.failed }, { "number", "number", "number", 0 })
+  local again = lulibre.index { force = true }
+  eq("force reads every file again", again.ok, again.files - again.missing)
+  local one = lulibre.index { filter = "id:1", force = true }
+  eq("a filter limits the run", one.files, #lulibre.files(1))
+  eq("a bad filter is an error, not a hang", (pcall(lulibre.index, { filter = "nosuch:field" })), false)
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

@@ -38,12 +38,7 @@ if what == "" or what == "scan" then
   lulibre.notify(msg .. "   (S adds the selection, X adds and removes; gl is the library)")
   -- read the new files' title pages, if wanted
   if r.new > 0 and lulibre.policy("sync_propose", ("propose metadata for the %d new files from their title pages?"):format(r.new)) then
-    lulibre.exec("index")
-    for _ = 1, 1200 do -- the indexer works in the background; wait for it
-      local left = lulibre.sql("SELECT count(*) AS n FROM files WHERE book < 0 AND status = 0")[1].n
-      if left == 0 then break end
-      lulibre.sleep(100)
-    end
+    lulibre.index { filter = "in:sync" }
     lulibre.exec("run propose in:sync")
   end
   return

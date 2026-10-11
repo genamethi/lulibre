@@ -21,6 +21,8 @@ Added
   `<C-n>` `<C-p>` move through them.
 - History for the command, filter and search lines, kept between sessions.
   `Up` and `Down` recall entries that start with what has been typed.
+- `lulibre.index{filter=, force=}` runs the indexer from a script and waits
+  for it.
 
 ## 0.1.0-alpha.2
 
