@@ -58,6 +58,13 @@ code.
 - luv belongs to the main Lua state. It is loaded once at startup; never
   arrange for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
+- A screen written in Lua never compares a key with a letter. It asks its
+  key table (`lua/lulibre/ui/keys.lua`) which action the key means, and its
+  hint and `?` help are written from that table. A new action goes into the
+  table with a label and a description.
+- Nothing shown to the user names a key literally: C uses `key_hint("the
+  command")`, Lua `lulibre.hint("the command")`, a screen `keys:key(action)`.
+  The user rebinds keys and expects what is on screen to say so.
 - A command acts on what the *focused* cursor shows. With a panel that
   follows the list focused, that is the panel row's book, not the list's
   cursor: once the two can differ (the book was removed, or filtered out)
@@ -80,6 +87,11 @@ code.
 - `make check` always; `make e2e` before a merge that touches writing.
   A change to a form (edit, review, duplicates, orphans) gets a keystroke
   check in `test/forms.sh`.
+- A tmux session made with `-y 30` has 29 rows for the program (tmux keeps
+  one for its status line): find a row by what is on it, never by number.
+- A message left on the message line by an earlier step satisfies a later
+  `shown "changed 1 book"`. Clear it (`Escape`) before a step that waits for
+  the same words, or the check passes before the work is done.
 - A long tmux socket path fails ("File name too long"): name the private
   server with `-L`, do not move its socket directory under a deep `mktemp`.
 - Thread or memory work: `./configure --sanitize=address,undefined` and
