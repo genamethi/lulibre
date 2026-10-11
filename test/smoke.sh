@@ -159,6 +159,31 @@ if command -v tmux >/dev/null; then
   i=0; while [ "$($T show-buffer 2>/dev/null)" = "Sieve Methods" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i + 1)); done
   expect "yy copies the title"           "paper" "$($T show-buffer 2>/dev/null)"
 
+  # outside the preview's text a drag selects what is drawn: the list, a line being typed
+  row=$($T capture-pane -p -t t | grep -n '^ *— *paper' | head -1 | cut -d: -f1)
+  before=$($T capture-pane -p -t t | sed -n "${row}p" | sed 's/paper.*//')
+  col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
+  mouse '\033[<0;%d;%dM' "$col" "$row"
+  mouse '\033[<32;%d;%dM' "$((col + 2))" "$row"
+  mouse '\033[<0;%d;%dm' "$((col + 2))" "$row"
+  expect "a drag in the list copies what it covers" "pap" "$($T show-buffer 2>/dev/null)"
+  sleep 0.6
+  $T send-keys -t t : ; $T send-keys -t t -l "echo hello world"
+  wait_for "^:echo hello world"; row=$($T capture-pane -p -t t | grep -n '^:echo hello world' | head -1 | cut -d: -f1)
+  mouse '\033[<0;7;%dM' "$row"
+  mouse '\033[<32;11;%dM' "$row"
+  mouse '\033[<0;11;%dm' "$row"
+  expect "and in the line being typed"       "hello" "$($T show-buffer 2>/dev/null)"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "echo " ; $T send-keys -t t C-v
+  shown "which can be pasted back into it"   "^:echo hello *$"
+  $T send-keys -t t Escape
+  sleep 0.6
+  row=$($T capture-pane -p -t t | grep -n 'NORMAL' | head -1 | cut -d: -f1)
+  mouse '\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row"
+  mouse '\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row"
+  expect "a double click takes the word under it" "NORMAL" "$($T show-buffer 2>/dev/null)"
+  sleep 0.6
+
   # a paste from the terminal is text, whatever is in it
   $T set-buffer "$(printf 'echo two\nlines ZZ')"
   $T send-keys -t t : ; $T paste-buffer -p -t t

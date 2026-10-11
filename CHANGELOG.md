@@ -41,6 +41,11 @@ Added
   `is:capstitle` filters for titles in capitals. For scripts:
   `lulibre.titlecase`, and `lulibre.lower` / `lulibre.upper`, which know
   accented, Greek and Cyrillic letters.
+- The mouse selects text everywhere, not only in the preview: a drag in the
+  list, a panel, the line being typed, the status line or an overlay copies
+  what it covers; a double click the word; a triple click the row, or in a
+  panel the whole cell including what its column cut off. `<C-y>` copies
+  the line being typed.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

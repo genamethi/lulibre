@@ -49,7 +49,12 @@
 | wheel | scroll what it is over |
 | drag in the text preview | select text; it is copied when the button is released |
 | double click · triple click there | the word · the line |
+| drag anywhere else | select what is drawn there: a row of the list, a cell of review, the line being typed, the status line, a help or message overlay |
+| double click · triple click there | the word · the row; in a panel, the whole of the cell, including what its column cut off |
 | middle or right click, while typing | paste |
+
+A selection stays within the window (or line) it began in. It is copied at
+once and stays highlighted until the next key or click.
 
 `lulibre.o.mouse = 0` hands the mouse back to the terminal. With it on, hold
 Shift to make the terminal's own selection.
@@ -61,6 +66,7 @@ In the command line, a filter, a search, or a field of the edit form:
 | Key | |
 |---|---|
 | `<C-v>` | paste what was last copied, as one line |
+| `<C-y>` | copy the line as it stands |
 | the terminal's own paste | the same: line breaks become spaces, nothing is submitted |
 | `<PageUp>` `<PageDown>` | scroll the preview without leaving the field |
 | `Tab` | take the highlighted suggestion or completion |
@@ -75,8 +81,9 @@ names, `:sort` keys); `&` and `/` complete the filter language (`au` →
 `author:`, `is:d` → `is:dupe`). History is kept between sessions, separately
 for commands, filters and searches.
 
-The mouse still works in the preview while a field is open, so a title or a
-name can be dragged over on the page and pasted with `<C-v>`.
+The mouse still selects while a field is open, in the preview and in the
+panels, so a title on the page or a value in another row can be dragged over
+and pasted with `<C-v>`.
 
 ## Changing things
 
