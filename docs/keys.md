@@ -61,6 +61,7 @@ In the command line, a filter, a search, or a field of the edit form:
 | Key | |
 |---|---|
 | `<C-v>` | paste what was last copied, as one line |
+| the terminal's own paste | the same: line breaks become spaces, nothing is submitted |
 | `<PageUp>` `<PageDown>` | scroll the preview without leaving the field |
 | `Tab` | take the highlighted suggestion |
 | `<C-a>` `<C-e>` `<C-u>` `<C-k>` `<C-w>` | start, end, delete to start, to end, a word back |
@@ -84,7 +85,7 @@ name can be dragged over on the page and pasted with `<C-v>`.
 | `gl` | `source library` | back to the library |
 | `S` `X` | `sync add` / `sync move` | staged files into the library |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |
-| | `remove` | remove the selection from calibre (to its recycle bin) |
+| | `remove` | remove the selection from calibre (to its recycle bin; `u` undoes) |
 | | `embed` | write calibre's metadata into the files themselves |
 
 ## Other commands

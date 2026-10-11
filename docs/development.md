@@ -13,7 +13,7 @@ cannot tell).
 
 | Build | |
 |---|---|
-| release (default) | `-O2`, no symbols |
+| release (default) | `-O2 -g`: optimised, with symbols so a crash log resolves to lines |
 | `--debug` | `-O0 -g3`, and the trace level of the log |
 | `--sanitize=address,undefined` · `--sanitize=thread` | a debug build with that sanitizer |
 
@@ -60,6 +60,14 @@ A sanitizer build should stay clean on all of them:
     ./configure --sanitize=thread && make check
 
 (`use_sigaltstack=0` because notcurses installs its own alternate signal stack.)
+
+## Crashes
+
+A fatal signal appends the version and a backtrace to
+`~/.local/state/lulibre/crash.log` before the terminal is restored and the
+core is dumped. Frames read `lulibre(+0xOFFSET)`;
+`addr2line -fe $(command -v lulibre) 0xOFFSET` names the function and line.
+`coredumpctl info lulibre` has the same stack where systemd keeps cores.
 
 ## Layout
 
