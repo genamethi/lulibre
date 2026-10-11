@@ -45,6 +45,11 @@ static const struct opt_def opts[] = {
       "before a duplicate or orphan record is removed, keep what only it knew as proposals",
       NULL),
 
+  OPT(propose_over, OPT_STR, "sure", "gaps|sure|any",
+      "what :propose does about a field that already has a value: gaps leaves it alone; sure "
+      "proposes when the file is confident (0.8 or more) and says something different; any "
+      "proposes whenever the file's best candidate differs",
+      NULL),
   OPT(title_case, OPT_STR, "auto", "auto|never",
       "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
       NULL),

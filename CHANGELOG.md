@@ -50,6 +50,13 @@ Added
   them or a window's bar up or down, and from the keyboard with Alt and an
   arrow, or `<Leader>` and an arrow (`:resize left|right|up|down`). These
   keys, like any Alt combination and the leader, work from inside panels.
+- `:propose` no longer stops at fields that have a value. When the file is
+  confident and says something different from what the book holds, that is
+  proposed too, so a value mistyped by hand gets corrected by the next run.
+  The option `propose_over` (`gaps`, `sure`, `any`) sets how far the file is
+  believed; `:propose --over` and `--gaps` do so for one run. A proposal
+  that was rejected is not made again unless `--over` asks, and accepting
+  everything above a confidence asks before replacing existing values.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

@@ -8,7 +8,9 @@ local M = {}
 --- Propose a change. opts: op ("set", "add", "remove"), source, confidence,
 -- note. A title that arrives in capitals is proposed in title case, as the
 -- option title_case allows, unless it was typed (source "typed") or
--- opts.as_is is set. Returns true and the proposal's id, or false if the book already
+-- opts.as_is is set. A value that was proposed for this book and field and
+-- rejected is not proposed again (a decision made in review holds), unless
+-- it is typed or opts.again is set. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
 function M.add(id, field, value, opts)
@@ -24,6 +26,11 @@ function M.add(id, field, value, opts)
   if new == edit.current(book, field) then return false end
   local dup = lulibre.store([[SELECT id, confidence, source FROM proposals WHERE book = ? AND field = ? AND op = ?
     AND value = ? AND status IN ('pending', 'accepted')]], id, field, op, value)[1]
+  if not dup and not opts.again and opts.source ~= "typed" then
+    local said_no = lulibre.store([[SELECT 1 AS x FROM proposals WHERE book = ? AND field = ? AND op = ?
+      AND value = ? AND status = 'rejected' LIMIT 1]], id, field, op, value)[1]
+    if said_no then return false end
+  end
   if dup then
     -- the same value from a surer source: the proposal takes that source's word
     if opts.confidence and opts.confidence > (dup.confidence or 0) then
@@ -111,6 +118,14 @@ function M.apply_accepted(scope, only)
     end
   end
   return r
+end
+
+--- Would this proposal replace a value the book has (rather than fill an
+-- empty field, or add to a list)?
+function M.replaces(p)
+  if p.op ~= "set" then return false end
+  local book = lulibre.book(p.book)
+  return book ~= nil and edit.current(book, p.field) ~= ""
 end
 
 --- Drop proposals: by status, or everything not yet applied.

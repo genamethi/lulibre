@@ -499,6 +499,46 @@ do
   eq("a title found in capitals is suggested in title case", got, "Lectures on Riemann Surfaces")
 end
 
+-- proposing for a field that already has a value
+do
+  local propose = require "lulibre.propose"
+  local proposals = require "lulibre.proposals"
+  eq("same: quotes, case and punctuation do not matter",
+    propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
+  eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
+  eq("same: a bare year against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
+  eq("not the same", { propose.same("authors", "Bernhard Riemann", "W. Dittrich"), propose.same("pubdate", "2017-08-03", "2016") },
+    { false, false })
+  local book = lulibre.book(2) -- Notes, by Paul Erdős, 1996
+  local cands = {
+    { field = "authors", value = "P. Turan", source = "title page", confidence = 0.85 },
+    { field = "authors", value = "Somebody Else", source = "embedded", confidence = 0.6 },
+    { field = "publisher", value = "Acme", source = "title page", confidence = 0.55 },
+    { field = "title", value = "notes", source = "embedded", confidence = 0.6 },
+  }
+  local function fields(mode)
+    local out = {}
+    for _, w in ipairs(propose.wanted(book, cands, mode)) do out[#out + 1] = w.field .. (w.over and "!" or "") end
+    return table.concat(out, " ")
+  end
+  eq("gaps: only what is empty", fields("gaps"), "publisher")
+  eq("sure: also a confident candidate that differs, the strongest only", fields("sure"), "authors! publisher")
+  eq("any: the same here, since the title agrees", fields("any"), "authors! publisher")
+  cands[1].confidence = 0.6
+  eq("sure: a weak candidate does not go over a value", fields("sure"), "publisher")
+  eq("any: it does", fields("any"), "authors! publisher")
+  -- a rejection is remembered
+  local ok, pid = proposals.add(2, "publisher", "Rejected House", { source = "test", confidence = 0.9 })
+  eq("a proposal is added", ok, true)
+  proposals.set_status(pid, "rejected")
+  eq("what was rejected is not proposed again", proposals.add(2, "publisher", "Rejected House", { source = "test" }), false)
+  eq("unless asked to", (proposals.add(2, "publisher", "Rejected House", { source = "test", again = true })), true)
+  eq("replaces: a value over a value", { proposals.replaces { book = 2, field = "authors", op = "set" },
+    proposals.replaces { book = 2, field = "publisher", op = "set" }, proposals.replaces { book = 2, field = "tags", op = "add" } },
+    { true, false, false })
+  lulibre.store("DELETE FROM proposals WHERE book = 2 AND field = 'publisher'")
+end
+
 -- keys: the screens' tables, and the global keymap as scripts see it
 do
   local screens = require "lulibre.ui.keys"

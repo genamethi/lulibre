@@ -200,6 +200,7 @@ its own documentation.
 |---|---|
 | `lulibre.edit` | apply, undo, history, remove; a field's current value; the write route |
 | `lulibre.proposals` | add, list, accept, apply |
+| `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, again=})`, `wanted(book, candidates, over)`, `same(field, a, b)` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
