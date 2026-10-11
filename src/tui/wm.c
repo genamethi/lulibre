@@ -103,6 +103,16 @@ static void leaves(struct node *n, struct node **out, int *count) {
   leaves(n->b, out, count);
 }
 
+struct node *wm_leaf_of(struct tui *t, void *state) {
+  struct node *all[32];
+  int n = 0;
+  if (!state) return NULL;
+  leaves(t->root, all, &n);
+  for (int i = 0; i < n; i++)
+    if (all[i]->state == state) return all[i];
+  return NULL;
+}
+
 struct node *wm_at(struct tui *t, int y, int x) {
   struct node *all[32];
   int n = 0;

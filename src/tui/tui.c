@@ -251,6 +251,9 @@ static void filter_timer_cb(uv_timer_t *h) {
   else if (t->prompt == PROMPT_SEARCH) rows_search(t, text);
 }
 
+static void prompt_changed(struct tui *t);
+static void prompt_paste(struct tui *t);
+
 static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
   const char *text = t->line.text.s ? t->line.text.s : "";
   switch (key) {
@@ -274,6 +277,15 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       free(line);
       return;
     }
+    case KEY_CTRL | 'v': /* paste what was last copied, as one line */
+      prompt_paste(t);
+      return;
+    case NCKEY_PGUP: /* the preview stays readable while a field is typed */
+      preview_scroll(t, -8);
+      return;
+    case NCKEY_PGDOWN:
+      preview_scroll(t, 8);
+      return;
     case NCKEY_ESC:
     case KEY_CTRL | 'c':
       if (t->prompt == PROMPT_FILTER && t->prompt_saved) rows_set_filter(t, t->prompt_saved);
@@ -320,15 +332,18 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       }
       break;
   }
-  if (le_key(&t->line, key, ni)) {
-    if (t->prompt == PROMPT_FILTER || t->prompt == PROMPT_SEARCH)
-      uv_timer_start(&t->ftimer, filter_timer_cb, 40, 0);
-    if (t->prompt == PROMPT_INPUT) {
-      suggest_rematch(t);
-      if (t->input_change) t->input_change(t, t->line.text.s ? t->line.text.s : "", t->input_ud);
-    }
-    tui_dirty(t);
+  if (le_key(&t->line, key, ni)) prompt_changed(t);
+}
+
+/* the text being typed changed: filters and suggestions follow it */
+static void prompt_changed(struct tui *t) {
+  if (t->prompt == PROMPT_FILTER || t->prompt == PROMPT_SEARCH)
+    uv_timer_start(&t->ftimer, filter_timer_cb, 40, 0);
+  if (t->prompt == PROMPT_INPUT) {
+    suggest_rematch(t);
+    if (t->input_change) t->input_change(t, t->line.text.s ? t->line.text.s : "", t->input_ud);
   }
+  tui_dirty(t);
 }
 
 /* ----------------------------------------------------------------- input */
@@ -347,14 +362,61 @@ static void help_key(struct tui *t, uint32_t key) {
   tui_dirty(t);
 }
 
+/* Insert what was last copied into the field being typed, as one line. */
+static void prompt_paste(struct tui *t) {
+  char *text = clip_paste();
+  if (!text) {
+    tui_msg(t, 0, "nothing has been copied yet");
+    return;
+  }
+  sbuf flat = SBUF_INIT;
+  int gap = 0;
+  for (const char *p = text; *p; p++) {
+    if (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r' || *p == '\f') {
+      gap = flat.len > 0;
+    } else {
+      if (gap) sb_putc(&flat, ' ');
+      gap = 0;
+      sb_putc(&flat, *p);
+    }
+  }
+  if (flat.len) {
+    le_insert(&t->line, flat.s, flat.len);
+    prompt_changed(t);
+  }
+  sb_free(&flat);
+  free(text);
+}
+
 /* A click focuses the window under it and, in a list or panel, picks the row;
- * the wheel scrolls whatever it is over. Overlays and prompts ignore both. */
+ * the wheel scrolls whatever it is over; a drag in a text preview selects
+ * and copies. While a field is being typed the list and panels are left
+ * alone, but the preview can still be scrolled and selected from, and the
+ * middle or right button pastes. Overlays ignore the mouse. */
 static void on_mouse(struct tui *t, const struct ncinput *ni) {
-  if (t->help || (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL)) return;
-  struct node *nd = wm_at(t, ni->y, ni->x);
-  if (!nd) return;
+  if (t->help || t->mode == MODE_PICKER) return;
+  int release = ni->evtype == NCTYPE_RELEASE;
   int wheel = ni->id == NCKEY_SCROLL_UP ? -3 : ni->id == NCKEY_SCROLL_DOWN ? 3 : 0;
-  if (!wheel && ni->id != NCKEY_BUTTON1) return;
+  int left = ni->id == NCKEY_BUTTON1;
+
+  /* a drag that began in a preview goes on wherever the pointer is */
+  if (t->drag && (left || ni->id == NCKEY_MOTION)) {
+    struct node *in = wm_leaf_of(t, t->drag);
+    if (!in || !preview_mouse(t, in->state, ni->y, ni->x, release ? 2 : 1)) t->drag = NULL;
+    return;
+  }
+  if (release || ni->id == NCKEY_MOTION) return;
+
+  struct node *nd = wm_at(t, ni->y, ni->x);
+  if (t->mode == MODE_PROMPT) {
+    if (ni->id == NCKEY_BUTTON2 || ni->id == NCKEY_BUTTON3) prompt_paste(t);
+    else if (nd && nd->cls == &view_preview && wheel) preview_scroll(t, wheel);
+    else if (nd && nd->cls == &view_preview && left && preview_mouse(t, nd->state, ni->y, ni->x, 0))
+      t->drag = nd->state;
+    return;
+  }
+  if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
+  if (!nd || (!wheel && !left)) return;
   if (nd->cls == &view_list) {
     int row = wheel ? t->rows.cur + wheel : t->rows.top + ni->y - nd->r.y - 1;
     if (wheel || (ni->y > nd->r.y && row < t->rows.n)) {
@@ -365,8 +427,9 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   } else if (nd->cls == &view_panel) {
     if (wheel) panel_wheel(nd->state, wheel);
     else panel_click(nd->state, ni->y - nd->r.y);
-  } else if (nd->cls == &view_preview && wheel) {
-    preview_scroll(t, wheel);
+  } else if (nd->cls == &view_preview) {
+    if (wheel) preview_scroll(t, wheel);
+    else if (preview_mouse(t, nd->state, ni->y, ni->x, 0)) t->drag = nd->state;
   } else if (nd->cls == &view_console && wheel) {
     console_wheel(nd->state, wheel);
   }
@@ -375,6 +438,11 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
 }
 
 static void on_key(struct tui *t, const struct ncinput *ni) {
+  /* the mouse first: the end of a drag is a release */
+  if (ni->id >= NCKEY_MOTION && ni->id <= NCKEY_BUTTON11) {
+    on_mouse(t, ni);
+    return;
+  }
   if (ni->evtype == NCTYPE_RELEASE) return;
   if (ni->id == NCKEY_RESIZE) {
     unsigned y, x;
@@ -387,11 +455,7 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     uv_stop(t->app->loop);
     return;
   }
-  /* mouse and other synthesized events are not keys */
-  if (ni->id >= NCKEY_MOTION && ni->id <= NCKEY_BUTTON11) {
-    on_mouse(t, ni);
-    return;
-  }
+  /* other synthesized events are not keys */
   if (nckey_synthesized_p(ni->id) && ni->id >= NCKEY_CAPS_LOCK) return;
 
   uint32_t key = key_from_input(ni);
@@ -701,7 +765,7 @@ int tui_run(struct app *app) {
   t->nc = notcurses_core_init(&no, NULL);
   if (!t->nc) die("cannot initialise the terminal (TERM=%s)", getenv("TERM") ? getenv("TERM") : "");
   notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
-  if (app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT);
+  if (app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
   t->std = notcurses_stdplane(t->nc);
 
   t->mode = MODE_NORMAL;
@@ -761,6 +825,7 @@ int tui_run(struct app *app) {
   uv_run(loop, UV_RUN_DEFAULT);
 
   rows_free(t);
+  clip_free();
   app->tui = NULL;
   le_free(&t->line);
   for (int i = 0; i < t->nhistory; i++) free(t->history[i]);

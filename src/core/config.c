@@ -22,7 +22,6 @@ static const struct opt_def opts[] = {
       "(calibre allows that only while no calibre program has the library open), or auto: the "
       "server when it answers, else directly",
       NULL),
-  OPT(index, OPT_PATH, "", NULL, "index database file (default: under the XDG data dir)", NULL),
 
   OPT(pages, OPT_INT, "6", NULL, "first N pages of each file to index as text", "The index"),
   OPT(layout_pages, OPT_INT, "2", NULL, "of those, pages kept as lines tagged with font size", NULL),
@@ -45,8 +44,6 @@ static const struct opt_def opts[] = {
   OPT(carry_metadata, OPT_STR, "auto", POLICY,
       "before a duplicate or orphan record is removed, keep what only it knew as proposals",
       NULL),
-  OPT(orphans_dir, OPT_PATH, "", NULL,
-      "where stray files are set aside (default: orphans/ under the XDG data dir)", NULL),
 
   OPT(sync_dir, OPT_PATH, "", NULL,
       "a folder of files waiting to be added to the library; gS shows it", "The sync folder"),
@@ -61,6 +58,15 @@ static const struct opt_def opts[] = {
       "1: click selects, the wheel scrolls (Shift selects text); 0: off", NULL),
   OPT(review_open, OPT_INT, "0", NULL,
       "1: the review screen starts with every book's other fields shown", NULL),
+
+  OPT(config_dir, OPT_PATH, "", NULL,
+      "where init.lua, scripts/ and lua/ are looked for (default: ~/.config/lulibre). To start "
+      "from another one use `lulibre -C DIR` or $LULIBRE_CONFIG_DIR; set here, it moves scripts/ "
+      "and lua/ from then on",
+      "Where lulibre keeps things"),
+  OPT(index, OPT_PATH, "", NULL, "index database file (default: under the XDG data dir)", NULL),
+  OPT(orphans_dir, OPT_PATH, "", NULL,
+      "where stray files are set aside (default: orphans/ under the XDG data dir)", NULL),
   OPT(log_file, OPT_PATH, "", NULL,
       "also append the log to this file (the console, `, shows it either way)", NULL),
 };
@@ -141,6 +147,12 @@ const char *config_str(const struct config *c, const struct opt_def *o) {
 
 int config_int(const struct config *c, const struct opt_def *o) {
   return *int_slot(c, o);
+}
+
+char *config_dir_path(const struct config *c) {
+  if (c->config_dir && c->config_dir[0]) return xstrdup(c->config_dir);
+  const char *xdg = getenv("XDG_CONFIG_HOME");
+  return xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.config/lulibre");
 }
 
 char *config_index_path(const struct config *c) {

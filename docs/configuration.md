@@ -8,6 +8,7 @@
     lulibre -o name=value     override one for this run
     :set name=value           inside the interface, until it closes
     lulibre --clean           start without init.lua
+    lulibre -C DIR            use another configuration directory (or $LULIBRE_CONFIG_DIR)
 
 ## Options
 
@@ -35,6 +36,11 @@ o.library = "~/calibre-library"
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
+| `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |
+
+From Lua the same options are `lulibre.settings.get(name)` and
+`lulibre.settings.set(name, value)`; `lulibre.settings.paths()` says where
+everything is.
 
 ### Things lulibre may do on its own
 
@@ -80,7 +86,7 @@ See [the Lua API](api.md).
 
 | | |
 |---|---|
-| `~/.config/lulibre/` | `init.lua`, `scripts/`, `lua/` |
+| `~/.config/lulibre/` | `init.lua`, `scripts/`, `lua/`. Another directory: `lulibre -C DIR`, `$LULIBRE_CONFIG_DIR`, or the option `config_dir` |
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. Derived from the library and rebuilt at will, except for what lulibre alone knows: the undo journal, proposals, staged files' metadata, saved capture rules, file hashes |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 

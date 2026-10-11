@@ -13,14 +13,14 @@ static const char help[] =
   "Print the configuration as a Lua file: every option with what it does, set\n"
   "to its current value (options still at their default are commented out),\n"
   "then the colours and examples of key maps and commands.\n\n"
-  "  --write   save it as ~/.config/lulibre/init.lua, unless that file exists\n"
+  "  --write   save it as init.lua in the configuration directory\n"
+  "            (~/.config/lulibre, or -C DIR), unless that file exists\n"
   "  --path    print where the configuration file is looked for\n\n"
   "`lulibre config > file` writes it anywhere. The file is plain Lua, loaded at\n"
   "startup; `lulibre -o name=value` overrides an option for one run.\n";
 
-static char *config_path(void) {
-  const char *xdg = getenv("XDG_CONFIG_HOME");
-  char *dir = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.config/lulibre");
+static char *config_path(const struct app *app) {
+  char *dir = config_dir_path(&app->cfg);
   char *path = xasprintf("%s/init.lua", dir);
   free(dir);
   return path;
@@ -63,7 +63,8 @@ static void emit(FILE *f, const struct app *app) {
         "-- Plain Lua, loaded when lulibre starts. `lulibre config` prints this file\n"
         "-- with the values in effect; `lulibre -o name=value` overrides an option for\n"
         "-- one run, and `:set name=value` inside the interface until it closes.\n"
-        "-- A line that is commented out shows the default.\n"
+        "-- A line that is commented out shows the default. From a script the same\n"
+        "-- options are lulibre.settings.get(name) and lulibre.settings.set(name, value).\n"
         "--\n"
         "-- Options that say auto | ask | never are things lulibre can do on its own:\n"
         "-- \"auto\" does them without a word, \"ask\" asks first (and does nothing when\n"
@@ -137,7 +138,7 @@ static void emit(FILE *f, const struct app *app) {
 }
 
 int cmd_config(struct app *app, int argc, char **argv) {
-  char *path = config_path();
+  char *path = config_path(app);
   int rc = 0;
   if (argc > 1 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
     fputs(help, stdout);

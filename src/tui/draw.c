@@ -91,6 +91,20 @@ int dr_width(const char *s, size_t len) {
   return cols;
 }
 
+size_t dr_bytes_for_cols(const char *s, size_t len, int cols) {
+  size_t i = 0;
+  int used = 0;
+  while (i < len) {
+    unsigned cp;
+    int k = utf8_decode(s + i, len - i, &cp);
+    int w = cp_width(&cp);
+    if (used + w > cols) break;
+    used += w;
+    i += (size_t)k;
+  }
+  return i;
+}
+
 int dr_textn(struct ncplane *n, int y, int x, int maxw, const char *s, size_t len) {
   if (maxw <= 0 || !s) return 0;
   char buf[1024];

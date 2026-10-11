@@ -45,6 +45,11 @@ static void insert(struct lineedit *le, const char *s, size_t n) {
   le->cur += n;
 }
 
+void le_insert(struct lineedit *le, const char *s, size_t n) {
+  if (!le->text.s) sb_putn(&le->text, "", 0);
+  insert(le, s, n);
+}
+
 int le_key(struct lineedit *le, uint32_t key, const struct ncinput *ni) {
   if (!le->text.s) sb_putn(&le->text, "", 0);
   switch (key) {

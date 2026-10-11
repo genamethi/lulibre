@@ -62,6 +62,15 @@ expect   "lua script reads the index" \
 # duplicates: a third book holding the first one's bytes
 contains "no duplicates yet"              ", 0 groups,"        "$(run run dupes 2>&1)"
 expect   "is:dupe is empty"               0 "$(run query -c is:dupe 2>&1)"
+# a configuration directory of one's own
+mkdir -p "$t/conf/scripts"
+printf 'lulibre.o.pages = 11\n' > "$t/conf/init.lua"
+printf 'print("hello from", lulibre.settings.paths().scripts)\n' > "$t/conf/scripts/hello.lua"
+contains "-C chooses the configuration directory" "pages           11" "$("$bin" -C "$t/conf" -L "$lib" -o help 2>&1)"
+contains "its scripts are found"          "hello from	$t/conf/scripts" "$("$bin" -C "$t/conf" -L "$lib" run hello 2>&1)"
+contains "\$LULIBRE_CONFIG_DIR does the same" "pages           11" "$(LULIBRE_CONFIG_DIR="$t/conf" "$bin" -L "$lib" -o help 2>&1)"
+expect   "config --path follows it"       "$t/conf/init.lua" "$("$bin" -C "$t/conf" -L "$lib" config --path 2>&1)"
+expect   "--clean still skips init.lua"   "pages           6" "$("$bin" --clean -C "$t/conf" -L "$lib" -o help 2>&1 | grep '^pages ' | cut -c1-17)"
 contains "config prints every option"     "o.repair_links"     "$(run config 2>&1)"
 contains "config knows the default"       '-- o.pages = 6'     "$(run config 2>&1)"
 contains "config shows what was set"      'o.pages = 9'        "$(run -o pages=9 config 2>&1)"
@@ -101,6 +110,28 @@ if command -v tmux >/dev/null; then
   shown "tui picker sets a filter"   'author:="Unknown"'
   $T send-keys -t t Escape : ; $T send-keys -t t -l 'lua lulibre.count("")' ; $T send-keys -t t Enter
   shown "tui :lua"                   "^2 *$"
+  # the mouse: select text in the preview, paste it into a field
+  mouse() { $T send-keys -t t -l "$(printf "$@")"; sleep 0.3; }
+  row=$($T capture-pane -p -t t | grep -n 'A Note on Sieve' | head -1 | cut -d: -f1)
+  before=$($T capture-pane -p -t t | sed -n "${row}p" | sed 's/Sieve.*//')
+  col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
+  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
+  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
+  expect "double click copies the word"  "Sieve" "$($T show-buffer 2>/dev/null)"
+  sleep 0.6 # or the next press would be a third click, which takes the line
+  mouse '\033[<0;%d;%dM' "$col" "$row"
+  mouse '\033[<32;%d;%dM' "$((col + 12))" "$row"
+  mouse '\033[<0;%d;%dm' "$((col + 12))" "$row"
+  expect "a drag copies what it covers"  "Sieve Methods" "$($T show-buffer 2>/dev/null)"
+  shown "and says so"                    "copied 13 characters"
+  $T send-keys -t t : ; $T send-keys -t t -l "echo " ; $T send-keys -t t C-v
+  shown "C-v pastes into the line being typed" ":echo Sieve Methods"
+  $T send-keys -t t Enter
+  shown "the pasted line runs"           "^Sieve Methods *$"
+  $T send-keys -t t y y
+  i=0; while [ "$($T show-buffer 2>/dev/null)" = "Sieve Methods" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "yy copies the title"           "paper" "$($T show-buffer 2>/dev/null)"
+
   $T send-keys -t t g t
   shown "tui tree browser opens"     "browse  "
   $T send-keys -t t q
