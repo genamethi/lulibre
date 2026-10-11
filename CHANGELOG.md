@@ -3,6 +3,10 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## 0.2.0 (in development, branch `0.2.0`)
+
+Added
+
 ## 0.1.0-alpha.2
 
 Fixed
