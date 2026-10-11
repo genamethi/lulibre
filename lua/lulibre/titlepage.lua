@@ -184,4 +184,117 @@ function M.labelled(lines)
   return out
 end
 
+--- A thesis or dissertation cover page, read by rule: the approach of
+-- Choudhury, Wu, Ingram and Fox, "A Heuristic Baseline Method for Metadata
+-- Extraction from Scanned Electronic Theses and Dissertations" (JCDL 2020,
+-- doi:10.1145/3383583.3398590). Such covers follow a template, so plain
+-- patterns on the text do well, and they need no font sizes, which a page
+-- read by OCR does not have:
+--
+--   title        the lines above "by"
+--   author       what follows "by", on that line or the next
+--   degree       after "degree of"
+--   program      after "department of", or "in" after the degree
+--   institution  after "at the" or "faculty of (the)", else the line naming
+--                a university, institute or college
+--   year         four digits, preferring a line that names a month
+--   advisor      after "certified by", "approved", "supervisor", "advisor"
+--
+-- Returns nil unless the page reads like a thesis cover, else a table with
+-- whichever of those were found.
+function M.thesis(lines)
+  local text, low = {}, {}
+  for _, l in ipairs(lines or {}) do
+    local t = (type(l) == "table" and l.text or l or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if t ~= "" then
+      text[#text + 1] = t
+      low[#low + 1] = t:lower()
+    end
+    if #text >= 45 then break end
+  end
+  local all = table.concat(low, "\n")
+  if not (all:find("thesis") or all:find("dissertation")) then return nil end
+  if not (all:find("degree of") or all:find("requirements for") or all:find("submitted to")
+      or all:find("submitted in") or all:find("presented to")) then
+    return nil
+  end
+  local out = {}
+  local function boilerplate(t)
+    return t:find("thesis") or t:find("dissertation") or t:find("submitted") or t:find("presented to")
+      or t:find("requirements") or t:find("degree of") or t:find("fulfil")
+  end
+  local function school(t)
+    return t:find("universit") or t:find("institute of") or t:find("college") or t:find("^school of")
+      or t:find("polytechnic")
+  end
+
+  -- title and author, either side of "by"
+  for i, t in ipairs(low) do
+    local same = text[i]:match("^[Bb][Yy]%s+(%u.+)$")
+    if t == "by" or same then
+      local who = same or text[i + 1]
+      if who and not boilerplate(who:lower()) and #who < 80 then out.authors = names.split(who) end
+      local parts = {}
+      for k = 1, i - 1 do
+        if not boilerplate(low[k]) and not school(low[k]) and #parts < 5 then parts[#parts + 1] = text[k] end
+      end
+      if #parts > 0 then out.title = table.concat(parts, " ") end
+      break
+    end
+  end
+
+  for i, t in ipairs(low) do
+    local at = t:find("degree of", 1, true)
+    if at and not out.degree then
+      local rest = text[i]:sub(at + 9):gsub("^%s+", "")
+      if rest == "" then rest = text[i + 1] or "" end
+      local degree, program = rest:match("^(.-)%s+in%s+(.+)$")
+      out.degree = (degree or rest):gsub("[%s.,]+$", "")
+      if program and not out.program then out.program = program:gsub("[%s.,]+$", "") end
+    end
+    local dept = text[i]:match("[Dd][Ee][Pp][Aa][Rr][Tt][Mm][Ee][Nn][Tt] [Oo][Ff]%s+([^,]+)")
+    if dept and not out.program then out.program = dept:gsub("[%s.]+$", "") end
+    if not out.institution then
+      local place = text[i]:match("[Aa]t [Tt]he%s+(%u.+)$") or text[i]:match("[Ff]aculty [Oo]f [Tt]he%s+(%u.+)$")
+        or text[i]:match("[Ff]aculty [Oo]f%s+(%u.+)$")
+      if not place and (low[i]:find("at the$") or low[i]:find("faculty of the$") or low[i]:find("faculty of$")) then
+        place = text[i + 1] -- the name starts the next line
+      end
+      if place and school(place:lower()) then out.institution = place:gsub("[%s.,]+$", "") end
+    end
+    local guide = text[i]:match("[Cc]ertified [Bb]y:?%s*(.*)$") or text[i]:match("[Aa]pproved:?%s*[Bb]?y?:?%s*(.*)$")
+      or text[i]:match("[Ss]upervisor:?%s*(.*)$") or text[i]:match("[Aa]dvisor:?%s*(.*)$")
+    if guide and not out.advisor then
+      if guide == "" or not guide:find("%a%a") then guide = text[i + 1] or "" end
+      guide = guide:gsub("^[%s._:-]+", ""):gsub("[%s._,-]+$", "")
+      if guide:find("%u%l") and #guide < 70 then out.advisor = guide end
+    end
+  end
+  if not out.institution then
+    -- the last line that names a school and nothing else: an earlier one is
+    -- as likely where the author's first degree came from
+    for i, t in ipairs(low) do
+      if school(t) and not t:find("department") and not t:find("%d") and #text[i] < 70 then
+        out.institution = text[i]:gsub("[%s.,]+$", "")
+      end
+    end
+  end
+
+  local months = { "january", "february", "march", "april", "may", "june", "july", "august", "september",
+    "october", "november", "december" }
+  local fallback
+  for _, t in ipairs(low) do
+    for y in t:gmatch("%f[%d](%d%d%d%d)%f[%D]") do
+      if tonumber(y) >= 1850 and tonumber(y) <= 2099 then
+        fallback = y
+        for _, m in ipairs(months) do
+          if t:find(m, 1, true) or t:find(m:sub(1, 3) .. "%.") then out.year = out.year or y end
+        end
+      end
+    end
+  end
+  out.year = out.year or fallback
+  return out
+end
+
 return M
