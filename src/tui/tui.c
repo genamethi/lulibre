@@ -765,6 +765,7 @@ int tui_run(struct app *app) {
   t->nc = notcurses_core_init(&no, NULL);
   if (!t->nc) die("cannot initialise the terminal (TERM=%s)", getenv("TERM") ? getenv("TERM") : "");
   notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
+  crash_install(); /* again, to run before notcurses' handlers, which give the terminal back */
   if (app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
   t->std = notcurses_stdplane(t->nc);
 
