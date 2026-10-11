@@ -24,6 +24,42 @@ Added
 - `lulibre.index{filter=, force=}` runs the indexer from a script and waits
   for it.
 
+## 0.1.0-beta
+
+Fixed, from testing the alpha
+- A field can be blanked: empty it and press `Enter`. Backspace in an
+  emptied field no longer cancels it, review accepts an empty answer, and
+  both forms show `(blank)` where a value is about to be removed.
+- A command typed with the cursor in review, duplicates or orphans acts on
+  the book that row shows. `:remove`, repeated on a row whose book had just
+  been removed, took the list's next book instead; it is now refused.
+- Orphans: the verdict no longer runs off the right edge. The column holds
+  a short wording; `x` opens a row (`X` all rows) to show the full verdict,
+  the whole path and where a link points.
+- A filter in force is labelled in the status line, with how much of the
+  library it leaves and how to clear it:
+  `filter id:526   1 of 1999   <BS> shows all`.
+- Panels follow files staged from the sync folder too.
+
+Fixed, from a review of pointer lifetimes and leaks
+- A use-after-free: closing the console (`` ` ``) while only one other
+  window was open left the focus pointing at a freed window.
+- A panel made the only window (`:only`) could not be closed; the list now
+  takes its place.
+- A script waiting on a question (`lulibre.input`) waited for ever when
+  another prompt or a picker took over the bottom line; it is answered as
+  cancelled.
+- A mouse drag is dropped when its preview window closes, and its target is
+  checked to be a preview before use.
+- Messages still on their way to the Lua thread at exit are run, not
+  dropped, so what they carry is freed.
+- The indexer's progress report no longer keeps pointers into a finished
+  job; `lulibre.extract` no longer leaks when called outside a task.
+
+Tests
+- `test/forms.sh` (`make check-forms`, part of `make e2e`): the edit form,
+  review, removal and orphans, by keystroke, against a throwaway library.
+
 ## 0.1.0-alpha.2
 
 Fixed

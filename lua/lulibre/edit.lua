@@ -11,6 +11,9 @@ M.fields = { "title", "authors", "tags", "series", "series_index", "publisher", 
 -- how the items of a list field are separated when shown and typed
 M.separator = { authors = " & ", tags = ", ", identifiers = ", " }
 
+-- how an empty value is shown where one is about to be written
+M.BLANK = "(blank)"
+
 local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end

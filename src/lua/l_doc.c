@@ -59,8 +59,8 @@ static int l_text(lua_State *L) {
   int n = 0;
   while (sqlite3_step(st) == SQLITE_ROW) {
     if (n++) luaL_addchar(&b, '\f');
-    luaL_addlstring(&b, (const char *)sqlite3_column_text(st, 0),
-                    (size_t)sqlite3_column_bytes(st, 0));
+    const char *text = (const char *)sqlite3_column_text(st, 0);
+    if (text) luaL_addlstring(&b, text, (size_t)sqlite3_column_bytes(st, 0));
   }
   sqlite3_finalize(st);
   luaL_pushresult(&b);
@@ -220,6 +220,7 @@ static void x_after(uv_work_t *req, int status) {
 static int l_extract(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
   struct app *app = lapi_app(L);
+  sched_require_task(L); /* raises outside a task, before anything is allocated */
   struct xjob *j = xcalloc(1, sizeof *j);
   j->opts = (struct doc_opts){app->cfg.pages, app->cfg.layout_pages};
   if (lua_istable(L, 2)) {
@@ -228,10 +229,6 @@ static int l_extract(lua_State *L) {
     lua_getfield(L, 2, "layout_pages");
     if (!lua_isnil(L, -1)) j->opts.layout_pages = (int)lua_tointeger(L, -1);
     lua_pop(L, 2);
-  }
-  if (!sched_current_id(L)) {
-    free(j);
-    sched_require_task(L); /* raises */
   }
   j->path = xstrdup(path);
   j->format = xstrdup(path_ext(path));

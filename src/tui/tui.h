@@ -127,6 +127,7 @@ void le_free(struct lineedit *le);
 struct rows {
   sqlite3_int64 *ids;
   int n;
+  int total;         /* how many the source holds, filter or no filter */
   int cur, top;
   int anchor; /* visual mode anchor row, -1 when not selecting */
   char *filter;
@@ -205,6 +206,8 @@ void wm_layout(struct tui *t, struct rect area);
 void wm_draw(struct tui *t);
 int wm_split(struct tui *t, char dir, const char *view);
 void wm_close(struct tui *t);
+/* Close a given window; t->focus stays valid (see wm.c). */
+void wm_close_leaf(struct tui *t, struct node *n);
 void wm_only(struct tui *t);
 void wm_focus_next(struct tui *t, int delta);
 void wm_focus_dir(struct tui *t, char dir); /* h j k l */
@@ -252,7 +255,9 @@ int list_page_rows(struct tui *t); /* visible rows in the list view */
  * moves the list to the row's book. Movement keys are handled here; every
  * other key is handed to whoever is listening. */
 struct panel;
-enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD };
+/* HEAD and NOTE rows show their first cell across the whole width: a
+ * heading, and text too long for a column. */
+enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD, PSTYLE_NOTE };
 /* key is NULL when the panel has closed */
 typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud);
 
@@ -266,6 +271,9 @@ void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud);
 void panel_set_title(struct panel *p, const char *title);
 void panel_set_help(struct panel *p, const char *help);
 void panel_set_follow(struct panel *p, int follow);
+/* For a panel that follows: 1, and the book its cursor row stands for (0
+ * when that row is not a book). 0 for a panel that does not follow. */
+int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
 /* width > 0: that many columns; width <= 0: a share of what is left */
@@ -393,6 +401,7 @@ void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial);
 /* Ask for a line of text; cb gets the answer, or NULL if cancelled. */
 void tui_input(struct tui *t, const char *label, const char *initial, input_fn *cb, void *ud);
 void tui_input_cancel(struct tui *t); /* as if the user pressed Esc */
+void tui_prompt_cancel(struct tui *t); /* the same for whatever the bottom line is taking */
 /* Offer completions for the input prompt just opened. Texts are copied.
  * With sep set (" & " for authors), the value is a list and completion
  * applies to its last item. Tab takes the highlighted one. */

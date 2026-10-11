@@ -32,7 +32,7 @@ Semantic versioning. The version is written once, in `src/version.h`:
 #define LULIBRE_VERSION_MAJOR 0
 #define LULIBRE_VERSION_MINOR 1
 #define LULIBRE_VERSION_PATCH 0
-#define LULIBRE_VERSION_PRE "-alpha"     /* "-beta", "-rc.1", "" for a release */
+#define LULIBRE_VERSION_PRE "-beta"      /* "-rc.1", "" for a release */
 ```
 
 configure reads it, refuses anything that is not a semantic version, and
@@ -46,10 +46,10 @@ tag `vX.Y.Z[-pre]`.
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/units.lua` (the Lua runtime and API) |
 | `make check` | those, and `test/smoke.sh`: the command line and the interface, driven through tmux, on a generated library |
-| `make e2e` | every end-to-end test: smoke; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server) |
-| `make check-offline` · `make check-write` | one of the last two |
+| `make e2e` | every end-to-end test: smoke; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server); `forms.sh` (the edit form, review, removal and orphans, typed into the interface) |
+| `make check-offline` · `make check-write` · `make check-forms` | one of the last three |
 
-The last two need calibre and `unshare`: they run inside a private network
+The last three need calibre and `unshare`: they run inside a private network
 namespace against throwaway libraries, because calibre refuses direct access
 to any library while one of its servers runs on the machine. They skip where
 that is not possible. Nothing touches a real library.

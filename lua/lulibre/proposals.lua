@@ -58,8 +58,10 @@ function M.set_status(pid, status)
   lulibre.store("UPDATE proposals SET status = ? WHERE id = ?", status, pid)
 end
 
-function M.set_value(pid, value)
-  lulibre.store("UPDATE proposals SET value = ?, source = coalesce(source, '') || ' (edited)' WHERE id = ?", value, pid)
+function M.set_value(pid, value, op)
+  lulibre.store([[UPDATE proposals SET value = ?, op = coalesce(?, op),
+    source = CASE WHEN coalesce(source, '') LIKE '% (edited)' THEN source ELSE coalesce(source, '') || ' (edited)' END
+    WHERE id = ?]], value, op, pid)
 end
 
 --- Accepting one proposal for a single-valued field settles the others for

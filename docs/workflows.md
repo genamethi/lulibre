@@ -7,6 +7,8 @@ is recorded in a journal with the value it replaced, and can be undone with
 
 Most actions apply to the **selection**: the range being selected with `V`,
 else the marked books that are in the list, else the book under the cursor.
+With the cursor in review, duplicates or orphans, that is the book its row
+stands for; a command is refused when that book is no longer in the list.
 
 ## Editing: `e`
 
@@ -22,6 +24,10 @@ A form with one row per field for the selected book or books.
 
 In a list field (authors, tags, identifiers) `+x, -y` adds and removes values
 and leaves the rest alone, which is how one tag is added to two hundred books.
+
+To blank a field, empty it (`<C-u>`, or backspace) and press `Enter`: the
+form shows `(blank)` where the value will be removed. The same works on a
+proposal in review.
 
 ### Copying from the page
 
@@ -98,7 +104,9 @@ one does not becomes proposals for the kept one.
 | a file in one of calibre's folders that calibre does not know | move it out, if a book already holds the same bytes |
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
-`Space` changes a row's action, `w` carries them out. Removed records go to
+`Space` changes a row's action, `w` carries them out. `x` opens the row
+under the cursor to show what its columns cut short (the verdict in full,
+the whole path, where a link points); `X` opens every row. Removed records go to
 calibre's recycle bin (`u` brings them back); stray files are moved to
 `~/.local/share/lulibre/orphans/`, never deleted. Calibre renames a book's
 folder when its title or author changes; with `repair_links = "auto"` links

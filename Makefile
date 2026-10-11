@@ -32,8 +32,9 @@ help:
 	@echo "  make check           unit tests and the quick end-to-end test (no calibre needed)"
 	@echo "  make unit            unit tests: C (build/test/unit) and Lua (test/units.lua)"
 	@echo "  make e2e             every end-to-end test: the interface, an install into a"
-	@echo "                       stage, writes without and with a content server"
+	@echo "                       stage, writes without and with a content server, the forms"
 	@echo "  make check-offline   only: writes straight to a library (needs calibre, unshare)"
+	@echo "  make check-forms     only: the edit form, review, removal and orphans, by keystroke"
 	@echo "  make check-write     only: writes through a content server (the same needs)"
 	@echo
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
@@ -87,11 +88,15 @@ check-offline: $(BIN)
 check-write: $(BIN)
 	sh test/write.sh $(BIN)
 
+check-forms: $(BIN)
+	sh test/forms.sh $(BIN)
+
 e2e: $(BIN)
 	sh test/smoke.sh $(BIN)
 	sh test/install.sh $(BIN) $(VERSION)
 	sh test/offline.sh $(BIN)
 	sh test/write.sh $(BIN)
+	sh test/forms.sh $(BIN)
 
 # ---- installing ----
 
@@ -117,4 +122,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status unit check check-offline check-write e2e install uninstall clean distclean
+.PHONY: all help status unit check check-offline check-write check-forms e2e install uninstall clean distclean
