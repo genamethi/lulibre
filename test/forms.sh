@@ -51,7 +51,7 @@ $cdb add "$t/src/knots.pdf" --title "Knots" --authors "Ann Lee" --tags "math, to
 $cdb add "$t/src/sieve.pdf" --title "Sieve" --authors "Jane Roe" >/dev/null 2>&1
 $cdb add "$t/src/rings.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
 $cdb add --duplicates "$t/src/rings2.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
-$cdb add --duplicates "$t/src/knots.pdf" --title "Knots, a second copy" --authors Unknown >/dev/null 2>&1
+$cdb add --duplicates "$t/src/knots.pdf" --title "KNOTS, A SECOND COPY" --authors Unknown >/dev/null 2>&1
 $cdb set_metadata 1 --field publisher:Acme --field series:Lectures >/dev/null 2>&1
 
 run() { "$bin" --clean -L "$lib" "$@"; }
@@ -94,6 +94,20 @@ shown "with how much of the library it shows" "1 of 5"
 shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
+
+# ---- a title in capitals, put in title case
+expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2>/dev/null)"
+k "&"; lit "is:capstitle"; k Enter
+wait_for "1 of 5"
+k g T
+shown "gT rewrites it"                        "changed 1 book"
+expect "in title case, minor words small"     "Knots, a Second Copy" "$(field 5 title)"
+k g T
+shown "and has nothing more to do"            "0 of 5"
+k BSpace
+wait_for "all books"
+k Escape
+sleep 0.2
 
 # ---- the edit form: a field emptied and entered is blanked
 k "&"; lit "id:1"; k Enter

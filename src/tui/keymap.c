@@ -264,6 +264,7 @@ void keymap_defaults(struct keymap *km) {
     /* changing things (these commands are defined in lua/lulibre/prelude.lua) */
     {MODE_NORMAL | MODE_VISUAL, "e", "edit"},
     {MODE_NORMAL | MODE_VISUAL, "gc", "capture"},
+    {MODE_NORMAL | MODE_VISUAL, "gT", "titlecase"},
     {MODE_NORMAL, "gr", "review"},
     {MODE_NORMAL, "gt", "browse"},
     {MODE_NORMAL, "gd", "dupes"},

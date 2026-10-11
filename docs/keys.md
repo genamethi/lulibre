@@ -85,6 +85,7 @@ name can be dragged over on the page and pasted with `<C-v>`.
 | `e` | `edit` | edit form for the selection |
 | `gc` | `capture` | fields from names by pattern |
 | `gr` | `review` | go through proposals |
+| `gT` | `titlecase` | titles in CAPITALS to title case |
 | `u` | `undo` | `:undo N` for a given batch; `:history` lists them |
 | `gd` | `dupes` | books with identical files |
 | `go` | `orphans` | records without files, files without records, broken links |

@@ -29,6 +29,7 @@ o.library = "~/calibre-library"
 | `ocr` | `never` | `never` · `auto` · `always` |
 | `ocr_pages` `ocr_lang` | `3` `eng` | pages per file the OCR pass reads; tesseract language |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
+| `title_case` | `auto` | `auto` · `never`: propose a title found in CAPITALS in title case |
 | `sync_dir` | | folder of files waiting to be added |
 | `orphans_dir` | | where stray files are set aside |
 | `preview` | `text` | `text` · `image`: what the preview shows first |

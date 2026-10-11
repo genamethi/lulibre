@@ -42,6 +42,7 @@ again.
 |---|---|
 | `listauthor` | several authors run together in one name |
 | `filetitle` | the title looks like a file name |
+| `capstitle` | the title is in CAPITALS (`gT` puts it in title case) |
 | `indexed` `unindexed` `error` | state of text extraction |
 | `missing` | the record's file is not on disk |
 | `needsocr` · `ocr` | no usable text layer · text came from OCR |

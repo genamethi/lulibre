@@ -462,6 +462,43 @@ do
   eq("a bad filter is an error, not a hang", (pcall(lulibre.index, { filter = "nosuch:field" })), false)
 end
 
+-- title case (APA) and case beyond ASCII
+do
+  local tc = require "lulibre.titlecase"
+  eq("minor words stay small, subtitles start again", tc.apply("ON THE THEORY OF GROUPS: AN INTRODUCTION"),
+    "On the Theory of Groups: An Introduction")
+  eq("four letters or more are capitalised", tc.apply("ALGEBRA WITH GALOIS THEORY FROM THE START"),
+    "Algebra With Galois Theory From the Start")
+  eq("hyphens: major words, and after a prefix", tc.apply("SELF-REPORT MEASURES IN MID-YEAR ANTI-HERO STUDIES"),
+    "Self-Report Measures in Mid-year Anti-hero Studies")
+  eq("numerals, initialisms and known spellings survive capitals", tc.apply("PDE AND NMR METHODS, VOL. II, 3D CASE"),
+    "PDE and NMR Methods, Vol. II, 3D Case")
+  eq("accented letters", tc.apply("ÉTUDE SUR LES ÉQUATIONS"), "Étude Sur Les Équations")
+  eq("possessives and O'", tc.apply("HILBERT'S PROBLEMS AND O'NEIL"), "Hilbert's Problems and O'Neil")
+  eq("capitals put there on purpose are kept", tc.apply("an introduction to LaTeX and McKean's PDE"),
+    "An Introduction to LaTeX and McKean's PDE")
+  eq("a capitalised minor word is lowered", tc.apply("What Is An Answer?"), "What Is an Answer?")
+  eq("is_caps", { tc.is_caps("SIEVE METHODS"), tc.is_caps("Sieve Methods"), tc.is_caps("A"), tc.is_caps("1234") },
+    { true, false, false, false })
+  tc.minor["with"] = true
+  eq("the minor words can be added to", tc.apply("ALGEBRA WITH GALOIS THEORY"), "Algebra with Galois Theory")
+  tc.minor["with"] = nil
+  eq("lulibre.titlecase", lulibre.titlecase("A NOTE ON SIEVES"), "A Note on Sieves")
+  eq("lower and upper know more than ASCII", { lulibre.lower("ÉCOLE ΑΒΓ ЖЗ"), lulibre.upper("école αβγ жз") },
+    { "école αβγ жз", "ÉCOLE ΑΒΓ ЖЗ" })
+  eq("proposed: only what came in capitals", { tc.proposed("A NOTE ON SIEVES"), tc.proposed("A note on sieves") },
+    { "A Note on Sieves", "A note on sieves" })
+  lulibre.o.title_case = "never"
+  eq("and not when the option says never", tc.proposed("A NOTE ON SIEVES"), "A NOTE ON SIEVES")
+  lulibre.o.title_case = "auto"
+  local ex = require "lulibre.extract"
+  local got
+  for _, c in ipairs(ex.from_doc { title = "LECTURES ON RIEMANN SURFACES", pages = {} }) do
+    if c.field == "title" then got = c.value end
+  end
+  eq("a title found in capitals is suggested in title case", got, "Lectures on Riemann Surfaces")
+end
+
 -- keys: the screens' tables, and the global keymap as scripts see it
 do
   local screens = require "lulibre.ui.keys"

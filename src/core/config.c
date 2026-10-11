@@ -45,6 +45,9 @@ static const struct opt_def opts[] = {
       "before a duplicate or orphan record is removed, keep what only it knew as proposals",
       NULL),
 
+  OPT(title_case, OPT_STR, "auto", "auto|never",
+      "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
+      NULL),
   OPT(sync_dir, OPT_PATH, "", NULL,
       "a folder of files waiting to be added to the library; gS shows it", "The sync folder"),
   OPT(sync_propose, OPT_STR, "ask", POLICY,

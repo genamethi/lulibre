@@ -159,6 +159,8 @@ The edit form and review can be opened for given books from a script:
 | `lulibre.tasks()` `lulibre.cancel(id)` `lulibre.task_id()` | |
 | `lulibre.system({"prog", "arg"} [, {stdin=, cwd=, timeout=}])` | *waits.* `{ code=, signal=, stdout=, stderr=, timed_out= }`, or nil, message |
 | `lulibre.fold(s)` | search key: lower case, accents stripped |
+| `lulibre.lower(s)` `lulibre.upper(s)` | case for more than ASCII: accented Latin, Greek, Cyrillic |
+| `lulibre.titlecase(s)` | the title in title case (APA) |
 | `lulibre.fuzzy(query, candidate)` | score, or nil |
 | `lulibre.inspect(value)` | a readable rendering of any value |
 | `lulibre.uv`, `require "luv"` | libuv, on the loop Lua runs on |
@@ -201,6 +203,7 @@ its own documentation.
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
+| `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
 | `lulibre.dupes` | identical files |

@@ -7,6 +7,7 @@ local names = require "lulibre.names"
 local subjects = require "lulibre.subjects"
 local titlepage = require "lulibre.titlepage"
 
+local titlecase = require "lulibre.titlecase"
 local M = {}
 
 local function join(list)
@@ -20,6 +21,8 @@ end
 function M.from_doc(doc)
   local out = {}
   local function add(field, value, source, confidence)
+    -- a title set in capitals is offered in title case (option title_case)
+    if field == "title" and value then value = titlecase.proposed(value) end
     if value and value ~= "" then
       out[#out + 1] = { field = field, value = value, source = source, confidence = confidence }
     end

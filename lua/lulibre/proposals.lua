@@ -6,7 +6,9 @@ local edit = require "lulibre.edit"
 local M = {}
 
 --- Propose a change. opts: op ("set", "add", "remove"), source, confidence,
--- note. Returns true and the proposal's id, or false if the book already
+-- note. A title that arrives in capitals is proposed in title case, as the
+-- option title_case allows, unless it was typed (source "typed") or
+-- opts.as_is is set. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
 function M.add(id, field, value, opts)
@@ -14,6 +16,9 @@ function M.add(id, field, value, opts)
   local op = opts.op or "set"
   local book = lulibre.book(id)
   if not book then return false end
+  if field == "title" and op == "set" and opts.source ~= "typed" and not opts.as_is then
+    value = require("lulibre.titlecase").proposed(value)
+  end
   local ok, new = pcall(edit.resolve, book, field, op, value)
   if not ok then error(new, 2) end
   if new == edit.current(book, field) then return false end

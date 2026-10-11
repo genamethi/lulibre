@@ -57,6 +57,8 @@ static const struct { const char *name, *sql; } is_tests[] = {
                  " WHERE ba.book = b.id AND (a.name LIKE '%;%' OR a.name LIKE '% and %'))"},
   {"filetitle", "(instr(b.title, ' ') = 0 OR b.title LIKE '%.pdf' OR b.title LIKE '%.djvu'"
                 " OR b.title LIKE '%.dvi' OR b.title LIKE '%.tex' OR b.title LIKE '%.ps')"},
+  /* a title in capitals (as far as A to Z go): what :titlecase is for */
+  {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},
