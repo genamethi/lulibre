@@ -10,7 +10,7 @@
 #define LULIBRE_VERSION_MAJOR 0
 #define LULIBRE_VERSION_MINOR 1
 #define LULIBRE_VERSION_PATCH 0
-#define LULIBRE_VERSION_PRE "-beta"
+#define LULIBRE_VERSION_PRE "-beta.2"
 
 #define LULIBRE_STR_(x) #x
 #define LULIBRE_STR(x) LULIBRE_STR_(x)

@@ -78,6 +78,18 @@ printf 'error("boom")\n' > "$t/bad.lua"
 run run "$t/bad.lua" >/dev/null 2>&1 && rc=0 || rc=$?
 expect   "failing script exits 1"         1 "$rc"
 
+# a binary run from a source tree that has since become another version says so
+mkdir -p "$t/tree/build" "$t/tree/src"
+cp "$bin" "$t/tree/build/lulibre"
+ln -s "$(cd "$(dirname "$0")/.." && pwd)/lua" "$t/tree/lua"
+ln -s "$(cd "$(dirname "$0")/.." && pwd)/scripts" "$t/tree/scripts"
+cp "$(dirname "$0")/../src/version.h" "$t/tree/src/version.h"
+tree() { "$t/tree/build/lulibre" --clean -L "$lib" "$@"; }
+expect   "a tree of the binary's own version is fine" "2" "$(tree query -c 2>&1)"
+sed -i 's/define LULIBRE_VERSION_MINOR .*/define LULIBRE_VERSION_MINOR 99/' "$t/tree/src/version.h"
+contains "a tree of another version is named at start" "is now 0.99." "$(tree query -c 2>&1)"
+contains "and when a script fails there"  "Quit, run make there" "$(tree run "$t/bad.lua" 2>&1 || true)"
+
 # The interactive interface, driven through a private tmux server.
 if command -v tmux >/dev/null; then
   T="tmux -L lulibre-smoke-$$"
@@ -115,8 +127,8 @@ if command -v tmux >/dev/null; then
   row=$($T capture-pane -p -t t | grep -n 'A Note on Sieve' | head -1 | cut -d: -f1)
   before=$($T capture-pane -p -t t | sed -n "${row}p" | sed 's/Sieve.*//')
   col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
-  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
-  mouse '\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row"
+  # both clicks in one write: two that arrive a moment apart are not a double click
+  mouse '\033[<0;%d;%dM\033[<0;%d;%dm\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row" "$col" "$row" "$col" "$row"
   expect "double click copies the word"  "Sieve" "$($T show-buffer 2>/dev/null)"
   sleep 0.6 # or the next press would be a third click, which takes the line
   mouse '\033[<0;%d;%dM' "$col" "$row"

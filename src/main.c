@@ -120,6 +120,7 @@ int main(int argc, char **argv) {
   bridge_init(&app, i >= argc && !want_optlist);
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
+  if (lstate_tree_mismatch()) warnf("%s", lstate_tree_mismatch());
   if (!clean) lstate_run_init(&app);
   if (library && config_set(&app.cfg, "library", library, &err)) die("%s", err);
   for (int k = 0; k < nsets; k++) {

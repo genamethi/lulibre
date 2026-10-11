@@ -902,6 +902,7 @@ int tui_run(struct app *app) {
     else if (pending && !strcmp(policy, "ask"))
       tui_msg(t, 0, "%d file%s not indexed yet; :index reads them", pending, pending == 1 ? " is" : "s are");
   }
+  if (lstate_tree_mismatch()) tui_msg(t, 1, "%s", lstate_tree_mismatch());
   tui_dirty(t);
   log_to_stderr(0); /* the terminal is ours; the console shows the log */
   log_on_entry(log_arrived, app);

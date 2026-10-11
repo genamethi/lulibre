@@ -7,6 +7,16 @@ code.
 
 ## Branches and versions
 
+- **The tree at `/media/servd/staging/lulibre` stays on `main`, always.**
+  The user runs `./build/lulibre` from it, and a binary run from its tree
+  reads its Lua files from the tree as it needs them: checking out another
+  branch there, even for a minute, breaks the program they have open (it did:
+  "unknown option 'propose_over'" from a beta binary reading 0.2.0's files).
+  All branch work, fixes for `main` included, happens in the second checkout,
+  `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). A fix reaches
+  `main` by `git merge --no-ff` run in the main tree, followed by `make`
+  there; nothing else changes that tree.
+
 - `main` is the released line. Bug fixes go to it through `fix-<name>`
   branches, merged with `--no-ff`.
 - `0.2.0` is the next minor. Each feature is a branch `0.2.0-<name>` merged
