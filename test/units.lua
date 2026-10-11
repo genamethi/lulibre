@@ -402,5 +402,29 @@ do
   uv.fs_rmdir(dir)
 end
 
+-- cover sheets that label their fields
+do
+  local lab = titlepage.labelled {
+    "What is an Answer?", "Author(s): Herbert S. Wilf",
+    "Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292",
+    "Published by: Mathematical Association of America", "Stable URL: http://www.jstor.org/stable/2321713 .",
+    "Accessed: 21/01/2015 04:38",
+  }
+  eq("labelled cover sheet", { lab.title, lab.authors, lab.year, lab.publisher, lab.jstor, lab.labels },
+    { "What is an Answer?", { "Herbert S. Wilf" }, "1982", "Mathematical Association of America", "2321713", 4 })
+  local two = titlepage.labelled { "A Long Title That Runs", "onto a Second Line", "Author(s): A. One and B. Two", "Source: J. Thing, 2001" }
+  eq("labelled: wrapped title, two authors", { two.title, two.authors }, { "A Long Title That Runs onto a Second Line", { "A. One", "B. Two" } })
+  eq("no author label, no cover sheet", titlepage.labelled { "A Title", "by Somebody", "Source: nowhere" }, nil)
+  local cands = require("lulibre.extract").from_doc { lines = {
+    { text = "What is an Answer?", size = 11, x0 = 72, y0 = 100, x1 = 300, y1 = 112 },
+    { text = "Author(s): Herbert S. Wilf", size = 11, x0 = 72, y0 = 114, x1 = 300, y1 = 126 },
+    { text = "Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292", size = 11,
+      x0 = 72, y0 = 128, x1 = 500, y1 = 140 } }, text = "" }
+  local best = {}
+  for _, c in ipairs(cands) do best[c.field] = best[c.field] or c end
+  eq("a labelled author is trusted", { best.authors.value, best.authors.confidence >= 0.9, best.pubdate.value },
+    { "Herbert S. Wilf", true, "1982" })
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

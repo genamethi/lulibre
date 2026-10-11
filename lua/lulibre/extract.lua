@@ -31,6 +31,20 @@ function M.from_doc(doc)
     add("authors", join(names.split(doc.author)), "embedded", 0.6)
   end
 
+  -- a cover sheet that labels its fields is the best witness there is
+  local lab = titlepage.labelled(doc.pages and doc.pages[1] or doc.lines)
+  if lab then
+    local sure, less = 0.85, 0.8
+    if lab.labels >= 2 then sure, less = 0.95, 0.9 end
+    local people = {}
+    for i, a in ipairs(lab.authors) do people[i] = names.titlecase(a) end
+    add("authors", join(people), "cover sheet", sure)
+    if lab.title and not junk.title(lab.title) then add("title", lab.title, "cover sheet", sure) end
+    if lab.year then add("pubdate", lab.year, "cover sheet", less) end
+    if lab.publisher then add("publisher", lab.publisher, "cover sheet", less) end
+    if lab.jstor then add("identifiers", "jstor:" .. lab.jstor, "cover sheet", sure) end
+  end
+
   -- the title page
   local tp = doc.pages and titlepage.classify_pages(doc.pages) or titlepage.classify(doc.lines or {})
   local conf = tp.arxiv and 0.85 or 0.55
