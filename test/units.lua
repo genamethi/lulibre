@@ -567,6 +567,41 @@ do
     { "George W. Mackey", "by-line", 0.85 })
 end
 
+-- who is not an author, and a page that opens with its author's name
+do
+  eq("ranks and roles are never authors", { names.never("Professor Emeritus"), names.never("Lecture Notes"),
+    names.never("David Mumford"), names.never("John Dean") }, { true, true, false, false })
+  eq("so they are not names", { names.clean("Professor Emeritus"), names.clean("David Mumford") }, { nil, "David Mumford" })
+  lulibre.o.never_authors = "visiting scholar, Brown and Harvard"
+  eq("the option adds to them", { names.never("Brown and Harvard Universities"), names.never("Harvard Brown") }, { true, false })
+  lulibre.o.never_authors = ""
+  eq("a person on more than shape: an initial, a given name, an e-mail", { names.is_person("Sidney A. Morris"),
+    names.is_person("David Mumford"), names.is_person("Xu Zhang", "write to x.zhang@example.org"), names.is_person("Hopf Algebras"),
+    names.is_person("Delta Lake") }, { true, true, true, false, false })
+  local function line(text, size) return { text = text, size = size } end
+  local page = {
+    line("David Mumford", 23.8), line("Archive for Reprints,", 16.8), line("Notes, Talks, and Blog", 16.8),
+    line("Professor Emeritus", 12.5), line("Brown and Harvard Universities", 12.5), line("David_Mumford@brown.edu", 12.6),
+    line("Finding the Rhythms of the Primes", 20), line("October 30, 2014", 11.7),
+    line("Barry Mazur and William Stein are writing an excellent book entitled", 13.2),
+    line("What is Riemann's Hypothesis? The book leads up to Riemann's", 13.2),
+    line("explicit formula which, in von Mangoldt's form, is the formula for the", 13.2),
+  }
+  local got = titlepage.classify(page)
+  eq("the name on the first line is the author, the next largest line the title",
+    { got.authors, got.title, got.name_first }, { { "David Mumford" }, "Finding the Rhythms of the Primes", true })
+  local text = {}
+  for i, l in ipairs(page) do text[i] = l.text end
+  local authors
+  for _, c in ipairs(require("lulibre.extract").from_doc { lines = page, text = table.concat(text, "\n") }) do
+    if c.field == "authors" then authors = authors or c end
+  end
+  eq("proposed as such, surer for being on the page twice", { authors.value, authors.source, authors.confidence },
+    { "David Mumford", "first line, named twice", 0.85 })
+  got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
+  eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
+end
+
 -- one record's values offered to another
 do
   local dupes = require "lulibre.dupes"

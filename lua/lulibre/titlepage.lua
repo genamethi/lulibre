@@ -80,8 +80,9 @@ end
 
 --- lines: as from lulibre.lines(id). Returns
 -- { arxiv=, class=, subject=, title=, authors={...}, subject_source=,
---   byline= } (byline: the authors were named by a "by" line, which is the
--- page's own word for it).
+--   byline=, name_first= } (byline: the authors were named by a "by" line,
+-- which is the page's own word for it; name_first: the page opens with the
+-- author's name and has its title further down).
 function M.classify(lines)
   local r = { authors = {} }
 
@@ -133,6 +134,49 @@ function M.classify(lines)
   local cand = table.concat(title, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")
   local low = cand:lower()
   if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then r.title = cand end
+
+  -- A page that opens with its author's name, alone on the first line and set
+  -- largest (a home page, a reprint archive, a set of notes), has its title
+  -- further down in the next largest type. It is taken for that layout only
+  -- when the first line reads as one person's name, the next most prominent
+  -- line does not, and no by-line says otherwise.
+  local all_text = {}
+  for _, l in ipairs(lines) do all_text[#all_text + 1] = l.text end
+  -- (a person's name on more than its shape: see names.is_person)
+  if #title == 1 and last == 1 and names.is_person(cand, table.concat(all_text, "\n")) then
+    -- the whole page counts here: the title stands below the affiliation,
+    -- which is where the front matter above was cut off
+    local page, sizes = {}, {}
+    for _, l in ipairs(lines) do
+      local t = trim(l.text)
+      if t ~= "" and not l.rotated and not t:find("^%d+$") then
+        if any(t:lower(), STOP) then break end
+        page[#page + 1] = l
+        sizes[#sizes + 1] = l.size
+      end
+    end
+    table.sort(sizes)
+    local text_size = sizes[(#sizes + 1) // 2] or 0 -- the median: what the page's prose is set in
+    local best, at, by = 0, nil, false
+    for i = 2, math.min(#page, 16) do
+      if M.byline(page[i].text) then by = true end
+      if page[i].size > best then best, at = page[i].size, i end
+    end
+    if at and not by and best >= text_size + 2 then
+      local parts = {}
+      for i = at, #page do
+        if math.abs(page[i].size - best) > 0.5 then break end
+        parts[#parts + 1] = trim(page[i].text)
+      end
+      local under = table.concat(parts, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")
+      local ulow = under:lower()
+      if ulow:find("%a") and not names.is_person(under) and not names.never(under) and not any(ulow, PUBLISHER)
+        and not JUNK[ulow] and not names.is_affiliation(under) and not under:find("^%a+ %d+, %d%d%d%d$") then
+        r.title, r.authors, r.name_first = under, { names.clean(cand) }, true
+        return r
+      end
+    end
+  end
 
   local author_lines = {}
   -- a by-line under the title says who wrote it outright: "by A. Name", or
@@ -195,7 +239,7 @@ function M.classify_pages(pages)
     if not best.subject and r.subject then best.subject, best.subject_source = r.subject, r.subject_source end
     if not best.arxiv and r.arxiv then best.arxiv, best.class = r.arxiv, r.class end
     if not best.title and r.title then
-      best.title, best.authors, best.byline = r.title, r.authors, r.byline
+      best.title, best.authors, best.byline, best.name_first = r.title, r.authors, r.byline, r.name_first
     end
     if best.title then break end
   end

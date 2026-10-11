@@ -86,8 +86,16 @@ Scripts do not change the library; they *propose*, and you review.
 `propose` reads the first pages: an arXiv stamp, a cover sheet that labels
 its fields (JSTOR's "Author(s):"), a thesis cover (title above "by", author
 after it, institution, year), a by-line under the title ("By A. Name", or
-"by" on a line of its own above the names), or failing those the largest
-type on the page.
+"by" on a line of its own above the names), a page that opens with its
+author's name alone on the first line and has its title further down, or
+failing those the largest type on the page.
+
+A name the leading pages give twice (again in an e-mail address or a running
+head) is proposed with more confidence, and says so ("named twice"). Ranks
+and roles are never proposed as authors ("Professor Emeritus", "Lecture
+Notes"); the option `never_authors` adds words and phrases of your own:
+
+    lulibre.o.never_authors = "visiting scholar, working group"
 Each proposal carries where it came from and how sure it is.
 
 A field that is empty always gets the file's best candidate. A field that
