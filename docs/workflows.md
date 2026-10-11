@@ -88,6 +88,26 @@ its fields (JSTOR's "Author(s):"), a thesis cover (title above "by", author
 after it, institution, year), or failing those the largest type on the page.
 Each proposal carries where it came from and how sure it is.
 
+A field that is empty always gets the file's best candidate. A field that
+already has a value is proposed for when the file is confident (0.8 or more)
+and says something different, so a slip made by hand is caught the next
+time `:propose` runs over the book; review shows the value and the proposal
+side by side. What counts as different ignores case, accents, the shape of
+quotes and punctuation. The option `propose_over` moves the line:
+
+| `propose_over` | a field that has a value |
+|---|---|
+| `gaps` | is left alone |
+| `sure` (default) | is proposed for when the file is confident and differs |
+| `any` | is proposed for whenever the file's best candidate differs |
+
+    :propose --over [filter]     as `any` for this run, and proposing again what was rejected before
+    :propose --gaps [filter]     as `gaps` for this run
+
+A proposal you rejected is not made again by a later run, unless `--over`
+asks. In review, `A` (accept everything above a confidence) asks before it
+includes proposals that replace a value.
+
 `gr` lists the proposals book by book, with the current value beside each;
 the list and preview follow the cursor, so the title page is in view. The
 book whose surest proposal is surest comes first, so what can be accepted at

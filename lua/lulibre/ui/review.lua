@@ -284,6 +284,17 @@ function M.run(args)
     elseif act == "accept_above" then
       local v = lulibre.input { prompt = "accept every pending proposal with confidence at least: ", default = "0.8" }
       local floor = tonumber(v or "")
+      -- a blanket accept fills gaps without asking; replacing values a book
+      -- already has is asked about, since those may well be the right ones
+      local over, replacing = true, 0
+      if floor then
+        for _, q in ipairs(listed("pending")) do
+          if (q.confidence or 0) >= floor and proposals.replaces(q) then replacing = replacing + 1 end
+        end
+        if replacing > 0 then
+          over = lulibre.confirm(("%d of these would replace a value the book already has; accept those too?"):format(replacing))
+        end
+      end
       if floor then
         local n, taken = 0, {}
         for _, q in ipairs(listed("accepted")) do
@@ -292,13 +303,16 @@ function M.run(args)
         for _, q in ipairs(listed("pending")) do
           -- one value per single-valued field: the strongest wins (the list is ordered so)
           local slot = q.book .. "\0" .. q.field
-          if (q.confidence or 0) >= floor and not (q.op == "set" and taken[slot]) then
+          if (q.confidence or 0) >= floor and not (q.op == "set" and taken[slot])
+            and (over or not proposals.replaces(q)) then
             proposals.accept(q)
             taken[slot] = true
             n = n + 1
           end
         end
-        lulibre.notify(("accepted %d; %s writes them"):format(n, keys:key("write") or "write"))
+        lulibre.notify(("accepted %d%s; %s writes them"):format(n,
+          (replacing > 0 and not over) and (", left %d that replace a value"):format(replacing) or "",
+          keys:key("write") or "write"))
       end
     elseif act == "reject_rest" then
       if lulibre.confirm("reject every proposal still pending?") then

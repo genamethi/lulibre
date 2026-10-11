@@ -22,6 +22,7 @@ struct config {
   char *leader;        /* the key <Leader> stands for in key bindings */
   char *review_sort;   /* confidence | id: the order of books in review */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
+  char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
   char *server;        /* calibre content server URL, used for writes */
   char *user;
   char *password_file;
