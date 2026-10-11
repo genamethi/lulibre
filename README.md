@@ -4,8 +4,9 @@ A fast, modal terminal workbench for the metadata of a [calibre](https://calibre
 library: a full-text index over the first pages of every book, a filter
 language, batch editing with undo, and Lua scripting. C, notcurses, libuv.
 
-**0.1.0-alpha.** It works and is tested, but it is young: try changes on a
-few books before a few hundred. Every change is journaled and `u` undoes it.
+**Alpha.** It works and is tested, but it is young: try changes on a few
+books before a few hundred. Every change is journaled and `u` undoes it,
+removals included. [Changelog](CHANGELOG.md).
 
 ## Install
 

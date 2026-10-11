@@ -94,7 +94,7 @@ one does not becomes proposals for the kept one.
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
 `Space` changes a row's action, `w` carries them out. Removed records go to
-calibre's recycle bin; stray files are moved to
+calibre's recycle bin (`u` brings them back); stray files are moved to
 `~/.local/share/lulibre/orphans/`, never deleted. Calibre renames a book's
 folder when its title or author changes; with `repair_links = "auto"` links
 are repaired after every such change.
@@ -153,3 +153,11 @@ else direct.
 `` ` `` opens the log console. Errors are counted in the status line until it
 has shown them. `:history` lists every batch of changes; `:undo N` puts one
 back, leaving alone any field that has been changed again since.
+
+Removals are batches too. Undoing one re-adds each book from calibre's
+recycle bin (`.caltrash` in the library folder), with its files, cover and
+metadata; the book comes back under a new id. It works for as long as
+calibre keeps the bin, which it empties after some days.
+
+If lulibre itself crashes, `~/.local/state/lulibre/crash.log` has the
+backtrace.
