@@ -121,7 +121,9 @@ function M.relink(links)
 end
 
 --- Look. Returns
--- { records = { {book=, verdict=, action=, actions=, stray=, twin=}, ... },
+-- (verdict says what was found; brief, where there is one, is a shorter
+-- wording for a narrow column)
+-- { records = { {book=, verdict=, brief=, action=, actions=, stray=, twin=}, ... },
 --   strays  = { {path=, rel=, size=, verdict=, action=, actions=, twin=}, ... },
 --   links   = { {path=, rel=, target=, book=, to=, verdict=, action=, actions=}, ... },
 --   empty   = { path, ... }, root = }
@@ -177,6 +179,7 @@ function M.scan()
       r.stray = mine[1]
       mine[1].claimed = book.id
       r.verdict = "its file is at " .. mine[1].rel
+      r.brief = "its file is on disk"
       r.action, r.actions = "reattach", { "reattach", "keep", "remove" }
     else
       -- another book with the same title and author is the same work; with
@@ -191,10 +194,12 @@ function M.scan()
       end
       if r.twin then
         r.verdict = ("book %d is the same work and has its file"):format(r.twin.id)
+        r.brief = ("same work as book %d"):format(r.twin.id)
         r.action = "remove"
       elseif maybe then
         r.twin = maybe
         r.verdict = ("book %d has this title, but one of the two has no author to compare"):format(maybe.id)
+        r.brief = ("book %d has this title"):format(maybe.id)
         r.action = "keep"
       else
         r.verdict = "no other copy in the library"

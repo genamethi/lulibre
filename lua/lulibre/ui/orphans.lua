@@ -1,12 +1,14 @@
 -- Orphans: records with no file, and files with no record. Each row carries
 -- a verdict and what would be done about it; Space changes that, w does it.
+-- x opens a row up: what does not fit its columns (the verdict in full, the
+-- whole path, where a link points) is shown beneath it. X does so for all.
 local dupes = require "lulibre.dupes"
 local edit = require "lulibre.edit"
 local orphans = require "lulibre.orphans"
 
 local M = {}
 
-local HELP = "Space change action   m mark removals   f filter   w do it   q close"
+local HELP = "Space action   x details   X all   m mark   f filter   w do it   q close"
 local SIGN = { keep = "", remove = "×", reattach = "↩", move = "→", add = "+", relink = "↩", unlink = "×" }
 local WORD = { keep = "keep", remove = "remove record", reattach = "re-attach file", move = "move out", add = "add as book",
   relink = "repair link", unlink = "delete link" }
@@ -18,21 +20,35 @@ function M.run()
     return
   end
 
-  local at -- row -> the record or stray it shows
+  local at -- row -> the record, stray or link it shows
+  local open = {} -- item -> its details are shown beneath it
   local function build()
     local rows = {}
     at = {}
     local function head(text, id)
       rows[#rows + 1] = { text, id = id, style = "head" }
     end
+    -- beneath an opened row: each line across the whole width
+    local function details(item, id, lines)
+      if not open[item] then return end
+      for _, line in ipairs(lines) do
+        if line and line ~= "" then
+          rows[#rows + 1] = { "      " .. line, id = id, style = "note" }
+          at[#rows] = item
+        end
+      end
+    end
     if #found.records > 0 then
       head(("Records with no file  (%d)"):format(#found.records), found.records[1].book.id)
       for _, r in ipairs(found.records) do
         local b = r.book
         rows[#rows + 1] = { SIGN[r.action], WORD[r.action], b.id, b.title or "",
-          edit.is_unknown(b.author) and "" or b.author, r.verdict, id = b.id,
+          edit.is_unknown(b.author) and "" or b.author, r.brief or r.verdict, id = b.id,
           style = r.action == "remove" and "warn" or (r.action == "reattach" and "ok" or nil) }
         at[#rows] = r
+        details(r, b.id, { (b.title or "") .. (edit.is_unknown(b.author) and "" or "  —  " .. b.author), r.verdict,
+          r.twin and ("book %d: %s%s"):format(r.twin.id, r.twin.title or "",
+            edit.is_unknown(r.twin.author) and "" or "  —  " .. r.twin.author) })
       end
     end
     if #found.strays > 0 then
@@ -41,6 +57,7 @@ function M.run()
         rows[#rows + 1] = { SIGN[s.action], WORD[s.action], "", s.rel, dupes.human(s.size), s.verdict,
           id = s.twin, style = s.action == "move" and "warn" or (s.action == "add" and "ok" or nil) }
         at[#rows] = s
+        details(s, s.twin, { s.rel, s.verdict })
       end
     end
     if #found.links > 0 then
@@ -49,6 +66,7 @@ function M.run()
         rows[#rows + 1] = { SIGN[l.action], WORD[l.action], l.book or "", l.rel, "", l.verdict,
           id = l.book, style = l.action == "relink" and "ok" or (l.action == "unlink" and "warn" or nil) }
         at[#rows] = l
+        details(l, l.book, { l.rel, "points at  " .. l.target, l.to and ("would point at  " .. l.to), l.verdict })
       end
     end
     if #found.empty > 0 then
@@ -70,7 +88,7 @@ function M.run()
 
   local p <close> = lulibre.panel {
     title = title(), help = HELP, follow = true, height = 0.5,
-    columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", -3 } },
+    columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
   }
   p:cursor(2)
@@ -85,6 +103,16 @@ function M.run()
         if a == item.action then i = k end
       end
       item.action = item.actions[i % #item.actions + 1]
+    elseif item and key == "x" then
+      open[item] = not open[item] or nil
+    elseif key == "X" then
+      local any = next(open) ~= nil
+      open = {}
+      if not any then
+        for _, list in ipairs { found.records, found.strays, found.links } do
+          for _, it in ipairs(list) do open[it] = true end
+        end
+      end
     elseif key == "m" then
       local n = 0
       for _, r in ipairs(found.records) do
