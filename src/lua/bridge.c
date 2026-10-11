@@ -1,0 +1,236 @@
+#include "core/log.h"
+#include "lua/bridge.h"
+
+#include <stdatomic.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <lauxlib.h>
+#include <uv.h>
+
+#include "app.h"
+#include "core/util.h"
+#include "lua/lapi.h"
+#include "lua/sched.h"
+#include "tui/tui.h"
+
+struct ui_req {
+  void (*fn)(void *);
+  void *arg;
+  uv_sem_t done;
+  struct ui_req *next;
+};
+
+struct lua_msg {
+  void (*fn)(struct app *, void *);
+  void *arg;
+  struct lua_msg *next;
+};
+
+/* One per process, and never freed: the Lua loop's handles are released
+ * with the process. */
+static struct bridge {
+  struct app *app;
+  int threaded;       /* Lua has its own loop */
+  atomic_int running; /* ...and its own thread is running it */
+  uv_loop_t lloop;
+  uv_thread_t ui_thread, lua_thread;
+  uv_async_t to_ui, to_lua;
+  uv_mutex_t mu;
+  struct ui_req *ui_head, *ui_tail;
+  struct lua_msg *lua_head, *lua_tail;
+  atomic_int redraw, exited;
+  uv_timer_t winddown;
+  double stop_at;
+  struct db ldb;
+} B;
+
+void bridge_init(struct app *app, int threaded) {
+  B.app = app;
+  B.threaded = threaded;
+  if (threaded) {
+    uv_loop_init(&B.lloop);
+    app->lloop = &B.lloop;
+  } else {
+    app->lloop = app->loop;
+  }
+}
+
+int bridge_on_ui(const struct app *app) {
+  if (!atomic_load(&B.running)) return 1;
+  uv_thread_t self = uv_thread_self();
+  return uv_thread_equal(&self, &B.ui_thread);
+}
+
+/* ---- Lua -> interface ---- */
+
+static void to_ui_cb(uv_async_t *h) {
+  for (;;) {
+    uv_mutex_lock(&B.mu);
+    struct ui_req *r = B.ui_head;
+    if (r) {
+      B.ui_head = r->next;
+      if (!B.ui_head) B.ui_tail = NULL;
+    }
+    uv_mutex_unlock(&B.mu);
+    if (!r) break;
+    r->fn(r->arg);
+    uv_sem_post(&r->done);
+  }
+  if (atomic_exchange(&B.redraw, 0) && B.app->tui) tui_dirty(B.app->tui);
+}
+
+void bridge_ui(struct app *app, void (*fn)(void *), void *arg) {
+  if (bridge_on_ui(app)) {
+    fn(arg);
+    return;
+  }
+  struct ui_req r = {.fn = fn, .arg = arg};
+  uv_sem_init(&r.done, 0);
+  uv_mutex_lock(&B.mu);
+  if (B.ui_tail) B.ui_tail->next = &r;
+  else B.ui_head = &r;
+  B.ui_tail = &r;
+  uv_mutex_unlock(&B.mu);
+  uv_async_send(&B.to_ui);
+  uv_sem_wait(&r.done);
+  uv_sem_destroy(&r.done);
+}
+
+struct lcall {
+  lua_State *L;
+  lua_CFunction fn;
+  int status;
+};
+
+static void lcall_run(void *arg) {
+  struct lcall *c = arg;
+  lua_State *L = c->L;
+  int n = lua_gettop(L);
+  lua_pushcfunction(L, c->fn);
+  lua_insert(L, 1);
+  c->status = lua_pcall(L, n, LUA_MULTRET, 0);
+}
+
+int ui_pcall(lua_State *L, lua_CFunction fn) {
+  struct app *app = lapi_app(L);
+  struct lcall c = {L, fn, LUA_OK};
+  if (bridge_on_ui(app)) {
+    lcall_run(&c);
+    return c.status;
+  }
+  /* The collector must not run over there: finalizers (a luv handle's, say)
+   * belong to this thread and its loop. */
+  int collecting = lua_gc(L, LUA_GCISRUNNING);
+  if (collecting) lua_gc(L, LUA_GCSTOP);
+  bridge_ui(app, lcall_run, &c);
+  if (collecting) lua_gc(L, LUA_GCRESTART);
+  return c.status;
+}
+
+int ui_call(lua_State *L, lua_CFunction fn) {
+  if (bridge_on_ui(lapi_app(L))) return fn(L);
+  if (ui_pcall(L, fn) != LUA_OK) return lua_error(L);
+  return lua_gettop(L);
+}
+
+void bridge_redraw(struct app *app) {
+  if (bridge_on_ui(app)) {
+    if (app->tui) tui_dirty(app->tui);
+    return;
+  }
+  atomic_store(&B.redraw, 1);
+  uv_async_send(&B.to_ui);
+}
+
+/* ---- interface -> Lua ---- */
+
+static void to_lua_cb(uv_async_t *h) {
+  for (;;) {
+    uv_mutex_lock(&B.mu);
+    struct lua_msg *m = B.lua_head;
+    if (m) {
+      B.lua_head = m->next;
+      if (!B.lua_head) B.lua_tail = NULL;
+    }
+    uv_mutex_unlock(&B.mu);
+    if (!m) break;
+    m->fn(B.app, m->arg);
+    free(m);
+  }
+}
+
+void bridge_lua(struct app *app, void (*fn)(struct app *, void *), void *arg) {
+  if (!atomic_load(&B.running)) { /* one thread: it owns the Lua state */
+    fn(app, arg);
+    return;
+  }
+  struct lua_msg *m = xcalloc(1, sizeof *m);
+  m->fn = fn;
+  m->arg = arg;
+  uv_mutex_lock(&B.mu);
+  if (B.lua_tail) B.lua_tail->next = m;
+  else B.lua_head = m;
+  B.lua_tail = m;
+  uv_mutex_unlock(&B.mu);
+  uv_async_send(&B.to_lua);
+}
+
+/* ---- the Lua thread ---- */
+
+static void lua_main(void *arg) {
+  uv_run(&B.lloop, UV_RUN_DEFAULT);
+  atomic_store(&B.exited, 1);
+  uv_async_send(&B.to_ui);
+}
+
+void bridge_start(struct app *app) {
+  if (!B.threaded || atomic_load(&B.running)) return;
+  char *err = NULL;
+  if (db_open_writer(&B.ldb, app->db.path, &err)) die("%s", err);
+  app->ldb = &B.ldb;
+  uv_mutex_init(&B.mu);
+  uv_async_init(app->loop, &B.to_ui, to_ui_cb);
+  uv_async_init(&B.lloop, &B.to_lua, to_lua_cb);
+  B.ui_thread = uv_thread_self();
+  atomic_store(&B.exited, 0);
+  atomic_store(&B.running, 1);
+  if (uv_thread_create(&B.lua_thread, lua_main, NULL)) die("cannot start the Lua thread");
+  log_debug("Lua thread started");
+}
+
+/* Tasks were told to stop; leave once they have, or after a moment. */
+static void winddown_cb(uv_timer_t *h) {
+  if (sched_live(B.app) == 0 || now_s() > B.stop_at) uv_stop(&B.lloop);
+}
+
+static void stop_on_lua(struct app *app, void *arg) {
+  sched_cancel_all(app);
+  B.stop_at = now_s() + 1.5;
+  uv_timer_init(&B.lloop, &B.winddown);
+  uv_timer_start(&B.winddown, winddown_cb, 0, 10);
+}
+
+static void closed(uv_handle_t *h) {
+}
+
+void bridge_stop(struct app *app) {
+  if (!atomic_load(&B.running)) return;
+  bridge_lua(app, stop_on_lua, NULL);
+  /* Tasks being cancelled may still call in (to close a panel, to report);
+   * keep answering until the thread is gone. */
+  while (!atomic_load(&B.exited)) uv_run(app->loop, UV_RUN_ONCE);
+  uv_thread_join(&B.lua_thread);
+  log_debug("Lua thread ended");
+  atomic_store(&B.running, 0);
+  to_ui_cb(&B.to_ui);
+  uv_close((uv_handle_t *)&B.to_ui, closed);
+  /* messages that arrived too late to run */
+  for (struct lua_msg *m = B.lua_head, *n; m; m = n) {
+    n = m->next;
+    free(m);
+  }
+  B.lua_head = B.lua_tail = NULL;
+  db_close(&B.ldb);
+  app->ldb = NULL;
+}

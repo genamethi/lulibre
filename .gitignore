@@ -1,0 +1,6 @@
+# what make and ./configure write, at the top of the tree only
+/build/
+/config.mk
+/config.h
+/config.status
+/stage/

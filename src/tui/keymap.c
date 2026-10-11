@@ -1,0 +1,236 @@
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+
+#include "match/fold.h"
+#include "tui/tui.h"
+
+static const struct { const char *name; uint32_t key; } named[] = {
+  {"Space", ' '},          {"Tab", NCKEY_TAB},       {"Esc", NCKEY_ESC},
+  {"CR", NCKEY_ENTER},     {"Enter", NCKEY_ENTER},   {"BS", NCKEY_BACKSPACE},
+  {"Up", NCKEY_UP},        {"Down", NCKEY_DOWN},     {"Left", NCKEY_LEFT},
+  {"Right", NCKEY_RIGHT},  {"PageUp", NCKEY_PGUP},   {"PageDown", NCKEY_PGDOWN},
+  {"Home", NCKEY_HOME},    {"End", NCKEY_END},       {"Del", NCKEY_DEL},
+  {"lt", '<'},
+};
+
+uint32_t key_from_input(const struct ncinput *ni) {
+  uint32_t k = ni->id;
+  if (k == '\r' || k == '\n') k = NCKEY_ENTER;
+  if (k == 0x7f) k = NCKEY_BACKSPACE;
+  if (ni->modifiers & NCKEY_MOD_CTRL) {
+    if (k < 0x80 && isalpha((int)k)) k = (uint32_t)tolower((int)k);
+    k |= KEY_CTRL;
+  }
+  if (ni->modifiers & NCKEY_MOD_ALT) k |= KEY_ALT;
+  return k;
+}
+
+int key_parse(const char *spec, uint32_t out[KEYSEQ_MAX]) {
+  int n = 0;
+  size_t len = strlen(spec);
+  for (size_t i = 0; i < len;) {
+    if (n == KEYSEQ_MAX) return 0;
+    const char *close = spec[i] == '<' ? strchr(spec + i, '>') : NULL;
+    if (close && close > spec + i + 1) {
+      char name[32];
+      size_t nl = (size_t)(close - (spec + i + 1));
+      if (nl >= sizeof name) return 0;
+      memcpy(name, spec + i + 1, nl);
+      name[nl] = '\0';
+      uint32_t mods = 0;
+      const char *p = name;
+      while (p[0] && p[1] == '-' && p[2]) {
+        if (p[0] == 'C' || p[0] == 'c') mods |= KEY_CTRL;
+        else if (p[0] == 'M' || p[0] == 'A' || p[0] == 'm' || p[0] == 'a') mods |= KEY_ALT;
+        else return 0;
+        p += 2;
+      }
+      uint32_t key = 0;
+      for (size_t k = 0; k < ARRAY_LEN(named); k++)
+        if (strcasecmp(named[k].name, p) == 0) key = named[k].key;
+      if (!key) {
+        unsigned cp;
+        int l = utf8_decode(p, strlen(p), &cp);
+        if (p[l] != '\0') return 0;
+        key = cp;
+        if ((mods & KEY_CTRL) && key < 0x80) key = (uint32_t)tolower((int)key);
+      }
+      out[n++] = key | mods;
+      i = (size_t)(close - spec) + 1;
+    } else {
+      unsigned cp;
+      i += (size_t)utf8_decode(spec + i, len - i, &cp);
+      out[n++] = cp;
+    }
+  }
+  return n;
+}
+
+void key_format(sbuf *out, const uint32_t *keys, int n) {
+  for (int i = 0; i < n; i++) {
+    uint32_t k = keys[i] & ~(KEY_CTRL | KEY_ALT);
+    const char *name = NULL;
+    for (size_t j = 0; j < ARRAY_LEN(named); j++)
+      if (named[j].key == k) { name = named[j].name; break; }
+    int mods = (keys[i] & (KEY_CTRL | KEY_ALT)) != 0;
+    if (!mods && !name) {
+      char u[8];
+      sb_putn(out, u, (size_t)utf8_encode(u, k));
+      continue;
+    }
+    sb_putc(out, '<');
+    if (keys[i] & KEY_CTRL) sb_puts(out, "C-");
+    if (keys[i] & KEY_ALT) sb_puts(out, "M-");
+    if (name) {
+      sb_puts(out, name);
+    } else {
+      char u[8];
+      sb_putn(out, u, (size_t)utf8_encode(u, k));
+    }
+    sb_putc(out, '>');
+  }
+}
+
+int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command) {
+  uint32_t keys[KEYSEQ_MAX];
+  int n = key_parse(spec, keys);
+  if (!n) return -1;
+  for (int i = 0; i < km->n; i++) {
+    struct binding *b = &km->b[i];
+    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
+      b->modes &= ~modes; /* the new binding takes these modes over */
+    }
+  }
+  if (km->n == km->cap) {
+    km->cap = km->cap ? km->cap * 2 : 64;
+    km->b = xrealloc(km->b, (size_t)km->cap * sizeof *km->b);
+  }
+  struct binding *b = &km->b[km->n++];
+  memset(b, 0, sizeof *b);
+  b->modes = modes;
+  b->nkeys = n;
+  memcpy(b->keys, keys, (size_t)n * sizeof *keys);
+  b->command = xstrdup(command);
+  return 0;
+}
+
+const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (km->npending == KEYSEQ_MAX) km->npending = 0;
+    km->pending[km->npending++] = key;
+    const struct binding *exact = NULL;
+    int longer = 0;
+    for (int i = 0; i < km->n; i++) {
+      const struct binding *b = &km->b[i];
+      if (!(b->modes & mode) || b->nkeys < km->npending) continue;
+      if (memcmp(b->keys, km->pending, (size_t)km->npending * sizeof key)) continue;
+      if (b->nkeys == km->npending) exact = b;
+      else longer = 1;
+    }
+    if (exact && !longer) {
+      km->npending = 0;
+      return exact->command;
+    }
+    if (longer) return NULL; /* wait for the rest of the sequence */
+    /* a dead end: drop the prefix and try this key on its own */
+    int had_prefix = km->npending > 1;
+    km->npending = 0;
+    if (!had_prefix) break;
+  }
+  return NULL;
+}
+
+void keymap_free(struct keymap *km) {
+  for (int i = 0; i < km->n; i++) free(km->b[i].command);
+  free(km->b);
+  memset(km, 0, sizeof *km);
+}
+
+struct keymap tui_keymap;
+
+void keymap_defaults(struct keymap *km) {
+  static const struct { unsigned modes; const char *keys, *command; } d[] = {
+    /* moving */
+    {MODE_NORMAL | MODE_VISUAL, "j", "move +1"},
+    {MODE_NORMAL | MODE_VISUAL, "k", "move -1"},
+    {MODE_NORMAL | MODE_VISUAL, "<Down>", "move +1"},
+    {MODE_NORMAL | MODE_VISUAL, "<Up>", "move -1"},
+    {MODE_NORMAL | MODE_VISUAL, "gg", "move top"},
+    {MODE_NORMAL | MODE_VISUAL, "G", "move bottom"},
+    {MODE_NORMAL | MODE_VISUAL, "<Home>", "move top"},
+    {MODE_NORMAL | MODE_VISUAL, "<End>", "move bottom"},
+    {MODE_NORMAL | MODE_VISUAL, "<C-d>", "move half-down"},
+    {MODE_NORMAL | MODE_VISUAL, "<C-u>", "move half-up"},
+    {MODE_NORMAL | MODE_VISUAL, "<C-f>", "move page-down"},
+    {MODE_NORMAL | MODE_VISUAL, "<C-b>", "move page-up"},
+    {MODE_NORMAL | MODE_VISUAL, "<PageDown>", "move page-down"},
+    {MODE_NORMAL | MODE_VISUAL, "<PageUp>", "move page-up"},
+    /* finding */
+    {MODE_NORMAL | MODE_VISUAL, "/", "prompt search"},
+    {MODE_NORMAL | MODE_VISUAL, "n", "search next"},
+    {MODE_NORMAL | MODE_VISUAL, "N", "search prev"},
+    {MODE_NORMAL, "&", "prompt filter"},
+    {MODE_NORMAL, ":", "prompt command"},
+    {MODE_NORMAL, "f", "pick books"},
+    {MODE_NORMAL, "ga", "pick authors"},
+    {MODE_NORMAL, "gs", "pick subjects"},
+    {MODE_NORMAL, "gf", "pick filters"},
+    {MODE_NORMAL, "<BS>", "filter"},
+    /* selecting */
+    {MODE_NORMAL, "<Space>", "mark toggle"},
+    {MODE_NORMAL, "V", "visual"},
+    {MODE_VISUAL, "V", "visual"},
+    {MODE_VISUAL, "<Space>", "mark toggle"},
+    {MODE_VISUAL, "<Esc>", "visual"},
+    /* preview */
+    {MODE_NORMAL | MODE_VISUAL, "J", "preview scroll +3"},
+    {MODE_NORMAL | MODE_VISUAL, "K", "preview scroll -3"},
+    {MODE_NORMAL | MODE_VISUAL, "]", "preview page +1"},
+    {MODE_NORMAL | MODE_VISUAL, "[", "preview page -1"},
+    {MODE_NORMAL | MODE_VISUAL, "P", "preview graphic"},
+    {MODE_NORMAL | MODE_VISUAL, "+", "preview zoom +1"},
+    {MODE_NORMAL | MODE_VISUAL, "-", "preview zoom -1"},
+    {MODE_NORMAL | MODE_VISUAL, "=", "preview zoom 0"},
+    {MODE_NORMAL | MODE_VISUAL, "H", "preview pan -6"},
+    {MODE_NORMAL | MODE_VISUAL, "L", "preview pan +6"},
+    /* windows */
+    {MODE_NORMAL, "<Tab>", "focus next"},
+    {MODE_NORMAL, "<C-w>w", "focus next"},
+    {MODE_NORMAL, "<C-w>h", "focus h"},
+    {MODE_NORMAL, "<C-w>j", "focus j"},
+    {MODE_NORMAL, "<C-w>k", "focus k"},
+    {MODE_NORMAL, "<C-w>l", "focus l"},
+    {MODE_NORMAL, "<C-w>v", "split v preview"},
+    {MODE_NORMAL, "<C-w>s", "split h preview"},
+    {MODE_NORMAL, "<C-w>c", "close"},
+    {MODE_NORMAL, "<C-w>o", "only"},
+    {MODE_NORMAL, "<C-w>>", "resize +1"},
+    {MODE_NORMAL, "<C-w><lt>", "resize -1"},
+    /* changing things (these commands are defined in lua/lulibre/prelude.lua) */
+    {MODE_NORMAL | MODE_VISUAL, "e", "edit"},
+    {MODE_NORMAL | MODE_VISUAL, "gc", "capture"},
+    {MODE_NORMAL, "gr", "review"},
+    {MODE_NORMAL, "gt", "browse"},
+    {MODE_NORMAL, "gd", "dupes"},
+    {MODE_NORMAL, "go", "orphans"},
+    /* the sync folder (lua/lulibre/sync.lua) */
+    {MODE_NORMAL, "gS", "sync"},
+    {MODE_NORMAL, "gl", "source library"},
+    {MODE_NORMAL | MODE_VISUAL, "S", "sync add"},
+    {MODE_NORMAL | MODE_VISUAL, "X", "sync move"},
+    {MODE_NORMAL, "u", "undo"},
+    {MODE_NORMAL | MODE_VISUAL, "yb", "yank bib"},
+    {MODE_NORMAL | MODE_VISUAL, "yk", "yank key"},
+    {MODE_NORMAL | MODE_VISUAL, "yp", "yank path"},
+    {MODE_NORMAL | MODE_VISUAL, "yy", "yank title"},
+    /* misc */
+    {MODE_NORMAL, "R", "reload"},
+    {MODE_NORMAL, "?", "help"},
+    {MODE_NORMAL, "`", "console"},
+    {MODE_NORMAL, "q", "quit"},
+    {MODE_NORMAL, "ZZ", "quit"},
+  };
+  for (size_t i = 0; i < ARRAY_LEN(d); i++) keymap_bind(km, d[i].modes, d[i].keys, d[i].command);
+}

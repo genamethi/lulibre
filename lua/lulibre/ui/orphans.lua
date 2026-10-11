@@ -1,0 +1,127 @@
+-- Orphans: records with no file, and files with no record. Each row carries
+-- a verdict and what would be done about it; Space changes that, w does it.
+local dupes = require "lulibre.dupes"
+local edit = require "lulibre.edit"
+local orphans = require "lulibre.orphans"
+
+local M = {}
+
+local HELP = "Space change action   m mark removals   f filter   w do it   q close"
+local SIGN = { keep = "", remove = "×", reattach = "↩", move = "→", add = "+", relink = "↩", unlink = "×" }
+local WORD = { keep = "keep", remove = "remove record", reattach = "re-attach file", move = "move out", add = "add as book",
+  relink = "repair link", unlink = "delete link" }
+
+function M.run()
+  local found = orphans.scan()
+  if #found.records + #found.strays + #found.links + #found.empty == 0 then
+    lulibre.notify("no orphans: every record has its file and every file has its record")
+    return
+  end
+
+  local at -- row -> the record or stray it shows
+  local function build()
+    local rows = {}
+    at = {}
+    local function head(text, id)
+      rows[#rows + 1] = { text, id = id, style = "head" }
+    end
+    if #found.records > 0 then
+      head(("Records with no file  (%d)"):format(#found.records), found.records[1].book.id)
+      for _, r in ipairs(found.records) do
+        local b = r.book
+        rows[#rows + 1] = { SIGN[r.action], WORD[r.action], b.id, b.title or "",
+          edit.is_unknown(b.author) and "" or b.author, r.verdict, id = b.id,
+          style = r.action == "remove" and "warn" or (r.action == "reattach" and "ok" or nil) }
+        at[#rows] = r
+      end
+    end
+    if #found.strays > 0 then
+      head(("Files with no record  (%d)"):format(#found.strays))
+      for _, s in ipairs(found.strays) do
+        rows[#rows + 1] = { SIGN[s.action], WORD[s.action], "", s.rel, dupes.human(s.size), s.verdict,
+          id = s.twin, style = s.action == "move" and "warn" or (s.action == "add" and "ok" or nil) }
+        at[#rows] = s
+      end
+    end
+    if #found.links > 0 then
+      head(("Links that lead nowhere  (%d)"):format(#found.links), found.links[1].book)
+      for _, l in ipairs(found.links) do
+        rows[#rows + 1] = { SIGN[l.action], WORD[l.action], l.book or "", l.rel, "", l.verdict,
+          id = l.book, style = l.action == "relink" and "ok" or (l.action == "unlink" and "warn" or nil) }
+        at[#rows] = l
+      end
+    end
+    if #found.empty > 0 then
+      head(("Empty folders  (%d)   left alone"):format(#found.empty))
+      for _, dir in ipairs(found.empty) do
+        rows[#rows + 1] = { "", "", "", dir:sub(#found.root + 2), "", "", style = "dim" }
+      end
+    end
+    return rows
+  end
+  local function title()
+    local n = orphans.counts(found)
+    local todo = {}
+    for _, a in ipairs { "reattach", "remove", "move", "add", "relink", "unlink" } do
+      if n[a] > 0 then todo[#todo + 1] = ("%d %s"):format(n[a], WORD[a]) end
+    end
+    return "orphans  " .. (#todo > 0 and table.concat(todo, ", ") or "nothing to do as it stands")
+  end
+
+  local p <close> = lulibre.panel {
+    title = title(), help = HELP, follow = true, height = 0.5,
+    columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", -3 } },
+    rows = build(),
+  }
+  p:cursor(2)
+
+  while true do
+    local key, row = p:wait()
+    if not key then return end
+    local item = at[row]
+    if item and (key == "<Space>" or key == "<CR>") then
+      local i = 1
+      for k, a in ipairs(item.actions) do
+        if a == item.action then i = k end
+      end
+      item.action = item.actions[i % #item.actions + 1]
+    elseif key == "m" then
+      local n = 0
+      for _, r in ipairs(found.records) do
+        if r.action == "remove" then
+          lulibre.mark(r.book.id, true)
+          n = n + 1
+        end
+      end
+      lulibre.notify(("marked the %d records set to be removed"):format(n))
+    elseif key == "f" then
+      lulibre.filter("is:missing")
+    elseif key == "w" then
+      local n = orphans.counts(found)
+      if n.remove + n.reattach + n.move + n.add + n.relink + n.unlink == 0 then
+        lulibre.notify("every row is set to keep; Space changes a row's action")
+      else
+        local parts = {}
+        if n.reattach > 0 then parts[#parts + 1] = ("give %d records their files back"):format(n.reattach) end
+        if n.remove > 0 then parts[#parts + 1] = ("remove %d records (to calibre's recycle bin)"):format(n.remove) end
+        if n.add > 0 then parts[#parts + 1] = ("add %d files as books"):format(n.add) end
+        if n.move > 0 then parts[#parts + 1] = ("move %d stray files out of the library"):format(n.move) end
+        if n.relink > 0 then parts[#parts + 1] = ("repair %d links"):format(n.relink) end
+        if n.unlink > 0 then parts[#parts + 1] = ("delete %d links"):format(n.unlink) end
+        if lulibre.confirm(table.concat(parts, ", ") .. "?") then
+          p:close()
+          local carried = dupes.propose(orphans.gather(found), "record with no file")
+          local out = orphans.apply(found)
+          lulibre.notify(orphans.summary(out) .. (carried > 0
+            and ("; %d things the removed records knew are proposals for their copies (gr)"):format(carried) or ""),
+            #out.failed > 0 and "error" or nil)
+          return
+        end
+      end
+    end
+    p:rows(build())
+    p:title(title())
+  end
+end
+
+return M

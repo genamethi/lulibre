@@ -1,0 +1,115 @@
+#!/bin/sh
+# Smoke test: build a two-book calibre library from scratch, index it, query it.
+# Touches nothing outside a temporary directory.
+set -eu
+
+bin=$(realpath "$1")
+command -v sqlite3 >/dev/null || { echo "smoke: sqlite3 CLI not found, skipping"; exit 0; }
+
+t=$(mktemp -d)
+trap 'rm -rf "$t"' EXIT
+lib=$t/lib
+sh "$(dirname "$0")/mklib.sh" "$lib"
+
+export XDG_DATA_HOME="$t/data"
+run() { "$bin" --clean -L "$lib" "$@"; }
+
+fails=0
+expect() { # description, expected, actual
+  if [ "$2" = "$3" ]; then
+    echo "ok    $1"
+  else
+    echo "FAIL  $1: expected '$2', got '$3'"
+    fails=$((fails + 1))
+  fi
+}
+contains() { # description, needle, haystack
+  case $3 in
+    *"$2"*) echo "ok    $1" ;;
+    *) echo "FAIL  $1: '$2' not in output"; fails=$((fails + 1)) ;;
+  esac
+}
+
+contains "index extracts both files"      "2 ok, 0 failed"     "$(run index 2>&1)"
+contains "second run skips unchanged"     "2 already current"  "$(run index 2>&1)"
+expect   "empty filter matches all"       2 "$(run query -c)"
+expect   "accent-insensitive author"      1 "$(run query -c author:erdos)"
+expect   "placeholder author"             1 "$(run query -c author:unknown)"
+expect   "hierarchical subject"           1 "$(run query -c subject:number-theory)"
+expect   "subject needs whole component"  0 "$(run query -c subject:number)"
+expect   "negation"                       1 "$(run query -c -- -subject:math)"
+expect   "missing date"                   1 "$(run query -c no:date)"
+expect   "year comparison"                1 "$(run query -c 'year:>1990')"
+expect   "identifier"                     1 "$(run query -c doi:10.1000)"
+expect   "full text, pdf"                 1 "$(run query -c text:sieve)"
+expect   "full text, plain text file"     1 "$(run query -c 'text:"additive number theory"')"
+expect   "Lua pattern over text"          1 "$(run query -c 'text:~arXiv:%d+%.%d+')"
+expect   "Lua pattern over title"         1 "$(run query -c 'title:~^N')"
+expect   "or"                             2 "$(run query -c text:sieve or author:erdos)"
+expect   "columns"                        "2	1996	Paul Erdős" "$(run query -f id,year,authors id:2)"
+contains "title line keeps its font size" "24.0"               "$(run show -l 1)"
+contains "bad pattern is reported"        "bad Lua pattern"    "$(run query 'title:~%' 2>&1 || true)"
+
+# Lua: a script against this library (the unit checks are test/units.sh).
+cat > "$t/probe.lua" <<'LUA'
+local tp = require("lulibre.titlepage").classify(lulibre.lines(1))
+local b = lulibre.book(2)
+print(tp.title, tp.arxiv, tp.subject, b.authors[1], b.idents.doi, b.year)
+LUA
+expect   "lua script reads the index" \
+  "A Note on Sieve Methods	1012.6008	math/number-theory	Paul Erdős	10.1000/xyz	1996" \
+  "$(run run "$t/probe.lua" 2>&1)"
+# duplicates: a third book holding the first one's bytes
+contains "no duplicates yet"              ", 0 groups,"        "$(run run dupes 2>&1)"
+expect   "is:dupe is empty"               0 "$(run query -c is:dupe 2>&1)"
+contains "config prints every option"     "o.repair_links"     "$(run config 2>&1)"
+contains "config knows the default"       '-- o.pages = 6'     "$(run config 2>&1)"
+contains "config shows what was set"      'o.pages = 9'        "$(run -o pages=9 config 2>&1)"
+printf 'error("boom")\n' > "$t/bad.lua"
+run run "$t/bad.lua" >/dev/null 2>&1 && rc=0 || rc=$?
+expect   "failing script exits 1"         1 "$rc"
+
+# The interactive interface, driven through a private tmux server.
+if command -v tmux >/dev/null; then
+  T="tmux -L lulibre-smoke-$$"
+  screen() { $T capture-pane -p -t t 2>/dev/null; }
+  wait_for() { # pattern
+    i=0
+    while [ $i -lt 100 ]; do
+      screen | grep -q -- "$1" && return 0
+      sleep 0.05
+      i=$((i + 1))
+    done
+    return 1
+  }
+  shown() { wait_for "$2" && echo "ok    $1" || { echo "FAIL  $1"; fails=$((fails + 1)); }; }
+  $T new-session -d -s t -x 120 -y 30 \
+    "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib'; echo \$? > '$t/rc'"
+  shown "tui starts"                 "NORMAL"
+  shown "tui lists both books"       "1/2"
+  shown "tui previews indexed text"  "A Note on Sieve Methods"
+  $T send-keys -t t / ; $T send-keys -t t -l "erdos" ; $T send-keys -t t Enter
+  shown "tui / jumps to the match"   "/erdos: 1   2/2"
+  $T send-keys -t t n
+  shown "tui n wraps around"         "continuing at the top"
+  $T send-keys -t t Escape "&" ; $T send-keys -t t -l "author:erdos"
+  shown "tui & narrows as you type"  "1/1"
+  $T send-keys -t t Enter Space
+  shown "tui marks"                  "1 marked"
+  $T send-keys -t t : ; $T send-keys -t t -l "mark none" ; $T send-keys -t t Enter
+  $T send-keys -t t g a ; $T send-keys -t t -l "unk" ; $T send-keys -t t Enter
+  shown "tui picker sets a filter"   'author:="Unknown"'
+  $T send-keys -t t Escape : ; $T send-keys -t t -l 'lua lulibre.count("")' ; $T send-keys -t t Enter
+  shown "tui :lua"                   "^2 *$"
+  $T send-keys -t t g t
+  shown "tui tree browser opens"     "browse  "
+  $T send-keys -t t q
+  $T send-keys -t t q
+  i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
+  $T kill-server 2>/dev/null || true
+else
+  echo "skip  tui tests (tmux not found)"
+fi
+
+[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -1,0 +1,241 @@
+#!/bin/sh
+# lulibre configure -- find dependencies with pkgconf, write config.mk and config.h.
+#
+#   ./configure [--prefix=DIR] [--debug] [--lua=5.4|5.5] [--lua-inc=DIR] [CC=..] [CFLAGS=..] [LDFLAGS=..]
+#   make                                 # `make help` lists the other targets
+#   make DESTDIR=/some/stage install     # staged, no root needed
+#   sudo make install
+
+prefix=/usr/local
+bindir=
+datadir=
+lua_want=
+lua_inc=
+debug=0
+sanitize=
+CC=${CC:-cc}
+CFLAGS=${CFLAGS:-}
+LDFLAGS=${LDFLAGS:-}
+
+usage() {
+  sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<EOF
+
+  --prefix=DIR     install prefix                     [$prefix]
+  --bindir=DIR     executables                        [PREFIX/bin]
+  --datadir=DIR    read-only data                     [PREFIX/share]
+  --debug          a debug build: no optimisation, full symbols, and the
+                   trace level of the log console (\` inside lulibre)
+  --sanitize=LIST  build with -fsanitize=LIST (address,undefined or thread);
+                   implies --debug
+  --lua=VER        Lua version to build against       [first of 5.5, 5.4 found]
+  --lua-inc=DIR    directory holding lua.h, if the compiler's default is wrong
+EOF
+}
+
+for arg; do
+  case $arg in
+    --prefix=*)  prefix=${arg#*=} ;;
+    --bindir=*)  bindir=${arg#*=} ;;
+    --datadir=*) datadir=${arg#*=} ;;
+    --debug)     debug=1 ;;
+    --sanitize=*) sanitize=${arg#*=}; debug=1 ;;
+    --lua=*)     lua_want=${arg#*=} ;;
+    --lua-inc=*) lua_inc=${arg#*=} ;;
+    CC=*)        CC=${arg#*=} ;;
+    CFLAGS=*)    CFLAGS=${arg#*=} ;;
+    LDFLAGS=*)   LDFLAGS=${arg#*=} ;;
+    -h|--help)   usage; exit 0 ;;
+    *)           echo "configure: ignoring unknown option $arg" >&2 ;;
+  esac
+done
+: "${bindir:=$prefix/bin}"
+: "${datadir:=$prefix/share}"
+cflags_given=$CFLAGS
+ldflags_given=$LDFLAGS
+# A release is optimised and carries no symbols; a debug build is the reverse.
+if [ -z "$CFLAGS" ]; then
+  if [ $debug = 1 ]; then CFLAGS="-O0 -g3 -fno-omit-frame-pointer"; else CFLAGS="-O2"; fi
+fi
+if [ -n "$sanitize" ]; then
+  CFLAGS="$CFLAGS -fsanitize=$sanitize"
+  LDFLAGS="$LDFLAGS -fsanitize=$sanitize"
+fi
+build=release
+[ $debug = 1 ] && build=debug
+
+fail() { echo "configure: error: $*" >&2; exit 1; }
+say()  { printf '%-28s %s\n' "$1" "$2"; }
+
+PKGCONF=${PKG_CONFIG:-$(command -v pkgconf || command -v pkg-config)}
+[ -n "$PKGCONF" ] || fail "pkgconf not found"
+command -v "$CC" >/dev/null || fail "C compiler '$CC' not found"
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/lulibre-conf.XXXXXX") || fail "mktemp failed"
+trap 'rm -rf "$tmp"' EXIT
+
+DEP_CFLAGS=
+DEP_LIBS=
+
+# need NAME MODULE... : first pkgconf module that exists wins
+need() {
+  name=$1; shift
+  for m; do
+    if "$PKGCONF" --exists "$m" 2>/dev/null; then
+      DEP_CFLAGS="$DEP_CFLAGS $("$PKGCONF" --cflags "$m")"
+      DEP_LIBS="$DEP_LIBS $("$PKGCONF" --libs "$m")"
+      say "$name" "$m $("$PKGCONF" --modversion "$m")"
+      return 0
+    fi
+  done
+  fail "$name not found (pkgconf modules tried: $*)"
+}
+
+# ---- the version, from the one place it is written ----
+[ -f src/version.h ] || fail "run configure from the source directory (src/version.h not found)"
+cat > "$tmp/ver.c" <<'VEOF'
+#include <stdio.h>
+#include "version.h"
+int main(void) {
+  printf("%s %d.%d.%d%s\n", LULIBRE_VERSION, LULIBRE_VERSION_MAJOR, LULIBRE_VERSION_MINOR,
+         LULIBRE_VERSION_PATCH, LULIBRE_VERSION_PRE);
+  return 0;
+}
+VEOF
+$CC -Isrc -o "$tmp/ver" "$tmp/ver.c" 2>"$tmp/ver.log" || { cat "$tmp/ver.log" >&2; fail "src/version.h does not compile"; }
+set -- $("$tmp/ver")
+version=$1
+[ "$1" = "$2" ] || fail "src/version.h: LULIBRE_VERSION ($1) is not built from its parts ($2)"
+semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+printf '%s\n' "$version" | grep -Eq "$semver" ||
+  fail "src/version.h: '$version' is not a semantic version (MAJOR.MINOR.PATCH[-PRERELEASE])"
+say version "$version ($build)"
+
+need libuv     libuv
+need sqlite3   sqlite3
+need notcurses notcurses-core
+need mupdf     mupdf
+need djvulibre ddjvuapi
+
+# ---- Lua: 5.4 and 5.5 are both supported ----
+case $lua_want in
+  '')  lua_mods="lua lua5.5 lua-5.5 lua55 lua5.4 lua-5.4 lua54" ;;
+  5.4) lua_mods="lua5.4 lua-5.4 lua54 lua" ;;
+  5.5) lua_mods="lua5.5 lua-5.5 lua55 lua" ;;
+  *)   fail "--lua must be 5.4 or 5.5" ;;
+esac
+lua_mod=
+for m in $lua_mods; do
+  "$PKGCONF" --exists "$m" 2>/dev/null || continue
+  v=$("$PKGCONF" --modversion "$m" | cut -d. -f1,2)
+  case $v in 5.4|5.5) ;; *) continue ;; esac
+  [ -z "$lua_want" ] || [ "$v" = "$lua_want" ] || continue
+  lua_mod=$m; lua_ver=$v; break
+done
+[ -n "$lua_mod" ] || fail "Lua ${lua_want:-5.4/5.5} not found (pkgconf modules tried: $lua_mods)"
+LUA_CFLAGS=$("$PKGCONF" --cflags "$lua_mod")
+LUA_LIBS=$("$PKGCONF" --libs "$lua_mod")
+
+cat > "$tmp/lua.c" <<'EOF'
+#include <stdio.h>
+#include <lua.h>
+#include <lauxlib.h>
+int main(void) {
+  lua_State *L = luaL_newstate();
+  if (!L) return 2;
+  printf("%d %d\n", LUA_VERSION_NUM, (int)lua_version(L));
+  return 0;
+}
+EOF
+# prints "ok" when the headers the compiler picks match the library it links
+lua_probe() {
+  $CC $1 -o "$tmp/lua" "$tmp/lua.c" $LUA_LIBS 2>"$tmp/lua.log" || { echo "nocompile"; return; }
+  set -- $("$tmp/lua" 2>/dev/null)
+  if [ "${1:-x}" = "${2:-y}" ]; then echo ok; else echo "headers ${1:-?} vs library ${2:-?}"; fi
+}
+# The compiler ignores -I for directories already on its system path, so a
+# header directory is pinned by linking the four Lua headers into build/lua-inc.
+lua_pin() {
+  [ -f "$1/lua.h" ] || return 1
+  mkdir -p build/lua-inc
+  for h in lua.h luaconf.h lualib.h lauxlib.h; do ln -sf "$1/$h" "build/lua-inc/$h"; done
+  LUA_CFLAGS="-Ibuild/lua-inc"
+}
+
+if [ -n "$lua_inc" ]; then
+  lua_pin "$lua_inc" || fail "--lua-inc=$lua_inc: no lua.h there"
+  r=$(lua_probe "$LUA_CFLAGS")
+  [ "$r" = ok ] || fail "Lua check failed with --lua-inc=$lua_inc ($r)"
+  lua_note=" (headers: $lua_inc)"
+else
+  r=$(lua_probe "$LUA_CFLAGS")
+  lua_note=
+  if [ "$r" != ok ]; then
+    # Stale headers earlier on the include path: fall back to the directory
+    # pkgconf reports for this module.
+    d=$("$PKGCONF" --variable=includedir "$lua_mod")
+    if [ -n "$d" ] && lua_pin "$d" && [ "$(lua_probe "$LUA_CFLAGS")" = ok ]; then
+      lua_note=" (default headers mismatched: $r; using $d)"
+    else
+      fail "Lua headers do not match the library ($r). Pass --lua-inc=DIR."
+    fi
+  fi
+fi
+DEP_CFLAGS="$DEP_CFLAGS $LUA_CFLAGS"
+DEP_LIBS="$DEP_LIBS $LUA_LIBS"
+say lua "$lua_mod $("$PKGCONF" --modversion "$lua_mod")$lua_note"
+
+# ---- one link test over everything ----
+cat > "$tmp/all.c" <<'EOF'
+#include <uv.h>
+#include <sqlite3.h>
+#include <notcurses/notcurses.h>
+#include <mupdf/fitz.h>
+#include <libdjvu/ddjvuapi.h>
+int main(void) { return uv_version() == 0 || sqlite3_libversion_number() == 0; }
+EOF
+$CC $CFLAGS $DEP_CFLAGS -o "$tmp/all" "$tmp/all.c" $LDFLAGS $DEP_LIBS 2>"$tmp/all.log" || {
+  cat "$tmp/all.log" >&2
+  fail "could not compile and link against the dependencies above"
+}
+
+cat > config.mk <<EOF
+# generated by ./configure
+VERSION    = $version
+BUILD      = $build
+PREFIX     = $prefix
+BINDIR     = $bindir
+DATADIR    = $datadir
+CC         = $CC
+CFLAGS     = $CFLAGS
+LDFLAGS    = $LDFLAGS
+DEP_CFLAGS =$DEP_CFLAGS
+DEP_LIBS   =$DEP_LIBS
+LUA_VER    = $lua_ver
+EOF
+
+cat > config.h <<EOF
+/* generated by ./configure; the version is in src/version.h */
+#define LULIBRE_DATADIR "$datadir/lulibre"
+#define LULIBRE_LUA_VER "$lua_ver"
+#define LULIBRE_BUILD "$build"
+#define LULIBRE_DEBUG $debug
+EOF
+
+# How this was configured, so make can do it again when src/version.h or
+# this script changes.
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+{
+  echo '#!/bin/sh'
+  echo '# generated by ./configure: run it again the same way'
+  printf 'exec ./configure --prefix=%s --bindir=%s --datadir=%s' "$(quote "$prefix")" "$(quote "$bindir")" "$(quote "$datadir")"
+  [ $debug = 1 ] && [ -z "$sanitize" ] && printf ' --debug'
+  [ -n "$sanitize" ] && printf ' --sanitize=%s' "$(quote "$sanitize")"
+  [ -n "$lua_want" ] && printf ' --lua=%s' "$(quote "$lua_want")"
+  [ -n "$lua_inc" ] && printf ' --lua-inc=%s' "$(quote "$lua_inc")"
+  printf ' CC=%s CFLAGS=%s LDFLAGS=%s\n' "$(quote "$CC")" "$(quote "$cflags_given")" "$(quote "$ldflags_given")"
+} > config.status
+chmod +x config.status
+
+say prefix "$prefix"
+echo "now run: make"
