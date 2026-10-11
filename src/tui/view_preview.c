@@ -23,6 +23,8 @@ struct pstate {
   sqlite3_int64 file;
   char *fpath, *fmt, *ferror, *etitle, *eauthor;
   int fstatus, npages, indexed;
+  int first_text; /* first indexed page with text worth showing; 0 if none */
+  int skipped;    /* blank leading pages passed over when the book was opened */
 
   int page; /* 1-based */
   char *text;
@@ -146,6 +148,20 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
       ps->eauthor = col(st, 8);
     }
     sqlite3_finalize(st);
+  }
+  /* A scan often opens on a cover or a blank leaf. Start where there is
+   * something to read; [ still goes back. */
+  ps->first_text = ps->skipped = 0;
+  if (ps->file &&
+      sqlite3_prepare_v2(h, "SELECT min(page) FROM pages WHERE file = ? AND length(trim(text)) >= 40",
+                         -1, &st, NULL) == SQLITE_OK) {
+    sqlite3_bind_int64(st, 1, ps->file);
+    if (sqlite3_step(st) == SQLITE_ROW) ps->first_text = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+  }
+  if (ps->first_text > 1) {
+    ps->skipped = ps->first_text - 1;
+    ps->page = ps->first_text;
   }
   load_page(ps);
 }
@@ -480,6 +496,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   else if (ps->fstatus == FILE_PENDING) state_note = "not indexed yet";
   sb_printf(&line, "── page %d", ps->page);
   if (ps->npages > 0) sb_printf(&line, "/%d", ps->npages);
+  if (ps->skipped && ps->page == ps->first_text) sb_puts(&line, ", the first with text");
   if (ps->graphic && ps->zoom > 1) sb_printf(&line, " ── image ×%d ", ps->zoom);
   else sb_printf(&line, " ── %s ", ps->graphic ? "image" : "text");
   if (state_note) sb_printf(&line, "── %s ", state_note);
@@ -502,12 +519,37 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   drop_plane(ps);
 
   ps->body.h = 0;
-  if (!ps->text) {
+  int blank = 1; /* nothing but white space counts as no text */
+  for (const char *c = ps->text; c && *c && blank; c++) blank = *c == ' ' || *c == '\n' || *c == '\f';
+  if (blank) {
+    /* say why there is nothing to read, and what would show it */
     dr_style(n, theme.dim, C_DEFAULT, 0);
-    if (ps->file && ps->fstatus == FILE_OK)
-      dr_text(n, body.y, x, w, ps->page > ps->indexed
-                                 ? "this page is beyond the indexed pages (P shows the image)"
-                                 : "no text on this page");
+    if (ps->file && ps->fstatus == FILE_OK) {
+      const char *why, *then = "P shows the page as an image.";
+      char buf[160];
+      if (ps->page > ps->indexed) {
+        snprintf(buf, sizeof buf, "Page %d is past the first %d pages, which is all lulibre indexes",
+                 ps->page, ps->indexed);
+        why = buf;
+        then = "(the option `pages`). P shows the page as an image.";
+      } else if (!ps->first_text) {
+        why = "This file has no text in its first pages: it is a scan without a text layer.";
+        then = ":ocr reads the first pages with tesseract. P shows the page as an image.";
+      } else {
+        snprintf(buf, sizeof buf, "No text on this page. Page %d has some: ] and [ turn pages.", ps->first_text);
+        why = buf;
+      }
+      int row = 0;
+      for (const char *part = why; part; part = part == why ? then : NULL) {
+        size_t len = strlen(part), off = 0;
+        while (off < len && row < body.h) {
+          size_t take = dr_wrap(part + off, len - off, w);
+          dr_textn(n, body.y + row++, x, w, part + off, take);
+          off += take;
+          while (off < len && part[off] == ' ') off++;
+        }
+      }
+    }
     return;
   }
   wrap(ps, w);
