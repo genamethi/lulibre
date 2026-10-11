@@ -25,6 +25,8 @@ for n, id in ipairs(ids) do
       want = (junk.title(cur) or not cur:find("%s")) and not best.title
     elseif c.field == "pubdate" then
       want = cur == "" and not best.pubdate
+    elseif c.field == "publisher" then
+      want = cur == "" and not best.publisher
     elseif c.field == "tags" then
       -- a stated subject (arXiv class, MSC) is worth adding; vocabulary only fills a gap
       want = cur == "" and (c.confidence >= 0.9 or not best.tags)

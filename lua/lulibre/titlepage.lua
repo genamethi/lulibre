@@ -128,4 +128,60 @@ function M.classify_pages(pages)
   return best or { authors = {} }
 end
 
+--- What a cover sheet states outright, in "Label: value" lines, as the
+-- sheets JSTOR and other archives put in front of an article do:
+--
+--   What is an Answer?
+--   Author(s): Herbert S. Wilf
+--   Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292
+--   Published by: Mathematical Association of America
+--   Stable URL: http://www.jstor.org/stable/2321713
+--
+-- Returns nil when the page has no author label, else { title=, authors=,
+-- year=, source=, publisher=, url=, jstor=, labels= } with whatever was
+-- found; labels counts the labelled lines, which is how sure one can be.
+function M.labelled(lines)
+  local text = {}
+  for i, l in ipairs(lines or {}) do
+    text[i] = (type(l) == "table" and l.text or l or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if i >= 40 then break end
+  end
+  local at, who
+  for i, t in ipairs(text) do
+    who = t:match("^[Aa]uthor%(?s?%)?%s*:%s*(.+)$") or t:match("^AUTHOR%(?S?%)?%s*:%s*(.+)$")
+    if who then
+      at = i
+      break
+    end
+  end
+  if not at then return nil end
+  local out = { authors = names.split(who), labels = 1 }
+  -- the title is what stands above the author line, when that is only a line or three
+  if at > 1 and at <= 4 then
+    local parts = {}
+    for i = 1, at - 1 do
+      if text[i] ~= "" and not text[i]:find("^%a[%a ()]-:%s") then parts[#parts + 1] = text[i] end
+    end
+    if #parts > 0 then out.title = table.concat(parts, " ") end
+  end
+  for i = at + 1, math.min(#text, at + 12) do
+    local t = text[i]
+    local source = t:match("^Source:%s*(.+)$")
+    local publisher = t:match("^Published [Bb]y:%s*(.+)$") or t:match("^Publisher:%s*(.+)$")
+    local url = t:match("^Stable URL:%s*(%S+)") or t:match("^URL:%s*(%S+)")
+    if source then
+      out.source, out.labels = source, out.labels + 1
+      for y in source:gmatch("%f[%d](%d%d%d%d)%f[%D]") do
+        if tonumber(y) >= 1500 and tonumber(y) <= 2099 then out.year = y end
+      end
+    elseif publisher then
+      out.publisher, out.labels = publisher:gsub("%s*%.$", ""), out.labels + 1
+    elseif url then
+      out.url, out.labels = url:gsub("[.,]$", ""), out.labels + 1
+      out.jstor = url:match("jstor%.org/stable/([%w./-]-)[.,]?$")
+    end
+  end
+  return out
+end
+
 return M
