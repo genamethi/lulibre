@@ -58,7 +58,14 @@ after it, institution, year), or failing those the largest type on the page.
 Each proposal carries where it came from and how sure it is.
 
 `gr` lists the proposals book by book, with the current value beside each;
-the list and preview follow the cursor, so the title page is in view.
+the list and preview follow the cursor, so the title page is in view. The
+book whose surest proposal is surest comes first, so what can be accepted at
+a glance is at the top and what needs thought is further down; each book's
+line says how many proposals wait and how sure the surest is. `s` switches
+to book id order (the option `review_sort` sets which it starts in).
+
+Review, duplicates and orphans bring themselves up to date when the library
+changes under them: a book removed with `:remove` leaves the panel.
 
 | Key | |
 |---|---|
@@ -69,6 +76,7 @@ the list and preview follow the cursor, so the title page is in view.
 | `A` | accept everything at or above a confidence |
 | `R` | reject everything still pending |
 | `c` | propose blanking the field |
+| `s` | sort: surest first, or by id |
 | `p` | more preview: shrink the panel, and again to bring it back |
 | `w` | write the accepted ones as one batch |
 

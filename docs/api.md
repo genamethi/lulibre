@@ -133,7 +133,9 @@ Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
 `p:height(share)`, `p:keys(list)`. Row styles: `dim
 accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
-`"<Move>"` when the cursor moves.
+`"<Move>"` when the cursor moves, and with `reloads = true` it returns
+`"<Reload>"` when the library has been read again, so the rows can be
+brought up to date.
 
 A panel normally takes every key. Given `keys` and `pass`, a key that is not
 among `keys` and begins a global binding to one of the `pass` commands (named

@@ -238,6 +238,8 @@ void wm_set_size(struct tui *t, void *state, float size);
  * Returns 0, or -1 with *err set. Interface thread. */
 int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
               void *ud, char **err);
+/* Every window, left to right and top to bottom; returns how many. */
+int wm_leaves(struct tui *t, struct node **out, int max);
 /* The window showing this state, or NULL. */
 struct node *wm_leaf_of(struct tui *t, void *state);
 /* The window at a screen position, or NULL. */
@@ -305,6 +307,11 @@ void panel_set_follow(struct panel *p, int follow);
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
+/* Report to the event function, as the key "<Reload>", that the library has
+ * been read again (something changed it), so the rows can be brought up to
+ * date. panels_reloaded tells every panel on screen that asked. */
+void panel_set_reloads(struct panel *p, int reloads);
+void panels_reloaded(struct tui *t);
 /* width > 0: that many columns; width <= 0: a share of what is left */
 void panel_set_columns(struct panel *p, int n, const char *const *titles, const int *widths);
 void panel_clear_rows(struct panel *p);

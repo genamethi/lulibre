@@ -52,6 +52,31 @@ function M.run(args)
   local open = {}   -- book id -> its other fields are shown
   local options = {} -- "book field" -> suggestions, read once
 
+  -- The order of the books. With "confidence" the book whose surest proposal
+  -- is surest comes first, so what can be accepted at a glance is at the top
+  -- and what needs thought is further down. It is worked out when review
+  -- opens, on s and when the library changes, not after every key: a book
+  -- does not jump away because one of its proposals was rejected.
+  local sort = lulibre.o.review_sort
+  local rank
+  local function rank_books()
+    local best, ids = {}, {}
+    for _, pr in ipairs(listed()) do
+      if not best[pr.book] then
+        best[pr.book] = -1
+        ids[#ids + 1] = pr.book
+      end
+      best[pr.book] = math.max(best[pr.book], pr.confidence or 0)
+    end
+    table.sort(ids, function(a, b)
+      if sort == "confidence" and best[a] ~= best[b] then return best[a] > best[b] end
+      return math.abs(a) < math.abs(b)
+    end)
+    rank = {}
+    for i, id in ipairs(ids) do rank[id] = i end
+  end
+  rank_books()
+
   local function proposal_row(book, pr)
     local shown = pr.value == "" and edit.BLANK or pr.value
     if pr.op == "add" then shown = "+ " .. shown elseif pr.op == "remove" then shown = "- " .. shown end
@@ -73,12 +98,26 @@ function M.run(args)
       end
       table.insert(by_book[pr.book], pr)
     end
+    -- books ranked when review opened keep their place; any that came since follow
+    table.sort(order, function(a, b)
+      if rank[a] and rank[b] then return rank[a] < rank[b] end
+      if rank[a] or rank[b] then return rank[a] ~= nil end
+      return math.abs(a) < math.abs(b)
+    end)
     for _, id in ipairs(order) do
       local book = lulibre.book(id)
       if book then
         local who = edit.current(book, "authors")
-        rows[#rows + 1] = { ("%s %d  %s%s%s"):format(open[id] and "▾" or "▸", id, book.title or "",
-          who ~= "" and ("  —  " .. who) or "", book.year and ("  (%d)"):format(book.year) or ""),
+        local best, waiting = 0, 0
+        for _, pr in ipairs(by_book[id]) do
+          if pr.status == "pending" then
+            waiting = waiting + 1
+            best = math.max(best, pr.confidence or 0)
+          end
+        end
+        rows[#rows + 1] = { ("%s %d  %s%s%s%s"):format(open[id] and "▾" or "▸", id, book.title or "",
+          who ~= "" and ("  —  " .. who) or "", book.year and ("  (%d)"):format(book.year) or "",
+          waiting > 0 and ("     %d to decide, surest %.2f"):format(waiting, best) or "     all decided"),
           id = id, style = "head" }
         items[#rows] = { heading = true, book = id }
         local function put(pr)
@@ -128,12 +167,12 @@ function M.run(args)
     rows = build()
   end
   local function title()
-    return ("review%s  %d pending, %d accepted"):format(scope == "sync" and " (sync folder)" or "",
-      #listed("pending"), #listed("accepted"))
+    return ("review%s  %d pending, %d accepted   %s"):format(scope == "sync" and " (sync folder)" or "",
+      #listed("pending"), #listed("accepted"), sort == "confidence" and "surest first" or "by id")
   end
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
-    keys = keys:own(), pass = panels.PASS,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows,
   }
@@ -196,6 +235,11 @@ function M.run(args)
       keys:show("review", panels.also())
     elseif act == "peek" then
       peek()
+    elseif act == "sort" then
+      sort = sort == "confidence" and "id" or "confidence"
+      rank_books()
+    elseif key == "<Reload>" then
+      rank_books() -- the library changed under us: books may have gone, values may differ
     elseif act == "write" then
       if #listed("accepted") == 0 then
         lulibre.notify(("nothing accepted yet: %s accepts the proposal under the cursor"):format(keys:key("accept") or "accept"))

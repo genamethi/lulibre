@@ -46,7 +46,7 @@ function M.run()
 
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("keep", "edit", "peek", "remove"), follow = true, height = 0.5,
-    keys = keys:own(), pass = panels.PASS,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
   }
@@ -71,7 +71,9 @@ function M.run()
     local g, b = at[row] and at[row][1], at[row] and at[row][2]
     local id = b and b.id or g and g.keep -- the book the row stands for
     local act = keys:action(key)
-    if act == "help" then
+    if key == "<Reload>" then
+      refresh() -- the library changed under us
+    elseif act == "help" then
       keys:show("duplicates", panels.also())
     elseif act == "peek" then
       peek()
