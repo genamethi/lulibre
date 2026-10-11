@@ -21,7 +21,8 @@ fi
 
 t=$(mktemp -d)
 T="tmux -L lulibre-forms-$$"
-trap '$T kill-server 2>/dev/null; rm -rf "$t"' EXIT
+# (|| true: the server may be gone already, and under set -e a failure in the trap becomes the exit status)
+trap '$T kill-server 2>/dev/null || true; rm -rf "$t"' EXIT
 lib=$t/lib
 export XDG_DATA_HOME=$t/data XDG_CONFIG_HOME=$t/config
 mkdir -p "$t/src" "$XDG_CONFIG_HOME"

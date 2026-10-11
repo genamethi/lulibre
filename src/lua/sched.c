@@ -74,7 +74,10 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
   log_debug("task %d %s: %s", t->id, t->cancelled ? "cancelled" : ok ? "done" : "failed", t->name);
   if (!ok && !t->cancelled) {
     s->failed++;
-    char *msg = xasprintf("%s: %s", t->name, err ? err : "error");
+    /* a failure may be the tree's Lua files no longer fitting this binary */
+    const char *why = lstate_tree_mismatch();
+    char *msg = why ? xasprintf("%s: %s\n%s", t->name, err ? err : "error", why)
+                    : xasprintf("%s: %s", t->name, err ? err : "error");
     lapi_report(s->app, 1, msg);
     free(msg);
   }

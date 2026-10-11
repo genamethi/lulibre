@@ -78,6 +78,18 @@ printf 'error("boom")\n' > "$t/bad.lua"
 run run "$t/bad.lua" >/dev/null 2>&1 && rc=0 || rc=$?
 expect   "failing script exits 1"         1 "$rc"
 
+# a binary run from a source tree that has since become another version says so
+mkdir -p "$t/tree/build" "$t/tree/src"
+cp "$bin" "$t/tree/build/lulibre"
+ln -s "$(cd "$(dirname "$0")/.." && pwd)/lua" "$t/tree/lua"
+ln -s "$(cd "$(dirname "$0")/.." && pwd)/scripts" "$t/tree/scripts"
+cp "$(dirname "$0")/../src/version.h" "$t/tree/src/version.h"
+tree() { "$t/tree/build/lulibre" --clean -L "$lib" "$@"; }
+expect   "a tree of the binary's own version is fine" "2" "$(tree query -c 2>&1)"
+sed -i 's/define LULIBRE_VERSION_MINOR .*/define LULIBRE_VERSION_MINOR 99/' "$t/tree/src/version.h"
+contains "a tree of another version is named at start" "is now 0.99." "$(tree query -c 2>&1)"
+contains "and when a script fails there"  "Quit, run make there" "$(tree run "$t/bad.lua" 2>&1 || true)"
+
 # The interactive interface, driven through a private tmux server.
 if command -v tmux >/dev/null; then
   T="tmux -L lulibre-smoke-$$"

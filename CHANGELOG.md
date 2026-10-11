@@ -93,6 +93,17 @@ Changed
 - After duplicates or orphan records are removed, the message says plainly
   what was kept from them and where it went.
 
+## 0.1.0-beta.2
+
+Fixed
+- A lulibre run from its build tree (`./build/lulibre`) reads its Lua files
+  from that tree, when each is first needed. If the tree was switched to
+  another version while it ran, those files no longer fitted the binary and
+  failed with errors that said nothing of the cause ("unknown option
+  'propose_over'"). It now says so, at start and with any script error: which
+  version the binary is, which the tree has become, and what to do.
+- `test/forms.sh` could exit with failure after every check had passed.
+
 ## 0.1.0-beta
 
 Fixed, from testing the alpha
