@@ -323,11 +323,14 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       }
       return;
     case NCKEY_BACKSPACE:
-      if (t->line.text.len == 0) { /* backspacing out of an empty prompt leaves it */
+      if (t->line.text.len == 0) {
+        /* A field that has been emptied stays open: Enter then answers with
+         * nothing, which is how a value is blanked. The other prompts are
+         * left by backspacing out of them. */
+        if (t->prompt == PROMPT_INPUT) return;
         if (t->prompt == PROMPT_FILTER) rows_set_filter(t, "");
         if (t->prompt == PROMPT_SEARCH) rows_search_end(t, "", 0);
-        if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
-        else prompt_close(t);
+        prompt_close(t);
         return;
       }
       break;
