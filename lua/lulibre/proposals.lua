@@ -35,8 +35,10 @@ end
 
 -- Library books have positive ids and files staged from the sync folder
 -- negative ones; scope ("library", "sync" or nil for both) picks a side.
+-- Proposals for a book that is no longer there (removed since) are not listed.
 local function side(scope)
-  return scope == "library" and " AND book > 0" or scope == "sync" and " AND book < 0" or ""
+  return (scope == "library" and " AND book > 0" or scope == "sync" and " AND book < 0" or "")
+    .. " AND EXISTS (SELECT 1 FROM books b WHERE b.id = proposals.book)"
 end
 
 --- Proposals with the given status ("pending" and "accepted" when omitted),

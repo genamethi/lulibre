@@ -34,6 +34,12 @@ Added
   shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
   same.
 
+- Review lists the books surest first: the one whose best proposal has the
+  highest confidence at the top, with how many proposals wait for each. `s`
+  switches to id order; the option `review_sort` sets the default.
+- Review, duplicates and orphans refresh when the library changes under
+  them (`reloads = true` gives a script's panel the same, as `"<Reload>"`).
+  Proposals for a book that has been removed are no longer listed or counted.
 - From duplicates and orphans, `e` opens the edit form for the row's book
   and `r` the review of its proposals; the panel steps aside meanwhile and
   comes back up to date. `:review FILTER` reviews only the matching books.

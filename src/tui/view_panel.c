@@ -21,7 +21,7 @@ struct panel {
   struct prow *rows;
   int nrows, cap;
   int cur, top, page;
-  int follow, moves, pending_g;
+  int follow, moves, reloads, pending_g;
   float size; /* its share of the screen, and the edge it is docked on */
   char side;
   int hidden; /* taken off the screen for a while (panel_hide), not closed */
@@ -242,6 +242,20 @@ void panel_set_cursor(struct panel *p, int row) {
 
 void panel_set_moves(struct panel *p, int moves) {
   p->moves = moves;
+}
+
+void panel_set_reloads(struct panel *p, int reloads) {
+  p->reloads = reloads;
+}
+
+void panels_reloaded(struct tui *t) {
+  struct node *all[32];
+  int n = wm_leaves(t, all, 32);
+  for (int i = 0; i < n; i++) {
+    if (all[i]->cls != &view_panel) continue;
+    struct panel *p = all[i]->state;
+    if (p->reloads && p->open && p->event) p->event(p, "<Reload>", p->nrows ? p->cur : -1, p->event_ud);
+  }
 }
 
 /* Returns 1 for a key that moves the cursor (and moves it), else 0. */

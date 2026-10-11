@@ -38,6 +38,7 @@ local DEFAULTS = {
     { "expand_all", { "X" }, "all", "show, or hide, every book's other fields" },
     { "accept_above", { "A" }, "accept all above…", "accept every pending proposal at or above a confidence you give" },
     { "reject_rest", { "R" }, "reject rest", "reject everything still pending" },
+    { "sort", { "s" }, "sort", "order the books by their surest proposal, or by id" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "write", "write what has been accepted, as one change that can be undone" },
   },

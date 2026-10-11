@@ -35,6 +35,7 @@ o.library = "~/calibre-library"
 | `blitter` | `auto` | `auto` · `pixel` · `sextant` · `quadrant` · `half`: how page images are drawn |
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
+| `review_sort` | `confidence` | `confidence` · `id`: the order of books in review |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |

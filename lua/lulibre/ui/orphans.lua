@@ -89,7 +89,7 @@ function M.run()
 
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("action", "expand", "edit", "write"), follow = true, height = 0.5,
-    keys = keys:own(), pass = panels.PASS,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
   }
@@ -112,7 +112,9 @@ function M.run()
     local id = item and (type(item.book) == "table" and item.book.id or item.book or item.twin)
     if type(id) == "table" then id = id.id end
     local act = keys:action(key)
-    if act == "help" then
+    if key == "<Reload>" then
+      refresh() -- the library changed under us
+    elseif act == "help" then
       keys:show("orphans", panels.also())
     elseif act == "peek" then
       peek()

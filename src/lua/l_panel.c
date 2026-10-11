@@ -9,6 +9,7 @@
  *     height = 0.45,      -- share of the screen
  *     side = "left",      -- a column down the left instead (width = 0.28)
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
+ *     reloads = true,     -- and "<Reload>" when the library has been read again
  *     keys = { "a", "r", "<CR>" },   -- the keys this script handles, and
  *     pass = "preview yank",         -- the global commands its other keys may
  *                                    -- still reach (P, ], yy ...); see below
@@ -108,9 +109,9 @@ static void deliver(struct app *app, void *arg) { /* Lua thread */
   if (!key) return;
   /* nobody is waiting (the script is busy): keep the key for the next wait().
    * A run of cursor movements is worth only its last position. */
-  if (lp->qn > 0 && !strcmp(key, "<Move>")) {
+  if (lp->qn > 0 && (!strcmp(key, "<Move>") || !strcmp(key, "<Reload>"))) {
     int last = (lp->qhead + lp->qn - 1) % QUEUE;
-    if (!strcmp(lp->q[last].key, "<Move>")) {
+    if (!strcmp(lp->q[last].key, key)) {
       lp->q[last].row = row;
       return;
     }
@@ -254,6 +255,9 @@ static int l_panel_ui(lua_State *L) {
   panel_set_follow(lp->p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "moves");
   panel_set_moves(lp->p, lua_toboolean(L, -1));
+  lua_getfield(L, 1, "reloads");
+  panel_set_reloads(lp->p, lua_toboolean(L, -1));
+  lua_pop(L, 1);
   lua_getfield(L, 1, "pass");
   if (lua_isstring(L, -1)) panel_set_pass(lp->p, lua_tostring(L, -1));
   lua_getfield(L, 1, "keys");

@@ -82,7 +82,7 @@ lit() { $T send-keys -t t -l "$1"; }
 run index >/dev/null 2>&1
 lua 'lulibre.propose(1, "publisher", "Wrong Press", { source = "test", confidence = 0.9 })
 lulibre.propose(2, "title", "Sieve Notes", { source = "test", confidence = 0.9 })
-lulibre.propose(3, "title", "Rings and Things", { source = "test", confidence = 0.9 })' >/dev/null
+lulibre.propose(3, "title", "Rings and Things", { source = "test", confidence = 0.99 })' >/dev/null
 
 $T new-session -d -s t -x 140 -y 40 "'$bin' --clean -L '$lib' 2>'$t/err'; echo \$? > '$t/rc'"
 shown "the interface starts"                  "1/5"
@@ -127,8 +127,18 @@ wait_for "all books"
 # ---- review: a proposal edited to nothing blanks the field
 k g r
 shown "review opens"                          "review  3 pending"
+shown "with what waits for each book"         "1 to decide, surest 0.99"
+first=$(screen | grep -n "▸ 3  Rings" | head -1 | cut -d: -f1)
+second=$(screen | grep -n "▸ 1  Knots" | head -1 | cut -d: -f1)
+if [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ]; then
+  echo "ok    the book with the surest proposal comes first"
+else
+  echo "FAIL  the book with the surest proposal comes first (rows $first, $second)"; fails=$((fails + 1))
+fi
+k s
+shown "s orders by id instead"                "by id"
 shown "on the first proposal"                 "Wrong Press"
-k e
+k g g j e
 shown "the proposal can be edited"            "publisher: Wrong Press"
 k C-u Enter
 shown "emptied, it proposes a blank"          "(blank)"
@@ -141,13 +151,21 @@ expect "the publisher is gone"                "" "$(field 1 publisher)"
 # neighbour the list has fallen back to
 k g r
 shown "review again"                          "review  2 pending"
-shown "its cursor is on book 2"               "Sieve Notes"
+k s
+shown "by id, book 2 comes first"             "by id"
+k g g j
+sleep 0.3
+shown "its cursor is on book 2"               "│ Sieve"
 k :; lit "remove"; k Enter
 shown "remove names the book review is on"    "remove book 2, Sieve"
 lit "y"; k Enter
 shown "it is removed"                         "removed 1 book"
-k :; lit "remove"; k Enter
-shown "a second remove on the stale row is refused" "book 2 is not in the list any more"
+shown "review lets go of the removed book"    "review  1 pending"
+if screen | grep -q "Sieve Notes"; then
+  echo "FAIL  its proposals are no longer shown"; fails=$((fails + 1))
+else
+  echo "ok    its proposals are no longer shown"
+fi
 expect "and no other book was taken"          4 "$(run query -c 2>/dev/null)"
 k q
 

@@ -104,6 +104,16 @@ static void leaves(struct node *n, struct node **out, int *count) {
   leaves(n->b, out, count);
 }
 
+int wm_leaves(struct tui *t, struct node **out, int max) {
+  struct node *all[32];
+  int n = 0;
+  if (!t->root) return 0;
+  leaves(t->root, all, &n);
+  if (n > max) n = max;
+  memcpy(out, all, (size_t)n * sizeof *out);
+  return n;
+}
+
 struct node *wm_leaf_of(struct tui *t, void *state) {
   struct node *all[32];
   int n = 0;
