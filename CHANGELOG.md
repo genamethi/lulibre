@@ -61,6 +61,14 @@ Added
   believed; `:propose --over` and `--gaps` do so for one run. A proposal
   that was rejected is not made again unless `--over` asks, and accepting
   everything above a confidence asks before replacing existing values.
+- In review, `a` on a book's own line accepts all of that book's proposals
+  (again: takes them back), and `r` there rejects those still pending.
+- A by-line under the title ("By A. Name", "BY A. NAME*", "by NAME, A. B.",
+  or "by" alone above the names) is read as the authors and proposed with
+  confidence 0.85, as the page's own word rather than a guess from layout.
+- Selecting text in the preview to copy it (a drag, a double click) no
+  longer moves the cursor out of the window it was in, so in review the next
+  key is still review's.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

@@ -70,7 +70,9 @@ function M.from_doc(doc)
   if #tp.authors > 0 then
     local people = {}
     for i, a in ipairs(tp.authors) do people[i] = names.titlecase(a) end
-    add("authors", join(people), "title page", conf)
+    -- "by A. Name" is the page saying who wrote it, not a guess from the layout
+    if tp.byline then add("authors", join(people), "by-line", math.max(conf, 0.85))
+    else add("authors", join(people), "title page", conf) end
   end
   if tp.subject then add("tags", tp.subject, tp.subject_source, 0.9) end
 

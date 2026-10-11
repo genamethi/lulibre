@@ -85,7 +85,9 @@ Scripts do not change the library; they *propose*, and you review.
 
 `propose` reads the first pages: an arXiv stamp, a cover sheet that labels
 its fields (JSTOR's "Author(s):"), a thesis cover (title above "by", author
-after it, institution, year), or failing those the largest type on the page.
+after it, institution, year), a by-line under the title ("By A. Name", or
+"by" on a line of its own above the names), or failing those the largest
+type on the page.
 Each proposal carries where it came from and how sure it is.
 
 A field that is empty always gets the file's best candidate. A field that
@@ -120,7 +122,7 @@ changes under them: a book removed with `:remove` leaves the panel.
 
 | Key | |
 |---|---|
-| `a` `r` | accept, reject |
+| `a` `r` | accept, reject; on a book's own line, all of that book's proposals |
 | `e` | correct the proposed value, then accept it |
 | `x` · `X` | show this book's other fields under its proposals · for every book |
 | `e` on a shown field | edit it in the same pass; it becomes an accepted proposal |
@@ -134,6 +136,11 @@ changes under them: a book removed with `:remove` leaves the panel.
 
 `:review FILTER` keeps the review to the books a filter matches
 (`:review author:unknown`); `w` then writes only theirs.
+
+Copying from the page does not take the cursor out of review: drag over a
+name in the preview, or double click a word, and the next key is still
+review's, so `e` then `<C-v>` puts what was copied into the field. (A plain
+click in the preview, one that selects nothing, does move the cursor there.)
 
 While the cursor is in review, duplicates, orphans or capture, the preview's
 own keys still work: `P` for the page as an image, `]` `[` to turn pages,

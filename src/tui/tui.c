@@ -513,6 +513,19 @@ static struct rect line_at(const struct tui *t, int y) {
   return (struct rect){y, 0, 1, t->cols_n};
 }
 
+/* The button has come up after a press in a preview: if nothing was
+ * selected it was a plain click, and the cursor's window moves there. */
+static void preview_click_done(struct tui *t) {
+  void *pv = t->pv.state;
+  t->pv.state = NULL;
+  struct node *nd = pv ? wm_leaf_of(t, pv) : NULL;
+  if (!nd || nd->cls != &view_preview || nd == t->focus) return;
+  if (preview_has_selection(pv) || t->sel.shown) return;
+  t->pv.back = t->focus->state;
+  t->focus = nd;
+  tui_dirty(t);
+}
+
 static void on_mouse(struct tui *t, const struct ncinput *ni) {
   int release = ni->evtype == NCTYPE_RELEASE;
   int wheel = ni->id == NCKEY_SCROLL_UP ? -3 : ni->id == NCKEY_SCROLL_DOWN ? 3 : 0;
@@ -523,6 +536,7 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     struct node *in = wm_leaf_of(t, t->drag);
     if (!in || in->cls != &view_preview || !preview_mouse(t, in->state, ni->y, ni->x, release ? 2 : 1))
       t->drag = NULL;
+    if (release) preview_click_done(t);
     return;
   }
   /* a line between windows follows the pointer */
@@ -545,10 +559,15 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   }
   /* and so does one selecting what is on the screen */
   if (t->sel.on && (left || ni->id == NCKEY_MOTION)) {
-    if (release) sel_release(t, ni->y, ni->x);
-    else sel_move(t, ni->y, ni->x);
+    if (release) {
+      sel_release(t, ni->y, ni->x);
+      preview_click_done(t);
+    } else {
+      sel_move(t, ni->y, ni->x);
+    }
     return;
   }
+  if (release && left) preview_click_done(t);
   if (release || ni->id == NCKEY_MOTION) return;
   sel_clear(t);
 
@@ -608,7 +627,20 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     console_wheel(nd->state, wheel);
   }
   if (!wheel) {
-    t->focus = nd;
+    if (nd->cls != &view_preview) {
+      t->focus = nd;
+    } else {
+      /* in a preview the click may be the start of a copy: see t->pv */
+      double now = now_s();
+      int again = now - t->pv.at < 0.4;
+      t->pv.at = now;
+      t->pv.state = again ? NULL : nd->state;
+      if (again) { /* a double click: put the cursor back where the first click took it from */
+        struct node *back = t->pv.back ? wm_leaf_of(t, t->pv.back) : NULL;
+        if (back) t->focus = back;
+        t->pv.back = NULL;
+      }
+    }
     if (!in_text) sel_press(t, ni->y, ni->x, clip, nd);
   }
   tui_dirty(t);

@@ -33,8 +33,8 @@ local DEFAULTS = {
     { "write", { "w" }, "write", "write the changes and close" },
   },
   review = {
-    { "accept", { "a" }, "accept", "accept the proposal (again: back to pending)" },
-    { "reject", { "r" }, "reject", "reject the proposal" },
+    { "accept", { "a" }, "accept", "accept the proposal (again: back to pending); on a book's line, all of that book's" },
+    { "reject", { "r" }, "reject", "reject the proposal; on a book's line, all of that book's still pending" },
     { "edit", { "e", "<CR>" }, "edit", "correct the proposed value, or type one for a field nothing was proposed for" },
     { "clear", { "c" }, "clear", "propose blanking this field" },
     { "titlecase", { "t" }, "title case", "put the value in title case, and accept that" },

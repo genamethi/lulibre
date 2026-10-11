@@ -299,6 +299,7 @@ void preview_toggle_graphic(struct tui *t);
  * is under way. */
 int preview_mouse(struct tui *t, void *state, int y, int x, int what);
 
+int preview_has_selection(void *state);
 /* Is this cell in a preview's page text, where the preview does the selecting? */
 int preview_owns(void *state, int y, int x);
 
@@ -465,6 +466,14 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  /* A click in a preview moves the cursor's window there only if it turns
+   * out to be a plain click: selecting text to copy (a drag, a double click)
+   * leaves the cursor where the copy is wanted, in review say. */
+  struct {
+    void *state; /* the preview pressed in, until the button comes up */
+    void *back;  /* the window the cursor left for it, should a second click make it a double */
+    double at;   /* when it was pressed */
+  } pv;
   struct {              /* a line between windows being dragged */
     int on;             /* it is moving */
     int armed;          /* the press was on a window's bar: resize if the pointer goes up or down */
