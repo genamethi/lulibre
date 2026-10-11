@@ -12,6 +12,9 @@ Added
   on pages read by OCR.
 - `D` (`:sync drop`) takes staged files out of the sync folder without adding
   them; they are kept aside and `u` puts them back.
+- With a sync folder set, a tab line shows `1 Library` and `2 Sync folder`
+  with their counts and which one the list is showing; `1`, `2` or a click
+  switch, and the keys that act on staged files are shown beside it.
 
 ## 0.1.0-alpha.2
 

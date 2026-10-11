@@ -106,8 +106,11 @@ are repaired after every such change.
 
 ## The sync folder: `gS`
 
-Set `lulibre.o.sync_dir` to a folder where files arrive. `gS` reads it and
-shows it as the list in place of the library; `gl` goes back.
+Set `lulibre.o.sync_dir` to a folder where files arrive. A tab line then
+appears along the top: `1 Library` and `2 Sync folder`, with how many each
+holds and which the list is showing. `2` (or `gS`, or a click on the tab)
+reads the folder and shows it in place of the library; `1` (or `gl`) goes
+back.
 
 A file there is *staged*: listed, filtered, searched and previewed like a
 book, and `e`, `gc`, `:run propose`, `gr` and undo all work on it. Those

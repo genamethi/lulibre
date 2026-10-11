@@ -81,8 +81,8 @@ name can be dragged over on the page and pasted with `<C-v>`.
 | `u` | `undo` | `:undo N` for a given batch; `:history` lists them |
 | `gd` | `dupes` | books with identical files |
 | `go` | `orphans` | records without files, files without records, broken links |
-| `gS` | `sync` | read the sync folder and show it |
-| `gl` | `source library` | back to the library |
+| `2` `gS` | `sync` | read the sync folder and show it |
+| `1` `gl` | `source library` | back to the library |
 | `S` `X` `D` | `sync add` / `sync move` / `sync drop` | staged files into the library, or out of the folder |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |
 | | `remove` | remove the selection from calibre (to its recycle bin; `u` undoes) |
