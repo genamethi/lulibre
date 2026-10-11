@@ -198,6 +198,30 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t : ; $T send-keys -t t -l "echo after escape" ; $T send-keys -t t Enter
   shown "Escape still cancels"           "^after escape *$"
 
+  # windows are resized by dragging the line between them, or from the keyboard
+  dcol() { screen | sed -n 5p | sed 's/│.*//' | LC_ALL=C.UTF-8 wc -m; }
+  was=$(dcol)
+  mouse '\033[<0;%d;5M' "$was"
+  mouse '\033[<32;%d;5M' "$((was - 10))"
+  mouse '\033[<0;%d;5m' "$((was - 10))"
+  expect "dragging the line between windows moves it" "$((was - 10))" "$(dcol)"
+  $T send-keys -t t M-Right
+  sleep 0.3
+  expect "Alt+Right moves it two columns right"  "$((was - 8))" "$(dcol)"
+  $T send-keys -t t -l '\' ; $T send-keys -t t Left
+  sleep 0.3
+  expect "<Leader> and an arrow do the same"     "$((was - 10))" "$(dcol)"
+  $T send-keys -t t '`'
+  shown "the console opens"                      "console  "
+  brow() { screen | grep -n '^ *console  ' | head -1 | cut -d: -f1; }
+  was=$(brow)
+  mouse '\033[<0;60;%dM' "$was"
+  mouse '\033[<32;60;%dM' "$((was - 4))"
+  mouse '\033[<0;60;%dm' "$((was - 4))"
+  expect "dragging a window's bar up makes it taller" "$((was - 4))" "$(brow)"
+  $T send-keys -t t '`'
+  sleep 0.6
+
   # closing a window must leave nothing pointing at it (a sanitizer build
   # stops here if something does)
   $T send-keys -t t : ; $T send-keys -t t -l "only" ; $T send-keys -t t Enter

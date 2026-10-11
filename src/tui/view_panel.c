@@ -312,6 +312,13 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     case KEY_CTRL | 'w':
       return 0;
   }
+  /* so do Alt with anything (resizing) and the leader key, unless the script
+   * has claimed the key */
+  if ((key & KEY_ALT) || (t->km->leader && key == t->km->leader)) {
+    int own = 0;
+    for (int i = 0; i < p->nown; i++) own = own || p->own[i] == key;
+    if (!own) return 0;
+  }
   if (p->event) {
     sbuf k = SBUF_INIT;
     key_format(&k, &key, 1);

@@ -218,7 +218,18 @@ static void c_split(struct tui *t, const char *args) {
 
 static void c_close(struct tui *t, const char *args) { wm_close(t); }
 static void c_only(struct tui *t, const char *args) { wm_only(t); }
-static void c_resize(struct tui *t, const char *args) { wm_resize(t, atoi(args)); }
+static void c_resize(struct tui *t, const char *args) {
+  static const struct { const char *word; char dir; int cells; } dirs[] = {
+    {"left", 'h', 2}, {"right", 'l', 2}, {"up", 'k', 1}, {"down", 'j', 1},
+  };
+  for (size_t i = 0; i < ARRAY_LEN(dirs); i++)
+    if (arg_is(args, dirs[i].word)) {
+      int n = atoi(arg_rest(args));
+      wm_resize_dir(t, dirs[i].dir, n > 0 ? n : dirs[i].cells);
+      return;
+    }
+  wm_resize(t, atoi(args));
+}
 
 static void c_preview(struct tui *t, const char *args) {
   if (arg_is(args, "scroll")) preview_scroll(t, atoi(arg_rest(args)));
@@ -394,7 +405,8 @@ void commands_builtin(void) {
   command_register("split", c_split, "[v|h] [list|preview]  open another window");
   command_register("close", c_close, "close the focused window");
   command_register("only", c_only, "close every window but the focused one");
-  command_register("resize", c_resize, "+N | -N  grow or shrink the focused window");
+  command_register("resize", c_resize,
+                   "left | right | up | down [N]  move the line beside the focused window;  +N | -N  grow or shrink it");
   command_register("preview", c_preview,
                    "scroll N | page N | graphic | zoom +1|-1|0 | pan N  (zoom and pan: image only)");
   command_register("pick", c_pick, "books | authors | subjects | filters  fuzzy finder");

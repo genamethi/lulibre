@@ -523,6 +523,24 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
       t->drag = NULL;
     return;
   }
+  /* a line between windows follows the pointer */
+  if (t->rs.on && (left || ni->id == NCKEY_MOTION)) {
+    if (!wm_divider_drag(t, &t->rs.y, &t->rs.x, ni->y, ni->x)) t->rs.on = 0; /* its windows are gone */
+    if (release) t->rs.on = 0;
+    return;
+  }
+  /* a press on a window's bar becomes a resize if the pointer then goes up
+   * or down, and stays a selection if it goes sideways */
+  if (t->rs.armed && (left || ni->id == NCKEY_MOTION)) {
+    if (!release && ni->y != t->rs.y) {
+      sel_clear(t);
+      t->rs.armed = 0;
+      t->rs.on = 1;
+      on_mouse(t, ni);
+      return;
+    }
+    if (release || ni->x != t->rs.x) t->rs.armed = 0;
+  }
   /* and so does one selecting what is on the screen */
   if (t->sel.on && (left || ni->id == NCKEY_MOTION)) {
     if (release) sel_release(t, ni->y, ni->x);
@@ -539,6 +557,15 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   }
   struct node *nd = wm_at(t, ni->y, ni->x);
   struct rect clip = nd ? nd->r : line_at(t, ni->y);
+  if (left) {
+    char split = wm_divider_at(t, ni->y, ni->x);
+    t->rs.split = split;
+    t->rs.y = ni->y;
+    t->rs.x = ni->x;
+    t->rs.on = split == 'v'; /* the rule between windows is nothing but a handle */
+    t->rs.armed = split == 'h';
+    if (t->rs.on) return;
+  }
   if (t->mode == MODE_PROMPT) {
     if (ni->id == NCKEY_BUTTON2 || ni->id == NCKEY_BUTTON3) prompt_paste(t);
     else if (nd && nd->cls == &view_preview && wheel) preview_scroll(t, wheel);

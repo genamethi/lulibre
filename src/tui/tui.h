@@ -228,6 +228,16 @@ void wm_only(struct tui *t);
 void wm_focus_next(struct tui *t, int delta);
 void wm_focus_dir(struct tui *t, char dir); /* h j k l */
 void wm_resize(struct tui *t, int delta);
+/* Move the line between the focused window and its neighbour: dir is h j k l
+ * (left, down, up, right), cells how far. */
+void wm_resize_dir(struct tui *t, char dir, int cells);
+/* The line between two windows at a screen position: 'v' for the rule
+ * between windows side by side, 'h' for the bar of a window with another
+ * above it, 0 for neither. wm_divider_drag moves the one at (*y, *x) towards
+ * the pointer, sets them to where it now is, and returns 0 when there is no
+ * line there any more. */
+char wm_divider_at(struct tui *t, int y, int x);
+int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 void wm_undock(struct tui *t, void *state);
@@ -426,6 +436,12 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  struct {              /* a line between windows being dragged */
+    int on;             /* it is moving */
+    int armed;          /* the press was on a window's bar: resize if the pointer goes up or down */
+    char split;         /* 'v' or 'h' */
+    int y, x;           /* where the line is now */
+  } rs;
   struct {              /* text being selected on the screen (select.c) */
     int on;             /* the button is down */
     int active;         /* and the pointer has left the cell it went down on */
