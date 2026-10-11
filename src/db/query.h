@@ -43,6 +43,8 @@ int query_compile(const char *filter, struct query *q, char **err);
 /* The same, with the scope a filter has when it does not say in:. */
 int query_compile_in(const char *filter, int scope, struct query *q, char **err);
 void query_free(struct query *q);
+/* Every word the language knows, for completion: "title:", "is:dupe", ... */
+void query_words(void (*fn)(const char *word, void *ud), void *ud);
 
 /* SELECT <cols> FROM books b WHERE <filter> ORDER BY <order> [LIMIT limit];
  * parameters are bound. limit <= 0 means none. */

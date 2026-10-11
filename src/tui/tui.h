@@ -334,8 +334,16 @@ struct tui {
   enum prompt_kind prompt;
   struct lineedit line;
   char *prompt_saved; /* filter to restore if the '/' prompt is cancelled */
-  char **history;
-  int nhistory, hist_pos;
+  /* what was entered at the ':', '&' and '/' prompts, oldest first; kept
+   * between sessions in the index's kv table */
+  struct {
+    char **v;
+    int n;
+  } hist[3];
+  int hist_pos;
+  char *hist_prefix; /* what was typed before Up was pressed; Up and Down look for it */
+  char *comp_ctx;    /* what the completion candidates were built for (complete.c) */
+  int sugg_prefix;   /* 0: fuzzy; 1: by prefix, once something is typed; 2: by prefix, all when nothing is */
 
   input_fn *input_cb; /* PROMPT_INPUT: who gets the answer */
   input_fn *input_change; /* optional: called after every edit of the line */
@@ -385,6 +393,9 @@ struct suggestion {
 void tui_input_suggest(struct tui *t, int n, const char *const *texts,
                        const char *const *details, const char *sep);
 void tui_input_on_change(struct tui *t, input_fn *fn);
+/* complete.c: offer completions for the ':', '&' or '/' line as it stands */
+void complete_refresh(struct tui *t);
+const char *command_at(int i, const char **help); /* the i-th command's name; NULL past the last */
 void tui_progress(struct tui *t, const char *text); /* NULL clears */
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
