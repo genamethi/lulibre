@@ -354,6 +354,12 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  /* a terminal paste in progress (tui.c): keys held while they might be one
+   * of its markers, and the text between the markers */
+  struct ncinput held[6];
+  int nheld, pasting;
+  uv_timer_t held_timer;
+  sbuf paste;
 
   char *msg;
   int msg_error;

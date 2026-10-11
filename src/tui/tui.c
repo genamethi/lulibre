@@ -363,12 +363,7 @@ static void help_key(struct tui *t, uint32_t key) {
 }
 
 /* Insert what was last copied into the field being typed, as one line. */
-static void prompt_paste(struct tui *t) {
-  char *text = clip_paste();
-  if (!text) {
-    tui_msg(t, 0, "nothing has been copied yet");
-    return;
-  }
+static void prompt_insert_flat(struct tui *t, const char *text) {
   sbuf flat = SBUF_INIT;
   int gap = 0;
   for (const char *p = text; *p; p++) {
@@ -385,6 +380,15 @@ static void prompt_paste(struct tui *t) {
     prompt_changed(t);
   }
   sb_free(&flat);
+}
+
+static void prompt_paste(struct tui *t) {
+  char *text = clip_paste();
+  if (!text) {
+    tui_msg(t, 0, "nothing has been copied yet");
+    return;
+  }
+  prompt_insert_flat(t, text);
   free(text);
 }
 
@@ -506,13 +510,87 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   tui_dirty(t); /* pending keys are shown */
 }
 
+/* ---- pastes from the terminal ----
+ * With bracketed paste on, a terminal (or tmux) wraps what it pastes in
+ * ESC[200~ ... ESC[201~. notcurses hands those markers over key by key, so
+ * they are recognised here: what lies between is text, never keys. A line
+ * break in it therefore cannot submit a field, and a paste outside a field
+ * cannot run as commands. */
+
+static void bracketed_paste(int on) {
+  FILE *tty = fopen("/dev/tty", "w");
+  if (!tty) return;
+  fputs(on ? "\033[?2004h" : "\033[?2004l", tty);
+  fclose(tty);
+}
+
+static void paste_done(struct tui *t) {
+  if (t->mode == MODE_PROMPT) prompt_insert_flat(t, t->paste.s ? t->paste.s : "");
+  else if (t->paste.len) tui_msg(t, 0, "pasted text goes into a field: open one first (:, &, /, or e)");
+  sb_reset(&t->paste);
+}
+
+static void dispatch(struct tui *t, const struct ncinput *ni) {
+  if (!t->pasting) {
+    on_key(t, ni);
+    return;
+  }
+  if (ni->evtype == NCTYPE_RELEASE) return;
+  if (ni->id == NCKEY_ENTER) sb_putc(&t->paste, '\n');
+  else if (ni->id == NCKEY_TAB) sb_putc(&t->paste, ' ');
+  else if (!nckey_synthesized_p(ni->id) && ni->id >= 0x20 && ni->utf8[0]) sb_puts(&t->paste, ni->utf8);
+}
+
+static void flush_held(struct tui *t) {
+  int n = t->nheld;
+  t->nheld = 0;
+  for (int i = 0; i < n; i++) dispatch(t, &t->held[i]);
+}
+
+static void held_timer_cb(uv_timer_t *h) {
+  flush_held(h->data); /* it was an Escape after all, or a paste cut short */
+}
+
+static void feed(struct tui *t, const struct ncinput *ni) {
+  static const uint32_t marker[] = {NCKEY_ESC, '[', '2', '0', 0, '~'}; /* [4]: '0' opens, '1' closes */
+  int at = t->nheld;
+  int fits = ni->evtype != NCTYPE_RELEASE && at < 6 &&
+             (at == 4 ? ni->id == '0' || ni->id == '1' : ni->id == marker[at]);
+  if (!fits) {
+    flush_held(t);
+    /* the key that broke the pattern may itself start one */
+    if (ni->evtype != NCTYPE_RELEASE && ni->id == NCKEY_ESC) {
+      t->held[t->nheld++] = *ni;
+      uv_timer_start(&t->held_timer, held_timer_cb, 30, 0);
+    } else {
+      dispatch(t, ni);
+    }
+    return;
+  }
+  t->held[t->nheld++] = *ni;
+  if (t->nheld < 6) {
+    uv_timer_start(&t->held_timer, held_timer_cb, 30, 0);
+    return;
+  }
+  uv_timer_stop(&t->held_timer);
+  int opening = t->held[4].id == '0';
+  t->nheld = 0;
+  if (opening) {
+    t->pasting = 1;
+    sb_reset(&t->paste);
+  } else if (t->pasting) {
+    t->pasting = 0;
+    paste_done(t);
+  }
+}
+
 static void input_cb(uv_poll_t *h, int status, int events) {
   struct tui *t = h->data;
   struct ncinput ni;
   while (!t->quit) {
     uint32_t id = notcurses_get_nblock(t->nc, &ni);
     if (id == 0 || id == (uint32_t)-1) break;
-    on_key(t, &ni);
+    feed(t, &ni);
   }
 }
 
@@ -766,6 +844,7 @@ int tui_run(struct app *app) {
   if (!t->nc) die("cannot initialise the terminal (TERM=%s)", getenv("TERM") ? getenv("TERM") : "");
   notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
   crash_install(); /* again, to run before notcurses' handlers, which give the terminal back */
+  bracketed_paste(1);
   if (app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
   t->std = notcurses_stdplane(t->nc);
 
@@ -782,6 +861,8 @@ int tui_run(struct app *app) {
   uv_timer_init(loop, &t->tick);
   uv_timer_init(loop, &t->settle);
   uv_timer_init(loop, &t->ftimer);
+  uv_timer_init(loop, &t->held_timer);
+  t->held_timer.data = t;
   t->input.data = t->prepare.data = t->tick.data = t->settle.data = t->ftimer.data = t;
   uv_poll_start(&t->input, UV_READABLE, input_cb);
   uv_prepare_start(&t->prepare, prepare_cb);
@@ -813,6 +894,7 @@ int tui_run(struct app *app) {
   bridge_stop(app); /* scripts stop with the interface; their thread ends */
   log_on_entry(NULL, NULL);
   wm_free(t);
+  bracketed_paste(0);
   notcurses_stop(t->nc);
   t->nc = NULL;
   log_to_stderr(1);
@@ -823,9 +905,11 @@ int tui_run(struct app *app) {
   uv_close((uv_handle_t *)&t->tick, closed);
   uv_close((uv_handle_t *)&t->settle, closed);
   uv_close((uv_handle_t *)&t->ftimer, closed);
+  uv_close((uv_handle_t *)&t->held_timer, closed);
   uv_run(loop, UV_RUN_DEFAULT);
 
   rows_free(t);
+  sb_free(&t->paste);
   clip_free();
   app->tui = NULL;
   le_free(&t->line);

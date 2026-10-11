@@ -351,8 +351,10 @@ do
   eq("log refuses an unknown level", (pcall(lulibre.log, "x", "loud")), false)
   eq("log defaults to info", (pcall(lulibre.log, "plain")), true)
   local edit = require "lulibre.edit"
-  eq("server_up: nothing listens on a closed port", edit.server_up("http://127.0.0.1:1"), false)
-  eq("server_up: nonsense is not a server", edit.server_up("not a url"), false)
+  if pcall(require, "luv") then -- without luv it cannot tell, and says so by answering true
+    eq("server_up: nothing listens on a closed port", edit.server_up("http://127.0.0.1:1"), false)
+    eq("server_up: nonsense is not a server", edit.server_up("not a url"), false)
+  end
 end
 
 -- settings
@@ -384,9 +386,10 @@ do
   local paths = S.paths()
   eq("paths follow it", { paths.config_dir, paths.init, paths.scripts }, { was, was .. "/init.lua", was .. "/scripts" })
   eq("paths names the index", paths.index:match("%.db$") ~= nil, true)
+  local has_luv, uv = pcall(require, "luv")
+  if not has_luv then goto no_luv end
   local dir = os.tmpname()
   os.remove(dir)
-  local uv = require "luv"
   uv.fs_mkdir(dir, 448)
   uv.fs_mkdir(dir .. "/lua", 448)
   local f = assert(io.open(dir .. "/lua/unit_probe.lua", "w"))
@@ -400,6 +403,7 @@ do
   os.remove(dir .. "/lua/unit_probe.lua")
   uv.fs_rmdir(dir .. "/lua")
   uv.fs_rmdir(dir)
+  ::no_luv::
 end
 
 -- cover sheets that label their fields

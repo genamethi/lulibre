@@ -132,6 +132,20 @@ if command -v tmux >/dev/null; then
   i=0; while [ "$($T show-buffer 2>/dev/null)" = "Sieve Methods" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i + 1)); done
   expect "yy copies the title"           "paper" "$($T show-buffer 2>/dev/null)"
 
+  # a paste from the terminal is text, whatever is in it
+  $T set-buffer "$(printf 'echo two\nlines ZZ')"
+  $T send-keys -t t : ; $T paste-buffer -p -t t
+  shown "a pasted line break does not submit" ":echo two lines ZZ"
+  $T send-keys -t t Enter
+  shown "the pasted text is one line"    "^two lines ZZ *$"
+  $T set-buffer "ZZ"
+  $T paste-buffer -p -t t
+  shown "a paste outside a field runs nothing" "pasted text goes into a field"
+  $T send-keys -t t : ; $T send-keys -t t -l "echo typed" ; $T send-keys -t t Escape
+  sleep 0.2
+  $T send-keys -t t : ; $T send-keys -t t -l "echo after escape" ; $T send-keys -t t Enter
+  shown "Escape still cancels"           "^after escape *$"
+
   $T send-keys -t t g t
   shown "tui tree browser opens"     "browse  "
   $T send-keys -t t q

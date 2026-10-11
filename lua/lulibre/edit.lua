@@ -220,6 +220,12 @@ function M.calibredb()
       a[#a + 1] = o.user
     end
     if o.password_file ~= "" then
+      -- say so now: handed a file that is not there, calibredb asks the terminal for a password
+      local f = io.open(o.password_file)
+      if not f then
+        error(("the password file %s does not exist (lulibre.o.password_file)"):format(o.password_file), 0)
+      end
+      f:close()
       a[#a + 1] = "--password"
       a[#a + 1] = "<f:" .. o.password_file .. ">"
     end
@@ -264,6 +270,13 @@ function M.apply(changes, opts)
     table.insert(by_book[c.id], c)
   end
 
+  -- anything that would stop every write stops it here, before the journal has a batch
+  for _, c in ipairs(changes) do
+    if c.id > 0 then
+      M.calibredb()
+      break
+    end
+  end
   local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
   local now = os.time()
   local queue, unchanged = {}, 0
