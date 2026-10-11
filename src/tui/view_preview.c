@@ -433,7 +433,7 @@ static void hide(struct tui *t, void *state) {
 static void draw(struct tui *t, void *state, struct rect r, int focused) {
   struct pstate *ps = state;
   struct ncplane *n = t->std;
-  sqlite3_int64 cur = rows_current(t);
+  sqlite3_int64 cur = t->peek ? t->peek : rows_current(t);
   if (cur != ps->book || ps->rows_gen != t->rows.gen) {
     int same = cur == ps->book;
     int page = ps->page, scroll = ps->scroll;

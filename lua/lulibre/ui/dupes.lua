@@ -6,6 +6,7 @@ local edit = require "lulibre.edit"
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("dupes")
+local panels = require "lulibre.ui.panels"
 
 function M.run()
   local groups, stats = dupes.scan()
@@ -44,19 +45,42 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("keep", "skip", "remove"), follow = true, height = 0.5,
+    title = title(), help = keys:hint("keep", "edit", "peek", "remove"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.5)
+  -- after something may have changed the books: read them again, and let go
+  -- of copies that are no longer there and of groups left with one
+  local function refresh()
+    for i = #groups, 1, -1 do
+      local g = groups[i]
+      panels.refresh_books(g.books)
+      local kept = false
+      for _, b in ipairs(g.books) do kept = kept or b.id == g.keep end
+      if #g.books < 2 then table.remove(groups, i)
+      elseif not kept then g.keep = g.books[1].id end
+    end
+  end
 
   while true do
     local key, row = p:wait()
     if not key then return end
     local g, b = at[row] and at[row][1], at[row] and at[row][2]
+    local id = b and b.id or g and g.keep -- the book the row stands for
     local act = keys:action(key)
     if act == "help" then
-      keys:show("duplicates")
+      keys:show("duplicates", panels.also())
+    elseif act == "peek" then
+      peek()
+    elseif id and act == "edit" then
+      panels.over(p, require("lulibre.ui.edit").run, { ids = { id } })
+      refresh()
+    elseif id and act == "review" then
+      panels.over(p, require("lulibre.ui.review").run, { ids = { id } })
+      refresh()
     elseif g and b and act == "keep" then
       g.keep, g.skip = b.id, nil
     elseif g and act == "skip" then
@@ -87,6 +111,10 @@ function M.run()
         lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or msg, err and "error" or nil)
         return
       end
+    end
+    if #groups == 0 then
+      lulibre.notify("no duplicates are left")
+      return
     end
     p:rows(build())
     p:title(title())

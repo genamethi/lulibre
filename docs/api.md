@@ -117,6 +117,8 @@ local p <close> = lulibre.panel {
   rows = { { 12, "A title", 1996, id = 12, style = "ok" } },
   follow = true,        -- moving through rows moves the list to row.id
   height = 0.4,         -- or side = "left", width = 0.3
+  keys = { "<CR>" },    -- the keys this script handles, and
+  pass = "preview yank" -- the global commands its other keys may still reach
 }
 while true do
   local key, row = p:wait()        -- nil once the panel is closed
@@ -126,10 +128,23 @@ end
 ```
 
 Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
-`p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`. Row styles: `dim
+`p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`, `p:hide()` and
+`p:show()` (off the screen and back, around a panel opened on top of it),
+`p:height(share)`, `p:keys(list)`. Row styles: `dim
 accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
 `"<Move>"` when the cursor moves.
+
+A panel normally takes every key. Given `keys` and `pass`, a key that is not
+among `keys` and begins a global binding to one of the `pass` commands (named
+by their first word) runs that binding instead: this is how `P` and `]`
+reach the preview from inside review. When a following panel's row is a book
+the list does not hold, the preview shows that book anyway.
+
+The edit form and review can be opened for given books from a script:
+`require("lulibre.ui.edit").run { ids = { 12 } }`, and the same for
+`lulibre.ui.review`. `require("lulibre.ui.panels").over(p, fn, ...)` runs
+`fn` with panel `p` out of the way.
 
 ## Tasks, processes, helpers
 

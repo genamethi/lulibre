@@ -12,6 +12,7 @@ local suggest = require "lulibre.suggest"
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("review")
+local panels = require "lulibre.ui.panels"
 
 -- the fields a book opens up to, in the order they are shown
 M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "identifiers" }
@@ -23,9 +24,30 @@ local function key_of(item)
   return "p" .. item.id
 end
 
-function M.run()
+--- Open review. args: a filter (as :review FILTER gives it) or { ids = {...} }
+-- keeps it to those books' proposals; otherwise it shows every proposal for
+-- what the list is showing.
+function M.run(args)
   -- proposals for what the list is showing: the library, or the sync folder
   local scope = lulibre.source()
+  local only -- book id -> true, when review is kept to some books
+  if type(args) == "table" and args.ids then
+    only = {}
+    for _, id in ipairs(args.ids) do only[id] = true end
+  elseif type(args) == "string" and args ~= "" then
+    only = {}
+    for _, id in ipairs(lulibre.ids(args)) do only[id] = true end
+  end
+  -- the proposals with a status (pending and accepted when nil) that this review covers
+  local function listed(status)
+    local all = proposals.list(status, scope)
+    if not only then return all end
+    local out = {}
+    for _, pr in ipairs(all) do
+      if only[pr.book] then out[#out + 1] = pr end
+    end
+    return out
+  end
   local items       -- row index -> a proposal, { plain=, book=, field= } or { heading=, book= }
   local open = {}   -- book id -> its other fields are shown
   local options = {} -- "book field" -> suggestions, read once
@@ -44,7 +66,7 @@ function M.run()
     local rows = {}
     items = {}
     local by_book, order = {}, {}
-    for _, pr in ipairs(proposals.list(nil, scope)) do
+    for _, pr in ipairs(listed()) do
       if not by_book[pr.book] then
         by_book[pr.book] = {}
         order[#order + 1] = pr.book
@@ -94,7 +116,8 @@ function M.run()
 
   local rows = build()
   if #rows == 0 then
-    lulibre.notify(scope == "sync" and "no proposals for the sync folder (:run propose in:sync makes them)"
+    lulibre.notify(only and "no proposals are waiting for that"
+      or scope == "sync" and "no proposals for the sync folder (:run propose in:sync makes them)"
       or "no proposals to review (scripts such as :run propose make them)")
     return
   end
@@ -106,14 +129,16 @@ function M.run()
   end
   local function title()
     return ("review%s  %d pending, %d accepted"):format(scope == "sync" and " (sync folder)" or "",
-      proposals.count("pending", scope), proposals.count("accepted", scope))
+      #listed("pending"), #listed("accepted"))
   end
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
+    keys = keys:own(), pass = panels.PASS,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows,
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.42)
 
   -- Ask for a field's value, with what the file and the library suggest.
   local function ask(book_id, field, default)
@@ -168,13 +193,15 @@ function M.run()
       end
     end
     if act == "help" then
-      keys:show("review")
+      keys:show("review", panels.also())
+    elseif act == "peek" then
+      peek()
     elseif act == "write" then
-      if proposals.count("accepted", scope) == 0 then
+      if #listed("accepted") == 0 then
         lulibre.notify(("nothing accepted yet: %s accepts the proposal under the cursor"):format(keys:key("accept") or "accept"))
       else
         p:close()
-        local r = proposals.apply_accepted(scope)
+        local r = proposals.apply_accepted(scope, only)
         lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
         return
       end
@@ -209,10 +236,10 @@ function M.run()
       local floor = tonumber(v or "")
       if floor then
         local n, taken = 0, {}
-        for _, q in ipairs(proposals.list("accepted", scope)) do
+        for _, q in ipairs(listed("accepted")) do
           if q.op == "set" then taken[q.book .. "\0" .. q.field] = true end
         end
-        for _, q in ipairs(proposals.list("pending", scope)) do
+        for _, q in ipairs(listed("pending")) do
           -- one value per single-valued field: the strongest wins (the list is ordered so)
           local slot = q.book .. "\0" .. q.field
           if (q.confidence or 0) >= floor and not (q.op == "set" and taken[slot]) then
@@ -225,8 +252,7 @@ function M.run()
       end
     elseif act == "reject_rest" then
       if lulibre.confirm("reject every proposal still pending?") then
-        lulibre.store("UPDATE proposals SET status = 'rejected' WHERE status = 'pending' AND " ..
-          (scope == "sync" and "book < 0" or "book > 0"))
+        for _, q in ipairs(listed("pending")) do proposals.set_status(q.id, "rejected") end
       end
     end
     rows = build()

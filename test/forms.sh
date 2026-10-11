@@ -51,6 +51,7 @@ $cdb add "$t/src/knots.pdf" --title "Knots" --authors "Ann Lee" --tags "math, to
 $cdb add "$t/src/sieve.pdf" --title "Sieve" --authors "Jane Roe" >/dev/null 2>&1
 $cdb add "$t/src/rings.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
 $cdb add --duplicates "$t/src/rings2.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
+$cdb add --duplicates "$t/src/knots.pdf" --title "Knots, a second copy" --authors Unknown >/dev/null 2>&1
 $cdb set_metadata 1 --field publisher:Acme --field series:Lectures >/dev/null 2>&1
 
 run() { "$bin" --clean -L "$lib" "$@"; }
@@ -84,19 +85,19 @@ lulibre.propose(2, "title", "Sieve Notes", { source = "test", confidence = 0.9 }
 lulibre.propose(3, "title", "Rings and Things", { source = "test", confidence = 0.9 })' >/dev/null
 
 $T new-session -d -s t -x 140 -y 40 "'$bin' --clean -L '$lib' 2>'$t/err'; echo \$? > '$t/rc'"
-shown "the interface starts"                  "1/4"
+shown "the interface starts"                  "1/5"
 
 # ---- a narrowed list says that it is, and how to undo it
 k "&"; lit "id:2"; k Enter
 shown "an active filter is labelled"          "filter id:2"
-shown "with how much of the library it shows" "1 of 4"
+shown "with how much of the library it shows" "1 of 5"
 shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
 
 # ---- the edit form: a field emptied and entered is blanked
 k "&"; lit "id:1"; k Enter
-wait_for "1 of 4"
+wait_for "1 of 5"
 k e
 shown "the edit form opens"                   "edit  1  Knots"
 k j j Enter
@@ -147,7 +148,7 @@ lit "y"; k Enter
 shown "it is removed"                         "removed 1 book"
 k :; lit "remove"; k Enter
 shown "a second remove on the stale row is refused" "book 2 is not in the list any more"
-expect "and no other book was taken"          3 "$(run query -c 2>/dev/null)"
+expect "and no other book was taken"          4 "$(run query -c 2>/dev/null)"
 k q
 
 # ---- orphans: what does not fit a column is one key away
@@ -170,6 +171,30 @@ fi
 k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
 k q
+
+# ---- from duplicates: the edit form for a row's book, and the preview's keys
+k g d
+shown "duplicates opens"                      "duplicates  1 groups"
+shown "its hint offers the edit form"         "e edit"
+k e
+shown "e opens the edit form for the row's book" "edit  1  Knots"
+if screen | grep -q "duplicates  1 groups"; then
+  echo "FAIL  the duplicates panel steps aside meanwhile"; fails=$((fails + 1))
+else
+  echo "ok    the duplicates panel steps aside meanwhile"
+fi
+k Enter
+shown "the title can be typed"                "^title: Knots"
+k C-u; lit "Knot Theory"; k Enter w
+shown "the change is written from there"      "changed 1 book"
+shown "and duplicates comes back, up to date" "✓ *1 *Knot Theory"
+k P
+shown "P still turns the preview to an image" "── image"
+k P
+shown "and back to text"                      "── text"
+k "?"
+shown "? says which of the list's keys work"  "ALSO HERE"
+k q q
 
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done

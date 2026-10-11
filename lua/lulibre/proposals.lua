@@ -76,8 +76,16 @@ end
 
 --- Apply every accepted proposal as one batch. Waits. Returns edit.apply's
 -- result; applied proposals are marked so, failed ones go back to pending.
-function M.apply_accepted(scope)
+-- only: a set of book ids ({ [id] = true }) to keep to; the rest stay accepted.
+function M.apply_accepted(scope, only)
   local accepted = M.list("accepted", scope)
+  if only then
+    local kept = {}
+    for _, p in ipairs(accepted) do
+      if only[p.book] then kept[#kept + 1] = p end
+    end
+    accepted = kept
+  end
   local changes = {}
   for i, p in ipairs(accepted) do
     changes[i] = { id = p.book, field = p.field, value = p.value, op = p.op }

@@ -14,8 +14,9 @@ local function is_gap(field, value)
   return false
 end
 
-function M.run()
-  local ids = lulibre.selection()
+--- Open the form. args.ids: the books to edit; otherwise the selection.
+function M.run(args)
+  local ids = type(args) == "table" and args.ids or lulibre.selection()
   if #ids == 0 then
     lulibre.notify("no book selected", "error")
     return

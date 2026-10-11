@@ -38,6 +38,7 @@ local DEFAULTS = {
     { "expand_all", { "X" }, "all", "show, or hide, every book's other fields" },
     { "accept_above", { "A" }, "accept all above…", "accept every pending proposal at or above a confidence you give" },
     { "reject_rest", { "R" }, "reject rest", "reject everything still pending" },
+    { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "write", "write what has been accepted, as one change that can be undone" },
   },
   dupes = {
@@ -45,6 +46,9 @@ local DEFAULTS = {
     { "skip", { "s" }, "skip group", "leave this group alone: nothing in it is removed" },
     { "mark", { "m" }, "mark the rest", "mark the surplus copies in the list" },
     { "filter", { "f" }, "filter", "narrow the list to books that have a duplicate" },
+    { "edit", { "e" }, "edit", "open the edit form for the book under the cursor" },
+    { "review", { "r" }, "review", "go through the proposals waiting for the book under the cursor" },
+    { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "remove", { "D" }, "remove the rest", "remove the surplus copies (to calibre's recycle bin)" },
   },
   orphans = {
@@ -53,6 +57,9 @@ local DEFAULTS = {
     { "expand_all", { "X" }, "all", "show, or hide, every row's details" },
     { "mark", { "m" }, "mark", "mark the records set to be removed" },
     { "filter", { "f" }, "filter", "narrow the list to books whose file is missing" },
+    { "edit", { "e" }, "edit", "open the edit form for the row's book" },
+    { "review", { "r" }, "review", "go through the proposals waiting for the row's book" },
+    { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "do it", "carry out the actions" },
   },
   capture = {

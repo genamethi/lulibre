@@ -105,6 +105,9 @@ void key_format(sbuf *out, const uint32_t *keys, int n);
 int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command);
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
 const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
+/* Does a binding in this mode begin with key and run one of these commands
+ * (first words, separated by spaces)? */
+int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands);
 void keymap_free(struct keymap *km);
 /* For a hint on screen: the keys the global keymap has for a command line
  * in normal mode, or ":command" when it has none. The text is good until
@@ -228,6 +231,8 @@ void wm_resize(struct tui *t, int delta);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 void wm_undock(struct tui *t, void *state);
+/* Give the docked window showing this state that share of the screen. */
+void wm_set_size(struct tui *t, void *state, float size);
 /* Start an indexing run with these options and call done when it ends; if
  * one is already under way, done is called when that one ends instead.
  * Returns 0, or -1 with *err set. Interface thread. */
@@ -278,6 +283,17 @@ typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud)
  * left (a share of the width). */
 struct panel *panel_open(struct tui *t, float size, char side);
 void panel_close(struct panel *p);  /* safe to call twice */
+/* Take the panel off the screen without closing it, and put it back. A
+ * script does this around a panel it opens on top of its own. */
+void panel_hide(struct panel *p);
+void panel_show(struct panel *p);
+void panel_set_size(struct panel *p, float size);
+/* Keys the script handles (panel_set_own) and the global commands, by first
+ * word and separated by spaces, that its other keys may reach
+ * (panel_set_pass): "preview yank" lets P and yy through. */
+void panel_set_own(struct panel *p, int n, const uint32_t *keys);
+void panel_set_pass(struct panel *p, const char *commands);
+int panel_passes(const struct panel *p, uint32_t key);
 void panel_unref(struct panel *p);  /* the opener's reference */
 int panel_is_open(const struct panel *p);
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud);
@@ -388,6 +404,8 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
+                         * following panel is on when the list does not hold it */
   /* whoever asked to be told when the indexing run ends (tui_index) */
   void (*ix_hook[8])(const struct index_stats *st, void *ud);
   void *ix_hook_ud[8];

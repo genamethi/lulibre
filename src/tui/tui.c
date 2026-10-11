@@ -608,9 +608,10 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   if (t->mode == MODE_NORMAL && t->focus->cls == &view_console && t->km->npending == 0 &&
       console_key(t, t->focus->state, key))
     return;
-  /* a focused panel takes keys first, unless a global sequence is under way */
+  /* a focused panel takes keys first, unless a global sequence is under way
+   * or the key is one it lets through to a global binding */
   if (t->mode == MODE_NORMAL && t->focus->cls == &view_panel && t->km->npending == 0 &&
-      panel_key(t, t->focus->state, key))
+      !panel_passes(t->focus->state, key) && panel_key(t, t->focus->state, key))
     return;
   const char *cmd = keymap_feed(t->km, t->mode, key);
   if (cmd) {
@@ -899,6 +900,10 @@ static void render(struct tui *t) {
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
   keymap_set_leader(t->km, t->app->cfg.leader);
+  if (t->peek && t->focus->cls != &view_panel) { /* the panel that was looking has lost the cursor */
+    t->peek = 0;
+    preview_book_changed(t);
+  }
   if (t->rows_n >= 4 && t->cols_n >= 20) {
     int top = tabs_shown(t) ? 1 : 0;
     wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});
