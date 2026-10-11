@@ -160,6 +160,14 @@ expect   "the surplus copy is gone"       gone "$(field 1 title)"
 expect   "the kept copy is still there"   "Knots and Links" "$(field 4 title)"
 test -d "$lib/.caltrash" && r=yes || r=no
 expect   "removal went to the recycle bin" yes "$r"
+# a removal can be undone: the book comes back out of the recycle bin
+back=$(lua 'local r = require("lulibre.edit").undo() print(#r.restored, r.restored[1], #r.failed)')
+contains "undo restores a removed book"   "1	" "$back"
+newid=$(printf '%s' "$back" | cut -f2)
+expect   "with its title"                 "knots" "$(field "$newid" title)"
+expect   "and its file"                   "$(md5sum < "$t/src/knots.pdf")" "$(md5sum < "$(lua "print(lulibre.files($newid)[1].path)")")"
+contains "the history shows it"           "restored as book $newid" "$(lua 'print(lulibre.store("SELECT new FROM journal WHERE field = ? ORDER BY id DESC LIMIT 1", "(removed)")[1].new)')"
+contains "it can be removed again"        "removed 1 books" "$(run run dupes --remove 2>&1)"
 
 # ---- orphans: plant one of each kind, using exact paths from the index
 lua '
@@ -187,6 +195,13 @@ out=$(run run orphans --apply 2>&1)
 contains "orphans --apply"                "1 given their files back, 1 records removed, 1 stray files moved out, 1 links repaired" "$out"
 contains "the removed record's tag is proposed for its copy" "1 things the removed records knew" "$out"
 expect   "the record is gone"             gone "$(field 6 title)"
+# a removed record that had no file comes back too, with what it said
+back=$(lua 'local r = require("lulibre.edit").undo() print(#r.restored, r.restored[1])')
+newid=$(printf '%s' "$back" | cut -f2)
+expect   "undo restores a file-less record" "Commutative Algebra|The Authors|kept/tag" "$(lua "
+  local b, e = lulibre.book($newid), require 'lulibre.edit'
+  print(b and table.concat({ b.title, e.current(b, 'authors'), e.current(b, 'tags') }, '|') or 'gone')")"
+contains "and is cleaned up again"        "1 records removed" "$(run run orphans --apply 2>&1)"
 test -e "$lib/To Read/moved.pdf" && r=yes || r=no
 expect   "the link resolves again"        yes "$r"
 expect   "book 5 has its file back"       indexed "$(run index >/dev/null 2>&1; lua 'print(lulibre.files(5)[1].status)')"

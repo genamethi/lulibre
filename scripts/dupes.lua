@@ -34,7 +34,7 @@ io.write(("%d files hashed, %d groups, %d surplus books, %s\n"):format(stats.has
 if opt.remove and #ids > 0 then
   local carried = dupes.propose(dupes.gather(groups), "duplicate")
   if carried > 0 then io.write(("%d things the removed copies knew are now proposals for the kept ones\n"):format(carried)) end
-  local n, err = edit.remove(ids)
+  local n, err = edit.remove(ids, { label = "duplicates" })
   io.write(("removed %d books%s\n"):format(n, err and (", then: " .. err) or ""))
   if err then error(err, 0) end
 end
