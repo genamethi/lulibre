@@ -69,6 +69,7 @@ void l_theme_open(struct lua_State *L);
 void l_match_open(struct lua_State *L);
 void l_ui_open(struct lua_State *L);
 void l_uv_open(struct lua_State *L);
+void l_uv_preload(struct lua_State *L); /* after the lulibre table exists */
 void l_panel_open(struct lua_State *L);
 
 #endif

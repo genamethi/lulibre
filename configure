@@ -53,9 +53,10 @@ done
 : "${datadir:=$prefix/share}"
 cflags_given=$CFLAGS
 ldflags_given=$LDFLAGS
-# A release is optimised and carries no symbols; a debug build is the reverse.
+# Both carry symbols, so a crash can be traced to a line; a release is
+# optimised, a debug build is not.
 if [ -z "$CFLAGS" ]; then
-  if [ $debug = 1 ]; then CFLAGS="-O0 -g3 -fno-omit-frame-pointer"; else CFLAGS="-O2"; fi
+  if [ $debug = 1 ]; then CFLAGS="-O0 -g3 -fno-omit-frame-pointer"; else CFLAGS="-O2 -g"; fi
 fi
 if [ -n "$sanitize" ]; then
   CFLAGS="$CFLAGS -fsanitize=$sanitize"

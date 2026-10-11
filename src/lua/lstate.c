@@ -123,6 +123,7 @@ lua_State *lstate_new(struct app *app) {
   l_panel_open(L);
   l_uv_open(L);
   lua_setglobal(L, "lulibre");
+  l_uv_preload(L);
 
   /* the part of the API written in Lua */
   lua_getglobal(L, "require");

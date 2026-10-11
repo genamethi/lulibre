@@ -17,3 +17,10 @@ export XDG_DATA_HOME="$t/data" XDG_CONFIG_HOME="$t/config"
 out=$("$bin" --clean -L "$t/lib" run "$src/units.lua" 2>&1) || { echo "$out" | tail -20; exit 1; }
 echo "Lua unit checks: $(echo "$out" | tail -1)"
 case $out in *", 0 failed"*) ;; *) echo "$out" | grep -A3 FAIL; exit 1 ;; esac
+# luv must belong to the main Lua state, not to whichever task loaded it
+if "$bin" --clean -L "$t/lib" run "$src/luv_probe.lua" >/dev/null 2>&1; then
+  out=$("$bin" --clean -L "$t/lib" run "$src/luv_state.lua" 2>&1) || { echo "FAIL  luv callback after its first user ended: $out"; exit 1; }
+  case $out in *"callback fired: true"*) echo "ok    a luv callback outlives the task that loaded luv" ;; *) echo "FAIL  $out"; exit 1 ;; esac
+else
+  echo "skip  luv checks (luv is not installed for this Lua version)"
+fi

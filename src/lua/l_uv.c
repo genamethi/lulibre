@@ -1,12 +1,14 @@
 /* libuv for scripts, on the loop lulibre runs Lua on.
  *
  * `require "luv"` (or `lulibre.uv`, which is the same module) loads the luv
- * rock from the Lua path as usual, with two differences made here before it
+ * rock from the Lua path as usual, with three differences made here before it
  * initialises: it is given the loop of the Lua thread instead of creating
  * its own, so its handles and the `lulibre` API's timers, subprocesses and
  * worker jobs are serviced together, and errors in its
  * callbacks are reported like any other script error instead of ending the
- * process, which is luv's default. */
+ * process, which is luv's default. And it is loaded once, at startup, by the
+ * main Lua state: luv runs every callback on the state that loaded it, so
+ * that state must outlive them all, which a task's coroutine does not. */
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +83,13 @@ static int lulibre_index(lua_State *L) {
   lua_pushvalue(L, -1);
   lua_setfield(L, 1, "uv"); /* cache: later reads skip the metamethod */
   return 1;
+}
+
+/* Load luv now, on the main state, if it is installed. */
+void l_uv_preload(lua_State *L) {
+  lua_getglobal(L, "require");
+  lua_pushliteral(L, "luv");
+  if (lua_pcall(L, 1, 0, 0) != LUA_OK) lua_pop(L, 1); /* not installed: require says so when asked */
 }
 
 void l_uv_open(lua_State *L) {

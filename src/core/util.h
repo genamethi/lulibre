@@ -37,4 +37,9 @@ char *path_expand(const char *p);   /* leading ~ -> $HOME; malloc'd */
 const char *path_ext(const char *p); /* extension without the dot, or "" */
 unsigned long long hash_fnv1a(const char *s);
 
+/* crash.c: on a fatal signal, append a backtrace to the crash log. Install
+ * after anything else that handles those signals, so it runs first. */
+void crash_install(void);
+const char *crash_log_path(void);
+
 #endif

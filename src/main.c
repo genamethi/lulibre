@@ -79,6 +79,7 @@ static int finish(struct app *app, int rc) {
 int main(int argc, char **argv) {
   struct app app;
   memset(&app, 0, sizeof app);
+  crash_install();
   signal(SIGPIPE, SIG_IGN); /* a helper process that exits early is an error to report, not a death */
   config_init(&app.cfg);
 
