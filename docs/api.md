@@ -98,6 +98,7 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.pick(items [, {title=}])` | *waits.* Fuzzy-pick one: item, index |
 | `lulibre.show(text [, title])` | a scrollable overlay; text may be a list of lines |
 | `lulibre.clipboard(text)` | copy |
+| `lulibre.clipboard()` | what was copied last, or nil |
 | `lulibre.policy(option, question)` | apply an `auto` / `ask` / `never` option: true or false |
 
 ### Panels
@@ -144,11 +145,27 @@ accent ok warn error head`. With `moves = true`, `wait()` also returns
 
 | | |
 |---|---|
-| `lulibre.o.name` | options; see [Configuration](configuration.md) |
-| `lulibre.setup{ pages = 8, ocr = "auto" }` | several at once |
+| `lulibre.o.name` | read or write an option; see [Configuration](configuration.md) |
+| `lulibre.settings.get(name)` | the same, as a function; with no name, every option as a table |
+| `lulibre.settings.set(name, value)` | or `set{ pages = 8, ocr = "auto" }` for several |
+| `lulibre.settings.reset(name)` | back to the default |
+| `lulibre.settings.names()` | option names, in order |
+| `lulibre.settings.info(name)` | `{ name=, value=, default=, type=, choices=, help= }` |
+| `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library= }` |
 | `lulibre.theme.name = "#rrggbb"` | colours; `lulibre.theme()` lists them |
 | `lulibre.version` | `"0.1.0-alpha"` |
 | `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua= }` |
+
+The configuration directory is the option `config_dir`:
+
+```lua
+lulibre.settings.get("config_dir")                 -- "/home/me/.config/lulibre"
+lulibre.settings.set("config_dir", "~/dotfiles/lulibre")
+```
+
+Reading it gives the directory in effect. Setting it changes where scripts
+and modules are looked for from then on; which `init.lua` is loaded was
+decided at startup (`lulibre -C DIR`, or `$LULIBRE_CONFIG_DIR`).
 
 ## Modules
 

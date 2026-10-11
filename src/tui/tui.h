@@ -58,6 +58,8 @@ void dr_fill(struct ncplane *n, int y, int x, int w);
 int dr_text(struct ncplane *n, int y, int x, int maxw, const char *s);
 int dr_textn(struct ncplane *n, int y, int x, int maxw, const char *s, size_t len);
 int dr_width(const char *s, size_t len);
+/* Bytes of the longest prefix of s that is at most cols columns wide. */
+size_t dr_bytes_for_cols(const char *s, size_t len, int cols);
 /* Bytes of s (up to len) that fit in maxw columns, breaking at a space when
  * one is available. Used for wrapping. */
 size_t dr_wrap(const char *s, size_t len, int maxw);
@@ -113,6 +115,7 @@ struct lineedit {
 };
 
 void le_set(struct lineedit *le, const char *s);
+void le_insert(struct lineedit *le, const char *s, size_t n); /* at the cursor */
 /* Returns 1 if the key edited or moved within the line, 0 if not handled. */
 int le_key(struct lineedit *le, uint32_t key, const struct ncinput *ni);
 void le_free(struct lineedit *le);
@@ -209,6 +212,8 @@ void wm_resize(struct tui *t, int delta);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 void wm_undock(struct tui *t, void *state);
+/* The window showing this state, or NULL. */
+struct node *wm_leaf_of(struct tui *t, void *state);
 /* The window at a screen position, or NULL. */
 struct node *wm_at(struct tui *t, int y, int x);
 /* First leaf showing this class, or NULL. */
@@ -221,6 +226,16 @@ void preview_page(struct tui *t, int delta);
 void preview_pan(struct tui *t, int delta);
 void preview_zoom(struct tui *t, int delta); /* 0 resets */
 void preview_toggle_graphic(struct tui *t);
+/* The mouse in a text preview: what is 0 for a press at that cell, 1 while
+ * dragging, 2 on release. Dragging selects text, a double click a word, a
+ * triple click a line; what was selected is copied. Returns 1 while a drag
+ * is under way. */
+int preview_mouse(struct tui *t, void *state, int y, int x, int what);
+
+/* clip.c: copy to, and paste from, the clipboard (tmux's inside tmux) */
+int clip_copy(const char *s, size_t n);
+char *clip_paste(void); /* malloc'd, or NULL when there is nothing */
+void clip_free(void);
 void preview_book_changed(struct tui *t);
 int list_page_rows(struct tui *t); /* visible rows in the list view */
 
@@ -338,6 +353,7 @@ struct tui {
   char *pager_title;
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
+  void *drag;           /* the preview a mouse drag began in, while it lasts */
 
   char *msg;
   int msg_error;

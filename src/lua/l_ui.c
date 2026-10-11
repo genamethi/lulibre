@@ -31,6 +31,8 @@
  *                                       list of lines
  *   lulibre.clipboard(text)             copy to the clipboard: through tmux when
  *                                       inside it, else OSC 52 (works over ssh)
+ *   lulibre.clipboard()                 what was copied last (tmux's newest
+ *                                       buffer inside tmux), or nil
  *   lulibre.log(text [, level])         write to the log the console (`) shows:
  *                                       "info", "warn", "error", or "debug"
  *                                       (kept only by a debug build)
@@ -479,48 +481,19 @@ static int l_input(lua_State *L) {
   return lua_yield(L, 0);
 }
 
-/* Copy to the clipboard.
- *
- * Inside tmux the text is handed to tmux itself (`tmux load-buffer -w`),
- * which keeps it as a paste buffer and passes it on to the terminal's
- * clipboard; that works with tmux's default settings, where an escape
- * sequence from a program would be ignored or blocked. Otherwise, or if
- * that fails, OSC 52 asks the terminal directly, which also works through
- * ssh. It is written to the terminal device as one write, so it cannot
- * interleave with a frame. */
-static int tmux_copy(const char *s, size_t n) {
-  FILE *p = popen("tmux load-buffer -w - 2>/dev/null", "w");
-  if (!p) return 0;
-  int wrote = fwrite(s, 1, n, p) == n;
-  return pclose(p) == 0 && wrote;
-}
-
+/* lulibre.clipboard(text) copies; lulibre.clipboard() gives back what was
+ * copied last (tui/clip.c says where from). */
 static int l_clipboard_ui(lua_State *L) {
-  static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  size_t n;
-  const unsigned char *s = (const unsigned char *)luaL_checklstring(L, 1, &n);
-  if (getenv("TMUX") && tmux_copy((const char *)s, n)) {
-    lua_pushboolean(L, 1);
+  if (lua_isnoneornil(L, 1)) {
+    char *text = clip_paste();
+    if (text) lua_pushstring(L, text);
+    else lua_pushnil(L);
+    free(text);
     return 1;
   }
-  sbuf out = SBUF_INIT;
-  sb_puts(&out, "\033]52;c;");
-  for (size_t i = 0; i < n; i += 3) {
-    unsigned v = (unsigned)s[i] << 16 | (i + 1 < n ? (unsigned)s[i + 1] << 8 : 0) | (i + 2 < n ? s[i + 2] : 0);
-    sb_putc(&out, b64[v >> 18 & 63]);
-    sb_putc(&out, b64[v >> 12 & 63]);
-    sb_putc(&out, i + 1 < n ? b64[v >> 6 & 63] : '=');
-    sb_putc(&out, i + 2 < n ? b64[v & 63] : '=');
-  }
-  sb_puts(&out, "\a");
-  FILE *tty = fopen("/dev/tty", "w");
-  int ok = 0;
-  if (tty) {
-    ok = fwrite(out.s, 1, out.len, tty) == out.len;
-    fclose(tty);
-  }
-  sb_free(&out);
-  lua_pushboolean(L, ok);
+  size_t n;
+  const char *s = luaL_checklstring(L, 1, &n);
+  lua_pushboolean(L, clip_copy(s, n));
   return 1;
 }
 ON_UI(l_clipboard)
@@ -570,15 +543,10 @@ ON_UI(l_show)
 
 /* ---- scripts ---- */
 
-static char *config_dir(void) {
-  const char *xdg = getenv("XDG_CONFIG_HOME");
-  return xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.config/lulibre");
-}
-
 char **lapi_script_dirs(struct app *app) {
   char **dirs = xcalloc(4, sizeof *dirs);
   int n = 0;
-  char *cfg = config_dir();
+  char *cfg = config_dir_path(&app->cfg);
   dirs[n++] = xasprintf("%s/scripts", cfg);
   free(cfg);
   char exe[4096];
@@ -657,28 +625,40 @@ void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg)
   bridge_lua(app, spawn_ref, r);
 }
 
-/* "name arg arg": find the script and start it */
+/* "path\0arg arg": load the script and start it */
 static void run_line(struct app *app, void *arg) {
-  char *copy = arg, *save = NULL;
+  char *path = arg, *args = path + strlen(path) + 1, *save = NULL;
   char *argv[32];
   int argc = 0;
-  char *name = strtok_r(copy, " ", &save);
-  for (char *a; argc < 32 && (a = strtok_r(NULL, " ", &save));) argv[argc++] = a;
-  char *path = name ? lapi_find_script(app, name) : NULL, *err = NULL;
-  if (!path) {
-    char *msg = xasprintf("no script named '%s' (see :run with no argument)", name ? name : "");
-    lapi_report(app, 1, msg);
-    free(msg);
-  } else if (!lapi_run_file(app, path, argc, argv, &err)) {
+  for (char *a = strtok_r(args, " ", &save); a && argc < 32; a = strtok_r(NULL, " ", &save))
+    argv[argc++] = a;
+  char *err = NULL;
+  if (!lapi_run_file(app, path, argc, argv, &err)) {
     lapi_report(app, 1, err);
     free(err);
   }
   free(path);
-  free(copy);
 }
 
+/* "name arg arg": the script is looked up here, on the interface thread,
+ * which owns the options that say where scripts are */
 static void run_named(struct tui *t, const char *line) {
-  bridge_lua(t->app, run_line, xstrdup(line));
+  while (*line == ' ') line++;
+  size_t nl = strcspn(line, " ");
+  char *name = xstrndup(line, nl);
+  char *path = *name ? lapi_find_script(t->app, name) : NULL;
+  if (!path) {
+    tui_msg(t, 1, "no script named '%s' (see :run with no argument)", name);
+  } else {
+    const char *args = line + nl;
+    size_t pl = strlen(path), al = strlen(args);
+    char *msg = xmalloc(pl + al + 2);
+    memcpy(msg, path, pl + 1);
+    memcpy(msg + pl + 1, args, al + 1);
+    bridge_lua(t->app, run_line, msg);
+  }
+  free(path);
+  free(name);
 }
 
 static void run_picked(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {

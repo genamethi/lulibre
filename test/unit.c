@@ -162,6 +162,13 @@ static void test_config(void) {
   free(err);
   err = NULL;
   ok(config_set(&c, "sync_dir", "~/in", &err) == 0 && c.sync_dir[0] == '/', "paths are expanded");
+  char *dir = config_dir_path(&c);
+  ok(dir[0] == '/' && strstr(dir, "lulibre"), "the configuration directory has a default");
+  free(dir);
+  ok(config_set(&c, "config_dir", "/somewhere/else", &err) == 0, "and can be set");
+  dir = config_dir_path(&c);
+  eq(dir, "/somewhere/else", "which is then the one in effect");
+  free(dir);
   size_t n;
   const struct opt_def *o = config_opts(&n);
   int bad = 0;

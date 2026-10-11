@@ -41,9 +41,34 @@
 | `<C-w>>` `<C-w><` | resize |
 | `` ` `` | the log console, without moving the focus |
 
-With the mouse: a click selects a row and focuses its window; the wheel
-scrolls what it is over. Hold Shift to select text. `lulibre.o.mouse = 0`
-turns this off.
+## The mouse
+
+| | |
+|---|---|
+| click | select the row, focus the window |
+| wheel | scroll what it is over |
+| drag in the text preview | select text; it is copied when the button is released |
+| double click · triple click there | the word · the line |
+| middle or right click, while typing | paste |
+
+`lulibre.o.mouse = 0` hands the mouse back to the terminal. With it on, hold
+Shift to make the terminal's own selection.
+
+## While typing
+
+In the command line, a filter, a search, or a field of the edit form:
+
+| Key | |
+|---|---|
+| `<C-v>` | paste what was last copied, as one line |
+| `<PageUp>` `<PageDown>` | scroll the preview without leaving the field |
+| `Tab` | take the highlighted suggestion |
+| `<C-a>` `<C-e>` `<C-u>` `<C-k>` `<C-w>` | start, end, delete to start, to end, a word back |
+| `<Up>` `<Down>` | history, or the suggestion list |
+| `Enter` · `Esc` | accept · cancel |
+
+The mouse still works in the preview while a field is open, so a title or a
+name can be dragged over on the page and pasted with `<C-v>`.
 
 ## Changing things
 

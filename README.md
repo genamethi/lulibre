@@ -63,6 +63,7 @@ o.password_file = "~/.config/calibre/password-file"
 | `gr` | review proposed changes; `x` shows a book's other fields |
 | `u` | undo the last change |
 | `J` `K` `[` `]` · `P` | scroll and page the preview · text ⇄ page image |
+| mouse | click a row; wheel scrolls; drag over preview text to copy it, `<C-v>` pastes it into a field |
 | `gd` · `go` | duplicate files (MD5) · orphaned records, files and links |
 | `gS` `S` `X` · `gl` | the sync folder: show, add, add-and-remove · back to the library |
 | `yb` `yk` `yp` | copy BibTeX, cite keys, paths |

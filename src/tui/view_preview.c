@@ -29,6 +29,12 @@ struct pstate {
   int scroll;
   struct wline *wl;
   int nwl, capwl, wrap_w;
+  /* text selected with the mouse: bytes [sel_lo, sel_hi) of text */
+  struct rect body; /* where the text was last drawn; h == 0 when it was not */
+  long sel_lo, sel_hi;
+  long anchor_lo, anchor_hi; /* the character the drag began on */
+  int selecting, clicks, click_y, click_x;
+  double click_at;
 
   int graphic;
   struct doc_image img;
@@ -84,6 +90,8 @@ static void load_page(struct pstate *ps) {
   sqlite3_stmt *st;
   free(ps->text);
   ps->text = NULL;
+  ps->sel_lo = ps->sel_hi = 0; /* a selection belongs to the page it was made on */
+  ps->selecting = 0;
   ps->nwl = 0;
   ps->wrap_w = 0;
   ps->scroll = ps->scroll_px = ps->scroll_x = 0;
@@ -493,6 +501,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
   drop_plane(ps);
 
+  ps->body.h = 0;
   if (!ps->text) {
     dr_style(n, theme.dim, C_DEFAULT, 0);
     if (ps->file && ps->fstatus == FILE_OK)
@@ -506,11 +515,117 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   if (max_scroll < 0) max_scroll = 0;
   if (ps->scroll > max_scroll) ps->scroll = max_scroll;
   if (ps->scroll < 0) ps->scroll = 0;
-  dr_style(n, C_DEFAULT, C_DEFAULT, 0);
+  ps->body = body;
   for (int i = 0; i < body.h && ps->scroll + i < ps->nwl; i++) {
     struct wline *l = &ps->wl[ps->scroll + i];
-    dr_textn(n, body.y + i, x, w, l->p, (size_t)l->len);
+    long a = l->p - ps->text, b = a + l->len;
+    dr_style(n, C_DEFAULT, C_DEFAULT, 0);
+    if (ps->sel_hi <= ps->sel_lo || ps->sel_hi <= a || ps->sel_lo >= b) {
+      dr_textn(n, body.y + i, x, w, l->p, (size_t)l->len);
+      continue;
+    }
+    /* the selected stretch of this line, between what is before and after */
+    size_t s1 = (size_t)((ps->sel_lo > a ? ps->sel_lo : a) - a);
+    size_t s2 = (size_t)((ps->sel_hi < b ? ps->sel_hi : b) - a);
+    int cx = x + dr_textn(n, body.y + i, x, w, l->p, s1);
+    dr_style(n, C_DEFAULT, theme.visual_bg, 0);
+    cx += dr_textn(n, body.y + i, cx, w - (cx - x), l->p + s1, s2 - s1);
+    dr_style(n, C_DEFAULT, C_DEFAULT, 0);
+    dr_textn(n, body.y + i, cx, w - (cx - x), l->p + s2, (size_t)l->len - s2);
   }
+}
+
+/* ---- selecting text with the mouse ---- */
+
+/* The bytes of the character under a cell: [*lo, *hi). Past the end of a
+ * line it is the empty stretch at the line's end. */
+static void cell_bytes(struct pstate *ps, int y, int x, long *lo, long *hi) {
+  int row = ps->scroll + (y - ps->body.y);
+  if (row < 0) row = 0;
+  if (row >= ps->nwl) row = ps->nwl - 1;
+  struct wline *l = &ps->wl[row];
+  int col = x - ps->body.x;
+  size_t at = col <= 0 ? 0 : dr_bytes_for_cols(l->p, (size_t)l->len, col);
+  *lo = (l->p - ps->text) + (long)at;
+  if (y < ps->body.y) at = 0, *lo = l->p - ps->text;
+  if (y >= ps->body.y + ps->body.h) at = (size_t)l->len, *lo = (l->p - ps->text) + l->len;
+  *hi = *lo;
+  if (at < (size_t)l->len) {
+    unsigned cp;
+    *hi += utf8_decode(l->p + at, (size_t)l->len - at, &cp);
+  }
+}
+
+static void copy_selection(struct tui *t, struct pstate *ps) {
+  if (ps->sel_hi <= ps->sel_lo) return;
+  size_t n = (size_t)(ps->sel_hi - ps->sel_lo);
+  int chars = dr_width(ps->text + ps->sel_lo, n);
+  if (clip_copy(ps->text + ps->sel_lo, n))
+    tui_msg(t, 0, "copied %d character%s   (<C-v> pastes into a field)", chars, chars == 1 ? "" : "s");
+  else
+    tui_msg(t, 1, "selected, but the terminal did not take the copy; <C-v> still pastes it inside lulibre");
+}
+
+int preview_mouse(struct tui *t, void *state, int y, int x, int what) {
+  struct pstate *ps = state;
+  if (ps->graphic || !ps->text || ps->nwl == 0 || ps->body.h <= 0) {
+    ps->selecting = 0;
+    return 0;
+  }
+  long lo, hi;
+  if (what == 0) { /* press */
+    if (y < ps->body.y || y >= ps->body.y + ps->body.h) return 0;
+    double now = now_s();
+    ps->clicks = now - ps->click_at < 0.4 && y == ps->click_y && x == ps->click_x ? ps->clicks + 1 : 1;
+    ps->click_at = now;
+    ps->click_y = y;
+    ps->click_x = x;
+    cell_bytes(ps, y, x, &lo, &hi);
+    const char *s = ps->text;
+    if (ps->clicks == 2) { /* the word: up to white space, less the punctuation around it */
+      while (lo > 0 && !strchr(" \n\t", s[lo - 1])) lo--;
+      while (s[hi] && !strchr(" \n\t", s[hi])) hi++;
+      while (lo < hi && strchr("([{\"'", s[lo])) lo++;
+      while (hi > lo && strchr(".,;:)]}\"'", s[hi - 1])) hi--;
+    } else if (ps->clicks >= 3) { /* the line as it stands in the file */
+      while (lo > 0 && s[lo - 1] != '\n') lo--;
+      while (s[hi] && s[hi] != '\n') hi++;
+    }
+    if (ps->clicks >= 2) {
+      ps->sel_lo = lo;
+      ps->sel_hi = hi;
+      ps->selecting = 0;
+      copy_selection(t, ps);
+      tui_dirty(t);
+      return 0;
+    }
+    ps->anchor_lo = lo;
+    ps->anchor_hi = hi;
+    ps->sel_lo = ps->sel_hi = lo; /* nothing until the pointer moves */
+    ps->selecting = 1;
+    tui_dirty(t);
+    return 1;
+  }
+  if (!ps->selecting) return 0;
+  /* dragging past the top or bottom scrolls */
+  if (y < ps->body.y && ps->scroll > 0) ps->scroll--;
+  if (y >= ps->body.y + ps->body.h && ps->scroll < ps->nwl - ps->body.h) ps->scroll++;
+  cell_bytes(ps, y, x, &lo, &hi);
+  if (lo != ps->anchor_lo || what == 1) {
+    ps->sel_lo = lo < ps->anchor_lo ? lo : ps->anchor_lo;
+    ps->sel_hi = hi > ps->anchor_hi ? hi : ps->anchor_hi;
+  }
+  tui_dirty(t);
+  if (what == 2) {
+    ps->selecting = 0;
+    if (lo == ps->anchor_lo && ps->sel_hi - ps->sel_lo <= ps->anchor_hi - ps->anchor_lo) {
+      ps->sel_lo = ps->sel_hi = 0; /* a plain click selects nothing */
+      return 0;
+    }
+    copy_selection(t, ps);
+    return 0;
+  }
+  return 1;
 }
 
 const struct view_class view_preview = {"preview", create, destroy, draw, hide};

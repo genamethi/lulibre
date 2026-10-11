@@ -31,11 +31,6 @@ uv_loop_t *lapi_loop(lua_State *L) {
   return lapi_app(L)->lloop;
 }
 
-static char *config_dir(void) {
-  const char *xdg = getenv("XDG_CONFIG_HOME");
-  return xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.config/lulibre");
-}
-
 /* Prepend to package.path / package.cpath. */
 static void prepend(lua_State *L, const char *field, const char *entries) {
   lua_getglobal(L, "package");
@@ -50,7 +45,7 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
  * luarocks tree so `luarocks install --local` rocks just work. */
 static void setup_paths(lua_State *L) {
   sbuf p = SBUF_INIT, c = SBUF_INIT;
-  char *cfg = config_dir();
+  char *cfg = config_dir_path(&lapi_app(L)->cfg);
   char *rocks = path_expand("~/.luarocks");
   const char *dev = getenv("LULIBRE_RUNTIME");
   char exe[4096], *tree = NULL;
@@ -140,7 +135,7 @@ lua_State *lstate_new(struct app *app) {
 }
 
 int lstate_run_init(struct app *app) {
-  char *dir = config_dir();
+  char *dir = config_dir_path(&app->cfg);
   char *init = xasprintf("%s/init.lua", dir);
   int rc = 0;
   if (access(init, R_OK) == 0 && luaL_dofile(app->L, init) != LUA_OK) {

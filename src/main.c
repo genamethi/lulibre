@@ -33,13 +33,15 @@ static const struct {
 };
 
 static void usage(FILE *f) {
-  fprintf(f, "usage: lulibre [-L library] [-o name=value]... [--clean] [command [args]]\n\n"
+  fprintf(f, "usage: lulibre [-L library] [-C confdir] [-o name=value]... [--clean] [command [args]]\n\n"
              "With no command, lulibre opens the interactive interface (? for help).\n\n");
   for (size_t i = 0; i < ARRAY_LEN(commands); i++)
     fprintf(f, "  %-7s %s\n", commands[i].name, commands[i].summary);
   fprintf(f, "\n  -L DIR          calibre library (else $LULIBRE_LIBRARY, init.lua, or .)\n"
              "  -o name=value   set an option; `lulibre -o help` lists them\n"
-             "  --clean         do not load ~/.config/lulibre/init.lua\n"
+             "  -C DIR          configuration directory: init.lua, scripts/, lua/\n"
+             "                  (else $LULIBRE_CONFIG_DIR, else ~/.config/lulibre)\n"
+             "  --clean         do not load init.lua\n"
              "  -V              version\n\n"
              "Run `lulibre <command> -h` for a command's own options.\n");
 }
@@ -84,10 +86,11 @@ int main(int argc, char **argv) {
   int i = 1, clean = 0, want_optlist = 0;
   const char *sets[64];
   int nsets = 0;
-  const char *library = NULL;
+  const char *library = NULL, *confdir = getenv("LULIBRE_CONFIG_DIR");
   for (; i < argc; i++) {
     const char *a = argv[i];
     if (!strcmp(a, "-L") && i + 1 < argc) library = argv[++i];
+    else if ((!strcmp(a, "-C") || !strcmp(a, "--config-dir")) && i + 1 < argc) confdir = argv[++i];
     else if (!strcmp(a, "-o") && i + 1 < argc) {
       if (!strcmp(argv[i + 1], "help")) want_optlist = 1;
       else if (nsets < (int)ARRAY_LEN(sets)) sets[nsets++] = argv[i + 1];
@@ -109,13 +112,14 @@ int main(int argc, char **argv) {
   }
 
   /* init.lua first, then the command line on top of it */
+  char *err = NULL;
+  if (confdir && confdir[0] && config_set(&app.cfg, "config_dir", confdir, &err)) die("%s", err);
   app.loop = uv_default_loop();
   /* with the interface, Lua gets a loop and (once it is up) a thread of its own */
   bridge_init(&app, i >= argc && !want_optlist);
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
   if (!clean) lstate_run_init(&app);
-  char *err = NULL;
   if (library && config_set(&app.cfg, "library", library, &err)) die("%s", err);
   for (int k = 0; k < nsets; k++) {
     const char *eq = strchr(sets[k], '=');

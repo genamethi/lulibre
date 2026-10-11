@@ -355,5 +355,52 @@ do
   eq("server_up: nonsense is not a server", edit.server_up("not a url"), false)
 end
 
+-- settings
+do
+  local S = lulibre.settings
+  eq("settings.get", S.get("layout_pages"), lulibre.o.layout_pages)
+  S.set("ocr_pages", 7)
+  eq("settings.set", { S.get("ocr_pages"), lulibre.o.ocr_pages }, { 7, 7 })
+  S.set { ocr_pages = 4, ocr_lang = "deu" }
+  eq("settings.set with a table", { S.get("ocr_pages"), S.get("ocr_lang") }, { 4, "deu" })
+  S.reset("ocr_pages")
+  S.reset("ocr_lang")
+  eq("settings.reset", { S.get("ocr_pages"), S.get("ocr_lang") }, { 3, "eng" })
+  eq("settings.get() has every option", S.get().write_via, "auto")
+  local names = S.names()
+  eq("settings.names lists them in order", { names[1], #names > 20 }, { "library", true })
+  local info = S.info("repair_links")
+  eq("settings.info", { info.type, info.default, info.choices, info.help ~= "" },
+    { "string", "ask", { "auto", "ask", "never" }, true })
+  eq("settings.info of a number", { S.info("pages").type, S.info("pages").default }, { "number", 6 })
+  eq("unknown options are errors", { (pcall(S.get, "nope")), (pcall(S.set, "nope", 1)), (pcall(S.info, "nope")) },
+    { false, false, false })
+  eq("a refused value changes nothing", { (pcall(S.set, "write_via", "carrier pigeon")), S.get("write_via") },
+    { false, "auto" })
+
+  -- the configuration directory can be read, and moved
+  local was = S.get("config_dir")
+  eq("config_dir reads as the directory in effect", was:sub(1, 1) == "/" and was:find("lulibre") ~= nil, true)
+  local paths = S.paths()
+  eq("paths follow it", { paths.config_dir, paths.init, paths.scripts }, { was, was .. "/init.lua", was .. "/scripts" })
+  eq("paths names the index", paths.index:match("%.db$") ~= nil, true)
+  local dir = os.tmpname()
+  os.remove(dir)
+  local uv = require "luv"
+  uv.fs_mkdir(dir, 448)
+  uv.fs_mkdir(dir .. "/lua", 448)
+  local f = assert(io.open(dir .. "/lua/unit_probe.lua", "w"))
+  f:write("return { answer = 42 }\n")
+  f:close()
+  S.set("config_dir", dir)
+  eq("config_dir can be set", { S.get("config_dir"), lulibre.o.config_dir, S.paths().scripts }, { dir, dir, dir .. "/scripts" })
+  eq("modules are then found there", require("unit_probe").answer, 42)
+  S.reset("config_dir")
+  eq("and reset", S.get("config_dir"), was)
+  os.remove(dir .. "/lua/unit_probe.lua")
+  uv.fs_rmdir(dir .. "/lua")
+  uv.fs_rmdir(dir)
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

@@ -31,6 +31,7 @@ struct config {
   char *orphans_dir;    /* where stray files are set aside; empty = XDG data dir */
   char *write_via;      /* auto | server | direct: how changes reach calibre */
   char *log_file;       /* every log entry is also appended here; empty = no file */
+  char *config_dir;     /* where init.lua, scripts/ and lua/ are; empty = the XDG default */
 };
 
 enum opt_type { OPT_STR, OPT_PATH, OPT_INT };
@@ -55,6 +56,9 @@ int config_set(struct config *c, const char *name, const char *val, char **err);
 const char *config_str(const struct config *c, const struct opt_def *o);
 int config_int(const struct config *c, const struct opt_def *o);
 
+/* The configuration directory in effect: the option if set, else
+ * $XDG_CONFIG_HOME/lulibre, else ~/.config/lulibre. malloc'd. */
+char *config_dir_path(const struct config *c);
 /* index path: the option if set, else $XDG_DATA_HOME/lulibre/<name>-<hash>.db */
 char *config_index_path(const struct config *c);
 

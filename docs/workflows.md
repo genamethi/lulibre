@@ -23,6 +23,17 @@ A form with one row per field for the selected book or books.
 In a list field (authors, tags, identifiers) `+x, -y` adds and removes values
 and leaves the rest alone, which is how one tag is added to two hundred books.
 
+### Copying from the page
+
+The preview usually shows the title page, with the title and authors right
+there. Drag over them with the mouse (or double click a word, triple click a
+line) and they are copied; in a field, `<C-v>` or a middle click pastes them,
+flattened to one line. This works while the field is open, and `<PageUp>` /
+`<PageDown>` or the wheel scroll the preview meanwhile.
+
+Inside tmux the copy is a tmux paste buffer as well, so text copied in
+another pane pastes the same way.
+
 ## Proposals and review: `gr`
 
 Scripts do not change the library; they *propose*, and you review.
