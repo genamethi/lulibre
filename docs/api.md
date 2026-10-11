@@ -86,7 +86,7 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.log(text [, level])` | the log console: `"info"`, `"warn"`, `"error"`, `"debug"` (debug builds only) |
 | `lulibre.progress(text \| nil)` | a note in the status line while a script works |
 | `lulibre.current()` | id under the cursor |
-| `lulibre.selection()` | ids an action applies to |
+| `lulibre.selection()` | ids an action applies to. With the cursor in a panel that follows the list, the book its row stands for; an error if that book is not in the list |
 | `lulibre.mark(id [, on])` | mark, unmark, or toggle |
 | `lulibre.filter([expr])` | get or set the list filter |
 | `lulibre.jump(id)` | move the cursor to a book |
@@ -123,7 +123,8 @@ end
 
 Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
 `p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`. Row styles: `dim
-accent ok warn error head`. With `moves = true`, `wait()` also returns
+accent ok warn error`, and `head` and `note`, which show their first cell
+across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
 `"<Move>"` when the cursor moves.
 
 ## Tasks, processes, helpers
