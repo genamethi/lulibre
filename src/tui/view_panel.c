@@ -332,6 +332,37 @@ static int style_color(int style) {
   }
 }
 
+/* Where the columns fall in a window: fixed widths first, the rest shared
+ * by weight. Returns how many there are (at most 32). */
+static int columns(const struct panel *p, struct rect r, int x[32], int w[32]) {
+  int nc = p->ncols < 32 ? p->ncols : 32;
+  int fixed = 0, weight = 0, avail = r.w - 2 - (nc - 1);
+  for (int c = 0; c < nc; c++) {
+    if (p->col_widths[c] > 0) fixed += p->col_widths[c];
+    else weight += p->col_widths[c] < 0 ? -p->col_widths[c] : 1;
+  }
+  int flex = avail - fixed > 0 ? avail - fixed : 0, pos = r.x + 1;
+  for (int c = 0; c < nc; c++) {
+    int cw = p->col_widths[c] > 0 ? p->col_widths[c]
+           : weight ? flex * (p->col_widths[c] < 0 ? -p->col_widths[c] : 1) / weight : 0;
+    x[c] = pos;
+    w[c] = cw;
+    pos += cw + 1;
+  }
+  return nc;
+}
+
+const char *panel_text_at(struct panel *p, struct rect r, int y, int x) {
+  int row = p->top + (y - r.y - 2); /* below the bar and the column titles */
+  if (y - r.y < 2 || row < 0 || row >= p->nrows) return NULL;
+  const struct prow *pr = &p->rows[row];
+  if (pr->style == PSTYLE_HEAD || pr->style == PSTYLE_NOTE) return pr->ncells ? pr->cells[0] : NULL;
+  int cx[32], cw[32], nc = columns(p, r, cx, cw);
+  for (int c = 0; c < nc && c < pr->ncells; c++)
+    if (x >= cx[c] && x < cx[c] + cw[c]) return pr->cells[c];
+  return NULL;
+}
+
 static void draw(struct tui *t, void *state, struct rect r, int focused) {
   struct panel *p = state;
   struct ncplane *n = t->std;
@@ -346,21 +377,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
   if (r.h < 3 || p->ncols == 0) return;
 
-  /* column positions: fixed widths first, the rest shared by weight */
-  int x[32], w[32], nc = p->ncols < 32 ? p->ncols : 32;
-  int fixed = 0, weight = 0, avail = r.w - 2 - (nc - 1);
-  for (int c = 0; c < nc; c++) {
-    if (p->col_widths[c] > 0) fixed += p->col_widths[c];
-    else weight += p->col_widths[c] < 0 ? -p->col_widths[c] : 1;
-  }
-  int flex = avail - fixed > 0 ? avail - fixed : 0, pos = r.x + 1;
-  for (int c = 0; c < nc; c++) {
-    int cw = p->col_widths[c] > 0 ? p->col_widths[c]
-           : weight ? flex * (p->col_widths[c] < 0 ? -p->col_widths[c] : 1) / weight : 0;
-    x[c] = pos;
-    w[c] = cw;
-    pos += cw + 1;
-  }
+  int x[32], w[32], nc = columns(p, r, x, w);
 
   dr_style(n, theme.dim, C_DEFAULT, A_BOLD);
   for (int c = 0; c < nc; c++) dr_text(n, r.y + 1, x[c], w[c], p->col_titles[c]);

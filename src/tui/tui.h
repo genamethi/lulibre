@@ -260,6 +260,18 @@ void preview_toggle_graphic(struct tui *t);
  * is under way. */
 int preview_mouse(struct tui *t, void *state, int y, int x, int what);
 
+/* Is this cell in a preview's page text, where the preview does the selecting? */
+int preview_owns(void *state, int y, int x);
+
+/* select.c: selecting what is drawn on the screen, outside a preview's text.
+ * clip is the window (or line) the selection stays within; nd the window
+ * pressed in, when there is one. */
+void sel_press(struct tui *t, int y, int x, struct rect clip, struct node *nd);
+void sel_move(struct tui *t, int y, int x);
+void sel_release(struct tui *t, int y, int x);
+void sel_clear(struct tui *t);
+void sel_draw(struct tui *t); /* over the finished frame */
+
 /* clip.c: copy to, and paste from, the clipboard (tmux's inside tmux) */
 int clip_copy(const char *s, size_t n);
 char *clip_paste(void); /* malloc'd, or NULL when there is nothing */
@@ -323,6 +335,9 @@ void panel_set_cursor(struct panel *p, int row);
 int panel_key(struct tui *t, struct panel *p, uint32_t key);
 /* The mouse: a click on the panel's line `line` (0 is its bar), the wheel. */
 void panel_click(struct panel *p, int line);
+/* The whole text of the cell drawn at a screen position (r is the panel's
+ * window), or NULL where there is none. */
+const char *panel_text_at(struct panel *p, struct rect r, int y, int x);
 void panel_wheel(struct panel *p, int delta);
 
 /* ---------------------------------------------------------------- picker.c */
@@ -411,6 +426,15 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  struct {              /* text being selected on the screen (select.c) */
+    int on;             /* the button is down */
+    int active;         /* and the pointer has left the cell it went down on */
+    int shown;          /* a finished selection, highlighted until the next key or click */
+    int y0, x0, y1, x1; /* where it began, where it is now */
+    struct rect clip;
+    int clicks, click_y, click_x;
+    double click_at;
+  } sel;
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
   /* whoever asked to be told when the indexing run ends (tui_index) */

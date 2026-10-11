@@ -615,6 +615,12 @@ static void copy_selection(struct tui *t, struct pstate *ps) {
     tui_msg(t, 1, "selected, but the terminal did not take the copy; <C-v> still pastes it inside lulibre");
 }
 
+int preview_owns(void *state, int y, int x) {
+  struct pstate *ps = state;
+  return !ps->graphic && ps->text && ps->nwl > 0 && ps->body.h > 0 && y >= ps->body.y &&
+         y < ps->body.y + ps->body.h && x >= ps->body.x && x < ps->body.x + ps->body.w;
+}
+
 int preview_mouse(struct tui *t, void *state, int y, int x, int what) {
   struct pstate *ps = state;
   if (ps->graphic || !ps->text || ps->nwl == 0 || ps->body.h <= 0) {

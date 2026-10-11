@@ -383,6 +383,9 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
     case KEY_CTRL | 'v': /* paste what was last copied, as one line */
       prompt_paste(t);
       return;
+    case KEY_CTRL | 'y': /* copy the line as it stands */
+      if (*text && clip_copy(text, strlen(text))) tui_show_msg(t, 0, "copied the line");
+      return;
     case NCKEY_PGUP: /* the preview stays readable while a field is typed */
       preview_scroll(t, -8);
       return;
@@ -502,8 +505,13 @@ static void prompt_paste(struct tui *t) {
  * and copies. While a field is being typed the list and panels are left
  * alone, but the preview can still be scrolled and selected from, and the
  * middle or right button pastes. Overlays ignore the mouse. */
+/* The line of the screen a position is on, as a rectangle: what a selection
+ * begun outside any window (the status line, the line being typed) keeps to. */
+static struct rect line_at(const struct tui *t, int y) {
+  return (struct rect){y, 0, 1, t->cols_n};
+}
+
 static void on_mouse(struct tui *t, const struct ncinput *ni) {
-  if (t->help || t->mode == MODE_PICKER) return;
   int release = ni->evtype == NCTYPE_RELEASE;
   int wheel = ni->id == NCKEY_SCROLL_UP ? -3 : ni->id == NCKEY_SCROLL_DOWN ? 3 : 0;
   int left = ni->id == NCKEY_BUTTON1;
@@ -515,14 +523,30 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
       t->drag = NULL;
     return;
   }
+  /* and so does one selecting what is on the screen */
+  if (t->sel.on && (left || ni->id == NCKEY_MOTION)) {
+    if (release) sel_release(t, ni->y, ni->x);
+    else sel_move(t, ni->y, ni->x);
+    return;
+  }
   if (release || ni->id == NCKEY_MOTION) return;
+  sel_clear(t);
 
+  /* over an overlay the mouse only selects */
+  if (t->help || t->mode == MODE_PICKER) {
+    if (left) sel_press(t, ni->y, ni->x, (struct rect){0, 0, t->rows_n, t->cols_n}, NULL);
+    return;
+  }
   struct node *nd = wm_at(t, ni->y, ni->x);
+  struct rect clip = nd ? nd->r : line_at(t, ni->y);
   if (t->mode == MODE_PROMPT) {
     if (ni->id == NCKEY_BUTTON2 || ni->id == NCKEY_BUTTON3) prompt_paste(t);
     else if (nd && nd->cls == &view_preview && wheel) preview_scroll(t, wheel);
-    else if (nd && nd->cls == &view_preview && left && preview_mouse(t, nd->state, ni->y, ni->x, 0))
-      t->drag = nd->state;
+    else if (nd && nd->cls == &view_preview && left && preview_owns(nd->state, ni->y, ni->x)) {
+      if (preview_mouse(t, nd->state, ni->y, ni->x, 0)) t->drag = nd->state;
+    } else if (left) {
+      sel_press(t, ni->y, ni->x, clip, nd); /* from a panel's row, say, into the field */
+    }
     return;
   }
   if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
@@ -531,7 +555,12 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     else if (ni->x >= t->tab_x[1] && ni->x < t->tab_x[2]) tui_exec(t, "sync");
     return;
   }
-  if (!nd || (!wheel && !left)) return;
+  if (!nd) { /* the status line, the message line */
+    if (left) sel_press(t, ni->y, ni->x, clip, NULL);
+    return;
+  }
+  if (!wheel && !left) return;
+  int in_text = 0;
   if (nd->cls == &view_list) {
     int row = wheel ? t->rows.cur + wheel : t->rows.top + ni->y - nd->r.y - 1;
     if (wheel || (ni->y > nd->r.y && row < t->rows.n)) {
@@ -544,11 +573,15 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     else panel_click(nd->state, ni->y - nd->r.y);
   } else if (nd->cls == &view_preview) {
     if (wheel) preview_scroll(t, wheel);
-    else if (preview_mouse(t, nd->state, ni->y, ni->x, 0)) t->drag = nd->state;
+    else if ((in_text = preview_owns(nd->state, ni->y, ni->x)) && preview_mouse(t, nd->state, ni->y, ni->x, 0))
+      t->drag = nd->state;
   } else if (nd->cls == &view_console && wheel) {
     console_wheel(nd->state, wheel);
   }
-  if (!wheel) t->focus = nd;
+  if (!wheel) {
+    t->focus = nd;
+    if (!in_text) sel_press(t, ni->y, ni->x, clip, nd);
+  }
   tui_dirty(t);
 }
 
@@ -559,6 +592,7 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (ni->evtype == NCTYPE_RELEASE) return;
+  sel_clear(t); /* a selection is shown until the next key */
   if (ni->id == NCKEY_RESIZE) {
     unsigned y, x;
     notcurses_refresh(t->nc, &y, &x);
@@ -913,6 +947,7 @@ static void render(struct tui *t) {
     draw_bottom(t, t->rows_n - 1);
     if (t->help) draw_help(t);
     if (t->picker) picker_draw(t);
+    sel_draw(t);
   }
   dr_style(t->std, C_DEFAULT, C_DEFAULT, 0);
   notcurses_render(t->nc);
