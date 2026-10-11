@@ -40,6 +40,44 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
   lua_pop(L, 2);
 }
 
+/* ---- a binary run from its source tree ----
+ * build/lulibre finds its Lua files in the tree it was built in (below), so
+ * that a build can be tried without installing it. The files are read when
+ * they are first needed, which may be long after the program started; if
+ * the tree has been changed to another version meanwhile (another branch
+ * checked out), they no longer fit the binary and fail in ways that say
+ * nothing of the cause. src/version.h in the tree says which version the
+ * tree is now, so the mismatch can at least be named. */
+
+static char tree_root[4096]; /* the tree this binary runs from, or "" */
+
+const char *lstate_tree_mismatch(void) {
+  static char msg[768];
+  if (!tree_root[0]) return NULL;
+  char *path = xasprintf("%s/src/version.h", tree_root);
+  FILE *f = fopen(path, "r");
+  free(path);
+  if (!f) return NULL;
+  int major = -1, minor = -1, patch = -1;
+  char pre[64] = "", line[256];
+  while (fgets(line, sizeof line, f)) {
+    sscanf(line, "#define LULIBRE_VERSION_MAJOR %d", &major);
+    sscanf(line, "#define LULIBRE_VERSION_MINOR %d", &minor);
+    sscanf(line, "#define LULIBRE_VERSION_PATCH %d", &patch);
+    sscanf(line, "#define LULIBRE_VERSION_PRE \"%63[^\"]\"", pre);
+  }
+  fclose(f);
+  if (major < 0 || minor < 0 || patch < 0) return NULL;
+  char now[128];
+  snprintf(now, sizeof now, "%d.%d.%d%s", major, minor, patch, pre);
+  if (!strcmp(now, LULIBRE_VERSION)) return NULL;
+  snprintf(msg, sizeof msg,
+           "this lulibre is %s, but the source tree it runs from (%.200s) is now %s: its Lua files belong to that "
+           "version and may fail here. Quit, run make there, and start again; or run an installed lulibre.",
+           LULIBRE_VERSION, tree_root, now);
+  return msg;
+}
+
 /* Search order: the user's own modules, a source tree when running from one
  * (build/lulibre finds ./lua), the installed runtime, then the user's
  * luarocks tree so `luarocks install --local` rocks just work. */
@@ -59,6 +97,9 @@ static void setup_paths(lua_State *L) {
       if (access(tree, R_OK) != 0) {
         free(tree);
         tree = NULL;
+      } else {
+        char *up = strrchr(exe, '/'); /* exe is .../build: the tree is one up */
+        if (up && up > exe) snprintf(tree_root, sizeof tree_root, "%.*s", (int)(up - exe), exe);
       }
     }
   }
