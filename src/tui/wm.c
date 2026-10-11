@@ -255,6 +255,15 @@ void wm_undock(struct tui *t, void *state) {
   }
 }
 
+void wm_set_size(struct tui *t, void *state, float size) {
+  struct node *n = wm_leaf_of(t, state);
+  if (!n || !n->parent) return;
+  if (size < 0.1f) size = 0.1f;
+  if (size > 0.9f) size = 0.9f;
+  n->parent->ratio = n->parent->a == n ? size : 1.0f - size;
+  tui_dirty(t);
+}
+
 void wm_only(struct tui *t) {
   while (t->focus->parent) {
     /* close every other window: rotate focus to a sibling subtree and back */

@@ -68,7 +68,16 @@ the list and preview follow the cursor, so the title page is in view.
 | `e` on a shown field | edit it in the same pass; it becomes an accepted proposal |
 | `A` | accept everything at or above a confidence |
 | `R` | reject everything still pending |
+| `c` | propose blanking the field |
+| `p` | more preview: shrink the panel, and again to bring it back |
 | `w` | write the accepted ones as one batch |
+
+`:review FILTER` keeps the review to the books a filter matches
+(`:review author:unknown`); `w` then writes only theirs.
+
+While the cursor is in review, duplicates, orphans or capture, the preview's
+own keys still work: `P` for the page as an image, `]` `[` to turn pages,
+`J` `K` to scroll, as do the copying keys (`yy` ...). `?` lists them.
 
 Proposals are kept between sessions.
 
@@ -97,6 +106,10 @@ default), `s` skips a group, `m` marks the surplus, `f` filters the list to
 `is:dupe`, `D` removes the surplus. What a removed record knew that the kept
 one does not becomes proposals for the kept one.
 
+`e` opens the edit form for the book under the cursor and `r` the review of
+its proposals; the duplicates panel steps aside while they are open and
+comes back up to date. `p` gives the preview more room.
+
 ## Orphans: `go`
 
 | Found | Suggested |
@@ -106,7 +119,8 @@ one does not becomes proposals for the kept one.
 | a file in one of calibre's folders that calibre does not know | move it out, if a book already holds the same bytes |
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
-`Space` changes a row's action, `w` carries them out. `x` opens the row
+`Space` changes a row's action, `w` carries them out. `e` and `r` open the
+edit form and the review for the row's book, as in duplicates. `x` opens the row
 under the cursor to show what its columns cut short (the verdict in full,
 the whole path, where a link points); `X` opens every row. Removed records go to
 calibre's recycle bin (`u` brings them back); stray files are moved to

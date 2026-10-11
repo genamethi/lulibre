@@ -180,6 +180,21 @@ const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
   return NULL;
 }
 
+int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands) {
+  for (int i = 0; i < km->n; i++) {
+    const struct binding *b = &km->b[i];
+    if (!(b->modes & mode) || b->nkeys < 1 || !keys_match(km, b->keys, &key, 1)) continue;
+    size_t len = strcspn(b->command, " ");
+    for (const char *c = commands; *c;) {
+      size_t cl = strcspn(c, " ");
+      if (cl == len && !strncmp(c, b->command, len)) return 1;
+      c += cl;
+      while (*c == ' ') c++;
+    }
+  }
+  return 0;
+}
+
 void keymap_free(struct keymap *km) {
   for (int i = 0; i < km->n; i++) free(km->b[i].command);
   free(km->b);

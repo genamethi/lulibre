@@ -9,6 +9,7 @@ local orphans = require "lulibre.orphans"
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("orphans")
+local panels = require "lulibre.ui.panels"
 local SIGN = { keep = "", remove = "×", reattach = "↩", move = "→", add = "+", relink = "↩", unlink = "×" }
 local WORD = { keep = "keep", remove = "remove record", reattach = "re-attach file", move = "move out", add = "add as book",
   relink = "repair link", unlink = "delete link" }
@@ -87,19 +88,41 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("action", "expand", "write"), follow = true, height = 0.5,
+    title = title(), help = keys:hint("action", "expand", "edit", "write"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS,
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.5)
+  -- after something may have changed the books: read the records again, and
+  -- let go of those whose book is no longer there
+  local function refresh()
+    for i = #found.records, 1, -1 do
+      local fresh = lulibre.book(found.records[i].book.id)
+      if fresh then found.records[i].book = fresh else table.remove(found.records, i) end
+    end
+  end
 
   while true do
     local key, row = p:wait()
     if not key then return end
     local item = at[row]
+    -- the book the row stands for: the record's own, a stray file's twin, a link's target
+    local id = item and (type(item.book) == "table" and item.book.id or item.book or item.twin)
+    if type(id) == "table" then id = id.id end
     local act = keys:action(key)
     if act == "help" then
-      keys:show("orphans")
+      keys:show("orphans", panels.also())
+    elseif act == "peek" then
+      peek()
+    elseif act == "edit" or act == "review" then
+      if not id or not lulibre.book(id) then
+        lulibre.notify("this row has no book in the library to " .. act)
+      else
+        panels.over(p, require(act == "edit" and "lulibre.ui.edit" or "lulibre.ui.review").run, { ids = { id } })
+        refresh()
+      end
     elseif item and act == "action" then
       local i = 1
       for k, a in ipairs(item.actions) do

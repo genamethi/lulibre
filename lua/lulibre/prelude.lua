@@ -126,7 +126,8 @@ local function screen(module)
   return function(args) require(module).run(args) end
 end
 lulibre.command("edit", screen("lulibre.ui.edit"), "edit the selected books' fields, with suggestions")
-lulibre.command("review", screen("lulibre.ui.review"), "go through proposed changes and write the accepted ones")
+lulibre.command("review", screen("lulibre.ui.review"),
+  "[filter]  go through proposed changes and write the accepted ones; with a filter, only those books'")
 lulibre.command("capture", screen("lulibre.ui.capture"),
   "[pattern]  pull fields out of file names or titles: %author% - %title%")
 

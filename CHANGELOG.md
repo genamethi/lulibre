@@ -34,6 +34,17 @@ Added
   shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
   same.
 
+- From duplicates and orphans, `e` opens the edit form for the row's book
+  and `r` the review of its proposals; the panel steps aside meanwhile and
+  comes back up to date. `:review FILTER` reviews only the matching books.
+- With the cursor in review, duplicates, orphans or capture, the preview's
+  keys work (`P`, `]`, `[`, `J`, `K`), as do the copying keys and the
+  console's. `p` shrinks the panel to give the preview room.
+- A following panel shows its row's book in the preview even when the
+  list's filter leaves that book out.
+- Panels for scripts: `keys` and `pass`, `p:hide()`, `p:show()`,
+  `p:height()`; `lulibre.ui.edit` and `lulibre.ui.review` take `{ ids = }`.
+
 Changed
 - After duplicates or orphan records are removed, the message says plainly
   what was kept from them and where it went.

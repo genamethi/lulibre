@@ -22,6 +22,12 @@ struct panel {
   int nrows, cap;
   int cur, top, page;
   int follow, moves, pending_g;
+  float size; /* its share of the screen, and the edge it is docked on */
+  char side;
+  int hidden; /* taken off the screen for a while (panel_hide), not closed */
+  uint32_t *own; /* keys the script handles itself; the rest may pass to global bindings */
+  int nown;
+  char *pass; /* first words of the global commands that may be reached from here */
   panel_event_fn *event;
   void *event_ud;
 };
@@ -50,6 +56,8 @@ void panel_unref(struct panel *p) {
   free_cols(p);
   free(p->title);
   free(p->help);
+  free(p->own);
+  free(p->pass);
   free(p);
 }
 
@@ -61,6 +69,8 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->title = xstrdup("");
   p->help = xstrdup("");
   p->page = 10;
+  p->size = size;
+  p->side = side;
   wm_dock(t, &view_panel, p, size, side);
   return p;
 }
@@ -69,19 +79,78 @@ int panel_is_open(const struct panel *p) {
   return p->open;
 }
 
-void panel_close(struct panel *p) {
-  if (!p->open) return;
-  wm_undock(p->t, p); /* frees the window, which calls destroy() below */
-}
-
-/* The window is going away, by panel_close, <C-w>c, or at exit. */
-static void destroy(struct tui *t, void *state) {
-  struct panel *p = state;
+/* The panel is closed for good: say so, and drop the window's reference. */
+static void gone(struct panel *p) {
   p->open = 0;
   panel_event_fn *fn = p->event;
   p->event = NULL;
   if (fn) fn(p, NULL, -1, p->event_ud);
   panel_unref(p);
+}
+
+void panel_close(struct panel *p) {
+  if (!p->open) return;
+  if (p->hidden) { /* it has no window to close */
+    p->hidden = 0;
+    gone(p);
+    return;
+  }
+  wm_undock(p->t, p); /* frees the window, which calls destroy() below */
+}
+
+/* The window is going away, by panel_close, panel_hide, <C-w>c, or at exit. */
+static void destroy(struct tui *t, void *state) {
+  struct panel *p = state;
+  t->peek = 0;
+  if (!p->hidden) gone(p);
+}
+
+void panel_hide(struct panel *p) {
+  if (!p->open || p->hidden) return;
+  p->hidden = 1;
+  wm_undock(p->t, p);
+}
+
+static void follow(struct panel *p);
+
+void panel_show(struct panel *p) {
+  if (!p->open || !p->hidden) return;
+  p->hidden = 0;
+  wm_dock(p->t, &view_panel, p, p->size, p->side);
+  follow(p);
+}
+
+void panel_set_size(struct panel *p, float size) {
+  p->size = size;
+  if (p->open && !p->hidden) wm_set_size(p->t, p, size);
+}
+
+void panel_set_pass(struct panel *p, const char *commands) {
+  free(p->pass);
+  p->pass = commands && *commands ? xstrdup(commands) : NULL;
+}
+
+void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
+  free(p->own);
+  p->own = n > 0 ? xmalloc((size_t)n * sizeof *keys) : NULL;
+  if (n > 0) memcpy(p->own, keys, (size_t)n * sizeof *keys);
+  p->nown = n > 0 ? n : 0;
+}
+
+/* Is this key one that goes past the panel to a global binding? Only for a
+ * panel that has said which keys are its own, only for a key that is not,
+ * and only when it starts a binding to one of the commands let through. */
+int panel_passes(const struct panel *p, uint32_t key) {
+  if (!p->open || !p->pass || !p->nown) return 0;
+  switch (key) { /* the panel's movement, always its own */
+    case 'j': case 'k': case 'g': case 'G': case 'q': case NCKEY_ESC: case NCKEY_UP: case NCKEY_DOWN:
+    case NCKEY_HOME: case NCKEY_END: case NCKEY_PGUP: case NCKEY_PGDOWN:
+    case KEY_CTRL | 'd': case KEY_CTRL | 'u': case KEY_CTRL | 'f': case KEY_CTRL | 'b':
+      return 0;
+  }
+  for (int i = 0; i < p->nown; i++)
+    if (p->own[i] == key) return 0;
+  return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
 }
 
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud) {
@@ -142,9 +211,19 @@ int panel_cursor(const struct panel *p) {
 }
 
 static void follow(struct panel *p) {
-  if (!p->follow || !p->open || p->cur < 0 || p->cur >= p->nrows) return;
+  if (!p->follow || !p->open || p->hidden || p->cur < 0 || p->cur >= p->nrows) return;
+  struct tui *t = p->t;
   sqlite3_int64 id = p->rows[p->cur].id; /* negative for a file staged from the sync folder */
-  if (id != 0 && id != rows_current(p->t) && rows_goto_id(p->t, id)) preview_book_changed(p->t);
+  sqlite3_int64 was = t->peek;
+  t->peek = 0;
+  if (id != 0 && id != rows_current(t)) {
+    /* a book the list does not hold (the filter leaves it out) can still be
+     * looked at: the preview shows it without the list moving */
+    if (!rows_goto_id(t, id)) t->peek = id;
+    preview_book_changed(t);
+  } else if (was) {
+    preview_book_changed(t);
+  }
 }
 
 int panel_points_at(const struct panel *p, sqlite3_int64 *id) {
