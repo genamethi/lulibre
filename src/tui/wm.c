@@ -73,6 +73,7 @@ void wm_layout(struct tui *t, struct rect area) {
 static void draw(struct tui *t, struct node *n) {
   if (!n->split) {
     if (n->r.w > 0 && n->r.h > 0) n->cls->draw(t, n->state, n->r, n == t->focus);
+    else if (n->cls->hide) n->cls->hide(t, n->state); /* no room: take down what it left on screen */
     return;
   }
   draw(t, n->a);
@@ -192,6 +193,13 @@ void wm_close(struct tui *t) {
   close_node(t, t->focus);
 }
 
+/* Closing a window frees its node and its sibling's (the sibling's contents
+ * move up into their parent), so a node pointer held across a close may be
+ * dangling. This closes any leaf and leaves t->focus valid whatever it was. */
+void wm_close_leaf(struct tui *t, struct node *n) {
+  if (n && !n->split && n->parent) close_node(t, n);
+}
+
 /* Add a full-width window along the bottom showing an existing view state. */
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side) {
   struct node *leaf = xcalloc(1, sizeof *leaf);
@@ -230,7 +238,18 @@ void wm_undock(struct tui *t, void *state) {
         stack[n++] = x->b;
       }
     } else if (x->state == state) {
-      if (x->parent) close_node(t, x);
+      if (x->parent) {
+        close_node(t, x);
+      } else {
+        /* It is the only window left (:only was used on it). Its view still
+         * has to go, and a screen with no window is no use: the list takes
+         * its place. */
+        if (x->cls->destroy) x->cls->destroy(t, x->state);
+        x->cls = &view_list;
+        x->state = view_list.create(t);
+        t->focus = x;
+        tui_dirty(t);
+      }
       return;
     }
   }

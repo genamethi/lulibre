@@ -98,6 +98,12 @@ static void picker_free(struct picker *p) {
 
 void picker_open(struct tui *t, struct picker *p) {
   if (t->picker) picker_close(t); /* lets whoever was waiting on it know */
+  /* the picker takes the keyboard: a line being typed is given up first, so
+   * a script waiting on it hears so instead of waiting for ever */
+  if (t->mode == MODE_PROMPT) {
+    if (t->prompt == PROMPT_INPUT) tui_input_cancel(t);
+    else tui_prompt_cancel(t);
+  }
   t->picker = p;
   t->mode = MODE_PICKER;
   le_set(&p->query, "");

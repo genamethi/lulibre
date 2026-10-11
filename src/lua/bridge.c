@@ -225,12 +225,17 @@ void bridge_stop(struct app *app) {
   atomic_store(&B.running, 0);
   to_ui_cb(&B.to_ui);
   uv_close((uv_handle_t *)&B.to_ui, closed);
-  /* messages that arrived too late to run */
-  for (struct lua_msg *m = B.lua_head, *n; m; m = n) {
-    n = m->next;
+  /* Messages that arrived too late for the Lua thread. There is one thread
+   * again, which is how bridge_lua runs a message from here on, so they run
+   * now: each owns what it carries and is what frees it. */
+  for (;;) {
+    struct lua_msg *m = B.lua_head;
+    if (!m) break;
+    B.lua_head = m->next;
+    if (!B.lua_head) B.lua_tail = NULL;
+    m->fn(app, m->arg);
     free(m);
   }
-  B.lua_head = B.lua_tail = NULL;
   db_close(&B.ldb);
   app->ldb = NULL;
 }

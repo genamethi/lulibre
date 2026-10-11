@@ -206,6 +206,8 @@ void wm_layout(struct tui *t, struct rect area);
 void wm_draw(struct tui *t);
 int wm_split(struct tui *t, char dir, const char *view);
 void wm_close(struct tui *t);
+/* Close a given window; t->focus stays valid (see wm.c). */
+void wm_close_leaf(struct tui *t, struct node *n);
 void wm_only(struct tui *t);
 void wm_focus_next(struct tui *t, int delta);
 void wm_focus_dir(struct tui *t, char dir); /* h j k l */
@@ -381,6 +383,7 @@ void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial);
 /* Ask for a line of text; cb gets the answer, or NULL if cancelled. */
 void tui_input(struct tui *t, const char *label, const char *initial, input_fn *cb, void *ud);
 void tui_input_cancel(struct tui *t); /* as if the user pressed Esc */
+void tui_prompt_cancel(struct tui *t); /* the same for whatever the bottom line is taking */
 /* Offer completions for the input prompt just opened. Texts are copied.
  * With sep set (" & " for authors), the value is a list and completion
  * applies to its last item. Tab takes the highlighted one. */

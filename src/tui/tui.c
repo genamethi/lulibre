@@ -203,6 +203,9 @@ void tui_input(struct tui *t, const char *label, const char *initial, input_fn *
 }
 
 void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial) {
+  /* a question still open is answered "cancelled" before the line is reused,
+   * or whoever asked it would wait for ever */
+  if (t->prompt == PROMPT_INPUT && kind != PROMPT_INPUT) tui_input_cancel(t);
   t->prompt = kind;
   t->mode = MODE_PROMPT;
   le_set(&t->line, initial ? initial : "");
@@ -235,6 +238,14 @@ static void input_done(struct tui *t, const char *text) {
 
 void tui_input_cancel(struct tui *t) {
   if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
+}
+
+void tui_prompt_cancel(struct tui *t) {
+  if (t->mode != MODE_PROMPT) return;
+  if (t->prompt == PROMPT_FILTER && t->prompt_saved) rows_set_filter(t, t->prompt_saved);
+  if (t->prompt == PROMPT_SEARCH) rows_search_end(t, "", 0);
+  if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
+  else prompt_close(t);
 }
 
 static void history_add(struct tui *t, const char *line) {
@@ -288,10 +299,7 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       return;
     case NCKEY_ESC:
     case KEY_CTRL | 'c':
-      if (t->prompt == PROMPT_FILTER && t->prompt_saved) rows_set_filter(t, t->prompt_saved);
-      if (t->prompt == PROMPT_SEARCH) rows_search_end(t, "", 0);
-      if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
-      else prompt_close(t);
+      tui_prompt_cancel(t);
       return;
     case NCKEY_TAB:
       if (t->prompt == PROMPT_INPUT && t->nsugg_match) {
@@ -409,7 +417,8 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   /* a drag that began in a preview goes on wherever the pointer is */
   if (t->drag && (left || ni->id == NCKEY_MOTION)) {
     struct node *in = wm_leaf_of(t, t->drag);
-    if (!in || !preview_mouse(t, in->state, ni->y, ni->x, release ? 2 : 1)) t->drag = NULL;
+    if (!in || in->cls != &view_preview || !preview_mouse(t, in->state, ni->y, ni->x, release ? 2 : 1))
+      t->drag = NULL;
     return;
   }
   if (release || ni->id == NCKEY_MOTION) return;

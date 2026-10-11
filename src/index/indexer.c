@@ -150,6 +150,7 @@ static void after_cb(uv_work_t *req, int status) {
     ix->st.last_path = j->path;
     ix->st.last_error = j->info.error;
     if (ix->progress) ix->progress(ix, &ix->st, ix->ud);
+    ix->st.last_path = ix->st.last_error = NULL; /* they are the job's, freed next */
   }
   job_free(j);
   dispatch(ix);
@@ -226,7 +227,8 @@ static int plan(struct indexer *ix, char **err) {
     j->ix = ix;
     j->file = id;
     j->path = xstrdup(path);
-    j->format = xstrdup((const char *)sqlite3_column_text(st, 2));
+    const char *format = (const char *)sqlite3_column_text(st, 2);
+    j->format = xstrdup(format ? format : "");
     j->size = (long long)sb.st_size;
     j->mtime = (long long)sb.st_mtime;
     if (ix->njobs == cap) {

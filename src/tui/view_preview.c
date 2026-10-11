@@ -104,7 +104,8 @@ static void load_page(struct pstate *ps) {
     return;
   sqlite3_bind_int64(st, 1, ps->file);
   sqlite3_bind_int(st, 2, ps->page);
-  if (sqlite3_step(st) == SQLITE_ROW) ps->text = xstrdup((const char *)sqlite3_column_text(st, 0));
+  const char *text = sqlite3_step(st) == SQLITE_ROW ? (const char *)sqlite3_column_text(st, 0) : NULL;
+  if (text) ps->text = xstrdup(text);
   sqlite3_finalize(st);
 }
 
@@ -418,6 +419,7 @@ static void *create(struct tui *t) {
 
 static void destroy(struct tui *t, void *state) {
   struct pstate *ps = state;
+  if (t->drag == ps) t->drag = NULL; /* a drag under way ends with its window */
   if (t->nc) drop_plane(ps);
   ps->plane = NULL;
   if (ps->job_running) ps->dead = 1; /* freed when the job reports back */

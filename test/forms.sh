@@ -20,8 +20,7 @@ fi
   echo "forms: the luv rock is not installed for this Lua version, skipping"; exit 0; }
 
 t=$(mktemp -d)
-export TMUX_TMPDIR="$t"
-T="tmux -L forms"
+T="tmux -L lulibre-forms-$$"
 trap '$T kill-server 2>/dev/null; rm -rf "$t"' EXIT
 lib=$t/lib
 export XDG_DATA_HOME=$t/data XDG_CONFIG_HOME=$t/config

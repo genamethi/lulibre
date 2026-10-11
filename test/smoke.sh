@@ -146,9 +146,28 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t : ; $T send-keys -t t -l "echo after escape" ; $T send-keys -t t Enter
   shown "Escape still cancels"           "^after escape *$"
 
+  # closing a window must leave nothing pointing at it (a sanitizer build
+  # stops here if something does)
+  $T send-keys -t t : ; $T send-keys -t t -l "only" ; $T send-keys -t t Enter
+  $T send-keys -t t '`'
+  shown "the console opens beside the only window" "console  "
+  $T send-keys -t t '`' j
+  $T send-keys -t t : ; $T send-keys -t t -l "echo list alive" ; $T send-keys -t t Enter
+  shown "and closes without taking the list along" "^list alive *$"
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.spawn(function() lulibre.spawn(function() lulibre.sleep(200) lulibre.exec("prompt command") end) lulibre.notify("answer: " .. tostring(lulibre.input{prompt="question: "})) end)'
+  $T send-keys -t t Enter
+  shown "a script asks a question"   "^question:"
+  sleep 0.5
+  $T send-keys -t t Escape
+  shown "a question replaced by another prompt is answered" "^answer: nil"
+
   $T send-keys -t t g t
   shown "tui tree browser opens"     "browse  "
+  $T send-keys -t t : ; $T send-keys -t t -l "only" ; $T send-keys -t t Enter
+  sleep 0.3
   $T send-keys -t t q
+  i=0; while screen | grep -q "browse  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  shown "a panel closed as the only window gives way to the list" "Author  *Title"
   $T send-keys -t t q
   i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
