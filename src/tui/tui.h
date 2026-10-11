@@ -127,6 +127,7 @@ void le_free(struct lineedit *le);
 struct rows {
   sqlite3_int64 *ids;
   int n;
+  int total;         /* how many the source holds, filter or no filter */
   int cur, top;
   int anchor; /* visual mode anchor row, -1 when not selecting */
   char *filter;

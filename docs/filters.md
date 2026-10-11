@@ -15,6 +15,10 @@ One language, used by `lulibre query`, by `&` and `/` in the interface, and by
 
 Quote a value that contains spaces: `author:="Saunders Mac Lane"`.
 
+In the interface the status line shows the filter in force as `filter …`,
+with how many of the library's books it leaves; `<BS>` shows everything
+again.
+
 ## Fields
 
 | Field | Matches |

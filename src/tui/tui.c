@@ -649,8 +649,18 @@ static void draw_status(struct tui *t, int y) {
     dr_style(n, theme.error, theme.bar_bg, 0);
     dr_text(n, y, x + 1, avail, r->error ? r->error : r->search_error);
   } else if (r->filter && r->filter[0]) {
-    dr_style(n, C_DEFAULT, theme.bar_bg, 0);
-    dr_text(n, y, x + 1, avail, r->filter);
+    /* a narrowed list says so, and how to get everything back */
+    int end = x + 1 + avail, fx = x + 1;
+    dr_style(n, theme.warn, theme.bar_bg, A_BOLD);
+    fx += dr_text(n, y, fx, end - fx, "filter ");
+    dr_style(n, C_DEFAULT, theme.bar_bg, A_BOLD);
+    fx += dr_text(n, y, fx, end - fx, r->filter);
+    char *hint = xasprintf("   %d of %d   <BS> shows all", r->n, r->total);
+    if (!r->running && fx + dr_width(hint, strlen(hint)) <= end) {
+      dr_style(n, theme.dim, theme.bar_bg, 0);
+      dr_text(n, y, fx, end - fx, hint);
+    }
+    free(hint);
   } else {
     dr_style(n, theme.dim, theme.bar_bg, 0);
     dr_text(n, y, x + 1, avail, r->source ? "every file in the sync folder" : "all books");
