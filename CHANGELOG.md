@@ -10,6 +10,8 @@ Added
   author after it, degree, program, institution, year, advisor), following
   Choudhury et al., JCDL 2020. It needs no font information, so it also works
   on pages read by OCR.
+- `D` (`:sync drop`) takes staged files out of the sync folder without adding
+  them; they are kept aside and `u` puts them back.
 
 ## 0.1.0-alpha.2
 

@@ -240,6 +240,73 @@ function M.add(ids, opts)
   return out
 end
 
+-- ---- dropping: take a staged file out of the folder without adding it ----
+
+local function mkdir_p(dir)
+  local at = ""
+  for part in dir:gmatch("[^/]+") do
+    at = at .. "/" .. part
+    uv.fs_mkdir(at, 493)
+  end
+end
+
+local function move(from, to)
+  mkdir_p(to:match("^(.*)/[^/]*$"))
+  local ok, err = uv.fs_rename(from, to)
+  if not ok then -- another filesystem: copy, then delete
+    ok, err = uv.fs_copyfile(from, to)
+    if ok then ok, err = uv.fs_unlink(from) end
+  end
+  return ok, err
+end
+
+--- Drop staged files: each is moved out of the sync folder into a holding
+-- folder (dropped/ under lulibre's data directory) and forgotten, with what
+-- had been worked out for it. Journaled, so `u` puts the file and its staged
+-- metadata back. Returns { dropped=, failed = { "why", ... }, holding= }.
+function M.drop(ids)
+  local json = require "lulibre.json"
+  local dir = M.dir() or ""
+  local data = os.getenv("XDG_DATA_HOME") or ((os.getenv("HOME") or "") .. "/.local/share")
+  local holding = ("%s/lulibre/dropped/%s"):format(data, os.date("%Y%m%d-%H%M%S"))
+  local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
+  local out = { dropped = 0, failed = {}, holding = holding }
+  for _, id in ipairs(ids) do
+    local row = id < 0 and staged_row(id)
+    if row then
+      local rel = row.path:sub(1, #dir + 1) == dir .. "/" and row.path:sub(#dir + 2) or row.path:gsub("^.*/", "")
+      local held = holding .. "/" .. rel
+      local ok, err = move(row.path, held)
+      if ok then
+        row.held = held
+        lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label)
+          VALUES(?, ?, '(dropped)', ?, '', 'applied', ?, 'sync drop')]], batch, id, json.encode(row), os.time())
+        lulibre.store("DELETE FROM staged WHERE id = ?", -id)
+        pcall(lulibre.mark, id, false)
+        out.dropped = out.dropped + 1
+      else
+        table.insert(out.failed, rel .. ": " .. tostring(err))
+      end
+    end
+  end
+  lulibre.stage_refresh()
+  lulibre.reload()
+  return out
+end
+
+--- Put a dropped file back (what undo does with a "(dropped)" journal row):
+-- row is the staged record as drop() saved it. Returns true, or nil and why.
+function M.undrop(row)
+  if uv.fs_stat(row.path) then return nil, row.path .. " exists again; the dropped copy stays in " .. row.held end
+  local ok, err = move(row.held, row.path)
+  if not ok then return nil, tostring(err) end
+  lulibre.store([[INSERT OR REPLACE INTO staged(id, path, size, mtime, title, authors, tags, series, series_index,
+      publisher, pubdate, idents, languages, added, twin, note) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
+    row.id, row.path, row.size, row.mtime, row.title, row.authors, row.tags, row.series, row.series_index,
+    row.publisher, row.pubdate, row.idents, row.languages, row.added, row.twin, row.note)
+  return true
+end
+
 --- One line about what add() did.
 function M.summary(out)
   local parts = {}

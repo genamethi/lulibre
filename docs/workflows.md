@@ -117,6 +117,7 @@ edits are kept by lulibre; nothing reaches calibre until:
 |---|---|
 | `S` | add the selection to the library with its staged metadata; the files stay |
 | `X` | add, then delete each file from the folder once calibre holds the same bytes |
+| `D` | drop: take the selection out of the folder without adding it. The files are kept under `~/.local/share/lulibre/dropped/` and `u` puts them back |
 
 `=` marks a staged file the library already has. Adding it adds nothing;
 moving it only clears it out of the folder.
