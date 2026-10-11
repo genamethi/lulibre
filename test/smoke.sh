@@ -152,6 +152,29 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t q
   i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
+
+  # with a sync folder set, a tab line says which of the two the list shows
+  if "$bin" --clean -L "$lib" run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1; then
+    mkdir -p "$t/incoming"
+    printf 'A text file waiting to be added\n' > "$t/incoming/note.txt"
+    $T new-session -d -s t -x 120 -y 30 \
+      "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
+    shown "source tabs appear"           " 1  Library  2 "
+    shown "and name the sync folder"     " 2  Sync folder  0 "
+    $T send-keys -t t 2
+    shown "2 shows the sync folder"      " SYNC "
+    shown "which now holds the file"     " 2  Sync folder  1 "
+    shown "and lists it"                 "note"
+    $T send-keys -t t 1
+    shown "1 goes back to the library"   "all books"
+    $T send-keys -t t -l "$(printf '\033[<0;24;1M\033[<0;24;1m')"
+    shown "a click on the tab switches too" " SYNC "
+    $T send-keys -t t q
+    i=0; while [ ! -s "$t/rc2" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+    expect "and exits cleanly" 0 "$(cat "$t/rc2" 2>/dev/null)"
+  else
+    echo "skip  sync folder tabs (luv is not installed for this Lua version)"
+  fi
   $T kill-server 2>/dev/null || true
 else
   echo "skip  tui tests (tmux not found)"

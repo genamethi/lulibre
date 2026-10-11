@@ -420,6 +420,11 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
+  if (left && ni->y == 0 && t->app->cfg.sync_dir[0]) { /* a click on a source tab */
+    if (ni->x >= t->tab_x[0] && ni->x < t->tab_x[1]) tui_exec(t, "source library");
+    else if (ni->x >= t->tab_x[1] && ni->x < t->tab_x[2]) tui_exec(t, "sync");
+    return;
+  }
   if (!nd || (!wheel && !left)) return;
   if (nd->cls == &view_list) {
     int row = wheel ? t->rows.cur + wheel : t->rows.top + ni->y - nd->r.y - 1;
@@ -720,6 +725,51 @@ static void draw_help(struct tui *t) {
   }
 }
 
+/* ---- the source tabs: which of the library and the sync folder the list
+ * is showing, and how to get to the other. Shown once a sync folder is set. */
+
+static int count_books(struct tui *t, const char *where) {
+  sqlite3_stmt *st;
+  int n = 0;
+  char sql[96];
+  snprintf(sql, sizeof sql, "SELECT count(*) FROM books WHERE %s", where);
+  if (sqlite3_prepare_v2(t->app->db.h, sql, -1, &st, NULL) != SQLITE_OK) return 0;
+  if (sqlite3_step(st) == SQLITE_ROW) n = sqlite3_column_int(st, 0);
+  sqlite3_finalize(st);
+  return n;
+}
+
+static int tabs_shown(const struct tui *t) {
+  return t->app->cfg.sync_dir[0] != '\0';
+}
+
+static void draw_tabs(struct tui *t) {
+  struct ncplane *n = t->std;
+  dr_style(n, theme.dim, theme.bar_bg, 0);
+  dr_fill(n, 0, 0, t->cols_n);
+  char label[2][96];
+  snprintf(label[0], sizeof label[0], " 1  Library  %d ", count_books(t, "id > 0"));
+  snprintf(label[1], sizeof label[1], " 2  Sync folder  %d ", count_books(t, "id < 0"));
+  int x = 0;
+  for (int i = 0; i < 2; i++) {
+    int on = t->rows.source == i;
+    dr_style(n, on ? theme.on_accent : theme.bar_fg, on ? (i ? theme.ok : theme.accent) : theme.bar_bg,
+             on ? A_BOLD : 0);
+    t->tab_x[i] = x;
+    x += dr_text(n, 0, x, t->cols_n - x, label[i]);
+    t->tab_x[i + 1] = x;
+    dr_style(n, theme.border, theme.bar_bg, 0);
+    if (i == 0) x += dr_text(n, 0, x, t->cols_n - x, "│");
+  }
+  const char *hint = t->rows.source ? "S add   X add and remove   D drop   1 library"
+                                    : "2 shows what is waiting in the sync folder";
+  int hw = dr_width(hint, strlen(hint));
+  if (x + hw + 3 < t->cols_n) {
+    dr_style(n, theme.dim, theme.bar_bg, 0);
+    dr_text(n, 0, t->cols_n - hw - 1, hw, hint);
+  }
+}
+
 static void render(struct tui *t) {
   unsigned rows, cols;
   ncplane_dim_yx(t->std, &rows, &cols);
@@ -728,8 +778,10 @@ static void render(struct tui *t) {
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
   if (t->rows_n >= 4 && t->cols_n >= 20) {
-    wm_layout(t, (struct rect){0, 0, t->rows_n - 2, t->cols_n});
+    int top = tabs_shown(t) ? 1 : 0;
+    wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});
     wm_draw(t);
+    if (top) draw_tabs(t);
     draw_status(t, t->rows_n - 2);
     draw_bottom(t, t->rows_n - 1);
     if (t->help) draw_help(t);
