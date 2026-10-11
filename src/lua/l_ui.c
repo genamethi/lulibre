@@ -758,10 +758,9 @@ static void c_messages(struct tui *t, const char *args) {
 static void c_console(struct tui *t, const char *args) {
   struct node *open = wm_find(t, &view_console);
   if (open && open->cls == &view_console) {
-    struct node *back = t->focus == open ? NULL : t->focus;
-    t->focus = open;
-    wm_close(t);
-    if (back) t->focus = back;
+    /* not through t->focus: the focused node may be the one whose place the
+     * console's sibling takes, and would be freed under a saved pointer */
+    wm_close_leaf(t, open);
   } else {
     struct node *was = t->focus;
     wm_dock(t, &view_console, view_console.create(t), 0.3f, 'b');

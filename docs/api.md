@@ -154,7 +154,7 @@ across the whole width (a heading; text too long for a column). With `moves = tr
 | `lulibre.settings.info(name)` | `{ name=, value=, default=, type=, choices=, help= }` |
 | `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library= }` |
 | `lulibre.theme.name = "#rrggbb"` | colours; `lulibre.theme()` lists them |
-| `lulibre.version` | `"0.1.0-alpha"` |
+| `lulibre.version` | `"0.1.0-beta"` |
 | `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua= }` |
 
 The configuration directory is the option `config_dir`:

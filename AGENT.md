@@ -58,6 +58,19 @@ code.
 - luv belongs to the main Lua state. It is loaded once at startup; never
   arrange for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
+- A command acts on what the *focused* cursor shows. With a panel that
+  follows the list focused, that is the panel row's book, not the list's
+  cursor: once the two can differ (the book was removed, or filtered out)
+  the list's cursor is on a neighbour. `lulibre.selection()` settles this;
+  do not read the list's cursor directly for an action.
+- Closing a window frees its node *and its sibling's* (the sibling's
+  contents move up into the parent). Never keep a `struct node *` across a
+  close; `wm_close_leaf` closes a given window and keeps `t->focus` valid.
+  A view's state pointer kept elsewhere (`t->drag`) is checked against the
+  windows, class included, before every use.
+- Whatever takes over the bottom line or the keyboard (`tui_prompt`,
+  `picker_open`) first answers a question still open as cancelled. A script
+  waiting on an answer nobody can give any more waits for ever.
 - Lua code must run on 5.4 and 5.5: never assign to a `for` variable.
 - `src/core/log.h` includes the generated `<config.h>` with angle brackets,
   because `src/core/config.h` is the options header.
@@ -65,6 +78,10 @@ code.
 ## Verifying
 
 - `make check` always; `make e2e` before a merge that touches writing.
+  A change to a form (edit, review, duplicates, orphans) gets a keystroke
+  check in `test/forms.sh`.
+- A long tmux socket path fails ("File name too long"): name the private
+  server with `-L`, do not move its socket directory under a deep `mktemp`.
 - Thread or memory work: `./configure --sanitize=address,undefined` and
   `--sanitize=thread` in a scratch copy, then the same targets
   (`ASAN_OPTIONS=use_sigaltstack=0`).
