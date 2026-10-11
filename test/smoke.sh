@@ -254,6 +254,8 @@ if command -v tmux >/dev/null; then
 lulibre.o.leader = ","
 lulibre.map("n", "<Leader>e", "echo the leader works")
 lulibre.map("browse", "o", "open")
+lulibre.map("line", "<C-g>", "cancel")
+lulibre.map("panel", "<C-x>", "close")
 LUA
   $T new-session -d -s t -x 120 -y 30 \
     "XDG_DATA_HOME='$t/data' '$bin' -C '$t/conf3' -L '$lib'; echo \$? > '$t/rc3'"
@@ -268,7 +270,13 @@ LUA
   $T send-keys -t t "?"
   shown "? lists the screen's keys"        "KEYS HERE"
   shown "a remapped key first, with what it does" "o  l  .*open the branch"
-  $T send-keys -t t q q
+  $T send-keys -t t q C-x
+  i=0; while screen | grep -q "browse  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "a key put on the panels' close closes one" "" "$(screen | grep -o 'browse  ' | head -1)"
+  $T send-keys -t t : ; $T send-keys -t t -l "echo not this" ; $T send-keys -t t C-g
+  sleep 0.3
+  $T send-keys -t t : ; $T send-keys -t t -l "echo but this" ; $T send-keys -t t Enter
+  shown "a key put on the line's cancel cancels" "^but this *$"
   printf 'lulibre.map("n", "<Leader>e", "echo read again")\n' > "$t/conf3/init.lua"
   $T send-keys -t t , R
   shown "<Leader>R reads init.lua again"   "read .*init.lua again"
@@ -286,7 +294,7 @@ LUA
       "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
     shown "source tabs appear"           " 1  Library  2 "
     $T send-keys -t t : ; $T send-keys -t t Up
-    shown "history is kept between sessions" "^:lua lulibre.notify"
+    shown "history is kept between sessions" "^:echo but this"
     $T send-keys -t t Escape
     sleep 0.2
     shown "and name the sync folder"     " 2  Sync folder  0 "

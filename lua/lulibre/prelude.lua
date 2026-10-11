@@ -117,6 +117,8 @@ do
   function lulibre.map(modes, key, target, help)
     local screens = require "lulibre.ui.keys"
     if type(modes) == "string" and screens.has(modes) then return screens.set(modes, key, target) end
+    -- or of a place with keys of its own: "panel", "line", "picker", "pager", "console"
+    if type(modes) == "string" and #modes > 2 and lulibre._place_map(modes, key, target or "") then return end
     return map(modes, key, target, help)
   end
 end

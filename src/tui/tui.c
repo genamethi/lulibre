@@ -359,8 +359,9 @@ static void prompt_paste(struct tui *t);
 
 static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
   const char *text = t->line.text.s ? t->line.text.s : "";
-  switch (key) {
-    case NCKEY_ENTER: {
+  int action = ctx_feed(KC_LINE, NULL, key);
+  switch (action) {
+    case LA_ACCEPT: {
       char *line = xstrdup(text);
       enum prompt_kind kind = t->prompt;
       if (kind == PROMPT_INPUT) {
@@ -380,48 +381,49 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       free(line);
       return;
     }
-    case KEY_CTRL | 'v': /* paste what was last copied, as one line */
+    case LA_PASTE: /* what was last copied, as one line */
       prompt_paste(t);
       return;
-    case KEY_CTRL | 'y': /* copy the line as it stands */
+    case LA_COPY: /* the line as it stands */
       if (*text && clip_copy(text, strlen(text))) tui_show_msg(t, 0, "copied the line");
       return;
-    case NCKEY_PGUP: /* the preview stays readable while a field is typed */
+    case LA_PREVIEW_UP: /* the preview stays readable while a field is typed */
       preview_scroll(t, -8);
       return;
-    case NCKEY_PGDOWN:
+    case LA_PREVIEW_DOWN:
       preview_scroll(t, 8);
       return;
-    case NCKEY_ESC:
-    case KEY_CTRL | 'c':
+    case LA_CANCEL:
       tui_prompt_cancel(t);
       return;
-    case NCKEY_TAB:
+    case LA_COMPLETE:
       if (t->nsugg_match) {
         suggest_accept(t);
         prompt_changed(t);
       }
       return;
-    case KEY_CTRL | 'n':
-    case KEY_CTRL | 'p':
-    case NCKEY_UP:
-    case NCKEY_DOWN:
-      /* in a field the arrows walk the suggestions; at a command line they
-       * walk the history, and <C-n> <C-p> the completions */
-      if (t->nsugg_match && (t->prompt == PROMPT_INPUT || key == (KEY_CTRL | 'n') || key == (KEY_CTRL | 'p'))) {
-        int down = key == NCKEY_DOWN || key == (KEY_CTRL | 'n');
+    case LA_NEXT:
+    case LA_PREV:
+    case LA_UP:
+    case LA_DOWN: {
+      /* in a field up and down walk the suggestions; at a command line they
+       * walk the history, and next and prev the completions */
+      int stepping = action == LA_NEXT || action == LA_PREV;
+      if (t->nsugg_match && (t->prompt == PROMPT_INPUT || stepping)) {
+        int down = action == LA_DOWN || action == LA_NEXT;
         t->sugg_sel = (t->sugg_sel + (down ? 1 : t->nsugg_match - 1)) % t->nsugg_match;
         tui_dirty(t);
         return;
       }
-      if (key == NCKEY_UP || key == NCKEY_DOWN) {
-        history_step(t, key == NCKEY_UP ? -1 : 1);
+      if (!stepping) {
+        history_step(t, action == LA_UP ? -1 : 1);
         complete_refresh(t);
         suggest_rematch(t);
         tui_dirty(t);
       }
       return;
-    case NCKEY_BACKSPACE:
+    }
+    case LA_BACKSPACE:
       if (t->line.text.len == 0) {
         /* A field that has been emptied stays open: Enter then answers with
          * nothing, which is how a value is blanked. The other prompts are
@@ -457,12 +459,12 @@ static void prompt_changed(struct tui *t) {
 /* ----------------------------------------------------------------- input */
 
 static void help_key(struct tui *t, uint32_t key) {
-  switch (key) {
-    case 'j': case NCKEY_DOWN: t->help_scroll++; break;
-    case 'k': case NCKEY_UP: t->help_scroll--; break;
-    case KEY_CTRL | 'd': case NCKEY_PGDOWN: case ' ': t->help_scroll += 10; break;
-    case KEY_CTRL | 'u': case NCKEY_PGUP: t->help_scroll -= 10; break;
-    case 'g': t->help_scroll = 0; break;
+  switch (ctx_feed(KC_PAGER, NULL, key)) {
+    case GA_DOWN: t->help_scroll++; break;
+    case GA_UP: t->help_scroll--; break;
+    case GA_PAGE_DOWN: t->help_scroll += 10; break;
+    case GA_PAGE_UP: t->help_scroll -= 10; break;
+    case GA_TOP: t->help_scroll = 0; break;
     default:
       free(t->help);
       t->help = NULL;
@@ -1077,11 +1079,13 @@ void tui_setup(void) {
   done = 1;
   commands_builtin();
   keymap_defaults(&tui_keymap);
+  ctx_defaults();
 }
 
 void tui_teardown(void) {
   commands_free();
   keymap_free(&tui_keymap);
+  ctx_free();
 }
 
 static void closed(uv_handle_t *h) {

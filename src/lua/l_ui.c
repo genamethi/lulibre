@@ -212,6 +212,43 @@ static int l_maps_ui(lua_State *L) {
 }
 ON_UI(l_maps)
 
+/* lulibre._place_map(place, key, action): the binding of a key to an action
+ * of a place that has keys of its own ("panel", "line", "picker", "pager",
+ * "console"); false when there is no such place, so lulibre.map can look
+ * elsewhere. */
+static int l_place_map_ui(lua_State *L) {
+  const char *place = luaL_checkstring(L, 1);
+  if (ctx_named(place) < 0) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  char *err = NULL;
+  if (ctx_bind(place, luaL_checkstring(L, 2), luaL_optstring(L, 3, ""), &err)) {
+    lua_pushstring(L, err);
+    free(err);
+    return lua_error(L);
+  }
+  lua_pushboolean(L, 1);
+  return 1;
+}
+ON_UI(l_place_map)
+
+/* lulibre.place_keys(place): the keys of a place as lines of text, each
+ * "keys   what they do"; nil for no such place. */
+static int l_place_keys_ui(lua_State *L) {
+  int c = ctx_named(luaL_checkstring(L, 1));
+  if (c < 0) {
+    lua_pushnil(L);
+    return 1;
+  }
+  sbuf out = SBUF_INIT;
+  ctx_describe(c, &out, 0);
+  lua_pushstring(L, out.s ? out.s : "");
+  sb_free(&out);
+  return 1;
+}
+ON_UI(l_place_keys)
+
 static int l_exec_ui(lua_State *L) {
   tui_exec(need_tui(L), luaL_checkstring(L, 1));
   return 0;
@@ -781,6 +818,7 @@ static void c_lua(struct tui *t, const char *args) {
 static void keys_reset_ui(void *arg) {
   keymap_free(&tui_keymap);
   keymap_defaults(&tui_keymap);
+  ctx_defaults();
 }
 
 static void cli_again_ui(void *arg) {
@@ -928,7 +966,8 @@ void l_ui_open(lua_State *L) {
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
-    {"key", l_key},       {"maps", l_maps},       {NULL, NULL},
+    {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},
+    {"place_keys", l_place_keys}, {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
   lua_pushcfunction(L, l_print);

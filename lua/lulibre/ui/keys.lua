@@ -15,7 +15,9 @@
 --   keys:show("review")              --> the `?` overlay
 --
 -- Moving within a panel (j k gg G, paging) and closing it (q, Esc) are the
--- panel's own and are the same everywhere; they are not in these tables.
+-- same in every panel and are bound in one place, "panel" (src/tui/ctxkeys.c):
+-- lulibre.map("panel", "n", "down"). A panel's movement keys come before a
+-- screen's own, so a key bound to both moves.
 local M = {}
 
 -- screen -> list of { action, keys, label, what it does }. The first key of
@@ -200,7 +202,7 @@ function View:lines()
     local keys = {}
     for i, k in ipairs(s.keys[action]) do keys[i] = M.spoken(k) end
     if #keys > 0 and action ~= "help" then
-      out[#out + 1] = ("  %-16s %s"):format(table.concat(keys, "  "), s.about[action])
+      out[#out + 1] = ("  %-22s %s"):format(table.concat(keys, "  "), s.about[action])
     end
   end
   return out
@@ -212,13 +214,17 @@ function View:show(title, extra)
   local out = { "KEYS HERE" }
   for _, line in ipairs(self:lines()) do out[#out + 1] = line end
   out[#out + 1] = ""
-  out[#out + 1] = "MOVING"
-  out[#out + 1] = "  j  k  gg  G      up, down, top, bottom;  <C-d> <C-u> <C-f> <C-b> page"
-  out[#out + 1] = "  q  Esc           close"
-  out[#out + 1] = "  Tab  <C-w>…      the other windows;  : a command"
+  -- moving and closing are the same in every panel, and bound in one place
+  local first = true
+  for line in (lulibre.place_keys("panel") or ""):gmatch("[^\n]+") do
+    out[#out + 1] = first and "MOVING, IN ANY PANEL" or line
+    first = false
+  end
+  out[#out + 1] = ("  %-22s %s"):format("Tab  <C-w>…  :", "the other windows; a command")
   for _, line in ipairs(extra or {}) do out[#out + 1] = line end
   out[#out + 1] = ""
-  out[#out + 1] = ("These keys can be changed: lulibre.map(\"%s\", key, action) in init.lua."):format(self.screen)
+  out[#out + 1] = ("These keys can be changed in init.lua: lulibre.map(\"%s\", key, action) for this"):format(self.screen)
+  out[#out + 1] = "screen's, lulibre.map(\"panel\", key, action) for moving (down, up, top, bottom, close ...)."
   local actions = {}
   for _, action in ipairs(screens[self.screen].order) do
     if action ~= "help" then actions[#actions + 1] = action end

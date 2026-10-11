@@ -431,6 +431,10 @@ void command_help(struct tui *t) {
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }
+  for (int c = 0; c < KC_N; c++) {
+    sb_putc(&h, '\n');
+    ctx_describe(c, &h, 1);
+  }
   sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n");
   for (int i = 0; i < ncmds; i++) sb_printf(&h, "  %-10s %s\n", cmds[i].name, cmds[i].help);
   sb_puts(&h,
@@ -444,7 +448,8 @@ void command_help(struct tui *t) {
           "  -term negates;  or  starts an alternative;  sort:-added orders\n"
           "\nA command acts on the range being selected, else on the marked books in\n"
           "the list, else on the book under the cursor.\n"
-          "\nj/k scroll this help; q or Esc closes it.\n");
+          "\nEvery key here can be changed in init.lua with lulibre.map: a command line for\n"
+          "the keys at the top, an action name for the places listed after them.\n");
   tui_pager(t, "help", h.s);
   sb_free(&h);
 }

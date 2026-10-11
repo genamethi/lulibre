@@ -21,7 +21,8 @@ struct panel {
   struct prow *rows;
   int nrows, cap;
   int cur, top, page;
-  int follow, moves, reloads, pending_g;
+  int follow, moves, reloads;
+  uint32_t pending; /* the first key of a two-key binding such as gg */
   float size; /* its share of the screen, and the edge it is docked on */
   char side;
   int hidden; /* taken off the screen for a while (panel_hide), not closed */
@@ -142,12 +143,7 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
  * and only when it starts a binding to one of the commands let through. */
 int panel_passes(const struct panel *p, uint32_t key) {
   if (!p->open || !p->pass || !p->nown) return 0;
-  switch (key) { /* the panel's movement, always its own */
-    case 'j': case 'k': case 'g': case 'G': case 'q': case NCKEY_ESC: case NCKEY_UP: case NCKEY_DOWN:
-    case NCKEY_HOME: case NCKEY_END: case NCKEY_PGUP: case NCKEY_PGDOWN:
-    case KEY_CTRL | 'd': case KEY_CTRL | 'u': case KEY_CTRL | 'f': case KEY_CTRL | 'b':
-      return 0;
-  }
+  if (p->pending || ctx_bound(KC_PANEL, key)) return 0; /* the panel's movement, always its own */
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
@@ -258,21 +254,17 @@ void panels_reloaded(struct tui *t) {
   }
 }
 
-/* Returns 1 for a key that moves the cursor (and moves it), else 0. */
-static int motion(struct panel *p, uint32_t key, int was_g) {
-  switch (key) {
-    case 'j': case NCKEY_DOWN: panel_set_cursor(p, p->cur + 1); return 1;
-    case 'k': case NCKEY_UP: panel_set_cursor(p, p->cur - 1); return 1;
-    case 'G': case NCKEY_END: panel_set_cursor(p, p->nrows - 1); return 1;
-    case NCKEY_HOME: panel_set_cursor(p, 0); return 1;
-    case 'g':
-      if (was_g) panel_set_cursor(p, 0);
-      else p->pending_g = 1;
-      return 1;
-    case KEY_CTRL | 'd': panel_set_cursor(p, p->cur + p->page / 2 + 1); return 1;
-    case KEY_CTRL | 'u': panel_set_cursor(p, p->cur - p->page / 2 - 1); return 1;
-    case KEY_CTRL | 'f': case NCKEY_PGDOWN: panel_set_cursor(p, p->cur + p->page); return 1;
-    case KEY_CTRL | 'b': case NCKEY_PGUP: panel_set_cursor(p, p->cur - p->page); return 1;
+/* Returns 1 for an action that moves the cursor (and moves it), else 0. */
+static int motion(struct panel *p, int action) {
+  switch (action) {
+    case PA_DOWN: panel_set_cursor(p, p->cur + 1); return 1;
+    case PA_UP: panel_set_cursor(p, p->cur - 1); return 1;
+    case PA_BOTTOM: panel_set_cursor(p, p->nrows - 1); return 1;
+    case PA_TOP: panel_set_cursor(p, 0); return 1;
+    case PA_HALF_DOWN: panel_set_cursor(p, p->cur + p->page / 2 + 1); return 1;
+    case PA_HALF_UP: panel_set_cursor(p, p->cur - p->page / 2 - 1); return 1;
+    case PA_PAGE_DOWN: panel_set_cursor(p, p->cur + p->page); return 1;
+    case PA_PAGE_UP: panel_set_cursor(p, p->cur - p->page); return 1;
   }
   return 0;
 }
@@ -295,17 +287,18 @@ void panel_wheel(struct panel *p, int delta) {
 }
 
 int panel_key(struct tui *t, struct panel *p, uint32_t key) {
-  int was_g = p->pending_g, before = p->cur;
-  p->pending_g = 0;
-  if (motion(p, key, was_g)) {
+  int before = p->cur;
+  int action = ctx_feed(KC_PANEL, &p->pending, key);
+  if (action == CTX_PENDING) return 1; /* the first key of a pair such as gg */
+  if (motion(p, action)) {
     moved(p, before);
     return 1;
   }
+  if (action == PA_CLOSE) {
+    panel_close(p);
+    return 1;
+  }
   switch (key) {
-    case 'q':
-    case NCKEY_ESC:
-      panel_close(p);
-      return 1;
     /* these stay global, so the list and preview remain reachable */
     case NCKEY_TAB:
     case ':':

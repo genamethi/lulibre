@@ -123,6 +123,35 @@ extern struct keymap tui_keymap;
 /* Register the built-in commands and keys; safe to call more than once. */
 void tui_setup(void);
 
+/* -------------------------------------------------------------- ctxkeys.c */
+
+/* Keys that belong to a place: each place has named actions, and its code
+ * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_N };
+enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE };
+enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PREV, LA_UP, LA_DOWN,
+       LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
+       LA_KILL_START, LA_KILL_END, LA_KILL_WORD };
+enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
+enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP };
+enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
+       CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
+#define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
+
+void ctx_defaults(void);
+void ctx_free(void);
+int ctx_named(const char *name); /* a place's number, or -1 */
+/* Put a key (one, or two in a row) on an action; an empty action unbinds. */
+int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
+/* The action a key means: 0 for none, CTX_PENDING while a pair is open.
+ * pending holds the first key of a pair between calls; NULL where pairs are
+ * not wanted. */
+int ctx_feed(int ctx, uint32_t *pending, uint32_t key);
+int ctx_bound(int ctx, uint32_t key); /* does any binding there begin with it? */
+int ctx_key_of(int ctx, int action, sbuf *out);
+const char *ctx_hint(int ctx, int action); /* for a hint: "" when unbound; good for eight calls */
+void ctx_describe(int ctx, sbuf *out, int names);
+
 /* -------------------------------------------------------------- cmdline.c */
 
 struct lineedit {
