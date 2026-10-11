@@ -138,8 +138,31 @@ lulibre.map("review", "a", "")         -- a no longer does anything in review
 ```
 
 The panels are `edit`, `review`, `dupes`, `orphans`, `capture` and `browse`.
-Moving and closing (`j k gg G q Esc`) are the same in every panel and are
-not configurable, nor are the keys of the line being typed or of a picker.
+
+## Keys that belong to a place
+
+Moving inside a panel, editing the line being typed, the picker, an overlay
+and the console each have keys of their own, with named actions, bound the
+same way:
+
+```lua
+lulibre.map("panel", "n", "down")        -- n moves down in every panel
+lulibre.map("line", "<C-g>", "cancel")   -- <C-g> leaves the line being typed
+lulibre.map("console", "x", "close")
+lulibre.map("line", "<C-k>", "")         -- unbind
+```
+
+| Place | Actions |
+|---|---|
+| `panel` | `down` `up` `top` `bottom` `half-down` `half-up` `page-down` `page-up` `close` |
+| `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` |
+| `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
+| `pager` | `down` `up` `page-down` `page-up` `top` (any other key closes it) |
+| `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
+
+A binding here is one key, or two in a row (`gg`). `?` lists every place
+with its actions and the keys they are on. In a panel, movement keys come
+before the panel's own: a key bound to both moves.
 
 ## The leader key
 

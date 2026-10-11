@@ -62,8 +62,12 @@ code.
   key table (`lua/lulibre/ui/keys.lua`) which action the key means, and its
   hint and `?` help are written from that table. A new action goes into the
   table with a label and a description.
+- C code for a place with keys of its own (a panel's movement, the line
+  editor, picker, pager, console) never compares a key with a constant
+  either: it asks `ctx_feed(KC_..., &pending, key)` for the action
+  (`src/tui/ctxkeys.c`; the enums in `tui.h` follow the tables there).
 - Nothing shown to the user names a key literally: C uses `key_hint("the
-  command")`, Lua `lulibre.hint("the command")`, a screen `keys:key(action)`.
+  command")` or `ctx_hint(place, action)`, Lua `lulibre.hint("the command")`, a screen `keys:key(action)`.
   The user rebinds keys and expects what is on screen to say so.
 - A command acts on what the *focused* cursor shows. With a panel that
   follows the list focused, that is the panel row's book, not the list's

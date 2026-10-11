@@ -558,6 +558,15 @@ do
   eq("or the command, for a hint", { lulibre.hint("undo"), lulibre.hint("index") }, { "u", ":index" })
   lulibre.map("n", "gU", "undo")
   eq("a later binding is the one named", lulibre.key("undo"), "gU")
+  -- places with keys of their own: a panel's movement, the line being typed ...
+  lulibre.map("panel", "n", "down")
+  eq("a place's key can be added", lulibre.place_keys("panel"):find("j  <Down>  n +down a row") ~= nil, true)
+  lulibre.map("panel", "n", "")
+  eq("and taken away", lulibre.place_keys("panel"):find("j  <Down> +down a row") ~= nil, true)
+  lulibre.map("console", "gt", "top")
+  eq("two keys in a row are allowed", lulibre.place_keys("console"):find("gg  gt +the oldest entry") ~= nil, true)
+  eq("an unknown action of a place is refused", (pcall(lulibre.map, "line", "<C-g>", "nosuch")), false)
+  eq("no such place", lulibre.place_keys("nowhere"), nil)
   lulibre.map("n", "<Leader>z", "echo led")
   local found
   for _, m in ipairs(lulibre.maps()) do

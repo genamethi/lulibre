@@ -52,37 +52,32 @@ void le_insert(struct lineedit *le, const char *s, size_t n) {
 
 int le_key(struct lineedit *le, uint32_t key, const struct ncinput *ni) {
   if (!le->text.s) sb_putn(&le->text, "", 0);
-  switch (key) {
-    case NCKEY_BACKSPACE:
-    case KEY_CTRL | 'h':
+  switch (ctx_feed(KC_LINE, NULL, key)) {
+    case LA_BACKSPACE:
       erase(le, prev_cp(le, le->cur), le->cur);
       return 1;
-    case NCKEY_DEL:
+    case LA_DELETE:
       erase(le, le->cur, next_cp(le, le->cur));
       return 1;
-    case NCKEY_LEFT:
-    case KEY_CTRL | 'b':
+    case LA_LEFT:
       le->cur = prev_cp(le, le->cur);
       return 1;
-    case NCKEY_RIGHT:
-    case KEY_CTRL | 'f':
+    case LA_RIGHT:
       le->cur = next_cp(le, le->cur);
       return 1;
-    case NCKEY_HOME:
-    case KEY_CTRL | 'a':
+    case LA_HOME:
       le->cur = 0;
       return 1;
-    case NCKEY_END:
-    case KEY_CTRL | 'e':
+    case LA_END:
       le->cur = le->text.len;
       return 1;
-    case KEY_CTRL | 'u':
+    case LA_KILL_START:
       erase(le, 0, le->cur);
       return 1;
-    case KEY_CTRL | 'k':
+    case LA_KILL_END:
       erase(le, le->cur, le->text.len);
       return 1;
-    case KEY_CTRL | 'w': {
+    case LA_KILL_WORD: {
       size_t i = le->cur;
       while (i > 0 && le->text.s[i - 1] == ' ') i--;
       while (i > 0 && le->text.s[i - 1] != ' ') i--;

@@ -12,11 +12,11 @@ function M.also()
   return {
     "",
     "ALSO HERE, as in the list",
-    ("  %-16s %s"):format(lulibre.hint("preview graphic"), "the page as an image, or as text again"),
-    ("  %-16s %s"):format(lulibre.hint("preview page +1") .. "  " .. lulibre.hint("preview page -1"), "next and previous page"),
-    ("  %-16s %s"):format(lulibre.hint("preview scroll +3") .. "  " .. lulibre.hint("preview scroll -3"), "scroll the preview"),
-    ("  %-16s %s"):format(lulibre.hint("yank title"), "copy the title (and the other copying keys)"),
-    ("  %-16s %s"):format(lulibre.hint("console"), "the log console"),
+    ("  %-22s %s"):format(lulibre.hint("preview graphic"), "the page as an image, or as text again"),
+    ("  %-22s %s"):format(lulibre.hint("preview page +1") .. "  " .. lulibre.hint("preview page -1"), "next and previous page"),
+    ("  %-22s %s"):format(lulibre.hint("preview scroll +3") .. "  " .. lulibre.hint("preview scroll -3"), "scroll the preview"),
+    ("  %-22s %s"):format(lulibre.hint("yank title"), "copy the title (and the other copying keys)"),
+    ("  %-22s %s"):format(lulibre.hint("console"), "the log console"),
   }
 end
 

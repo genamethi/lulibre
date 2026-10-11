@@ -26,6 +26,10 @@ Added
 - Every panel's keys can be changed: `lulibre.map("review", "y", "accept")`.
   The title bar shows a panel's main keys and `?` lists them all, both
   written from the keys in force.
+- The remaining fixed keys can be changed too: moving inside a panel and
+  closing it, editing the line being typed, the picker, overlays and the
+  console each have named actions, bound with `lulibre.map("panel", "n",
+  "down")`. `?` lists them all with their keys.
 - `c` clears a field in the edit form and in review. In the edit form `x`,
   which dropped the pending change, is now called revert.
 - `<Leader>` in key bindings, set by the option `leader` (default `\`).
