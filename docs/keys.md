@@ -38,7 +38,9 @@
 | `<C-w>h` `j` `k` `l` | window in that direction |
 | `<C-w>v` `<C-w>s` | split with another preview, side by side or stacked |
 | `<C-w>c` `<C-w>o` | close this window · close the others |
-| `<C-w>>` `<C-w><` | resize |
+| `<M-Left>` `<M-Right>` `<M-Up>` `<M-Down>` | move the line beside the focused window that way (`:resize left` ...) |
+| `<Leader>` then an arrow | the same |
+| `<C-w>>` `<C-w><` | grow or shrink the focused window |
 | `` ` `` | the log console, without moving the focus |
 
 ## The mouse
@@ -51,6 +53,8 @@
 | double click · triple click there | the word · the line |
 | drag anywhere else | select what is drawn there: a row of the list, a cell of review, the line being typed, the status line, a help or message overlay |
 | double click · triple click there | the word · the row; in a panel, the whole of the cell, including what its column cut off |
+| drag the line between two windows | resize them |
+| drag a window's bar up or down | resize it against the window above (the review panel against the list) |
 | middle or right click, while typing | paste |
 
 A selection stays within the window (or line) it began in. It is copied at
