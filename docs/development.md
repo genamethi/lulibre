@@ -32,7 +32,7 @@ Semantic versioning. The version is written once, in `src/version.h`:
 #define LULIBRE_VERSION_MAJOR 0
 #define LULIBRE_VERSION_MINOR 1
 #define LULIBRE_VERSION_PATCH 0
-#define LULIBRE_VERSION_PRE "-alpha"     /* "-beta", "-rc.1", "" for a release */
+#define LULIBRE_VERSION_PRE "-beta"      /* "-rc.1", "" for a release */
 ```
 
 configure reads it, refuses anything that is not a semantic version, and
