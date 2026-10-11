@@ -34,6 +34,13 @@ Added
   shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
   same.
 
+- Title case, after the APA manual. `gT` (`:titlecase`) rewrites the
+  selected titles that are in CAPITALS; `t` does it for a field in the edit
+  form and in review; titles proposed from files and `.bib` records arrive
+  in title case when they were found in capitals (option `title_case`).
+  `is:capstitle` filters for titles in capitals. For scripts:
+  `lulibre.titlecase`, and `lulibre.lower` / `lulibre.upper`, which know
+  accented, Greek and Cyrillic letters.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

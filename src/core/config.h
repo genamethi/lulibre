@@ -21,6 +21,7 @@ struct config {
   int review_open;     /* 1: the review screen starts with every book opened up */
   char *leader;        /* the key <Leader> stands for in key bindings */
   char *review_sort;   /* confidence | id: the order of books in review */
+  char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *server;        /* calibre content server URL, used for writes */
   char *user;
   char *password_file;

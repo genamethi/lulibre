@@ -275,6 +275,12 @@ function M.run(args)
       if v then answer(v) end
     elseif item and not item.heading and act == "clear" then
       answer("")
+    elseif item and not item.heading and act == "titlecase" then
+      local book = lulibre.book(item.book)
+      local was = pr and pr.value or book and edit.current(book, item.field) or ""
+      local to = require("lulibre.titlecase").apply(was)
+      if was == "" or to == was then lulibre.notify((pr and pr.field or item.field) .. " is in title case already")
+      else answer(to) end
     elseif act == "accept_above" then
       local v = lulibre.input { prompt = "accept every pending proposal with confidence at least: ", default = "0.8" }
       local floor = tonumber(v or "")

@@ -190,6 +190,36 @@ lulibre.command("orphans", screen("lulibre.ui.orphans"),
 lulibre.command("browse", function(args) require("lulibre.ui.browse").run(args) end,
   "[author | subject | series | publisher | year | format | added]  the library as a tree")
 
+--- A title in title case (APA style); see lulibre.titlecase.
+function lulibre.titlecase(s)
+  return require("lulibre.titlecase").apply(s)
+end
+
+lulibre.command("titlecase", function(args)
+  local tc, edit = require "lulibre.titlecase", require "lulibre.edit"
+  local every = args == "all"
+  local changes, skipped = {}, 0
+  for _, id in ipairs(lulibre.selection()) do
+    local book = lulibre.book(id)
+    local title = book and book.title or ""
+    if every or tc.is_caps(title) then
+      local to = tc.apply(title)
+      if to ~= title then changes[#changes + 1] = { id = id, field = "title", value = to } end
+    elseif title ~= "" then
+      skipped = skipped + 1
+    end
+  end
+  if #changes == 0 then
+    lulibre.notify(skipped > 0
+      and ("%s not in capitals; :titlecase all applies the style to any title"):format(
+        skipped == 1 and "the title is" or skipped .. " titles are")
+      or "nothing to change: the titles are in title case already")
+    return
+  end
+  local r = edit.apply(changes, { label = "title case" })
+  lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+end, "[all]  put the selected books' titles in title case: those in CAPITALS, or with all, every one")
+
 lulibre.command("remove", function()
   local ids = lulibre.selection()
   if #ids == 0 then return end

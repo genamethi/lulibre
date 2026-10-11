@@ -20,6 +20,7 @@ A form with one row per field for the selected book or books.
 | `Space` | step through what the file itself and related books suggest |
 | `a` | fill every empty field with the best suggestion from the file |
 | `c` | clear: blank the field |
+| `t` | title case |
 | `x` | revert: forget the change pending for the field |
 | `w` | write |
 | `?` | every key of the form |
@@ -41,6 +42,36 @@ flattened to one line. This works while the field is open, and `<PageUp>` /
 
 Inside tmux the copy is a tmux paste buffer as well, so text copied in
 another pane pastes the same way.
+
+## Title case: `gT`
+
+A title set in CAPITALS is rewritten in title case, after the APA manual:
+the first word of the title and of a subtitle is capitalised, so is every
+major word and every word of four letters or more, and articles, short
+conjunctions and short prepositions stay small.
+
+    ON THE THEORY OF GROUPS: AN INTRODUCTION
+    On the Theory of Groups: An Introduction
+
+- `gT` (`:titlecase`) does it for the selection, leaving alone titles that
+  are not in capitals; `:titlecase all` applies the style to any title.
+  `&is:capstitle` lists the titles in capitals.
+- `t` in the edit form and in review does it for the value under the cursor.
+- Proposals do it by themselves: a title found in capitals on a title page,
+  in a file's own metadata or in a `.bib` file is proposed in title case.
+  `title_case = "never"` proposes titles as found.
+
+Capitals carry no case to go by, so some of it is guessed: Roman numerals,
+words with a digit, short words without a vowel (NMR) and a list of known
+spellings (PDE, LaTeX, USA) are kept. The rules are English; both lists can
+be added to in `init.lua`:
+
+```lua
+local tc = require "lulibre.titlecase"
+tc.minor["with"] = true      -- APA capitalises "With"; this keeps it small
+tc.minor["de"] = true        -- for French titles
+tc.keep["cw"] = "CW"
+```
 
 ## Proposals and review: `gr`
 
@@ -76,6 +107,7 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `A` | accept everything at or above a confidence |
 | `R` | reject everything still pending |
 | `c` | propose blanking the field |
+| `t` | put the value in title case, and accept that |
 | `s` | sort: surest first, or by id |
 | `p` | more preview: shrink the panel, and again to bring it back |
 | `w` | write the accepted ones as one batch |

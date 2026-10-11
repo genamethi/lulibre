@@ -98,6 +98,15 @@ function M.run(args)
         new[field] = picks[at[field]].text
         from[field] = ("%d/%d  %s"):format(at[field], #picks, picks[at[field]].detail or "")
       end
+    elseif field and act == "titlecase" then
+      local was = new[field] or now(field)
+      if not was or was == "" then
+        lulibre.notify(was and (field .. " is empty") or "the books differ here: type a value first")
+      else
+        local to = require("lulibre.titlecase").apply(was)
+        if to == was then lulibre.notify(field .. " is in title case already")
+        else new[field], from[field], at[field] = to, "title case", nil end
+      end
     elseif field and act == "revert" then
       new[field], from[field], at[field] = nil, nil, nil
     elseif field and act == "clear" then
