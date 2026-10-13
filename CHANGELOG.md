@@ -117,6 +117,17 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- An article's publisher is its journal, after the house behind it where
+  that is known: `Elsevier: Journal of Algebra`. Read from a journal's
+  heading and from CrossRef's and OpenAlex's records; houses are written one
+  way (`layouts.house`), archives such as JSTOR are not named.
+- `:arxiv-fetch` fetches arXiv's snapshot from Kaggle into the data folder,
+  running Kaggle's program through pixi; not again within a week unless
+  forced.
+- `:enrich` paces each service by its published policy, read and linked in
+  `net.lua` (Open Library two seconds, zbMATH three), waits longer after a
+  slow answer, and no longer sends `contact_email` to OpenAlex, which has no
+  use for it.
 - The publisher from the copyright line ("© Springer-Verlag Berlin
   Heidelberg 1999", "Copyright © 1984 by McGraw-Hill, Inc."), written one
   way per house (`layouts.houses`); an author's own copyright names none.

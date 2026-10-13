@@ -184,6 +184,8 @@ lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page image
 lulibre.command("enrich", script("enrich"),
   "[--offline] [--titles] [filter]  look books up by their identifiers (arXiv, CrossRef, zbMATH, Open Library); proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
+lulibre.command("arxiv-fetch", script("arxiv-fetch"),
+  "[--force]  fetch arXiv's snapshot of its records from Kaggle (through pixi), for :enrich to read instead of asking arXiv")
 lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")

@@ -28,8 +28,8 @@
 --   net.offline = true                -- answer from what is kept, or not at all
 --
 -- The option contact_email, when set, is sent with each request (in the
--- User-Agent, and as CrossRef's and OpenAlex's `mailto`): they give steadier
--- service to callers they can reach. It is empty unless you set it.
+-- User-Agent, and as CrossRef's `mailto`): CrossRef and Open Library give
+-- more room to callers they can reach. It is empty unless you set it.
 local detex = require "lulibre.detex"
 local json = require "lulibre.json"
 local taxonomy = require "lulibre.taxonomy"
@@ -37,11 +37,20 @@ local taxonomy = require "lulibre.taxonomy"
 local M = {}
 
 -- Seconds between two requests to one service, counted from the end of one
--- to the start of the next; one request at a time. arXiv's terms of use for
--- its API say "make no more than one request every three seconds, and limit
--- requests to a single connection at a time"; the others allow more than
--- this, and a library is in no hurry.
-M.PACE = { arxiv = 5, crossref = 1, zbmath = 1, openlibrary = 1, openalex = 1 }
+-- to the start of the next; one request at a time. Each is well inside what
+-- the service asks of callers who do not identify themselves:
+--   arXiv         "no more than one request every three seconds", "a single connection at a time"
+--                 (https://info.arxiv.org/help/api/tou.html)
+--   CrossRef      public pool: 5 requests a second, one at a time; "Back off if the response times start to increase"
+--                 (https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/)
+--   Open Library  "1 request per second" unidentified; "do not use our APIs to bulk download metadata"
+--                 (https://openlibrary.org/developers/api)
+--   OpenAlex      10 requests a second without a key, and a daily budget
+--                 (https://help.openalex.org/how-to-use-the-api/rate-limits-and-authentication)
+--   zbMATH Open   its terms could not be read when this was written; asked as slowly as arXiv allows
+-- A request that was slow to be answered is followed by a pause as long as
+-- it took, so that a service under load is asked less.
+M.PACE = { arxiv = 5, crossref = 1, zbmath = 3, openlibrary = 2, openalex = 1 }
 
 -- A service that answers "too many requests" (HTTP 429) or "unavailable"
 -- (503) is not asked again for this many seconds, or for as long as it says
@@ -93,7 +102,7 @@ local function mark(key)
   return row and tonumber(row.value)
 end
 
-local last, busy = {}, {}
+local last, busy, took = {}, {}, {}
 
 local function monotonic()
   local ok, uv = pcall(require, "luv")
@@ -107,7 +116,8 @@ end
 local function turn(service)
   while busy[service] do lulibre.sleep(50) end
   busy[service] = true
-  local pace = M.PACE[service] or 1
+  -- no sooner than the pace, nor sooner than the last answer took to come
+  local pace = math.min(60, math.max(M.PACE[service] or 1, took[service] or 0))
   local wait = (last[service] or -math.huge) + pace - monotonic()
   local elsewhere = mark("net.last." .. service)
   -- the clock on the wall counts in whole seconds: allow one more
@@ -148,7 +158,9 @@ function M.request(service, url)
   local till = M.held(service)
   if till then return nil, paused(service, till) end
   turn(service)
+  local began = monotonic()
   local ok, body, status, after = pcall(M.get, url)
+  took[service] = monotonic() - began
   done(service)
   M.stats.asked = M.stats.asked + 1
   M.stats.by[service] = (M.stats.by[service] or 0) + 1
@@ -663,7 +675,8 @@ local function crossref_record(m)
     title = m.title and m.title[1] and unescape(m.title[1]:gsub("%s+", " ")) or nil,
     authors = authors, year = year, type = m.type, subjects = {},
     ids = { doi = m.DOI, isbn = m.ISBN and m.ISBN[1] and m.ISBN[1]:gsub("[^%dXx]", "") or nil },
-    container = m["container-title"] and m["container-title"][1],
+    container = m["container-title"] and m["container-title"][1] and unescape(m["container-title"][1]:gsub("%s+", " ")) or nil,
+    member = m.publisher,
     -- the member that registered a DOI is the publisher of a book, but often an
     -- archive for an article (JSTOR for the Annals): only a book's is offered
     publisher = BOOKISH[m.type or ""] and m.publisher or nil,
@@ -907,7 +920,7 @@ end
 --- OpenAlex's record for a DOI: title, authors and date, for works CrossRef
 -- does not have.
 function M.openalex(doi)
-  local body, err = M.fetch("openalex", doi:lower(), "https://api.openalex.org/works/doi:" .. encode(doi) .. mailto("?"))
+  local body, err = M.fetch("openalex", doi:lower(), "https://api.openalex.org/works/doi:" .. encode(doi))
   if not body then return nil, err end
   local ok, w = pcall(json.decode, body)
   if not ok or type(w) ~= "table" or not w.title then return nil, "unreadable reply from OpenAlex" end
@@ -918,6 +931,12 @@ function M.openalex(doi)
     if type(a.author) == "table" and type(a.author.display_name) == "string" then
       rec.authors[#rec.authors + 1] = a.author.display_name
     end
+  end
+  -- where it appeared: the journal, and the house or society behind it
+  local place = type(w.primary_location) == "table" and type(w.primary_location.source) == "table" and w.primary_location.source or nil
+  if place and type(place.display_name) == "string" and (place.type == nil or place.type == "journal" or place.type == "conference") then
+    rec.container = place.display_name
+    rec.member = type(place.host_organization_name) == "string" and place.host_organization_name or nil
   end
   -- (no subject is taken from it: OpenAlex sorts works into topics by
   -- machine, and files Wiles's proof of Fermat under mathematical physics)
