@@ -110,8 +110,11 @@ static const struct opt_def opts[] = {
       "1: click selects, the wheel scrolls (Shift selects text); 0: off", NULL),
   OPT(review_open, OPT_INT, "0", NULL,
       "1: the review screen starts with every book's other fields shown", NULL),
-  OPT(review_sort, OPT_STR, "confidence", "confidence|id",
-      "the order of books in review: the surest proposals first, or by book id", NULL),
+  OPT(review_sort, OPT_STR, "confidence", "confidence|id|disputed",
+      "the order of books in review: the surest proposals first, by book id, or those whose sources disagree most first", NULL),
+  OPT(weigh_sources, OPT_STR, "off", "off|on",
+      "a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right "
+      "in this library (measured by :weigh, adjustable in :weights), instead of the confidence its rule claims", NULL),
   OPT(leader, OPT_STR, "\\", NULL,
       "the key <Leader> stands for in key bindings, in key-map notation: \\, <Space>, ,", NULL),
 

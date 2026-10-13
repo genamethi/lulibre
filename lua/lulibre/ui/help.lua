@@ -17,7 +17,7 @@ local keys = require("lulibre.ui.keys").of("help")
 local SECTIONS = {
   { "Moving and finding", "move search prompt filter pick sort" },
   { "The list as a tree, and selecting", "group fold enter mark visual" },
-  { "Changing what a book says", "edit review propose capture titlecase clear undo enrich" },
+  { "Changing what a book says", "edit review propose propose-review weights weigh capture titlecase clear undo enrich" },
   { "The preview", "preview addpages" },
   { "Copying", "yank" },
   { "Windows", "focus split close only resize console" },
@@ -59,6 +59,8 @@ local ABOUT = {
   ["resize right"] = "move it right", ["resize up"] = "move it up", ["resize down"] = "move it down",
   ["edit"] = "the edit form, for what is selected", ["capture"] = "pull fields out of file names or titles by a pattern",
   ["titlecase"] = "put the title in title case", ["propose"] = "propose metadata for what is selected, from the files themselves",
+  ["propose-review"] = "a dialog: what to ask, for which fields, what review shows; then propose and review",
+  ["weights"] = "how much each kind of source is believed, field by field",
   ["review"] = "go through every proposal that is waiting", ["review selection"] = "go through the proposals of what is selected",
   ["browse"] = "a tree of the library in a column on the left", ["dupes"] = "books whose files are the same, byte for byte",
   ["orphans"] = "records with no file, files with no record, broken links", ["good"] = "confirm records as right; they are learned from",

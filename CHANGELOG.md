@@ -3,6 +3,21 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## In development (since 0.2.0-alpha.0)
+
+- `<Leader>pr` (`:propose-review`): a dialog for a whole round: which
+  books, what is asked (files, kept records, services, bibliographies,
+  learned subjects), which fields, how what is there is treated, and what
+  review then shows; lines that cannot be used are greyed and say why.
+- How far a book's sources agree is measured (`lulibre.consensus`): review
+  shows how many agree on each proposal (`[2/3]`), and `s` can put the
+  books whose sources disagree most first.
+- `:weigh` measures how often each kind of source agrees with the library's
+  own records, field by field; `:weights` (`<Leader>w`) shows the table and
+  lets any weight be set by hand. With `weigh_sources = "on"` confidences
+  are worked out from them. Off by default.
+- `lulibre.ui.form`: the dialog pane, for scripts.
+
 ## 0.2.0-alpha.0
 
 The first alpha of 0.2.0: everything below is in it. (Put together on the

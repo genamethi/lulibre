@@ -41,13 +41,19 @@ function M.run(args)
   -- one field's proposals only, when set (f then a letter); accept-all and
   -- reject-rest then speak for that field alone
   local field_only = type(args) == "table" and args.field or nil
+  -- from the propose-and-review dialog: some fields only, and nothing below a confidence
+  local fields_only = type(args) == "table" and args.fields or nil
+  local floor = type(args) == "table" and tonumber(args.min) or nil
   -- the proposals with a status (pending and accepted when nil) that this review covers
   local function listed(status)
     local all = proposals.list(status, scope)
-    if not only and not field_only then return all end
+    if not only and not field_only and not fields_only and not floor then return all end
     local out = {}
     for _, pr in ipairs(all) do
-      if (not only or only[pr.book]) and (not field_only or pr.field == field_only) then out[#out + 1] = pr end
+      if (not only or only[pr.book]) and (not field_only or pr.field == field_only) and (not fields_only or fields_only[pr.field])
+        and (not floor or (pr.confidence or 0) >= floor or pr.status == "accepted") then
+        out[#out + 1] = pr
+      end
     end
     return out
   end
@@ -60,19 +66,25 @@ function M.run(args)
   -- and what needs thought is further down. It is worked out when review
   -- opens, on s and when the library changes, not after every key: a book
   -- does not jump away because one of its proposals was rejected.
-  local sort = lulibre.o.review_sort
+  -- "disputed" puts first the books whose sources disagree most about a
+  -- field (the note propose leaves: "2/3 agree, 0.41 apart"): where a look
+  -- is most needed.
+  local sort = type(args) == "table" and args.sort or lulibre.o.review_sort
+  local SORTS = { confidence = "surest first", disputed = "most disputed first", id = "by id" }
   local rank
   local function rank_books()
-    local best, ids = {}, {}
+    local best, apart, ids = {}, {}, {}
     for _, pr in ipairs(listed()) do
       if not best[pr.book] then
-        best[pr.book] = -1
+        best[pr.book], apart[pr.book] = -1, 0
         ids[#ids + 1] = pr.book
       end
       best[pr.book] = math.max(best[pr.book], pr.confidence or 0)
+      apart[pr.book] = math.max(apart[pr.book], tonumber((pr.note or ""):match("([%d.]+) apart")) or 0)
     end
     table.sort(ids, function(a, b)
       if sort == "confidence" and best[a] ~= best[b] then return best[a] > best[b] end
+      if sort == "disputed" and apart[a] ~= apart[b] then return apart[a] > apart[b] end
       return math.abs(a) < math.abs(b)
     end)
     rank = {}
@@ -85,7 +97,9 @@ function M.run(args)
     if pr.op == "add" then shown = "+ " .. shown elseif pr.op == "remove" then shown = "- " .. shown end
     return {
       pr.status == "accepted" and "✓" or "", pr.field, edit.current(book, pr.field), shown,
-      ("%s%s"):format(pr.source or "", pr.confidence and (" %.2f"):format(pr.confidence) or ""),
+      -- where it is from, how sure, and how far the book's sources agree about the field
+      ("%s%s%s"):format(pr.source or "", pr.confidence and (" %.2f"):format(pr.confidence) or "",
+        pr.note and pr.note:find(" agree") and ("  [%s]"):format(pr.note:match("^%d+/%d+") or "") or ""),
       id = book.id, style = pr.status == "accepted" and "ok" or nil,
     }
   end
@@ -171,7 +185,7 @@ function M.run(args)
   end
   local function title()
     return ("review%s  %d pending, %d accepted   %s%s"):format(scope == "sync" and " (sync folder)" or "",
-      #listed("pending"), #listed("accepted"), sort == "confidence" and "surest first" or "by id",
+      #listed("pending"), #listed("accepted"), SORTS[sort] or "by id",
       field_only and ("   only %s (%s%s shows all)"):format(field_only, keys:key("field") or "f", keys:key("field") or "f") or "")
   end
   local p <close> = lulibre.panel {
@@ -240,7 +254,7 @@ function M.run(args)
     elseif act == "peek" then
       peek()
     elseif act == "sort" then
-      sort = sort == "confidence" and "id" or "confidence"
+      sort = sort == "confidence" and "disputed" or sort == "disputed" and "id" or "confidence"
       rank_books()
     elseif act == "field" then
       -- the next key says which field: a letter as in :propose --only, or f again for all

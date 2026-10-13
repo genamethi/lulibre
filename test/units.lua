@@ -1010,6 +1010,44 @@ do
   eq("every Lua file compiles", { n > 40, bad }, { true, {} })
 end
 
+-- how far sources agree, and how much each is believed
+do
+  local consensus = require "lulibre.consensus"
+  local d = consensus.distance
+  eq("the same title is no distance; a title cut short, little; another title, far",
+    { d("title", "On Sieves", "ON SIEVES"), d("title", "Recursive sequences attached to", "Recursive sequences attached to modular representations"),
+      d("title", "On Sieves", "Complex Analysis") }, { 0, 0.1, 1.0 })
+  eq("authors by their family names", { d("authors", "P. Erdős & A. Rényi", "Paul Erdos & Alfréd Renyi"), d("authors", "A. One & B. Two", "A. One") },
+    { 0.0, 0.5 })
+  eq("dates by their years; subjects by how near in the tree", { d("pubdate", "1995", "1995-05-01"), d("pubdate", "1995", "1996") < 0.5,
+    d("pubdate", "1995", "2018"), d("tags", "cs", "cs/ml"), d("tags", "cs/ai", "cs/ml"), d("tags", "cs", "math") }, { 0, true, 1, 0.25, 0.5, 1 })
+  eq("the kind of source a proposal names", { consensus.kind("arXiv 1012.6008"), consensus.kind("vocabulary (22)"), consensus.kind("by-line, named twice"),
+    consensus.kind("CrossRef 10.1000/x"), consensus.kind("arXiv class"), consensus.kind("MSC 11") },
+    { "arXiv record", "vocabulary", "by-line", "CrossRef", "arXiv class", "MSC" })
+  local cands = {
+    { field = "title", value = "A Note on Sieve Methods", source = "title page", confidence = 0.55 },
+    { field = "title", value = "A note on sieve methods", source = "embedded", confidence = 0.6 },
+    { field = "title", value = "sieve.dvi", source = "cover sheet", confidence = 0.5 },
+    { field = "authors", value = "Paul Erdős", source = "by-line", confidence = 0.85 },
+  }
+  local f = consensus.fuse(cands, "title")
+  eq("what three sources come to: the value two of them share, surer than either, with the third apart",
+    { lulibre.fold(f.value), f.agree, f.sources, f.confidence > 0.6, f.disagreement > 0.2 and f.disagreement < 0.5 },
+    { "a note on sieve methods", 2, 3, true, true })
+  local one = consensus.fuse(cands, "authors")
+  eq("a single source is taken at its word, with nothing to disagree with", { one.value, one.confidence, one.disagreement, one.sources }, { "Paul Erdős", 0.85, 0.0, 1 })
+  eq("no source, nothing", consensus.fuse(cands, "publisher"), nil)
+  consensus.set("cover sheet", "title", 0.05)
+  eq("a weight set by hand is used as it stands", { consensus.weight("cover sheet", "title") }, { 0.05, "set by hand" })
+  eq("and what it is given counts for that much", consensus.fuse(cands, "title").disagreement < f.disagreement, true)
+  consensus.set("cover sheet", "title", nil)
+  eq("given back, nothing is known of it until it is measured", consensus.weight("cover sheet", "title"), nil)
+  local used = consensus.learn()
+  eq("the sources are measured against the library's own records", { used >= 1, consensus.ready() }, { true, true })
+  lulibre.store("DELETE FROM kv WHERE key LIKE 'consensus:%'")
+  consensus.reload()
+end
+
 -- help: the guides as plain text, and found by topic
 do
   local help = require "lulibre.ui.help"

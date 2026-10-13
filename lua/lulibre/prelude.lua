@@ -133,6 +133,20 @@ lulibre.command("review", function(args)
   if args == "selection" then args = { ids = lulibre.selection() } end
   require("lulibre.ui.review").run(args)
 end, "[filter | selection]  go through proposed changes and write the accepted ones; with a filter, only those books'")
+lulibre.command("propose-review", screen("lulibre.ui.proposer"),
+  "a dialog: which books, what is asked (files, kept records, services), which fields, what review then shows; then propose, and review")
+lulibre.command("weights", screen("lulibre.ui.weights"),
+  "how much each kind of source is believed about each field: as measured against the library, or as you set it")
+lulibre.command("weigh", function(args)
+  -- "good": against the records confirmed as right (gk) only, which is the better measure once there are enough of them
+  local ids
+  if args == "good" then
+    ids = require("lulibre.quality").good_ids()
+    if #ids < 30 then error(("only %d records are confirmed as good: too few to measure against (gk confirms them)"):format(#ids), 0) end
+  end
+  local used = require("lulibre.consensus").learn(ids)
+  print(("each source measured against %d books; :weights shows what came of it, the option weigh_sources uses it"):format(used))
+end, "[good]  measure how often each kind of source (title page, cataloguing block, arXiv record ...) agrees with the library's own records; `good`: with the confirmed ones only")
 lulibre.command("help", screen("lulibre.ui.help"),
   "[topic]  the keys under headings that open and close, with a search; with a topic, what the guides say about it (:help enrich)")
 lulibre.command("beside", screen("lulibre.ui.beside"),
