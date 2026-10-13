@@ -240,8 +240,22 @@ function M.book(id, opts)
     candidates[#candidates + 1] = require("lulibre.learn").candidate(id)
     candidates[#candidates + 1] = require("lulibre.refs").candidate(id)
   end
+  -- How far the book's sources agree about each field goes with the proposal
+  -- as a note ("2/3 agree, 0.21 apart"), and with weigh_sources on its
+  -- confidence is what the agreeing sources come to, each taken for what it
+  -- has been measured to be worth here.
+  local consensus = require "lulibre.consensus"
+  local weigh = lulibre.o.weigh_sources == "on" and consensus.ready()
+  local fused = {}
   for _, w in ipairs(M.wanted(book, candidates, opts)) do
-    if proposals.add(id, w.field, w.value, { op = w.op, source = w.source, confidence = w.confidence, again = opts.again }) then
+    local confidence, note = w.confidence, nil
+    if w.field ~= "identifiers" and w.field ~= "series_index" then
+      fused[w.field] = fused[w.field] or consensus.fuse(candidates, w.field) or false
+      local f = fused[w.field]
+      if f and f.sources > 1 then note = ("%d/%d agree, %.2f apart"):format(f.agree, f.sources, f.disagreement) end
+      if f and weigh and consensus.distance(w.field, f.value, w.value) <= consensus.NEAR then confidence = f.confidence end
+    end
+    if proposals.add(id, w.field, w.value, { op = w.op, source = w.source, confidence = confidence, again = opts.again, note = note }) then
       added = added + 1
       if w.over then replacing = replacing + 1 end
     end

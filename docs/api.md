@@ -212,6 +212,8 @@ its own documentation.
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
 | `lulibre.datasets` | databases kept on this machine: `list` (`{name=, title=, useful=, size=, from=, renewed=, files=}`), `get(name)`, `path(file)`, `status(ds)`, `state(ds)`, `fetch(ds, {force=})`, `adopt(file)` |
+| `lulibre.consensus` | how far a book's sources agree: `distance(field, a, b)`, `fuse(candidates, field)` (`{value=, confidence=, disagreement=, agree=, sources=, by=}`), `book(id)`, `kind(source)`, `learn([ids])`, `weight(kind, field)`, `set(kind, field, w)`, `table()` |
+| `lulibre.ui.form` | a dialog of boxes, choices, values and actions: `run{title=, sections={{title=, items={{id=, kind=, label=, value=, choices=, off=}}}}}` returns the action chosen and the values |
 | `lulibre.detex` | `plain(s)`: TeX in a title or a name put into plain text (`Erd\H{o}s` is `Erdős`), and whether none is left; the tables `accents`, `letters` |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |

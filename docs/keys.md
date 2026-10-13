@@ -29,6 +29,8 @@ command; `:` runs one by name.
 | `Space` | `mark toggle` | on a heading: every book under it. `:mark all`, `none`, `invert` |
 | `V` | `visual` | select a range; `Esc` ends it |
 | `gp` | `propose` | propose metadata for what is selected, from the files themselves |
+| `<Leader>pr` | `propose-review` | a dialog: which books, what is asked, which fields, what review then shows; then propose, and review |
+| `<Leader>w` | `weights` | how much each kind of source is believed, field by field (`:weigh` measures them) |
 | `e` · `r` | `edit` · `review selection` | the edit form, or the waiting proposals, for what is selected: the range, else the marked books, else the books under the heading the cursor is on, else the book |
 | `R` | `reload` | re-read calibre's metadata now |
 

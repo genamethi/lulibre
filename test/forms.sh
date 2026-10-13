@@ -156,7 +156,9 @@ shown "f then t shows only the title proposals" "review  2 pending.*only title"
 k f f
 shown "f twice shows all again"               "review  3 pending"
 k s
-shown "s orders by id instead"                "by id"
+shown "s puts the most disputed first"        "most disputed first"
+k s
+shown "s again orders by id"                  "by id"
 shown "on the first proposal"                 "Wrong Press"
 k g g j e
 shown "the proposal can be edited"            "publisher: Wrong Press"
@@ -171,6 +173,8 @@ expect "the publisher is gone"                "" "$(field 1 publisher)"
 # neighbour the list has fallen back to
 k g r
 shown "review again"                          "review  2 pending"
+k s
+shown "past the most disputed"                "most disputed first"
 k s
 shown "by id, book 2 comes first"             "by id"
 k g g j

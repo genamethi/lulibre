@@ -196,6 +196,31 @@ if command -v tmux >/dev/null; then
   shown "gH gives the plain list back"            "the plain list"
   expect "with no headings" "" "$(screen | grep -o '▾' | head -1)"
 
+  # the propose-and-review dialog, and the weights of the sources
+  $T send-keys -t t '\' p r
+  shown "Leader pr opens the dialog"              "propose, then review"
+  shown "with what is asked, as boxes"            "\[x\]  the files themselves"
+  shown "what is not there greyed, with why"      "(nothing learned yet"
+  $T send-keys -t t G
+  shown "and what review will show"               "show nothing below a confidence of"
+  $T send-keys -t t g g j
+  $T send-keys -t t l
+  shown "a choice steps on"                       "everything the list shows (2)"
+  $T send-keys -t t w
+  shown "w proposes, and review opens"            "review  [0-9]* pending"
+  $T send-keys -t t s
+  shown "review can put the most disputed first"  "most disputed first"
+  $T send-keys -t t q
+  i=0; while screen | grep -q "review  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua local _ = lulibre.store("DELETE FROM proposals")' ; $T send-keys -t t Enter
+  sleep 0.3
+  $T send-keys -t t : ; $T send-keys -t t -l "weigh" ; $T send-keys -t t Enter
+  shown ":weigh measures the sources"             "each source measured against"
+  $T send-keys -t t '\' w
+  shown "Leader w shows what each is believed"    "how much each source is believed"
+  $T send-keys -t t q
+  i=0; while screen | grep -q "how much each source" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+
   # selecting text in the preview with the keys
   $T send-keys -t t g g v
   shown "v puts a cursor in the preview"          "^select: "
