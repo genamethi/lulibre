@@ -61,6 +61,8 @@ static const struct { const char *name, *sql; } is_tests[] = {
   {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
   /* confirmed as right by the user (:good) */
   {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
+  /* marked as a work no catalogue has a record of (:noncatalog) */
+  {"noncatalog", "EXISTS(SELECT 1 FROM noncatalog n WHERE n.book = b.id)"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},

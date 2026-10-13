@@ -137,10 +137,13 @@ function M.from_doc(doc)
   end
   -- a DOI further down that follows other words on its line, or stands among
   -- the references, is as likely a cited work's: offered, but not vouched for
-  local doi, own = ids.doi_in(text)
-  if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.8 or 0.5) end
-  local isbn = ids.isbn(text)
-  if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
+  -- (and in a work no catalogue has a record of, any DOI or ISBN is: none is offered)
+  if not (doc.id and require("lulibre.noncatalog").is(doc.id)) then
+    local doi, own = ids.doi_in(text)
+    if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.8 or 0.5) end
+    local isbn = ids.isbn(text)
+    if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
+  end
 
   -- subject from vocabulary, when the page did not state one
   local ranked = subjects.score((tp.title or "") .. "\n" .. text)

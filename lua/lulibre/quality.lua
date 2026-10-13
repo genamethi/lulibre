@@ -103,7 +103,9 @@ function M.score(book)
     why[#why + 1] = "no subject"
   end
 
-  if next(book.idents or {}) then s = s + 0.05 else why[#why + 1] = "no identifiers" end
+  -- a work no catalogue has a record of (:noncatalog) is not short of an identifier
+  if next(book.idents or {}) or require("lulibre.noncatalog").is(book.id) then s = s + 0.05
+  else why[#why + 1] = "no identifiers" end
   if book.publisher or book.series then s = s + 0.05 end
   return math.max(0, math.min(1, s)), why
 end

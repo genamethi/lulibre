@@ -22,7 +22,7 @@ local SECTIONS = {
   { "Copying", "yank" },
   { "Windows", "focus split close only resize console" },
   { "The sync folder", "sync sync-dialog source beside" },
-  { "Looking after the library", "dupes orphans good terms learn refs junk datasets datasets-dialog arxiv-fetch browse reload" },
+  { "Looking after the library", "dupes orphans good noncatalog terms learn refs junk datasets datasets-dialog arxiv-fetch browse reload" },
   { "lulibre itself", "help help-plain quit reload-cfg set echo lua run" },
 }
 local PLACES = { { "panel", "In a panel (review, the edit form ...)" }, { "line", "While typing" }, { "picker", "In a picker" },
@@ -69,6 +69,7 @@ local ABOUT = {
   ["review"] = "go through the proposals: what was just proposed, else everything that waits", ["review selection"] = "go through the proposals of what is selected",
   ["browse"] = "a tree of the library in a column on the left", ["dupes"] = "books whose files are the same, byte for byte",
   ["orphans"] = "records with no file, files with no record, broken links", ["good"] = "confirm records as right; they are learned from",
+  ["noncatalog"] = "works no catalogue has a record of: no DOI or ISBN is looked for",
   ["sync"] = "read the sync folder and show it", ["beside"] = "the sync folder in a column beside the library",
   ["source library"] = "show the library", ["sync add"] = "add the selected waiting files to the library",
   ["sync move"] = "add them, and delete them from the sync folder", ["sync drop"] = "take them out of the sync folder without adding them",

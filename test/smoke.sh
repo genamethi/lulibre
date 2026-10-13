@@ -52,6 +52,9 @@ expect   "or"                             2 "$(run query -c text:sieve or author
 expect   "columns"                        "2	1996	Paul Erdős" "$(run query -f id,year,authors id:2)"
 contains "title line keeps its font size" "24.0"               "$(run show -l 1)"
 contains "bad pattern is reported"        "bad Lua pattern"    "$(run query 'title:~%' 2>&1 || true)"
+expect   "nothing is non-catalog to begin with" 0 "$(run query -c is:noncatalog)"
+contains "stats counts non-catalog works apart" "non-catalog works" "$(run stats)"
+contains "holdout wants confirmed records" "too few to leave some out" "$(run run holdout 2>&1 || true)"
 
 # Lua: a script against this library (the unit checks are test/units.sh).
 cat > "$t/probe.lua" <<'LUA'
