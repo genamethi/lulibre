@@ -798,6 +798,51 @@ QA9.AIL64 1991
     { got.series, got.series_index, got.pubdate, got.publisher }, { "Graduate Texts in Mathematics", "52", "1977", "Springer" })
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
+
+  -- dates
+  eq("a date, however it is written", { layouts.date("8 February 1972"), layouts.date("Feb. 8, 1972"), layouts.date("March 2004"),
+    layouts.date("SEPTEMBER 2002"), layouts.date("2004-03-12"), layouts.date("July, 2012"), layouts.date("12 mars 1985"),
+    layouts.date("3. Mai 1962"), (layouts.date("May 3rd, 1999")) },
+    { "1972-02-08", "1972-02-08", "2004-03-01", "2002-09-01", "2004-03-12", "2012-07-01", "1985-03-12", "1962-05-03", "1999-05-03" })
+  eq("and what is not one", { layouts.date("3/12/2004"), layouts.date("Theorem 12, 2004"), layouts.date("31 February 9999"),
+    layouts.date("the name of zeta functions") }, {})
+  -- what one layout reads from a first page
+  local function reads(name, ...)
+    for _, c in ipairs(layouts.read { texts = { ... } }) do
+      if c.source == name then return c.value end
+    end
+  end
+  eq("the day a journal received an article", { reads("received date", "SCATTERING THEORY\nF. MAYNE\nReceived 8 February 1972\nSynopsis"),
+    reads("received date", "Received by the editors May 3, 1999 and, in revised form, June 1, 2000."),
+    reads("received date", "(Received: 21 October 2003 / Accepted: 2 March 2004)"), reads("received date", "Reçu le 12 mars 1985"),
+    reads("received date", "Eingegangen am 3. Mai 1962") }, { "1972-02-08", "1999-05-03", "2003-10-21", "1985-03-12", "1962-05-03" })
+  eq("'received' in a sentence is not a date", reads("received date", "bers, periodic orbits have received\nthe name of zeta functions in March 1990."), nil)
+  eq("a date on a line of its own", { reads("dated page", "On Sums\nA. N. Other\n\nMarch 12, 2015\n\nAbstract"),
+    reads("dated page", "Key words and phrases. Sieves.\nDate: December 11, 2008\n2001 PACS"), reads("dated page", "SEPTEMBER 2002\nNOTICES OF THE AMS"),
+    reads("dated page", "Preprint submitted to Elsevier\n21 June 2021"), reads("dated page", "Version of 3 January 2020.") },
+    { "2015-03-12", "2008-12-11", "2002-09-01", "2021-06-21", "2020-01-03" })
+  eq("but not one that ends a sentence begun on the line above", reads("dated page",
+    "July, 1801, and Jacobi introduced the Jacobi sum in a letter to Gauss[Ja1] dated\nFebruary 8, 1827.\n\nThe sum"), nil)
+  eq("nor a date within a line", reads("dated page", "We met on March 12, 2015 in Bonn."), nil)
+  local j = layouts.journal("Physica 63 (1973) 1-32\n© North-Holland Publishing Co.")
+  eq("a journal's heading", { j.journal, j.volume, j.year, j.pages }, { "Physica", 63, 1973, "1" })
+  j = layouts.journal("Journal of Algebra 320 (2008) 1234–1256")
+  eq("with a dash between the pages", { j.journal, j.volume, j.year }, { "Journal of Algebra", 320, 2008 })
+  j = layouts.journal("Invent. math. 123, 1–40 (1996)")
+  eq("or the year last", { j.journal, j.volume, j.year }, { "Invent. math.", 123, 1996 })
+  j = layouts.journal("Ann. of Math. (2) 141 (1995), 443–551")
+  eq("or a series before the volume", { j.journal, j.volume, j.year }, { "Ann. of Math.", 141, 1995 })
+  eq("a line of prose with a year is not one", layouts.journal("We follow Serre 12 (1973) and others in this"), nil)
+  eq("the year of the heading", reads("journal header", "Journal of Algebra 320 (2008) 1234–1256\nOn groups"), "2008")
+  eq("the year of a copyright line", { reads("copyright line", "© 2008 Elsevier Inc. All rights reserved."),
+    reads("copyright line", "Copyright (c) 1965, 1984, 2002 by A. N. Other"), reads("copyright line", "Copyright © 1994–2023 Lua.org, PUC-Rio."),
+    reads("copyright line", "no sign here, only 1999") }, { "2008", "2002", "2023" })
+  -- a reprint's series page knows better than its copyright line, and says so more surely
+  local best
+  for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer" } }) do
+    if c.field == "pubdate" and (not best or c.confidence > best.confidence) then best = c end
+  end
+  eq("the surest date of a reprint is the edition's", { best.value, best.source }, { "1977", "series page" })
 end
 
 -- references: the bibliography at the end of a file

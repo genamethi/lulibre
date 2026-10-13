@@ -208,7 +208,7 @@ its own documentation.
 | `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.refs` | what a book cites: `index_book(id)`, `of(id)`, `coupled(id)`, `subject(id)`, `key(entry)`, `entries(lines)`, `find(pages)` |
-| `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)` |
+| `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)`, `date(text)` (the date a text opens with, as YYYY-MM-DD), `journal(text)` (a journal heading: `{journal=, volume=, year=, pages=}`) |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |

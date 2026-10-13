@@ -99,6 +99,10 @@ Added
   or asked one by one instead; `:enrich --plan` says what a run would ask
   before anything is asked. Old-style arXiv numbers with a subject class
   (`math.AG/0601001`) are looked up as arXiv files them.
+- Four layouts that read a date, for the books that have none: the day a
+  journal received an article, a date on a line of its own on the first
+  page, the year in a journal's heading, the year of a copyright line.
+  `layouts.date(text)` and `layouts.journal(text)` for scripts.
 - The series-page layout knows some thirty series of several publishers
   (and takes more: `layouts.series`), with the volume, the house and the
   year. An author read off a title page who also heads entries of the
