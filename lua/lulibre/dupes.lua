@@ -11,7 +11,7 @@ function M.score(book)
   local s = 0
   if not edit.is_unknown(book.author) then s = s + 3 end
   local t = book.title or ""
-  if t:find("%s") and not junk.title(t) then s = s + 2 end
+  if not junk.unlikely_title(t) then s = s + 2 end
   if t ~= t:upper() then s = s + 1 end
   if #book.tags > 0 then s = s + 1 end
   if next(book.idents) then s = s + 1 end

@@ -540,6 +540,29 @@ do
   eq("fresh: the file's reading of every field, whatever the book says", fresh { fresh = true }, "authors! publisher")
   eq("only: kept to the fields named", { fresh { fresh = true, only = { publisher = true } }, fresh { only = { authors = true }, over = "any" } },
     { "publisher", "authors!" })
+  -- one word may be a title: a plain capitalised word is, what is left of a file name is not
+  eq("Algebra and Topology are titles; infinite and E807en are not", { junk.unlikely_title("Algebra"), junk.unlikely_title("Topology"),
+    junk.unlikely_title("ALGEBRA"), junk.unlikely_title("Élasticité"), junk.unlikely_title("infinite"), junk.unlikely_title("E807en"),
+    junk.unlikely_title("wilf.dvi"), junk.unlikely_title("tensorprod"), junk.unlikely_title("Dune"), junk.unlikely_title("Set"),
+    junk.unlikely_title("Lambda-Rings") }, { false, false, false, false, true, true, true, true, false, true, false })
+  lulibre.o.one_word_titles = "junk"
+  eq("one_word_titles = junk: none of them is", { junk.unlikely_title("Algebra"), junk.unlikely_title("A Course in Arithmetic") }, { true, false })
+  lulibre.o.one_word_titles = "ok"
+  eq("one_word_titles = ok: any single word is, a file name still is not", { junk.unlikely_title("infinite"), junk.unlikely_title("wilf.dvi"),
+    junk.unlikely_title("417675") }, { false, true, true })
+  lulibre.o.one_word_titles = "check"
+  lulibre.o.good_titles = "Set, 1984, infinite"
+  eq("good_titles vouches for a title whatever it looks like", { junk.unlikely_title("Set"), junk.unlikely_title("1984"),
+    junk.unlikely_title("Infinite"), junk.title("1984"), junk.unlikely_title("1985") }, { false, false, false, false, true })
+  lulibre.o.good_titles = ""
+  do
+    local quality = require "lulibre.quality"
+    eq("a title that looks like junk is a gap", propose.is_gap("title", "infinite", 2), true)
+    quality.set_good({ 2 }, true)
+    eq("but not in a record confirmed as good", { propose.is_gap("title", "infinite", 2), propose.is_gap("authors", "libgen.li", 2),
+      propose.is_gap("title", "", 2) }, { false, false, true })
+    quality.set_good({ 2 }, false)
+  end
   eq("what is plainly no value is a gap", { propose.is_gap("title", "417675"), propose.is_gap("title", "annals-v163-n3-p05"),
     propose.is_gap("title", "2019 44 31 x"), propose.is_gap("title", "A Course in Arithmetic"), propose.is_gap("authors", "libgen.li"),
     propose.is_gap("authors", "Professor Emeritus"), propose.is_gap("authors", "Jean-Pierre Serre"), propose.is_gap("authors", "") },

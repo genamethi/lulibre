@@ -55,7 +55,7 @@ function M.score(book)
   local s, why = 0, {}
   local title = book.title or ""
   local digits, letters = select(2, title:gsub("%d", "")), select(2, title:gsub("[%a\128-\255]", ""))
-  if junk.title(title) or not title:find("%s") then
+  if junk.unlikely_title(title) then
     why[#why + 1] = "the title looks like a file name or a heading"
   else
     s = s + 0.3

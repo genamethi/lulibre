@@ -120,6 +120,14 @@ A value that is plainly not one counts as empty: a title that is a file
 name, a number or a heading, an author that is a program, a web site or a
 rank. `:junk` marks and lists the books that have such a title or author.
 
+A title of one word is a title when it is a plain capitalised word
+("Algebra", "Topology") and junk when it is what a file name leaves behind
+("infinite", "E807en", "tensorprod"). The option `one_word_titles` changes
+that: `ok` takes any single word for a title, `junk` takes none. Two things
+protect a title whatever it looks like: listing it in `good_titles`
+(`lulibre.o.good_titles = "Set, 1984"`), and confirming its record as good
+(`gk`), after which nothing in that record is treated as junk.
+
 **When one field went wrong across many books** (titles from a bad download
 run, say): narrow the list to them, then
 

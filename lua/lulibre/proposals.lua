@@ -127,7 +127,7 @@ function M.replaces(p)
   local book = lulibre.book(p.book)
   if not book then return false end
   -- a value that is plainly not one (a file name for a title) has no claim to stay
-  return not require("lulibre.propose").is_gap(p.field, edit.current(book, p.field))
+  return not require("lulibre.propose").is_gap(p.field, edit.current(book, p.field), p.book)
 end
 
 --- Drop proposals: by status, or everything not yet applied.

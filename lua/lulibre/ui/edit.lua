@@ -10,7 +10,7 @@ local keys = require("lulibre.ui.keys").of("edit")
 
 local function is_gap(field, value)
   if value == "" then return true end
-  if field == "title" then return junk.title(value) or not value:find("%s") end
+  if field == "title" then return junk.unlikely_title(value) end
   return false
 end
 

@@ -31,6 +31,8 @@ o.library = "~/calibre-library"
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
 | `refs_pages` | `14` | closing pages of a file read when looking for its bibliography |
+| `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a title of one word is a title (`check`: a plain capitalised word is) |
+| `good_titles` | | titles, separated by commas, that are titles whatever they look like |
 | `never_titles` | | words and phrases, separated by commas, that mark a title as not one |
 | `subject_learned` | `suggest` | `off` · `suggest` · `propose`: what a subject worked out from the learned phrases is used for |
 | `subject_terms` | `20` | marking phrases `:learn` keeps for each subject |
