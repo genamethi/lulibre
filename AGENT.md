@@ -138,6 +138,15 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
   `-o index=scratch.db`. The library is still read, nothing of the user's
   is written.
+- The proposer is measured on a **bare copy**: links to the library's book
+  folders, a `metadata.db` stripped to "Untitled / Unknown" (triggers
+  dropped, written by hand with sqlite, **never through calibredb**: it
+  renames book folders, and here they are links to the real ones), a copy of
+  the index for the pages. Propose, then compare with the real records by
+  field and confidence. The first run showed titles at 0.9 right a third of
+  the time: one reader misreading a newer form of a page. The scripts are
+  kept in the session's scratch folder (`bare/compare.py`, `apply.py`,
+  `phase2.lua`); rebuild them from this note if they are gone.
 - A learned or statistical feature is reported with a held-out number, and
   the number goes in the report as measured. The first phrase learner looked
   finished and was teaching "delaware corporation" as a mark of computing.
