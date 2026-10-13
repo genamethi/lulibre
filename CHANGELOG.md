@@ -74,6 +74,17 @@ Added
   page that opens with its author's name alone on the first line is read
   that way (author 0.7, title from the next largest line); a name the
   leading pages give twice is proposed with 0.15 more confidence.
+- Known good records. Every record has a score for how complete and clean
+  it looks; `gk` (`:good`) lists them by it, and the ones you confirm are
+  marked (`is:good`). `lulibre.quality` for scripts.
+- `:learn` finds, from the confirmed records, the two- and three-word
+  phrases that mark each subject, and `:terms` shows them for review: drop
+  what does not belong, add your own. The edit form offers the subject a
+  book's phrases point to, naming them, at no more than 0.6 confidence;
+  the option `subject_learned` turns that into proposals, or off.
+  `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
+- In the edit form, subjects that say what a book is about come before
+  catch-alls such as `math/general` (option `subject_catchall`).
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

@@ -36,7 +36,7 @@ must not count in a shared variable (`n = n + 1` can lose a count). Use
 | `lulibre.count(filter)` | number |
 | `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index |
-| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`); returns rows, rows changed, last insert id |
+| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`); returns rows, rows changed, last insert id |
 | `lulibre.reload()` | pick up changes calibre has made |
 | `lulibre.source([name])` | what the list shows, `"library"` or `"sync"`; sets it when given |
 
@@ -162,6 +162,8 @@ The edit form and review can be opened for given books from a script:
 | `lulibre.fold(s)` | search key: lower case, accents stripped |
 | `lulibre.lower(s)` `lulibre.upper(s)` | case for more than ASCII: accented Latin, Greek, Cyrillic |
 | `lulibre.titlecase(s)` | the title in title case (APA) |
+| `lulibre.phrases(text)` | the distinct two- and three-word phrases of a text |
+| `lulibre.counter()` | counts phrases, or whole lines, over many texts: `c:add(text)`, `c:prune(min [, max])`, `c:of(text)`, `c:count(phrase)`, `c:add_lines(text [, same])`, `c:strip(text, min)` |
 | `lulibre.fuzzy(query, candidate)` | score, or nil |
 | `lulibre.inspect(value)` | a readable rendering of any value |
 | `lulibre.uv`, `require "luv"` | libuv, on the loop Lua runs on |
@@ -201,6 +203,8 @@ its own documentation.
 |---|---|
 | `lulibre.edit` | apply, undo, history, remove; a field's current value; the write route |
 | `lulibre.proposals` | add, list, accept, apply |
+| `lulibre.quality` | a record's score, and the confirmed ones: `score(book)`, `ranked(opts)`, `set_good(ids, on)`, `is_good(id)`, `good_ids()`, `catchall(subject)` |
+| `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
 | `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, again=})`, `wanted(book, candidates, over)`, `same(field, a, b)` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |

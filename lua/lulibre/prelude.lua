@@ -198,6 +198,17 @@ lulibre.command("good", function(args)
     require("lulibre.ui.good").run()
   end
 end, "[add | remove]  the records by how complete they look, to confirm the right ones; add and remove act on the selection")
+lulibre.command("learn", function()
+  local st, why = require("lulibre.learn").run()
+  if not st then
+    lulibre.notify(why, "error")
+  else
+    lulibre.notify(("learned %d phrases for %d subjects from %d confirmed books (%d read) in %ds; :terms shows them"):format(
+      st.terms, st.subjects, st.books, st.read, st.seconds))
+  end
+end, "learn the phrases that mark each subject, from the records confirmed as good (:good)")
+lulibre.command("terms", function(args) require("lulibre.ui.terms").run(args) end,
+  "[subject]  the phrases that mark each subject, as learned: review them, drop some, add your own")
 lulibre.command("orphans", screen("lulibre.ui.orphans"),
   "records with no file and files with no record: check, then clean up")
 lulibre.command("browse", function(args) require("lulibre.ui.browse").run(args) end,

@@ -52,6 +52,15 @@ function M.for_field(field, ids)
     end
   end
 
+  -- the subject its phrases point to, as learned from the confirmed records
+  if field == "tags" then
+    local learn = require "lulibre.learn"
+    for i = 1, math.min(#ids, 8) do
+      local c = learn.candidate(ids[i])
+      if c then add(c.value, ("%s %.2f"):format(c.source, c.confidence), "candidate") end
+    end
+  end
+
   -- what related books have, most common first
   if field == "authors" or field == "tags" or field == "publisher" or field == "series" then
     local counts, order = {}, {}
@@ -86,7 +95,14 @@ function M.for_field(field, ids)
       end
     end
   elseif field == "tags" then
-    for _, t in ipairs(lulibre.tags()) do add(t.name, tostring(t.books), "library") end
+    -- subjects that say what a book is about before those that only say where
+    -- it was put (math/general), however many books sit in the latter
+    local catchall = require("lulibre.quality").catchall
+    local tags = lulibre.tags()
+    for _, t in ipairs(tags) do
+      if not catchall(t.name) then add(t.name, tostring(t.books), "library") end
+    end
+    for _, t in ipairs(tags) do add(t.name, tostring(t.books) .. "  catch-all", "library") end
   elseif field == "publisher" or field == "series" then
     local rows = lulibre.sql(("SELECT %s AS v, count(*) AS n FROM books WHERE id > 0 AND %s IS NOT NULL GROUP BY 1 ORDER BY n DESC")
       :format(field, field))

@@ -632,6 +632,56 @@ do
   eq("and unconfirmed", quality.is_good(2), false)
 end
 
+-- phrases, and what is learned from them
+do
+  local t = "The ring of integers of a number field is a Dedekind domain. Class field theory (of the\nring of inte-\ngers); x2 breaks it. Modular forms and elliptic curves."
+  eq("the phrases of a text: within a clause, no function word at either end, a broken word joined",
+    lulibre.phrases(t), { "ring of integers", "number field", "dedekind domain", "class field", "class field theory",
+      "field theory", "modular forms", "forms and elliptic", "elliptic curves" })
+  eq("words of the trade make no phrases, words that only look like them do",
+    lulibre.phrases("All rights reserved. Copyright Springer Verlag. Power series over a number field."),
+    { "power series", "number field" })
+  eq("symbols and other scripts end a clause", lulibre.phrases("zeta · function ∞ random matrix"), { "random matrix" })
+  local c = lulibre.counter()
+  c:add(t)
+  c:add("Elliptic curves over a number field. Modular forms again, modular forms.")
+  c:add("nothing of note here")
+  eq("a counter counts texts, not mentions", { c:texts(), c:count("modular forms"), c:count("ring of integers"), c:count("no such") },
+    { 3, 2, 1, 0 })
+  eq("prune forgets the rare", { c:prune(2), c:of("On modular forms and the ring of integers of a number field") },
+    { 3, { "modular forms", "number field" } })
+  local lines = lulibre.counter()
+  for i = 1, 3 do
+    lines:add_lines("No part of this publication may be reproduced in any form\nwithout permission.\nBook " .. i .. " is about something of its own entirely")
+  end
+  lines:add_lines("No part of this publication may be reproduced in any form\nanother copy", true)
+  eq("lines many texts share are found (a copy of the last text is not another text)",
+    lines:count("no part of this publication may be reproduced in any form"), 3)
+  eq("and can be taken out", lines:strip("Sieve methods\nNo part of this Publication may be reproduced in any form\nby A. Name", 3),
+    "Sieve methods\n.\nby A. Name\n")
+
+  local learn = require "lulibre.learn"
+  eq("a subject and those above it", learn.lineage("math/number-theory/algebraic"), { "math/number-theory/algebraic", "math/number-theory", "math" })
+  local st, why = learn.run()
+  eq("nothing is learned until records are confirmed", { st, why:find("confirmed as good") ~= nil }, { nil, true })
+  for _, term in ipairs { "modular forms", "elliptic curves", "class field theory" } do learn.set("math/number-theory", term, "kept") end
+  for _, term in ipairs { "class field theory", "ideal class group" } do learn.set("math/number-theory/algebraic", term, "kept") end
+  for _, term in ipairs { "neural networks", "gradient descent" } do learn.set("cs", term, "kept") end
+  eq("a subject's phrases", #learn.terms("math/number-theory"), 3)
+  local got = learn.classify("We study modular forms and elliptic curves over the rationals.")
+  eq("classify finds the subjects whose phrases a text holds", { got[1].subject, #got[1].matched, #got }, { "math/number-theory", 2, 1 })
+  local subject, confidence, phrases = learn.suggest("Modular forms, elliptic curves and class field theory.")
+  eq("suggest names the subject and the phrases", { subject, confidence > 0.5, #phrases }, { "math/number-theory", true, 3 })
+  subject = learn.suggest("Class field theory and the ideal class group of a number field.")
+  eq("the more particular subject, when it fits", subject, "math/number-theory/algebraic")
+  eq("one phrase is not enough", learn.suggest("A note on neural networks."), nil)
+  learn.set("cs", "gradient descent", "dropped")
+  eq("a dropped phrase no longer counts", { #learn.terms("cs"), #learn.terms("cs", true) }, { 1, 2 })
+  lulibre.store("DELETE FROM terms")
+  learn.loaded = nil
+  eq("with nothing learned there is nothing to suggest", { learn.ready(), learn.candidate(1) }, { false })
+end
+
 -- one record's values offered to another
 do
   local dupes = require "lulibre.dupes"

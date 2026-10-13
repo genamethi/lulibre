@@ -275,6 +275,10 @@ k v
 shown "v shows the confirmed ones"            "showing: confirmed"
 k q
 expect "is:good finds it"                     1 "$(run query -c is:good 2>/dev/null)"
+k :; lit "learn"; k Enter
+shown "learn reads the library"               "confirmed books"
+k :; lit "terms"; k Enter
+shown "with too few confirmed books, nothing is learned" "nothing has been learned"
 
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done

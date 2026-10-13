@@ -97,7 +97,7 @@ function M.score(book)
   end
   if topical then s = s + 0.2
   elseif #(book.tags or {}) > 0 then
-    s = s + 0.05
+    s = s + 0.1
     why[#why + 1] = "only a catch-all subject"
   else
     why[#why + 1] = "no subject"

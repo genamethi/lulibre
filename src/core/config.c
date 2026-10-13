@@ -54,6 +54,12 @@ static const struct opt_def opts[] = {
       "words and phrases, separated by commas, that are never proposed as an author (added to the "
       "built-in ones such as professor emeritus): \"visiting scholar, lecture notes\"",
       NULL),
+  OPT(subject_learned, OPT_STR, "suggest", "off|suggest|propose",
+      "what a subject worked out from the learned phrases is used for: suggest offers it in the "
+      "edit form, propose also makes it a proposal when :propose runs, off neither",
+      NULL),
+  OPT(subject_terms, OPT_INT, "20", NULL,
+      "how many marking phrases :learn keeps for each subject", NULL),
   OPT(subject_catchall, OPT_STR, "", NULL,
       "subjects that file a book by its form, not its topic, named whole or by their last part "
       "and separated by commas (added to general, papers, books, handbook, misc, other): they "

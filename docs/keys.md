@@ -97,6 +97,7 @@ and pasted with `<C-v>`.
 | `gc` | `capture` | fields from names by pattern |
 | `gr` | `review` | go through proposals |
 | `gT` | `titlecase` | titles in CAPITALS to title case |
+| `gk` | `good` | the records by score, to confirm the right ones |
 | `u` | `undo` | `:undo N` for a given batch; `:history` lists them |
 | `gd` | `dupes` | books with identical files |
 | `go` | `orphans` | records without files, files without records, broken links |

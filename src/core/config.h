@@ -24,6 +24,8 @@ struct config {
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
   char *never_authors; /* words and phrases, comma-separated, that are never an author */
+  char *subject_learned; /* off | suggest | propose: what the learned phrases are used for */
+  int subject_terms;   /* marking phrases kept for each subject when learning */
   char *subject_catchall; /* subjects (or their last part) that say where a book was put, not what it is about */
   char *server;        /* calibre content server URL, used for writes */
   char *user;

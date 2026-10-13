@@ -77,6 +77,13 @@ local DEFAULTS = {
     { "learn", { "L" }, "learn", "learn each subject's telling phrases from the confirmed records" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
   },
+  terms = {
+    { "drop", { "x" }, "drop", "drop the phrase: it will not be learned for this subject again (again: let it be)" },
+    { "add", { "a" }, "add", "add a phrase of your own to the subject under the cursor" },
+    { "find", { "f", "<CR>" }, "find", "narrow the list to the books whose pages hold the phrase" },
+    { "dropped", { "d" }, "dropped", "show, or hide, the phrases that were dropped" },
+    { "learn", { "L" }, "learn again", "learn again from the confirmed records" },
+  },
   capture = {
     { "pattern", { "p", "<CR>" }, "pattern", "type the pattern; the table follows as you type" },
     { "source", { "s" }, "source", "choose what the pattern is run against" },

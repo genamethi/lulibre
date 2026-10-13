@@ -171,6 +171,65 @@ and the table shows what it finds in each selected book:
 | `m` | mark the books that matched |
 | `S` `L` | save the pattern as a named rule, load one |
 
+## Known good records: `gk`
+
+Every record has a score from 0 to 1 for how complete and clean it looks: a
+title that reads as a title, an author that is a name, a date, a subject
+that says what the book is about, identifiers. A file name for a title, a
+title in capitals or full of figures and odd characters, an author that is
+a list or a role, and a catch-all subject (`math/general`) pull it down.
+
+`gk` (`:good`) lists the records by score, best first, with what holds each
+down. The score only suggests; confirming is yours:
+
+| Key | |
+|---|---|
+| `Space` | confirm the record as right, or take that back |
+| `A` | confirm every record at or above a score (0.85 is a record with nothing visibly wrong) |
+| `v` | show the records still to confirm, the confirmed ones, or all |
+| `e` | edit the record |
+| `L` | learn from the confirmed records (below) |
+
+`:good add` and `:good remove` do the same for the selection, and
+`&is:good` lists the confirmed records. Confirmed records are what lulibre
+learns from, so that a mistake in an unchecked record is not taught back to
+the rest.
+
+## What marks a subject: `:learn` and `:terms`
+
+`:learn` reads the indexed pages of every book and finds, for each subject,
+the phrases of two and three words that its confirmed books use far more
+than books of other subjects do: "modular forms" and "class field theory"
+for number theory, "gradient descent" for computing. It takes a few seconds.
+A phrase counts only if several of the subject's books use it, by at least
+three different authors (so that one author's habits do not), and if it
+also stands in some book's title, which keeps out cities, companies and
+turns of speech. Text that many books share word for word (a publisher's
+imprint, a series list) is set aside first. A book teaches its subject and
+those above it; a catch-all subject teaches only the ones above it.
+
+`:terms` shows what was learned, subject by subject, strongest first:
+
+| Key | |
+|---|---|
+| `x` | drop the phrase: it will not be learned for that subject again |
+| `a` | add a phrase of your own |
+| `f` | narrow the list to the books whose pages hold the phrase |
+| `d` | show the dropped ones |
+| `L` | learn again |
+
+When a book's pages hold at least two of a subject's phrases, the edit form
+offers that subject for its tags, naming the phrases ("learned: modular
+forms, elliptic curves"), never as surer than 0.6. This is a judgement from
+a handful of phrases on a book's first pages and is often wrong; it is
+there to be looked at, not trusted. `subject_learned = "propose"` makes
+`:propose` use it too, `"off"` hides it.
+
+In the edit form, subjects that say what a book is about are now listed
+before catch-alls, however many books sit in the latter. The option
+`subject_catchall` names more of them than the built-in ones (`general`,
+`papers`, `books`, `handbook`, `misc`, `other`).
+
 ## Duplicates: `gd`
 
 Books whose files are byte for byte the same. Only files that share a size

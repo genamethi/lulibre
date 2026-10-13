@@ -98,6 +98,19 @@ code.
 
 ## Verifying
 
+- Anything that writes lulibre's own tables in bulk (`:learn`, confirming
+  records) is tried on a **copy** of the user's index, never the index
+  itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
+  `-o index=scratch.db`. The library is still read, nothing of the user's
+  is written.
+- A learned or statistical feature is reported with a held-out number, and
+  the number goes in the report as measured. The first phrase learner looked
+  finished and was teaching "delaware corporation" as a mark of computing.
+- A word list that removes "noise" removes signal too: the first trade-word
+  list dropped "number", "series", "law" and "distribution", and with them
+  number field, power series, reciprocity law. Test such a list against the
+  phrases that must survive it.
+
 - `make check` always; `make e2e` before a merge that touches writing.
   A change to a form (edit, review, duplicates, orphans) gets a keystroke
   check in `test/forms.sh`.
