@@ -214,10 +214,49 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `s` | sort: surest first, or by id |
 | `f` then a letter | only one field's proposals: `t` title, `a` authors, `s` subject, `i` identifiers, `d` date, `p` publisher; `f` `f` shows all again. Accept-all and reject-rest then speak for that field alone |
 | `p` | more preview: shrink the panel, and again to bring it back |
+| `l` `h` | the next view, the one before (the tabs in the bar; a click on one works too) |
+| `D` | drop what the view in front holds: deleted, not rejected, so it can be proposed again |
 | `w` | write the accepted ones as one batch |
 
 `:review FILTER` keeps the review to the books a filter matches
 (`:review author:unknown`); `w` then writes only theirs.
+
+#### Runs, and review's tabs
+
+Each go of proposing is a *run*: `gp`, `:propose`, `:enrich`, and the
+dialog below, which is one run however many steps it takes. While a run is
+going on the status line carries a badge beside the mode, in the warning
+colour:
+
+     NORMAL  ⟳ PROPOSING  280 books: records, step 2 of 2
+
+and nothing tells you to open review until it is done. Review shows the
+runs as tabs in its bar, the one in view standing out:
+
+     review  13 pending, 0 accepted   surest first   09:41 · 4 books (13)   all waiting (1140)
+
+| Tab | Holds |
+|---|---|
+| `09:41 · 4 books (13)` | everything that waits for the books of the run begun at 09:41, whether that run proposed it or it waited before |
+| `⟳ 09:50 · 280 books (96)` | a run still going on: what it has found so far. The view comes up by itself when the run is done |
+| `all waiting (1140)` | every proposal that waits |
+
+`gr` opens on a run that is going on or that you have not looked at yet,
+and otherwise on everything; a "propose, then review" from the dialog
+brings its own run up when it is done, in the review that is open if one
+is, so two reviews never lie on top of each other. The first line of a
+run's view says what it is and which keys act on it. `D` there drops what
+*that run added* and leaves what waited before; on a run still going on it
+stops the run first. A run is forgotten when nothing waits for its books
+any more, or when a later run covers the same books.
+
+All of this is Lua and yours to change, in `init.lua`:
+
+    local runs = require "lulibre.runs"
+    runs.badge = function(run) return "busy: " .. (run.step or ""), "accent" end  -- other words, another colour
+    runs.badge = function() end                                -- no badge
+    require("lulibre.ui.review").banner = function() end       -- no line at the top of a run's view
+    lulibre.map("review", "<C-n>", "next_view")                -- another key for the next tab
 
 Copying from the page does not take the cursor out of review: drag over a
 name in the preview, or double click a word, and the next key is still
@@ -254,6 +293,24 @@ confirm records with gk, then :learn"). `Space` ticks a box or steps
 through a choice, Enter types a value, `w` (or Enter on the last lines)
 goes. Everything it does can also be done by hand with `:propose`,
 `:enrich`, `:refs` and `:review` and their flags.
+
+The whole round is one run (see "Runs, and review's tabs" above): the
+status line says which step it is at, the steps keep their closing lines
+for the log, and when it is done review opens on that run's tab.
+
+### Other dialogs
+
+The same kind of pane stands in front of a few more things, each saying
+what will happen before it does:
+
+| Key | Dialog |
+|---|---|
+| `\e` | **Look up** the selection: how many works each service would be asked about and in how many requests (nothing is asked to find out), a box for each service, then "ask, then review" or "ask nobody: propose from what is kept here" |
+| `\c` | **Change at once**: add or remove a subject, or set the authors, series, publisher, date or language, for every selected book (the books under a heading, the marked ones). Empty lines change nothing; one undo takes it all back |
+| `\d` | **Databases** kept on this machine: what is here, how old, and a box for each to fetch |
+| `\s` | In the sync folder, **the waiting files that are selected**: which are new and which the library holds, and a choice of add, add and remove, or drop |
+
+`\` then `Space` unmarks every book (`:mark none`).
 
 ### How far the sources agree
 
@@ -312,7 +369,7 @@ are, with more confidence:
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | series line (a series named in so many words: "Springer Undergraduate Mathematics Series", the line above "Series Editors", "Series: Lecture Notes in Physics") | the series and, where it is given, the volume's number |
-| arXiv stamp | the day of submission |
+| arXiv stamp | the day of submission, from a first version's stamp only: a later version's stamp gives the day of that revision, and is not taken for a date |
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
 | journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year; the journal, as the publisher |
@@ -461,6 +518,26 @@ work is asked about once: a second run costs no requests, a run that was
 stopped loses nothing, and `--offline` proposes again from what is kept
 without touching the network. ("No such record" is believed for thirty
 days, then asked again.)
+
+A search by title is the weakest of these, because a search always answers
+with something. The record is taken only when it is plainly the same work:
+
+| The titles | The authors | Offered at |
+|---|---|---|
+| the same telling words | one family name in common | 0.90 |
+| the same telling words, four or more | the book has none | 0.80 |
+| one is the other with something after it (a subtitle, the author's name run on), four words or more shared | in common · the book has none | 0.85 · 0.70 |
+| three telling words or fewer ("Algebraic Geometry") | the book has none | not taken |
+| anything | both have authors, no name in common | not taken |
+
+"Telling words" leaves out *the, of, and, to* and their like; "An
+introduction to the ipaddress module" and "An Introduction to Module
+Theory" share two of three and are not the same title. Until 0.2.0-alpha.1
+they counted as one, and such records were offered at 0.95. `:run unmatch`
+lists the matches made that way which no longer hold; `:run unmatch --fix`
+withdraws what still waits from them and proposes putting back what the
+books said before, as a run of its own in review ("wrong title matches").
+It asks no service anything: the answers were kept.
 
 ### How the services are asked
 

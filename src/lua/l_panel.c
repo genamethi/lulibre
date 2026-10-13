@@ -10,6 +10,8 @@
  *     side = "left",      -- a column down the left instead (width = 0.28)
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
  *     reloads = true,     -- and "<Reload>" when the library has been read again
+ *     tabs = { "this run (9)", "all waiting (212)" }, tab = 1,
+ *                         -- names in the bar, one of them as the one in view
  *     keys = { "a", "r", "<CR>" },   -- the keys this script handles, and
  *     pass = "preview yank",         -- the global commands its other keys may
  *                                    -- still reach (P, ], yy ...); see below
@@ -26,6 +28,13 @@
  *                          panel opened on top of this one
  *   p:height(share)        resize (a share of the screen, 0.1 to 0.9)
  *   p:keys(list)           say again which keys are handled
+ *   p:tabs(names, current) the names in the bar and which is in view. The
+ *                          panel only draws them: the script switches, on
+ *                          keys of its choosing, and wait() returns "<Tab>"
+ *                          and the tab's number when one is clicked
+ *   p:send(key [, row])    make wait() return key, from another task: how a
+ *                          script that is not the panel's own tells it that
+ *                          something it shows has changed
  *
  * j k gg G and paging move within the panel; q and Esc close it; Tab, ':'
  * and <C-w> keep their usual meaning. Every other key is returned by wait()
@@ -189,6 +198,20 @@ static void set_rows(lua_State *L, struct panel *p, int idx) {
 }
 
 /* a list of key names at idx -> the keys the script calls its own */
+static void set_tabs(lua_State *L, struct panel *p, int idx, int current) {
+  const char *names[PANEL_TABS];
+  idx = lua_absindex(L, idx);
+  int n = (int)lua_rawlen(L, idx);
+  if (n > PANEL_TABS) n = PANEL_TABS;
+  for (int i = 0; i < n; i++) {
+    lua_rawgeti(L, idx, i + 1);
+    names[i] = luaL_tolstring(L, -1, NULL); /* stays on the stack until set */
+    lua_remove(L, -2);
+  }
+  panel_set_tabs(p, n, names, current);
+  lua_pop(L, n);
+}
+
 static void set_own(lua_State *L, struct panel *p, int idx) {
   idx = lua_absindex(L, idx);
   uint32_t keys[128];
@@ -266,6 +289,11 @@ static int l_panel_ui(lua_State *L) {
   lua_getfield(L, 1, "columns");
   if (lua_istable(L, -1)) set_columns(L, lp->p, -1);
   lua_pop(L, 1);
+  lua_getfield(L, 1, "tab");
+  int tab = (int)luaL_optinteger(L, -1, 1) - 1;
+  lua_getfield(L, 1, "tabs");
+  if (lua_istable(L, -1)) set_tabs(L, lp->p, -1, tab);
+  lua_pop(L, 2);
   lua_getfield(L, 1, "rows");
   if (lua_istable(L, -1)) set_rows(L, lp->p, -1);
   lua_pop(L, 1);
@@ -352,6 +380,30 @@ static int m_keys_ui(lua_State *L) {
 }
 ON_UI(m_keys)
 
+static int m_tabs_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  if (lp->p && !lp->closed) set_tabs(L, lp->p, 2, (int)luaL_optinteger(L, 3, 1) - 1);
+  return 0;
+}
+ON_UI(m_tabs)
+
+/* Lua thread: a key from another task, as if the panel had sent it */
+static int m_send(lua_State *L) {
+  struct lpanel *lp = check(L);
+  const char *key = luaL_checkstring(L, 2);
+  int row = (int)luaL_optinteger(L, 3, 1) - 1;
+  if (lp->closed || !lp->p) return 0;
+  struct pevent *e = xcalloc(1, sizeof *e);
+  e->lp = lp;
+  e->row = row;
+  e->has_key = 1;
+  snprintf(e->key, sizeof e->key, "%s", key);
+  atomic_fetch_add(&lp->inflight, 1);
+  deliver(lp->app, e);
+  return 0;
+}
+
 static void close_ui(void *arg) {
   struct panel *p = arg;
   if (panel_is_open(p)) panel_close(p); /* reports back through on_event */
@@ -423,6 +475,7 @@ void l_panel_open(lua_State *L) {
     {"rows", m_rows},     {"title", m_title}, {"help", m_help},   {"columns", m_columns},
     {"cursor", m_cursor}, {"wait", m_wait},   {"close", m_close}, {"is_open", m_is_open},
     {"hide", m_hide},     {"show", m_show},   {"height", m_height}, {"keys", m_keys},
+    {"tabs", m_tabs},     {"send", m_send},
     {"__gc", m_gc},      {"__close", m_close}, {NULL, NULL},
   };
   luaL_newmetatable(L, MT);

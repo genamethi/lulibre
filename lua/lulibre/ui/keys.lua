@@ -45,6 +45,9 @@ local DEFAULTS = {
     { "sort", { "s" }, "sort", "order the books: the surest proposals first, those whose sources disagree most first, or by id" },
     { "field", { "f" }, "field…", "show one field's proposals only: then t title, a authors, s subject, i identifiers, d date, p publisher; f again for all" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
+    { "next_view", { "l", "<Right>" }, "next view", "the next tab: each run of proposing that has something waiting, then everything that waits" },
+    { "prev_view", { "h", "<Left>" }, "previous view", "the tab before" },
+    { "drop", { "D" }, "drop these", "drop every proposal in the view in front (deleted, not rejected: they can be proposed again); stops a run still going on" },
     { "write", { "w" }, "write", "write what has been accepted, as one change that can be undone" },
   },
   dupes = {

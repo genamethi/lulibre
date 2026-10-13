@@ -288,6 +288,24 @@ shown "learn reads the library"               "confirmed books"
 k :; lit "terms"; k Enter
 shown "with too few confirmed books, nothing is learned" "nothing has been learned"
 
+# ---- one change to every selected book, from a dialog
+before=$(run query -c tag:from-the-dialog 2>/dev/null)
+k :; lit "mark all"; k Enter
+k '\\' c
+shown "the change dialog opens for the marked books" "change [0-9]* books at once"
+k Enter; lit "from-the-dialog"; k Enter
+shown "a subject typed into its line"         "add the subject  *from-the-dialog"
+k w
+shown "w writes it to all of them"            "changed [0-9]* book"
+expect "none had the subject before"          0 "$before"
+expect "and now every book has it"            "$(run query -c 2>/dev/null)" "$(run query -c tag:from-the-dialog 2>/dev/null)"
+k Escape
+sleep 0.2
+k u
+shown "one undo takes it back"                "undid"
+expect "from every book"                      0 "$(run query -c tag:from-the-dialog 2>/dev/null)"
+k '\\' Space
+
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
 expect "the interface exits cleanly"          0 "$(cat "$t/rc" 2>/dev/null)"

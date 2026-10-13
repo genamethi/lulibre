@@ -86,6 +86,7 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `print(...)` | the same; stdout when headless |
 | `lulibre.log(text [, level])` | the log console: `"info"`, `"warn"`, `"error"`, `"debug"` (debug builds only) |
 | `lulibre.progress(text \| nil)` | a note in the status line while a script works |
+| `lulibre.status(name, text \| nil [, style])` | a badge in the status line, beside the mode, under a name of your own: set again to change it, with `nil` to take it away. `style`: `accent` (default) `ok` `warn` `error` `dim`. At most six at once |
 | `lulibre.current()` | id under the cursor |
 | `lulibre.selection()` | ids an action applies to. With the cursor in a panel that follows the list, the book its row stands for; an error if that book is not in the list |
 | `lulibre.mark(id [, on])` | mark, unmark, or toggle |
@@ -119,7 +120,8 @@ local p <close> = lulibre.panel {
   follow = true,        -- moving through rows moves the list to row.id
   height = 0.4,         -- or side = "left", width = 0.3
   keys = { "<CR>" },    -- the keys this script handles, and
-  pass = "preview yank" -- the global commands its other keys may still reach
+  pass = "preview yank",-- the global commands its other keys may still reach
+  tabs = { "this run (9)", "all waiting (212)" }, tab = 1,   -- names in the bar, one of them in view
 }
 while true do
   local key, row = p:wait()        -- nil once the panel is closed
@@ -131,12 +133,21 @@ end
 Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
 `p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`, `p:hide()` and
 `p:show()` (off the screen and back, around a panel opened on top of it),
-`p:height(share)`, `p:keys(list)`. Row styles: `dim
+`p:height(share)`, `p:keys(list)`, `p:tabs(names, current)`, `p:send(key
+[, row])`. Row styles: `dim
 accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
 `"<Move>"` when the cursor moves, and with `reloads = true` it returns
 `"<Reload>"` when the library has been read again, so the rows can be
 brought up to date.
+
+Tabs are names drawn in the bar after the title, the current one standing
+out; when they do not all fit, the strip moves so that the current one is on
+it. The panel only draws them: the script switches, on keys of its
+choosing, and sets them again with `p:tabs`. A click on a tab makes
+`wait()` return `"<Tab>"` and the tab's number. `p:send(key)` makes
+`wait()` return `key` from another task: how a script that is not the
+panel's own tells it that something it shows has changed.
 
 A panel normally takes every key. Given `keys` and `pass`, a key that is not
 among `keys` and begins a global binding to one of the `pass` commands (named
@@ -212,6 +223,8 @@ its own documentation.
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
 | `lulibre.datasets` | databases kept on this machine: `list` (`{name=, title=, useful=, size=, from=, renewed=, files=}`), `get(name)`, `path(file)`, `status(ds)`, `state(ds)`, `fetch(ds, {force=})`, `adopt(file)` |
+| `lulibre.runs` | goes of proposing, remembered while their proposals wait: `start{ids=, label=, fields=, min=, sort=, steps=}`, `step(run, name)`, `finish(run [, "failed" \| "cancelled"])`, `join{...}` (a handle for a `<close>` variable: a run of the script's own, or a step of the run its task is in), `list([scope])`, `running()`, `fresh()`, `covers(run, proposal)`, `own(run, proposal)`, `waiting(run)`, `drop(run)`, `on(fn)`; `badge(run)` is what the status line says, and may be replaced |
+| `lulibre.ui.review` | `run{ids=, field=, run=}` or `run(filter)`, `show_run(run)`; `banner(view, key)` is the line at the top of a run's view, and may be replaced |
 | `lulibre.consensus` | how far a book's sources agree: `distance(field, a, b)`, `fuse(candidates, field)` (`{value=, confidence=, disagreement=, agree=, sources=, by=}`), `book(id)`, `kind(source)`, `learn([ids])`, `weight(kind, field)`, `set(kind, field, w)`, `table()` |
 | `lulibre.ui.form` | a dialog of boxes, choices, values and actions: `run{title=, sections={{title=, items={{id=, kind=, label=, value=, choices=, off=}}}}}` returns the action chosen and the values |
 | `lulibre.detex` | `plain(s)`: TeX in a title or a name put into plain text (`Erd\H{o}s` is `Erdős`), and whether none is left; the tables `accents`, `letters` |

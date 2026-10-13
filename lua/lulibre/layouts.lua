@@ -393,19 +393,27 @@ M.add {
   confidence = 0.85,
 }
 
--- The stamp arXiv prints down the left margin of a paper's first page gives
--- the day it was submitted: "arXiv:1012.6008v1 [math.CO] 29 Dec 2010".
+-- The stamp arXiv prints down the left margin of a paper's first page:
+-- "arXiv:1012.6008v1 [math.CO] 29 Dec 2010". Its date is the day THAT
+-- VERSION was put up. On a first version that is the day the paper was
+-- submitted, which is what a date of publication means for a preprint; on
+-- a later one it is the day of a revision, months or years on, and says
+-- nothing of when the paper appeared (half the stamped papers of the
+-- library this was written against carry a later version). So only a
+-- first version's stamp gives a date; for the others the paper's number
+-- gives the year, and arXiv's own record (:enrich) the day.
 local MONTH = { jan = 1, feb = 2, mar = 3, apr = 4, may = 5, jun = 6, jul = 7, aug = 8, sep = 9, oct = 10, nov = 11, dec = 12 }
 M.add {
   name = "arXiv stamp",
   marks = { "arxiv:%d%d%d%d%.%d+" },
   read = function(text)
-    local day, month, year = text:match("arXiv:%d%d%d%d%.%d+v?%d*%s*%[[%a.%-]+%]%s*(%d%d?)%s+(%a%a%a)%a*%s+(%d%d%d%d)")
+    local version, day, month, year = text:match("arXiv:%d%d%d%d%.%d+v?(%d*)%s*%[[%a.%-]+%]%s*(%d%d?)%s+(%a%a%a)%a*%s+(%d%d%d%d)")
     local m = month and MONTH[month:lower()]
-    if not m then return {} end
+    if not m or (version ~= "" and version ~= "1") then return {} end
     return { pubdate = ("%s-%02d-%02d"):format(year, m, tonumber(day)) }
   end,
-  confidence = 0.95,
+  -- under arXiv's own record of the same paper (0.95), which is the one to take when both speak
+  confidence = 0.9,
 }
 
 -- ---- a series named in so many words ----

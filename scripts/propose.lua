@@ -43,6 +43,9 @@ end
 local filter = table.concat(words, " ")
 local ids = (lulibre.headless or filter ~= "") and lulibre.ids(filter) or lulibre.selection()
 
+-- a run of its own, unless this is a step of one (the propose-and-review dialog)
+local run <close> = require("lulibre.runs").join { ids = ids, steps = { "files" } }
+run:step("files")
 local added, replacing, books = 0, 0, 0
 for n, id in ipairs(ids) do
   local a, r = propose.book(id, opts)
@@ -51,6 +54,7 @@ for n, id in ipairs(ids) do
   if n % 25 == 0 then lulibre.progress(("proposing %d/%d"):format(n, #ids)) end
 end
 lulibre.progress(nil)
+run:done()
 print(("%d proposal%s for %d of %d book%s%s; %s goes through them"):format(added, added == 1 and "" or "s", books, #ids,
   #ids == 1 and "" or "s",
   replacing > 0 and (", %d of them for a field that has a value"):format(replacing) or "", lulibre.hint("review")))

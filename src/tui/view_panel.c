@@ -15,6 +15,9 @@ struct panel {
   int refs; /* the window and the opener */
   int open;
   char *title, *help;
+  char **tabs; /* names shown in the bar after the title; the script switches between them */
+  int ntabs, tab;
+  int tab_x[PANEL_TABS], tab_w[PANEL_TABS]; /* where each was drawn, for the mouse */
   char **col_titles;
   int *col_widths;
   int ncols;
@@ -41,6 +44,13 @@ static void free_rows(struct panel *p) {
   p->nrows = 0;
 }
 
+static void free_tabs(struct panel *p) {
+  for (int i = 0; i < p->ntabs; i++) free(p->tabs[i]);
+  free(p->tabs);
+  p->tabs = NULL;
+  p->ntabs = 0;
+}
+
 static void free_cols(struct panel *p) {
   for (int i = 0; i < p->ncols; i++) free(p->col_titles[i]);
   free(p->col_titles);
@@ -57,6 +67,7 @@ void panel_unref(struct panel *p) {
   free_cols(p);
   free(p->title);
   free(p->help);
+  free_tabs(p);
   free(p->own);
   free(p->pass);
   free(p);
@@ -163,6 +174,16 @@ void panel_set_title(struct panel *p, const char *title) {
 void panel_set_help(struct panel *p, const char *help) {
   free(p->help);
   p->help = xstrdup(help ? help : "");
+  tui_dirty(p->t);
+}
+
+void panel_set_tabs(struct panel *p, int n, const char *const *names, int current) {
+  free_tabs(p);
+  if (n > PANEL_TABS) n = PANEL_TABS;
+  if (n > 0) p->tabs = xcalloc((size_t)n, sizeof *p->tabs);
+  for (int i = 0; i < n; i++) p->tabs[i] = xstrdup(names[i] ? names[i] : "");
+  p->ntabs = n;
+  p->tab = current < 0 ? 0 : current >= n ? n - 1 : current;
   tui_dirty(p->t);
 }
 
@@ -273,8 +294,15 @@ static void moved(struct panel *p, int before) {
   if (p->moves && p->event && p->cur != before) p->event(p, "<Move>", p->cur, p->event_ud);
 }
 
-void panel_click(struct panel *p, int line) {
+void panel_click(struct panel *p, int line, int x) {
   int before = p->cur, row = p->top + line - 2; /* below the bar and the column titles */
+  if (line == 0 && p->event) { /* a tab in the bar: the script is told which */
+    for (int i = 0; i < p->ntabs; i++)
+      if (p->tab_w[i] > 0 && x >= p->tab_x[i] && x < p->tab_x[i] + p->tab_w[i]) {
+        p->event(p, "<Tab>", i, p->event_ud);
+        return;
+      }
+  }
   if (line < 2 || row >= p->nrows) return;
   panel_set_cursor(p, row);
   moved(p, before);
@@ -370,6 +398,42 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   /* title bar, with the key help on the right */
   dr_bar(n, r, focused);
   int used = dr_text(n, r.y, r.x + 1, r.w - 2, p->title);
+  /* The tabs: the one being shown stands out from the bar, the others sit in
+   * it. When they do not all fit, the strip starts as late as it must for the
+   * one being shown to be on it, and says on which side there are more. */
+  int tw[PANEL_TABS], from = 0, room = r.w - 2 - used - 4;
+  for (int i = 0; i < p->ntabs; i++) {
+    tw[i] = dr_width(p->tabs[i], strlen(p->tabs[i])) + 2;
+    p->tab_w[i] = 0;
+  }
+  for (;;) {
+    int need = 0;
+    for (int i = from; i <= p->tab && i < p->ntabs; i++) need += tw[i] + 1;
+    if (need <= room || from >= p->tab) break;
+    from++;
+  }
+  if (from > 0) {
+    dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
+    dr_text(n, r.y, r.x + 1 + used + 1, 1, "‹");
+  }
+  for (int i = from; i < p->ntabs; i++) {
+    int tx = r.x + 1 + used + 2;
+    if (used + 2 + tw[i] > r.w - 4) {
+      dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
+      dr_text(n, r.y, tx, 1, "›");
+      used += 1;
+      break;
+    }
+    if (i == p->tab) dr_style(n, focused ? theme.bar_fg : theme.on_accent, focused ? theme.bar_bg : theme.accent, A_BOLD);
+    else dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
+    dr_text(n, r.y, tx, 1, " ");
+    dr_text(n, r.y, tx + 1, tw[i] - 2, p->tabs[i]);
+    dr_text(n, r.y, tx + tw[i] - 1, 1, " ");
+    p->tab_x[i] = tx - r.x;
+    p->tab_w[i] = tw[i];
+    used += tw[i] + 1;
+  }
+  if (p->ntabs) used += 2;
   int hw = dr_width(p->help, strlen(p->help));
   if (hw && used + hw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);

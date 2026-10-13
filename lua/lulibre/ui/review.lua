@@ -5,9 +5,14 @@
 -- x opens a book up: its other fields appear under the proposals, so what is
 -- proposed can be judged against what is already known, and any of them can
 -- be edited in the same pass (an edit becomes an accepted proposal).
+--
+-- Review has views, shown as tabs in its bar: one for each run of proposing
+-- that still has something waiting (lulibre.runs), and "all waiting". h and
+-- l step through them; D drops what the one in view holds.
 local edit = require "lulibre.edit"
 local proposals = require "lulibre.proposals"
 local suggest = require "lulibre.suggest"
+local runs = require "lulibre.runs"
 
 local M = {}
 
@@ -19,41 +24,127 @@ M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "iden
 
 local function key_of(item)
   if not item then return nil end
+  if item.banner then return "b" end
   if item.heading then return "h" .. item.book end
   if item.plain then return "f" .. item.book .. item.field end
   return "p" .. item.id
 end
 
+--- The line at the top of a view, saying what it is and how to be rid of it.
+-- view: { run = a run of lulibre.runs or nil, count = proposals in it };
+-- key(action) gives the key an action of review is on now. Return nil for no
+-- line. Replace this function in init.lua to say it your way, or not at all:
+--   require("lulibre.ui.review").banner = function() end
+function M.banner(view, key)
+  local run = view.run
+  if not run then return nil end
+  local books = ("%d book%s"):format(#run.ids, #run.ids == 1 and "" or "s")
+  if not run.finished then
+    return ("⟳ still proposing for %s%s: what it finds appears here, and this view comes up by itself when it is done.   %s stops it")
+      :format(books, run.step and (" (%s)"):format(run.step) or "", key("drop") or "drop")
+  end
+  local before = (view.count or 0) - (view.own or 0)
+  return ("proposed at %s for %s: %d waiting%s.   %s drops what this run added   %s %s the other views"):format(
+    os.date("%H:%M", run.started), books, view.count or 0, before > 0 and (", %d of them from before"):format(before) or "",
+    key("drop") or "drop", key("prev_view") or "", key("next_view") or "")
+end
+
+local session
+
 --- Open review. args: a filter (as :review FILTER gives it) or { ids = {...} }
--- keeps it to those books' proposals; otherwise it shows every proposal for
--- what the list is showing.
+-- keeps it to those books' proposals; { run = a run } opens on that run's
+-- view; otherwise it opens on a run that is going on or has not been looked
+-- at yet, if there is one, and else on everything waiting for what the list
+-- is showing. The other views are a key away either way.
 function M.run(args)
+  local before = M.live
+  local r = table.pack(pcall(session, args))
+  M.live = before
+  if not r[1] then error(r[2], 0) end
+  return table.unpack(r, 2, r.n)
+end
+
+--- Bring a run's proposals into view: in the review that is open, if one
+-- is, and in a new one otherwise.
+function M.show_run(run)
+  if M.live and pcall(M.live.show, "run:" .. run.id) then return end
+  return M.run { run = run }
+end
+
+-- a review that is open hears of runs starting, moving on and ending
+runs.on(function()
+  if M.live then pcall(M.live.changed) end
+end)
+
+session = function(args)
   -- proposals for what the list is showing: the library, or the sync folder
   local scope = lulibre.source()
-  local only -- book id -> true, when review is kept to some books
-  if type(args) == "table" and args.ids then
-    only = {}
-    for _, id in ipairs(args.ids) do only[id] = true end
-  elseif type(args) == "string" and args ~= "" then
-    only = {}
-    for _, id in ipairs(lulibre.ids(args)) do only[id] = true end
+  if type(args) == "string" then args = args ~= "" and { filter = args } or {} end
+  args = args or {}
+  -- a view of its own for the books review was asked to keep to
+  local asked
+  if args.ids or args.filter then
+    local ids, set = args.ids or lulibre.ids(args.filter), {}
+    for _, id in ipairs(ids) do set[id] = true end
+    asked = { key = "asked", only = set, fields = args.fields, floor = tonumber(args.min), n = #ids }
   end
   -- one field's proposals only, when set (f then a letter); accept-all and
   -- reject-rest then speak for that field alone
-  local field_only = type(args) == "table" and args.field or nil
-  -- from the propose-and-review dialog: some fields only, and nothing below a confidence
-  local fields_only = type(args) == "table" and args.fields or nil
-  local floor = type(args) == "table" and tonumber(args.min) or nil
-  -- the proposals with a status (pending and accepted when nil) that this review covers
-  local function listed(status)
-    local all = proposals.list(status, scope)
-    if not only and not field_only and not fields_only and not floor then return all end
-    local out = {}
-    for _, pr in ipairs(all) do
-      if (not only or only[pr.book]) and (not field_only or pr.field == field_only) and (not fields_only or fields_only[pr.field])
-        and (not floor or (pr.confidence or 0) >= floor or pr.status == "accepted") then
-        out[#out + 1] = pr
+  local field_only = args.field
+  -- The views: what was asked for, each run with something waiting, and all.
+  local views, at = {}, 1
+  local function in_view(view, pr)
+    if view.run then return runs.covers(view.run, pr) end
+    return (not view.only or view.only[pr.book]) and (not view.fields or view.fields[pr.field])
+      and (not view.floor or (pr.confidence or 0) >= view.floor or pr.status == "accepted")
+  end
+  local function make_views(want)
+    want = want or (views[at] and views[at].key)
+    views = {}
+    if asked then views[1] = asked end
+    for _, run in ipairs(runs.list(scope)) do views[#views + 1] = { key = "run:" .. run.id, run = run } end
+    views[#views + 1] = { key = "all" }
+    at = #views
+    for i, view in ipairs(views) do
+      if view.key == want then at = i end
+    end
+    local all = proposals.list(nil, scope)
+    for _, view in ipairs(views) do
+      view.count, view.own = 0, 0
+      for _, pr in ipairs(all) do
+        if in_view(view, pr) then
+          view.count = view.count + 1
+          -- a run's view also holds what waited for its books before it began
+          if not view.run or runs.own(view.run, pr) then view.own = view.own + 1 end
+        end
       end
+    end
+  end
+  -- asked for nothing in particular, review opens on a run that is going on
+  -- or has not been looked at yet: what was just proposed, not the whole pile
+  local fresh = not args.run and not asked and not field_only and runs.fresh(scope)
+  make_views((args.run or fresh) and ("run:" .. (args.run or fresh).id) or asked and "asked" or "all")
+  local function tab_names()
+    if #views < 2 then return {} end
+    local names = {}
+    for i, view in ipairs(views) do
+      names[i] = view.run and ("%s%s (%d)"):format(view.run.finished and "" or "⟳ ", view.run.label, view.count)
+        or view.key == "all" and ("all waiting (%d)"):format(view.count)
+        or ("%d book%s (%d)"):format(view.n, view.n == 1 and "" or "s", view.count)
+    end
+    return names
+  end
+  -- the books the view in front keeps to (nil: every book)
+  local function books_of(view)
+    if not view.run then return view.only end
+    runs.covers(view.run, { book = 0 })
+    return view.run.books
+  end
+  -- the proposals with a status (pending and accepted when nil) that the view in front covers
+  local function listed(status)
+    local view, out = views[at], {}
+    for _, pr in ipairs(proposals.list(status, scope)) do
+      if in_view(view, pr) and (not field_only or pr.field == field_only) then out[#out + 1] = pr end
     end
     return out
   end
@@ -69,7 +160,7 @@ function M.run(args)
   -- "disputed" puts first the books whose sources disagree most about a
   -- field (the note propose leaves: "2/3 agree, 0.41 apart"): where a look
   -- is most needed.
-  local sort = type(args) == "table" and args.sort or lulibre.o.review_sort
+  local sort = args.sort or ((args.run or fresh) and (args.run or fresh).sort) or lulibre.o.review_sort
   local SORTS = { confidence = "surest first", disputed = "most disputed first", id = "by id" }
   local rank
   local function rank_books()
@@ -107,6 +198,11 @@ function M.run(args)
   local function build()
     local rows = {}
     items = {}
+    local say = M.banner and M.banner(views[at], function(action) return keys:key(action) end)
+    if say then
+      rows[1] = { say, style = "note" }
+      items[1] = { banner = true }
+    end
     local by_book, order = {}, {}
     for _, pr in ipairs(listed()) do
       if not by_book[pr.book] then
@@ -170,18 +266,41 @@ function M.run(args)
     return rows
   end
 
-  local rows = build()
-  if #rows == 0 then
-    lulibre.notify(only and "no proposals are waiting for that"
+  -- A view with nothing in it gives way to the first that has something,
+  -- unless it is a run still going on (what it finds will appear there).
+  -- False when nothing waits anywhere.
+  local function settle()
+    local view = views[at]
+    if view.count > 0 or (view.run and not view.run.finished) then return true end
+    for i, other in ipairs(views) do
+      if other.count > 0 or (other.run and not other.run.finished) then
+        at = i
+        return true
+      end
+    end
+    return false
+  end
+  if not settle() or (asked and views[at] ~= asked and not args.run) then
+    lulibre.notify(asked and "no proposals are waiting for that"
       or scope == "sync" and "no proposals for the sync folder (:run propose in:sync makes them)"
       or "no proposals to review (scripts such as :run propose make them)")
     return
   end
-  if lulibre.o.review_open ~= 0 then
+  rank_books()
+  if views[at].run then runs.seen(views[at].run) end
+  local rows = build()
+  local function open_all()
     for _, it in ipairs(items) do
       if it.heading then open[it.book] = true end
     end
+  end
+  if lulibre.o.review_open ~= 0 then
+    open_all()
     rows = build()
+  end
+  -- where the cursor starts in a view: on the first book's first line
+  local function first_row()
+    return (items[1] and items[1].banner and 1 or 0) + math.min(2, #rows)
   end
   local function title()
     return ("review%s  %d pending, %d accepted   %s%s"):format(scope == "sync" and " (sync folder)" or "",
@@ -192,9 +311,27 @@ function M.run(args)
     title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
     keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
-    rows = rows,
+    rows = rows, tabs = tab_names(), tab = at,
   }
-  p:cursor(2)
+  p:cursor(first_row())
+  -- other tasks reach this review here: a run that has finished asks for its
+  -- view, and any change to the runs has the tabs written again
+  local wanted
+  M.live = {
+    show = function(key)
+      wanted = key
+      p:send("<View>")
+    end,
+    changed = function() p:send("<Runs>") end,
+  }
+  -- go to view i: its own order, its books opened as the option says, the cursor at its top
+  local to_top = false
+  local function switch(i)
+    at = ((i - 1) % #views) + 1
+    if views[at].run and views[at].run.sort then sort = views[at].run.sort end
+    if views[at].run then runs.seen(views[at].run) end
+    to_top = true
+  end
   local peek = panels.peeker(p, 0.42)
 
   -- Ask for a field's value, with what the file and the library suggest.
@@ -214,8 +351,9 @@ function M.run(args)
     local key, row = p:wait()
     if not key then return end
     local item = items[row]
-    local pr = item and not item.heading and not item.plain and item or nil
     local keep = key_of(item) -- where the cursor should be after the rows change
+    if item and item.banner then item = nil end
+    local pr = item and not item.heading and not item.plain and item or nil
     local act = keys:action(key)
     -- what a field is to become: v is what was typed, "" to blank it
     local function answer(v)
@@ -249,7 +387,48 @@ function M.run(args)
         end
       end
     end
-    if act == "help" then
+    if key == "<Tab>" then -- a tab was clicked
+      make_views()
+      if views[row] then switch(row) end
+    elseif key == "<View>" then -- a run has finished and asks to be looked at
+      make_views(wanted)
+      switch(at)
+    elseif key == "<Runs>" then
+      make_views()
+    elseif act == "next_view" or act == "prev_view" then
+      make_views()
+      if #views < 2 then lulibre.notify("there is one view only: everything that waits")
+      else switch(at + (act == "next_view" and 1 or -1)) end
+    elseif act == "drop" then
+      make_views()
+      local view = views[at]
+      local stay = view.count - view.own
+      local staying = stay > 0 and (" The %d that waited before stay."):format(stay) or ""
+      if view.run and not view.run.finished then
+        if lulibre.confirm(("stop this run, and drop the %d it has proposed so far?%s"):format(view.own, staying)) then
+          lulibre.notify(("stopped; %d proposals dropped"):format(runs.drop(view.run)))
+        end
+      elseif view.count == 0 then
+        lulibre.notify("nothing waits in this view")
+      elseif view.own == 0 then
+        lulibre.notify("nothing in this view is the run's own any more: what is here waited before it")
+      elseif lulibre.confirm(("drop the %d proposal%s %s? (deleted, not rejected: they can be proposed again)%s"):format(
+          view.own, view.own == 1 and "" or "s", view.run and "this run added" or "in this view", staying)) then
+        local n = view.own
+        if view.run then
+          n = runs.drop(view.run)
+        else
+          local gone = {}
+          for _, q in ipairs(proposals.list(nil, scope)) do
+            if in_view(view, q) then gone[#gone + 1] = q.id end
+          end
+          for from = 1, #gone, 400 do
+            lulibre.store(("DELETE FROM proposals WHERE id IN (%s)"):format(table.concat(gone, ",", from, math.min(from + 399, #gone))))
+          end
+        end
+        lulibre.notify(("dropped %d proposal%s"):format(n, n == 1 and "" or "s"))
+      end
+    elseif act == "help" then
       keys:show("review", panels.also())
     elseif act == "peek" then
       peek()
@@ -279,7 +458,7 @@ function M.run(args)
         lulibre.notify(("nothing accepted yet: %s accepts the proposal under the cursor"):format(keys:key("accept") or "accept"))
       else
         p:close()
-        local r = proposals.apply_accepted(scope, only)
+        local r = proposals.apply_accepted(scope, books_of(views[at]))
         lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
         return
       end
@@ -386,14 +565,27 @@ function M.run(args)
         for _, q in ipairs(listed("pending")) do proposals.set_status(q.id, "rejected") end
       end
     end
-    rows = build()
-    if #rows == 0 then
+    -- the views again: a run nothing waits for any more is gone, and the counts have moved
+    make_views()
+    local was = views[at]
+    if not settle() then
       lulibre.notify("nothing left to review")
       return
     end
+    if views[at] ~= was then to_top = true end
+    if to_top then
+      rank_books()
+      rows = build()
+      if lulibre.o.review_open ~= 0 then open_all() end
+    end
+    rows = build()
     p:rows(rows)
     p:title(title())
-    if keep then
+    p:tabs(tab_names(), at)
+    if to_top then
+      to_top = false
+      p:cursor(first_row())
+    elseif keep then
       for i, it in ipairs(items) do
         if key_of(it) == keep then
           p:cursor(i)

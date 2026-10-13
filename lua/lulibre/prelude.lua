@@ -133,6 +133,15 @@ lulibre.command("review", function(args)
   if args == "selection" then args = { ids = lulibre.selection() } end
   require("lulibre.ui.review").run(args)
 end, "[filter | selection]  go through proposed changes and write the accepted ones; with a filter, only those books'")
+local function dialog(name)
+  return function() require("lulibre.ui.dialogs")[name]() end
+end
+lulibre.command("enrich-dialog", dialog("enrich"),
+  "a dialog for looking the selected books up: what would be asked of whom, which services to ask, then review")
+lulibre.command("change", dialog("change"),
+  "a dialog: one change to every selected book (add or remove a subject, set authors, series, publisher, date, language)")
+lulibre.command("datasets-dialog", dialog("datasets"), "a dialog: the databases kept on this machine, with boxes for which to fetch")
+lulibre.command("sync-dialog", dialog("sync"), "a dialog for the selected waiting files: add, add and remove, or drop them")
 lulibre.command("propose-review", screen("lulibre.ui.proposer"),
   "a dialog: which books, what is asked (files, kept records, services), which fields, what review then shows; then propose, and review")
 lulibre.command("weights", screen("lulibre.ui.weights"),

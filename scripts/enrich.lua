@@ -71,6 +71,12 @@ for n, id in ipairs(ids) do
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
 
+-- a run of its own, unless this is a step of one (the propose-and-review
+-- dialog) or only a plan is asked for
+local step = net.offline and "records" or "records and services"
+local run <close> = not plan and require("lulibre.runs").join { ids = ids, steps = { step } } or nil
+if run then run:step(step) end
+
 -- arXiv's own snapshot of its records, if there is one here, is read before
 -- arXiv is asked anything: what it holds costs no request
 local snapshot = net.arxiv_snapshot_path()
@@ -268,7 +274,11 @@ for n, b in ipairs(books) do
   local isbn = k.isbn or (cr and cr.ids.isbn)
   if isbn then ask("openlibrary", "isbn-record", net.openlibrary, isbn) end
   if #records == 0 and by_title and use.crossref and b.book.title and #b.book.title >= 20 then
-    ask("crossref", "title", net.crossref_search, b.book.title)
+    -- the book's authors help tell the work from another of the same name, when it has any
+    local who = {}
+    local has = require("lulibre.edit").current(b.book, "authors")
+    if not propose.is_gap("authors", has, b.id) then who = require("lulibre.edit").split("authors", has) end
+    ask("crossref", "title", net.crossref_search, b.book.title, who)
   end
   -- the number zbMATH knows the paper by, from its table of links: no request, and not a record of its own
   local zb = k.arxiv and not other.arxiv and zb_numbers[k.arxiv]
@@ -286,7 +296,8 @@ for n, b in ipairs(books) do
       end
     end
     for _, r in ipairs(records) do
-      local trust = TRUST[r.service] or 0.85
+      -- a record found by its title is believed as far as the titles and authors bear it out
+      local trust = math.min(TRUST[r.service] or 0.85, r.trust or 1)
       -- a title with TeX left in it fills a gap, but is not put over a title that reads well
       offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or r.source, r.title_tex and 0.75 or trust)
       if #r.authors > 0 then
@@ -314,10 +325,10 @@ for n, b in ipairs(books) do
         if publisher == r.container then publisher = layouts.with_journal(layouts.known_house(b.book.publisher), r.container) end
       end
       offer("publisher", publisher, r.source, trust - 0.05)
-      offer("series", r.series, r.source, 0.85)
-      offer("series_index", r.series_index, r.source, 0.85)
+      offer("series", r.series, r.source, math.min(0.85, trust))
+      offer("series_index", r.series_index, r.source, math.min(0.85, trust))
       for _, s in ipairs(r.subjects) do offer("tags", s.tag, ("%s (%s)"):format(r.source, s.why), s.confidence) end
-      for kind, value in pairs(r.ids) do offer("identifiers", kind .. ":" .. value, r.source, 0.95) end
+      for kind, value in pairs(r.ids) do offer("identifiers", kind .. ":" .. value, r.source, math.min(0.95, r.trust or 1)) end
     end
     table.sort(cands, function(x, y)
       if x.field ~= y.field then return x.field < y.field end
@@ -328,10 +339,18 @@ for n, b in ipairs(books) do
         added = added + 1
         if w.over then replacing = replacing + 1 end
       end
+      -- A record's day of publication settles what the file could only read
+      -- off its arXiv number or stamp: those proposals are not left to be
+      -- chosen between.
+      if w.field == "pubdate" and #w.value > 4 then
+        lulibre.store([[DELETE FROM proposals WHERE book = ? AND field = 'pubdate' AND status = 'pending'
+          AND (source = 'arXiv id' OR source LIKE 'arXiv stamp%')]], b.id)
+      end
     end
   end
 end
 lulibre.progress(nil)
+if run then run:done() end
 
 local said = {}
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do

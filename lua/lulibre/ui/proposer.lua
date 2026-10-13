@@ -3,24 +3,40 @@
 -- fields, how what is there already is treated, and what review then shows.
 -- Everything here can also be done by hand with :propose, :enrich, :refs and
 -- :review and their flags; the dialog puts them in one place and in order.
+--
+-- What it starts is a run (lulibre.runs): the status line says so while it
+-- goes on, the steps keep their closing lines to themselves, and when it is
+-- done its proposals come up in review as a view of their own.
 local form = require "lulibre.ui.form"
 local proposals = require "lulibre.proposals"
+local runs = require "lulibre.runs"
 
 local M = {}
 
 local FIELDS = { { "title", "title", "t" }, { "authors", "authors", "a" }, { "tags", "subject", "s" }, { "pubdate", "date", "d" },
   { "publisher", "publisher", "p" }, { "series", "series", "e" }, { "identifiers", "identifiers", "i" } }
 
--- run one of the scripts (the user's own of that name first) and wait for it
+-- Run one of the scripts (the user's own of that name first) and wait for
+-- it. What it prints is kept back: its closing line ("12 proposals; gr goes
+-- through them") speaks for one step, and said in the middle of a run it
+-- sends you to review before the run is done.
 local function script(name, ...)
   local paths = lulibre.settings.paths()
   local src = debug.getinfo(1, "S").source:gsub("^@", "")
   local root = src:match("^(.*)/lua/lulibre/ui/proposer%.lua$")
+  local chunk
   for _, path in ipairs { (paths.scripts or "") .. "/" .. name .. ".lua", (root or ".") .. "/scripts/" .. name .. ".lua" } do
-    local chunk = loadfile(path)
-    if chunk then return chunk(...) end
+    chunk = chunk or loadfile(path)
   end
-  error(("the script '%s' was not found"):format(name), 0)
+  if not chunk then error(("the script '%s' was not found"):format(name), 0) end
+  local shown = print
+  print = function(...)
+    local parts = table.pack(...)
+    for i = 1, parts.n do parts[i] = tostring(parts[i]) end
+    lulibre.log(table.concat(parts, "\t"))
+  end
+  local quiet <close> = setmetatable({}, { __close = function() print = shown end })
+  return chunk(...)
 end
 
 local function count(sql, ...)
@@ -115,28 +131,52 @@ function M.run()
       lulibre.store(("DELETE FROM proposals WHERE status = 'pending' AND book IN (%s)"):format(table.concat(chunk, ",")))
     end
   end
-  if v.refs then script("refs", filter) end
-  -- the options the boxes stand for, for this run only
-  local was = { learned = lulibre.o.subject_learned, weigh = lulibre.o.weigh_sources }
-  if v.shared or v.learned then lulibre.o.subject_learned = "propose" end
-  lulibre.o.weigh_sources = v.weigh and "on" or "off"
-  local ok, err = pcall(function()
-    local flags = {}
-    if #only < #FIELDS then flags[#flags + 1], flags[#flags + 2] = "--only", table.concat(only, ",") end
-    if v.over == 2 then flags[#flags + 1] = "--gaps" elseif v.over == 3 then flags[#flags + 1] = "--over" end
-    if v.fresh then flags[#flags + 1] = "--fresh" end
-    flags[#flags + 1] = filter
-    if v.files then script("propose", table.unpack(flags)) end
-    if v.kept or v.online then
-      local e = {}
-      if not v.online then e[#e + 1] = "--offline" end
-      if v.titles and v.online then e[#e + 1] = "--titles" end
-      e[#e + 1] = filter
-      script("enrich", table.unpack(e))
+  local steps = {}
+  if v.refs then steps[#steps + 1] = "bibliographies" end
+  if v.files then steps[#steps + 1] = "files" end
+  if v.kept or v.online then steps[#steps + 1] = v.online and "records and services" or "records" end
+  local run = runs.start { ids = ids, fields = #only < #FIELDS and wanted or nil, min = v.floor > 0 and v.floor or nil,
+    sort = ({ "confidence", "disputed", "id" })[v.sort], steps = steps }
+  do
+    -- the options the boxes stand for, for this run only; put back however
+    -- the run ends (done, failed, or stopped from outside)
+    local was = { learned = lulibre.o.subject_learned, weigh = lulibre.o.weigh_sources }
+    local over <close> = setmetatable({}, { __close = function()
+      lulibre.o.subject_learned, lulibre.o.weigh_sources = was.learned, was.weigh
+      lulibre.progress(nil)
+      runs.finish(run, "cancelled") -- does nothing when the run got to its end
+    end })
+    if v.shared or v.learned then lulibre.o.subject_learned = "propose" end
+    lulibre.o.weigh_sources = v.weigh and "on" or "off"
+    local ok, err = pcall(function()
+      if v.refs then
+        runs.step(run, "bibliographies")
+        script("refs", filter)
+      end
+      local flags = {}
+      if #only < #FIELDS then flags[#flags + 1], flags[#flags + 2] = "--only", table.concat(only, ",") end
+      if v.over == 2 then flags[#flags + 1] = "--gaps" elseif v.over == 3 then flags[#flags + 1] = "--over" end
+      if v.fresh then flags[#flags + 1] = "--fresh" end
+      flags[#flags + 1] = filter
+      if v.files then
+        runs.step(run, "files")
+        script("propose", table.unpack(flags))
+      end
+      if v.kept or v.online then
+        runs.step(run, v.online and "records and services" or "records")
+        local e = {}
+        if not v.online then e[#e + 1] = "--offline" end
+        if v.titles and v.online then e[#e + 1] = "--titles" end
+        e[#e + 1] = filter
+        script("enrich", table.unpack(e))
+      end
+    end)
+    if not ok then
+      runs.finish(run, "failed")
+      error(err, 0)
     end
-  end)
-  lulibre.o.subject_learned, lulibre.o.weigh_sources = was.learned, was.weigh
-  if not ok then error(err, 0) end
+    runs.finish(run)
+  end
 
   local mine = {}
   for _, id in ipairs(ids) do mine[id] = true end
@@ -157,10 +197,7 @@ function M.run()
   end
   lulibre.notify(("%d proposal%s for %d book%s%s"):format(there, there == 1 and "" or "s", #ids, #ids == 1 and "" or "s",
     accepted > 0 and (", %d accepted at %.2f or more"):format(accepted, v.accept) or ""))
-  if did == "review" then
-    require("lulibre.ui.review").run { ids = ids, fields = #only < #FIELDS and wanted or nil, min = v.floor > 0 and v.floor or nil,
-      sort = ({ "confidence", "disputed", "id" })[v.sort] }
-  end
+  if did == "review" then require("lulibre.ui.review").show_run(run) end
 end
 
 return M

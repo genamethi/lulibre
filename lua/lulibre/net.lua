@@ -760,8 +760,87 @@ function M.same_title(a, b)
   return both >= 3 and both / (na + nb - both) > 0.4
 end
 
---- Search CrossRef by title; the record only if its title really matches.
-function M.crossref_search(title)
+-- the words of a title that tell it from another, in order
+local TITLE_STOP = { the = 1, a = 1, an = 1, of = 1, ["in"] = 1, on = 1, ["for"] = 1, ["and"] = 1, to = 1, with = 1,
+  by = 1, from = 1, at = 1, is = 1, are = 1 }
+local function title_words(s)
+  local list, seen = {}, {}
+  for w in lulibre.fold(s or ""):gmatch("[%w]+") do
+    if not TITLE_STOP[w] and not seen[w] then
+      seen[w] = true
+      list[#list + 1] = w
+    end
+  end
+  return list, seen
+end
+
+-- family names, folded: of "Given Family", "Family, Given" and "G. Family"
+local function family_names(people)
+  local set, n = {}, 0
+  for _, name in ipairs(people or {}) do
+    local low = lulibre.fold(name)
+    local family = low:match("^([^,]+),") or low
+    local last
+    for w in family:gmatch("[%a][%a'%-]+") do last = w end
+    if last and not set[last] then
+      set[last] = true
+      n = n + 1
+    end
+  end
+  return set, n
+end
+
+--- Is a record that a search for a title turned up the work in hand, and how
+-- far can it be believed? mine: the book's title; theirs: the record's;
+-- my_authors, their_authors: lists of names, either may be empty. Returns a
+-- confidence (0.7 to 0.9) or nil.
+--
+-- A search always answers with something, and titles share their words:
+-- "An introduction to the ipaddress module" brought back "An Introduction to
+-- Module Theory", and two words in three were once enough. Now the titles
+-- must say the same thing: the same telling words (0.8), or one of them the
+-- other with something after it, a subtitle or the author's name run on
+-- (0.7), and then only when four words or more are shared. A short title
+-- ("Algebraic Geometry", "The Galois Correspondence") is many works': it
+-- counts only when an author's family name is in the record too. Agreeing
+-- authors add to the confidence; authors on both sides with no name in
+-- common mean another work, whatever the titles say.
+function M.title_match(mine, theirs, my_authors, their_authors)
+  local a, sa = title_words(mine)
+  local b, sb = title_words(theirs)
+  if #a == 0 or #b == 0 then return nil end
+  local short, long, in_long = a, b, sb
+  if #b < #a then short, long, in_long = b, a, sa end
+  local same = #a == #b
+  for _, w in ipairs(short) do
+    if not in_long[w] then same = false end
+  end
+  local runs_on = false
+  if not same and #short >= 4 then
+    runs_on = true
+    for i, w in ipairs(short) do
+      if long[i] ~= w then runs_on = false end
+    end
+  end
+  if not same and not runs_on then return nil end
+  local fa, na = family_names(my_authors)
+  local fb, nb = family_names(their_authors)
+  local agree
+  if na > 0 and nb > 0 then
+    agree = false
+    for name in pairs(fa) do
+      if fb[name] then agree = true end
+    end
+    if not agree then return nil end
+  end
+  if same then return agree and 0.9 or (#short >= 4 and 0.8 or nil) end
+  return agree and 0.85 or 0.7
+end
+
+--- Search CrossRef by title; the record only if it is that work (title_match
+-- says how). authors: the book's, when it has any worth the name. The
+-- record carries `trust`: how far the match can be believed.
+function M.crossref_search(title, authors)
   local body, err = M.fetch("crossref-title", lulibre.fold(title),
     "https://api.crossref.org/works?rows=3&query.bibliographic=" .. encode(title) .. mailto("&"))
   if not body then return nil, err end
@@ -769,8 +848,9 @@ function M.crossref_search(title)
   if not ok or type(data) ~= "table" or not data.message then return nil, "unreadable reply from CrossRef" end
   for _, item in ipairs(data.message.items or {}) do
     local rec = crossref_record(item)
-    if rec.title and M.same_title(title, rec.title) then
-      rec.source = "CrossRef title search"
+    local trust = rec.title and M.title_match(title, rec.title, authors, rec.authors)
+    if trust then
+      rec.source, rec.trust = "CrossRef title search", trust
       return rec
     end
   end

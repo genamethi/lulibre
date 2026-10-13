@@ -3,7 +3,11 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.0)
+## 0.2.0-alpha.1
+
+The second alpha: dialogs over what lulibre already does, how far sources
+agree and how much each is believed, and runs of proposing that review
+shows by themselves.
 
 - `<Leader>pr` (`:propose-review`): a dialog for a whole round: which
   books, what is asked (files, kept records, services, bibliographies,
@@ -16,7 +20,48 @@ written in `src/version.h`.
   own records, field by field; `:weights` (`<Leader>w`) shows the table and
   lets any weight be set by hand. With `weigh_sources = "on"` confidences
   are worked out from them. Off by default.
+- More dialogs over what lulibre already does: `<Leader>e` looks the
+  selection up (what would be asked of whom, a box for each service),
+  `<Leader>c` makes one change to every selected book, `<Leader>d` shows
+  the databases with boxes for which to fetch, `<Leader>s` adds, moves or
+  drops the selected waiting files. `<Leader><Space>` unmarks every book.
+- The arXiv stamp on a paper's first page gives a date only when it is a
+  first version's: a later version's stamp is the day of that revision,
+  and half the stamped papers carry one. arXiv's own record of a paper now
+  outranks its stamp, and when a record gives the day the proposals read
+  off the stamp or the number are withdrawn instead of left beside it.
 - `lulibre.ui.form`: the dialog pane, for scripts.
+- Each go of proposing is a run (`lulibre.runs`). While one is going on the
+  status line carries a badge beside the mode (`⟳ PROPOSING  280 books:
+  records, step 2 of 2`). Review shows the runs as tabs: one for each that
+  still has something waiting, and "all waiting"; `l` and `h` (or a click)
+  switch, and `D` drops what the run in view added, stopping it first if it
+  is still going on. `gr` opens on what was just proposed.
+- Fixed: "propose, then review" from the dialog told you to press `gr`
+  after its first step, while the later steps were still working; that
+  opened review on everything that waited, and the run's own review then
+  came up over it. The steps now keep their closing lines for the log, and
+  the run's proposals come up in the review that is open, if one is.
+- Fixed: a round stopped with `:cancel` left the options the dialog had set
+  for it (`weigh_sources`, `subject_learned`) in place.
+- Fixed: looking a book up by its title (`:enrich --titles`, the dialog's
+  "CrossRef by title") took a record when two words in three of a short
+  title agreed, and offered it at 0.95: "An introduction to the ipaddress
+  module" became "An Introduction to Module Theory". The titles must now
+  say the same thing (the same telling words, or one the other with
+  something run on after it), a short title counts only with an author in
+  common, authors that disagree rule the record out, and the proposals
+  carry 0.7 to 0.9 according to how well it fits. Of the 79 such matches
+  in the library this was found in, 17 hold.
+- `:run unmatch` goes back over what the earlier rule brought in, from the
+  answers that were kept: it lists the matches that no longer hold, and
+  with `--fix` withdraws what still waits from them and proposes, for
+  review, putting back what the books said before.
+- For scripts: `lulibre.status(name, text, style)` keeps a badge in the
+  status line; panels take `tabs` and `p:tabs(names, current)`, and
+  `p:send(key)` wakes a panel from another task. The badge
+  (`runs.badge`) and the line at the top of a run's view
+  (`review.banner`) are functions to replace.
 
 ## 0.2.0-alpha.0
 

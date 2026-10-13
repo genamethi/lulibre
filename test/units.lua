@@ -858,7 +858,13 @@ QA9.AIL64 1991
   eq("the series named first on the page, and a reprint's own year",
     { got.series, got.series_index, got.pubdate, got.publisher }, { "Graduate Texts in Mathematics", "52", "1977", "Springer" })
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
-  eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
+  eq("the arXiv stamp of a first version gives the day of submission", { got[1].field, got[1].value, got[1].source, got[1].confidence },
+    { "pubdate", "2010-12-29", "arXiv stamp", 0.9 })
+  local later = {}
+  for _, c in ipairs(layouts.read { texts = { "arXiv:hep-th/9711200v3  22 Jan 1998\narXiv:1012.6008v3  [math.CO]  14 Mar 2012\nA Note on Sieves" } }) do
+    if c.source == "arXiv stamp" then later[#later + 1] = c.value end
+  end
+  eq("the stamp of a later version is the day of a revision: no date is taken from it", later, {})
 
   -- a series named in so many words
   local function series(text) return { layouts.series_line(text) } end
@@ -1561,6 +1567,122 @@ do
     if m.command == "echo led" then found = m end
   end
   eq("lulibre.maps lists bindings", found and found.modes, "n")
+end
+
+-- runs: one go of proposing, remembered while its proposals wait
+do
+  local runs = require "lulibre.runs"
+  local proposals = require "lulibre.proposals"
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local heard = {}
+  runs.on(function(event, run) heard[#heard + 1] = event .. ":" .. (run.step or "") end)
+  local id = lulibre.ids("")[1]
+  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.5 })
+  local run = runs.start { ids = { id }, steps = { "files", "records" } }
+  eq("a run going on is listed, and is the one review opens on", { #runs.list(), runs.running() == run, runs.fresh() == run }, { 1, true, true })
+  runs.step(run, "records")
+  eq("the badge says where it is", { runs.badge(run) }, { "⟳ PROPOSING  1 book: records, step 2 of 2", "warn" })
+  proposals.add(id, "series", "Run Made This", { source = "test", confidence = 0.7 })
+  runs.finish(run)
+  runs.finish(run, "failed")
+  eq("listeners hear it start, move on and end, once", heard, { "start:", "step:records", "finish:" })
+  eq("finished, it is kept while something waits for its books", { #runs.list(), runs.running(), runs.list()[1].label == run.label, runs.waiting(run) },
+    { 1, nil, true, 2 })
+  local mine, before = 0, 0
+  for _, pr in ipairs(proposals.list(nil)) do
+    if runs.own(runs.list()[1], pr) then mine = mine + 1 elseif runs.covers(runs.list()[1], pr) then before = before + 1 end
+  end
+  eq("what it made is told from what waited before", { mine, before }, { 1, 1 })
+  eq("not looked at yet, review opens on it; looked at, no more", { runs.fresh() ~= nil, (runs.seen(runs.list()[1])), runs.fresh() }, { true })
+  eq("dropping takes only what the run made", { runs.drop(runs.list()[1]), proposals.count("pending") }, { 1, 1 })
+  eq("and the run is forgotten", #runs.list(), 0)
+  -- a run nothing waits for any more goes by itself
+  local second = runs.start { ids = { id }, fields = { series = true } }
+  proposals.add(id, "series", "Another", { source = "test", confidence = 0.7 })
+  runs.finish(second)
+  eq("a run keeps to its fields", runs.waiting(second), 1)
+  lulibre.store("UPDATE proposals SET status = 'rejected' WHERE field = 'series'")
+  eq("decided, it is listed no longer", #runs.list(), 0)
+  -- joining: a script is a run of its own, or a step of the run its task is in
+  lulibre.store("DELETE FROM proposals")
+  local outer = runs.start { ids = { id } }
+  do
+    local inner <close> = runs.join { ids = { id } }
+    inner:step("files")
+    inner:done()
+    eq("inside a run of the same task a script joins it", { inner.mine, inner.run == outer }, { false, true })
+  end
+  eq("and leaves it going", runs.running() == outer, true)
+  runs.finish(outer, "cancelled")
+  do
+    local own <close> = runs.join { ids = { id }, steps = { "files" } }
+    own:step("files")
+    eq("with no run going on it starts one", { own.mine, runs.running() == own.run }, { true, true })
+  end
+  eq("which ends with the script, as stopped unless it said it was done", { runs.running(), #runs.list() }, { nil, 0 })
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+end
+
+-- a record found by searching for a title: is it the work in hand?
+do
+  local net = require "lulibre.net"
+  local m = net.title_match
+  eq("two words in three are not the same title", m("An introduction to the ipaddress module", "An Introduction to Module Theory", {}, { "Ibrahim Assem" }), nil)
+  eq("nor is a title inside a longer one", m("Galois groups of cubics and quartics in all characteristics", "Galois Groups of Quadratics, Cubics, and Quartics"), nil)
+  eq("one word apart is another paper", m("Fully abstract models of typed lambda-calculi", "Fully abstract submodels of typed lambda calculi"), nil)
+  eq("the same words, four or more", m("A general Kummer theory for function fields", "A General Kummer Theory for Function Fields"), 0.8)
+  eq("the same words and an author in common", m("Compact Representations for Arrays in Lua", "Compact representations for arrays in Lua",
+    { "Roberto Ierusalimschy" }, { "R. Ierusalimschy", "Noemi Rodriguez" }), 0.9)
+  eq("a family name written first", m("Symmetry of algebras over a number field", "Symmetry of Algebras over a Number Field", { "Serre, Jean-Pierre" },
+    { "Jean-Pierre Serre" }), 0.9)
+  eq("a short title is many works'", m("The Galois Correspondence", "The Galois Correspondence"), nil)
+  eq("unless an author is in the record too", m("The Galois Correspondence", "The Galois Correspondence", { "Keith Conrad" }, { "K. Conrad" }), 0.9)
+  eq("authors on both sides with no name in common: another work", m("Introduction to the theory of algebraic stacks", "Introduction to the Theory of Algebraic Stacks",
+    { "Martin Olsson" }, { "Someone Else" }), nil)
+  eq("a title with something run on after it", m("Negative Knowledge from Positive Evidence Charles Yang", "Negative Knowledge from Positive Evidence"), 0.7)
+  eq("too short to run on", m("Algebraic spaces and stacks", "Algebraic spaces"), nil)
+  eq("nothing against nothing", m("", "Anything at all here now"), nil)
+end
+
+-- unmatch: what an earlier, looser search by title brought in is found again and put back
+do
+  local proposals = require "lulibre.proposals"
+  local edit = require "lulibre.edit"
+  local id = lulibre.ids("")[1]
+  local book = lulibre.book(id)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local answer = json.encode { message = { items = { { DOI = "10.1000/Wrong", title = { "An Introduction to Module Theory" },
+    author = { { given = "Ibrahim", family = "Assem" } } } } } }
+  lulibre.store("INSERT OR REPLACE INTO lookups(service, key, at, status, body) VALUES('crossref-title', 'an introduction to the ipaddress module', ?, 200, ?)",
+    os.time(), answer)
+  -- as the old rule left it: the title written over, a DOI still waiting
+  lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, status, created)
+    VALUES(?, 'title', 'set', ?, 'CrossRef title search', 0.95, 'applied', ?)]], id, book.title, os.time())
+  lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, status, created)
+    VALUES(?, 'identifiers', 'add', 'doi:10.1000/wrong', 'CrossRef title search', 0.95, 'pending', ?)]], id, os.time())
+  lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label, undone)
+    VALUES(9001, ?, 'title', 'An introduction to the ipaddress module', ?, 'applied', ?, 'review', 0)]], id, book.title, os.time())
+  local src = debug.getinfo(1, "S").source:gsub("^@", "")
+  local script = assert(loadfile((src:match("^(.*)/test/units%.lua$") or ".") .. "/scripts/unmatch.lua"))
+  local said, shown = {}, print
+  print = function(text) said[#said + 1] = tostring(text) end
+  local ok, err = pcall(script)
+  eq("looking changes nothing", { ok or err, proposals.count("pending"), said[1] and said[1]:find("0 hold under the rule as it is now, 1 do not", 1, true) ~= nil },
+    { true, 1, true })
+  ok, err = pcall(script, "--fix")
+  print = shown
+  local left = proposals.list("pending")
+  eq("--fix withdraws what waits and proposes what the book said before",
+    { ok or err, #left, left[1] and left[1].field, left[1] and left[1].value, left[1] and left[1].source },
+    { true, 1, "title", "An introduction to the ipaddress module", "before a wrong title match" })
+  eq("as a run of its own, so review shows it by itself", #require("lulibre.runs").list(), 1)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM journal WHERE batch = 9001")
+  lulibre.store("DELETE FROM lookups WHERE service = 'crossref-title'")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local _ = edit
 end
 
 print(("%d checks, %d failed"):format(count, fails))
