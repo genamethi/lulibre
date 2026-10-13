@@ -828,6 +828,59 @@ do
   lulibre.store("DELETE FROM refs")
 end
 
+-- metadata services: answered from what is kept, never from the network here
+do
+  local net = require "lulibre.net"
+  net.offline = true
+  net.keep("arxiv", "1012.6008", 200, [[<entry>
+    <id>http://arxiv.org/abs/1012.6008v2</id>
+    <published>2010-12-29T18:01:10Z</published>
+    <title>A Note on
+  Sieve Methods</title>
+    <summary>  We prove a thing. </summary>
+    <author><name>Paul Erd&#39;os</name></author>
+    <author><name>A. N. Other</name></author>
+    <arxiv:doi xmlns:arxiv="http://arxiv.org/schemas/atom">10.1000/xyz</arxiv:doi>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="math.NT" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>]])
+  local r = net.arxiv("1012.6008v2")
+  eq("arXiv: title, authors, the day, the class as a subject, the DOI it knows",
+    { r.title, r.authors, r.date, r.subjects[1].tag, r.ids.doi, r.ids.arxiv, r.source },
+    { "A Note on Sieve Methods", { "Paul Erd'os", "A. N. Other" }, "2010-12-29", "math/number-theory", "10.1000/xyz", "1012.6008", "arXiv 1012.6008" })
+  net.keep("crossref", "10.2307/2118559", 200, [=[{"status":"ok","message":{"DOI":"10.2307/2118559","type":"journal-article",
+    "title":["Modular Elliptic Curves and Fermat's Last Theorem"],"author":[{"given":"Andrew","family":"Wiles"}],
+    "publisher":"JSTOR","issued":{"date-parts":[[1995,5]]},"container-title":["The Annals of Mathematics"]}}]=])
+  r = net.crossref("10.2307/2118559")
+  eq("CrossRef: an article's registrant is not offered as its publisher", { r.title, r.authors, r.year, r.publisher, r.ids.doi },
+    { "Modular Elliptic Curves and Fermat's Last Theorem", { "Andrew Wiles" }, 1995, nil, "10.2307/2118559" })
+  net.keep("zbmath", "doi:10.2307/2118559", 200, [=[{"result":[{"contributors":{"authors":[{"name":"Wiles, Andrew"}]},
+    "document_type":{"code":"j","description":"journal article"},"identifier":"0823.11029","year":"1995",
+    "msc":[{"code":"11G05","scheme":"msc2020"},{"code":"11F11","scheme":"msc2020"},{"code":"14H52","scheme":"msc2020"}],
+    "title":{"title":"Modular elliptic curves and Fermat's Last Theorem","subtitle":null}}],"status":{"status_code":200}}]=])
+  r = net.zbmath { doi = "10.2307/2118559" }
+  eq("zbMATH: the subject from the MSC codes, the main one surest, an area named once",
+    { r.authors, r.ids.zbl, #r.subjects, r.subjects[1].tag, r.subjects[1].confidence, r.subjects[1].why, r.subjects[2].tag },
+    { { "Andrew Wiles" }, "0823.11029", 2, "math/number-theory", 0.9, "MSC 11G05", "math/algebraic-geometry" })
+  net.keep("openlibrary", "9780387902449", 200, [=[{"ISBN:9780387902449":{"title":"Algebraic Geometry (Graduate Texts in Mathematics)",
+    "authors":[{"name":"Robin Hartshorne"}],"publishers":[{"name":"Springer"}],"publish_date":"April 1, 1997",
+    "classifications":{"lc_classifications":["QA564-609"]}}}]=])
+  r = net.openlibrary("978-0-387-90244-9")
+  eq("Open Library: the series out of the title's bracket, the subject from the shelf class",
+    { r.title, r.series, r.authors, r.publisher, r.date, r.subjects[1].tag }, { "Algebraic Geometry", "Graduate Texts in Mathematics",
+      { "Robin Hartshorne" }, "Springer", "1997-04-01", "math/algebraic-geometry" })
+  net.keep("crossref", "10.9999/none", 404)
+  local none, why = net.crossref("10.9999/none")
+  eq("what a service did not have is remembered as such", { none, why }, { nil, "crossref has no record of 10.9999/none" })
+  none, why = net.crossref("10.1000/never-asked")
+  eq("offline, nothing is asked", { none, why:find("offline") ~= nil }, { nil, true })
+  eq("requests carry the contact address only when one is set", { net.agent():find("mailto") },  {})
+  lulibre.o.contact_email = "me@example.org"
+  eq("and then they do", net.agent():find("mailto:me@example.org", 1, true) ~= nil, true)
+  lulibre.o.contact_email = ""
+  lulibre.store("DELETE FROM lookups")
+  net.offline = false
+end
+
 -- one record's values offered to another
 do
   local dupes = require "lulibre.dupes"

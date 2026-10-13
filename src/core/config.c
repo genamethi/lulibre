@@ -82,6 +82,15 @@ static const struct opt_def opts[] = {
   OPT(title_case, OPT_STR, "auto", "auto|never",
       "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
       NULL),
+  OPT(enrich_services, OPT_STR, "arxiv,crossref,zbmath,openlibrary,openalex", NULL,
+      "the metadata services :enrich asks, separated by commas: arxiv (by arXiv number), crossref "
+      "and openalex (by DOI), zbmath (by DOI or arXiv number; gives mathematics its subject), "
+      "openlibrary (by ISBN). None needs an account",
+      "Looking things up"),
+  OPT(contact_email, OPT_STR, "", NULL,
+      "an address sent with each request to those services (CrossRef and OpenAlex give steadier "
+      "service to callers they can reach); nothing is sent while this is empty",
+      NULL),
   OPT(sync_dir, OPT_PATH, "", NULL,
       "a folder of files waiting to be added to the library; gS shows it", "The sync folder"),
   OPT(sync_propose, OPT_STR, "ask", POLICY,

@@ -181,7 +181,8 @@ local function script(name)
 end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
 lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page images with tesseract")
-lulibre.command("enrich", script("enrich"), "[filter]  look the selection up on arXiv and CrossRef; proposes")
+lulibre.command("enrich", script("enrich"),
+  "[--offline] [--titles] [filter]  look books up by their identifiers (arXiv, CrossRef, zbMATH, Open Library); proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
 lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
