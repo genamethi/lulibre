@@ -874,7 +874,33 @@ QA9.AIL64 1991
   j = layouts.journal("Ann. of Math. (2) 141 (1995), 443–551")
   eq("or a series before the volume", { j.journal, j.volume, j.year }, { "Ann. of Math.", 141, 1995 })
   eq("a line of prose with a year is not one", layouts.journal("We follow Serre 12 (1973) and others in this"), nil)
-  eq("the year of the heading", reads("journal header", "Journal of Algebra 320 (2008) 1234–1256\nOn groups"), "2008")
+  local function field_of(name, field, text)
+    for _, c in ipairs(layouts.read { texts = { text } }) do
+      if c.source == name and c.field == field then return c.value end
+    end
+  end
+  eq("the year of the heading", field_of("journal header", "pubdate", "Journal of Algebra 320 (2008) 1234–1256\nOn groups"), "2008")
+  j = layouts.journal("Milan J. Math. Vol. 78 (2010) 135–152")
+  eq("'Vol.' is not part of a journal's name", { j.journal, j.volume }, { "Milan J. Math.", 78 })
+  eq("nor are capitals", layouts.journal("INTERNATIONAL JOURNAL OF QUANTUM CHEMISTRY 8 (1974) 1-20").journal, "International Journal of Quantum Chemistry")
+  -- an article's publisher is its journal, after the house behind it
+  eq("a house is written one way", { layouts.house("Springer-Verlag New York, Inc."), layouts.house("Springer Science and Business Media LLC"),
+    layouts.house("Elsevier BV"), layouts.house("Cambridge University Press (CUP)"), layouts.house("Informa UK Limited"),
+    layouts.house("American Institute of Mathematical Sciences (AIMS)"), layouts.house("Example Press"), layouts.house("") },
+    { "Springer", "Springer", "Elsevier", "Cambridge University Press", "Taylor & Francis", "American Institute of Mathematical Sciences", "Example Press" })
+  eq("the journal after its house", { layouts.with_journal("Elsevier BV", "Journal of Algebra"), layouts.with_journal(nil, "Journal of Algebra"),
+    layouts.with_journal("Springer", nil), layouts.with_journal(nil, nil) },
+    { "Elsevier: Journal of Algebra", "Journal of Algebra", "Springer" })
+  eq("an archive that only registers the articles is not the publisher", layouts.with_journal("JSTOR", "The Annals of Mathematics"), "The Annals of Mathematics")
+  eq("a society's own journal says whose it is already",
+    layouts.with_journal("American Mathematical Society (AMS)", "Transactions of the American Mathematical Society"), "Transactions of the American Mathematical Society")
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "Journal of Algebra 320 (2008) 1234–1256\nOn groups\n© 2008 Elsevier Inc. All rights reserved." } }) do
+    if c.field == "publisher" then got[c.source] = { c.value, c.confidence } end
+  end
+  eq("read from a first page: the journal with its house is the surer publisher", got,
+    { ["journal header"] = { "Elsevier: Journal of Algebra", 0.82 }, ["copyright line"] = { "Elsevier", 0.8 } })
+  eq("a journal alone, when the page names no house", field_of("journal header", "publisher", "Physica 63 (1973) 1-32\nSCATTERING THEORY"), "Physica")
   local function year_of(text)
     for _, c in ipairs(layouts.read { texts = { text } }) do
       if c.source == "copyright line" and c.field == "pubdate" then return c.value end
@@ -977,6 +1003,7 @@ do
   r = net.crossref("10.2307/2118559")
   eq("CrossRef: an article's registrant is not offered as its publisher", { r.title, r.authors, r.year, r.publisher, r.ids.doi },
     { "Modular Elliptic Curves and Fermat's Last Theorem", { "Andrew Wiles" }, 1995, nil, "10.2307/2118559" })
+  eq("but its journal is kept, with who registered it", { r.container, r.member, r.type }, { "The Annals of Mathematics", "JSTOR", "journal-article" })
   net.keep("zbmath", "doi:10.2307/2118559", 200, [=[{"result":[{"contributors":{"authors":[{"name":"Wiles, Andrew"}]},
     "document_type":{"code":"j","description":"journal article"},"identifier":"0823.11029","year":"1995",
     "msc":[{"code":"11G05","scheme":"msc2020"},{"code":"11F11","scheme":"msc2020"},{"code":"14H52","scheme":"msc2020"}],
@@ -1010,6 +1037,7 @@ do
     net.arxiv_id("math.AG/0601001v3"), net.arxiv_id("hep-th/9711200"), net.arxiv_id("10.1000/xyz"), net.arxiv_id("1012.60") },
     { "1012.6008", "2301.00001", "math/0601001", "hep-th/9711200", nil, nil })
   eq("no faster than its terms allow", net.PACE.arxiv >= 3, true)
+  eq("nor the others than theirs: Open Library one a second, CrossRef five", { net.PACE.openlibrary >= 1, net.PACE.crossref >= 0.2 }, { true, true })
   local ids = {}
   for i = 1, net.ARXIV_BATCH + 2 do ids[i] = ("1012.%04d"):format(i) end
   local urls = net.arxiv_urls(ids)
@@ -1249,6 +1277,7 @@ do
 
   -- CrossRef and Open Library take many at a time too
   fresh()
+  local pace_cr, pace_ol = net.PACE.crossref, net.PACE.openlibrary
   net.PACE.crossref, net.PACE.openlibrary = 0, 0
   answer = function(url)
     if url:find("crossref", 1, true) then
@@ -1273,7 +1302,7 @@ do
   eq("a batch that fails is not asked for again piece by piece", { l1, lwhy:find("pause") ~= nil, #calls, net.kept("crossref", "10.1000/later1") },
     { nil, true, 3 })
 
-  net.get, net.PACE.arxiv, net.PACE.crossref, net.PACE.openlibrary = real_get, pace, 1, 1
+  net.get, net.PACE.arxiv, net.PACE.crossref, net.PACE.openlibrary = real_get, pace, pace_cr, pace_ol
   fresh()
 end
 

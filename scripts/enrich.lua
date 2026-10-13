@@ -25,6 +25,7 @@
 local edit = require "lulibre.edit"
 local extract = require "lulibre.extract"
 local junk = require "lulibre.junk"
+local layouts = require "lulibre.layouts"
 local net = require "lulibre.net"
 local proposals = require "lulibre.proposals"
 local propose = require "lulibre.propose"
@@ -180,6 +181,9 @@ end
 -- publisher's own record (CrossRef) and the author's (arXiv) come first;
 -- zbMATH writes titles its own way (in sentence case) and is asked for the
 -- subject, which it classifies by hand and nobody else does.
+-- kinds of record whose "container" is a journal or a volume of proceedings
+-- (a chapter's is the book it is in)
+local ARTICLE = { ["journal-article"] = true, ["proceedings-article"] = true, article = true }
 local TRUST = { arxiv = 0.95, crossref = 0.95, openlibrary = 0.9, zbmath = 0.85, openalex = 0.85 }
 
 -- Is the record that of the book in hand? A number or DOI that calibre
@@ -262,7 +266,16 @@ for n, b in ipairs(books) do
         offer("authors", table.concat(authors, " & "), source, sure)
       end
       offer("pubdate", r.date or r.year, r.source, r.date and trust or trust - 0.05)
-      offer("publisher", r.publisher, r.source, trust - 0.05)
+      -- An article's publisher is its journal, after the house behind the
+      -- journal when the record names one; a book's is its house, written
+      -- the one way that house is.
+      local publisher = layouts.house(r.publisher)
+      if r.container and ARTICLE[r.type or ""] then
+        publisher = layouts.with_journal(r.member, r.container)
+        -- the record names no house, but the book has one already: the journal goes after it
+        if publisher == r.container then publisher = layouts.with_journal(layouts.known_house(b.book.publisher), r.container) end
+      end
+      offer("publisher", publisher, r.source, trust - 0.05)
       offer("series", r.series, r.source, 0.85)
       offer("series_index", r.series_index, r.source, 0.85)
       for _, s in ipairs(r.subjects) do offer("tags", s.tag, ("%s (%s)"):format(r.source, s.why), s.confidence) end

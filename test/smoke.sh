@@ -100,6 +100,25 @@ expect   "the title, the publisher of a book, the Zbl number" \
   "$(run query -f id id:2 >/dev/null 2>&1; printf 'for _, p in ipairs(lulibre.sql("SELECT field, value FROM proposals WHERE book = 2 AND status = \x27pending\x27 AND field IN (\x27title\x27, \x27publisher\x27) OR value LIKE \x27zbl:%%\x27 ORDER BY field")) do io.write(p.field, ":", p.value, "|") end\n' > "$t/p.lua"; run run "$t/p.lua" 2>&1 | sed 's/|$//')"
 contains "a book with no identifier is passed over" "a record for 0" "$(run run enrich --offline id:1 2>&1)"
 
+# fetching arXiv's snapshot: a stand-in for Kaggle's program, so nothing is asked of Kaggle
+cat > "$t/fakekaggle" <<'SH'
+#!/bin/sh
+# kaggle datasets download Cornell-University/arxiv -p DIR --unzip
+[ "$1 $2 $3" = "datasets download Cornell-University/arxiv" ] || { echo "unexpected: $*" >&2; exit 2; }
+printf '%s\n' '{"id":"0704.0001","authors":"A. N. Other","title":"A Paper","categories":"math.NT","versions":[{"version":"v1","created":"Mon, 2 Apr 2007 19:18:42 GMT"}],"authors_parsed":[["Other","A. N.",""]]}' > "$5/arxiv-metadata-oai-snapshot.json"
+SH
+cat > "$t/nokaggle" <<'SH'
+#!/bin/sh
+echo "401 Client Error: Unauthorized" >&2
+exit 1
+SH
+chmod +x "$t/fakekaggle" "$t/nokaggle"
+contains "a fetch that Kaggle refuses says why, and what to do" "put it in ~/.kaggle/" "$(run run arxiv-fetch --with "$t/nokaggle" 2>&1)"
+contains "arXiv's snapshot is fetched into the data folder" "arXiv's snapshot fetched" "$(run run arxiv-fetch --with "$t/fakekaggle" 2>&1)"
+expect   "where :enrich looks for it"  "$XDG_DATA_HOME/lulibre/arxiv-metadata-oai-snapshot.json" \
+  "$(printf 'print(require("lulibre.net").arxiv_snapshot_path())\n' > "$t/sp.lua"; run run "$t/sp.lua" 2>&1)"
+contains "a fresh one is not fetched again"  "arXiv renews it about weekly" "$(run run arxiv-fetch --with "$t/nokaggle" 2>&1)"
+
 # a binary run from a source tree that has since become another version says so
 mkdir -p "$t/tree/build" "$t/tree/src"
 cp "$bin" "$t/tree/build/lulibre"
