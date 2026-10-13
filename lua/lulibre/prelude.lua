@@ -244,6 +244,60 @@ lulibre.command("titlecase", function(args)
   lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
 end, "[all]  put the selected books' titles in title case: those in CAPITALS, or with all, every one")
 
+lulibre.command("clear", function(args)
+  local propose, edit = require "lulibre.propose", require "lulibre.edit"
+  local words = {}
+  for w in args:gmatch("%S+") do words[#words + 1] = w end
+  local set, bad = propose.fields(words[1] or "")
+  if not set or not next(set) then
+    lulibre.notify(("clear which field? title authors subject ids date publisher (or t a s i d p)%s"):format(
+      bad and ", not '" .. bad .. "'" or ""), "error")
+    return
+  end
+  local filter = table.concat(words, " ", 2)
+  local ids = filter ~= "" and lulibre.ids(filter) or lulibre.selection()
+  local changes, names = {}, {}
+  for field in pairs(set) do names[#names + 1] = field end
+  table.sort(names)
+  for _, id in ipairs(ids) do
+    local book = lulibre.book(id)
+    for _, field in ipairs(names) do
+      if book and edit.current(book, field) ~= "" then changes[#changes + 1] = { id = id, field = field, value = "" } end
+    end
+  end
+  if #changes == 0 then
+    lulibre.notify("those fields are empty already")
+    return
+  end
+  if not lulibre.confirm(("blank %s in %d book%s? (%s puts it back)"):format(table.concat(names, " and "), #ids,
+      #ids == 1 and "" or "s", lulibre.hint("undo"))) then
+    return
+  end
+  local r = edit.apply(changes, { label = "clear " .. table.concat(names, ",") })
+  lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+end, "FIELDS [filter]  blank fields (title authors subject ids date publisher, or t a s i d p) in the selection or the books a filter matches")
+
+lulibre.command("junk", function(args)
+  local propose, edit = require "lulibre.propose", require "lulibre.edit"
+  local ids = args ~= "" and lulibre.ids(args) or lulibre.ids("in:library")
+  lulibre.exec("mark none")
+  local n = 0
+  for _, id in ipairs(ids) do
+    local book = lulibre.book(id)
+    if book and (propose.is_gap("title", edit.current(book, "title"))
+        or (edit.current(book, "authors") ~= "" and propose.is_gap("authors", edit.current(book, "authors")))) then
+      lulibre.mark(id, true)
+      n = n + 1
+    end
+  end
+  if n == 0 then
+    lulibre.notify("no title or author here looks like junk")
+  else
+    lulibre.filter("is:marked")
+    lulibre.notify(("marked %d books whose title or author is not one (a file name, a number, a program's name); :propose proposes for them"):format(n))
+  end
+end, "[filter]  mark and list the books whose title or author is plainly not one")
+
 lulibre.command("remove", function()
   local ids = lulibre.selection()
   if #ids == 0 then return end

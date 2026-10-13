@@ -85,6 +85,23 @@ Added
   `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
 - In the edit form, subjects that say what a book is about come before
   catch-alls such as `math/general` (option `subject_catchall`).
+- One field at a time. `:propose --only title,ids` keeps to the fields
+  named; `--fresh` proposes the file's reading whatever the record says, for
+  when a field went wrong across many books; in review `f` and a letter
+  shows only that field's proposals, and accept-all then speaks for it
+  alone. `:clear FIELDS` blanks fields outright.
+- A value that is plainly not one is treated as empty when proposing: a
+  title that is a number, a file name or a heading, an author that is a
+  program, a site or a rank. `:junk` marks and lists such records.
+- Title pages: a title that begins with "Introduction" is no longer taken
+  for the heading that ends the front matter (no title was read from such
+  pages at all); a smaller line that leads into the largest is part of the
+  title ("Introduction to" above "Commutative Algebra"); a page set in one
+  size has its title read from its first lines; "Professor A. Name" is A.
+  Name.
+- `lulibre.map` takes a description for the help overlay, or `false` to stay
+  out of it.
+- A warning when the password file can be read by other users.
 - Review lists the books surest first: the one whose best proposal has the
   highest confidence at the top, with how many proposals wait for each. `s`
   switches to id order; the option `review_sort` sets the default.

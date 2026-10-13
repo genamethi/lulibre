@@ -213,6 +213,23 @@ function M.write_jobs()
 end
 
 --- The start of every calibredb command for this library.
+-- A file that holds a secret should be readable by its owner alone. lulibre
+-- never reads the password itself (calibredb is handed the file's name), but
+-- it can tell when others on the machine could: said once, as a warning.
+local warned = {}
+function M.check_secret(path)
+  if warned[path] then return end
+  local ok, uv = pcall(require, "luv")
+  local st = ok and uv.fs_stat(path)
+  if st and st.mode and st.mode % 64 ~= 0 then -- any permission for group or others
+    warned[path] = true
+    lulibre.log(("%s can be read by other users of this machine (mode %o): chmod 600 %s"):format(path, st.mode % 512, path),
+      "warn")
+    return false
+  end
+  return true
+end
+
 function M.calibredb()
   local o, a = lulibre.o, { "calibredb" }
   if M.route() == "server" then
@@ -229,6 +246,7 @@ function M.calibredb()
         error(("the password file %s does not exist (lulibre.o.password_file)"):format(o.password_file), 0)
       end
       f:close()
+      M.check_secret(o.password_file)
       a[#a + 1] = "--password"
       a[#a + 1] = "<f:" .. o.password_file .. ">"
     end

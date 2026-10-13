@@ -43,6 +43,7 @@ local DEFAULTS = {
     { "accept_above", { "A" }, "accept all above…", "accept every pending proposal at or above a confidence you give" },
     { "reject_rest", { "R" }, "reject rest", "reject everything still pending" },
     { "sort", { "s" }, "sort", "order the books by their surest proposal, or by id" },
+    { "field", { "f" }, "field…", "show one field's proposals only: then t title, a authors, s subject, i identifiers, d date, p publisher; f again for all" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "write", "write what has been accepted, as one change that can be undone" },
   },

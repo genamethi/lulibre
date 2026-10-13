@@ -527,6 +527,22 @@ do
   cands[1].confidence = 0.6
   eq("sure: a weak candidate does not go over a value", fields("sure"), "publisher")
   eq("any: it does", fields("any"), "authors! publisher")
+  -- one field at a time, and as if the fields were empty
+  eq("--only takes names or letters", { propose.fields("title,ids"), propose.fields("t a d"), (propose.fields("t,nosuch")) },
+    { { identifiers = true, title = true }, { authors = true, pubdate = true, title = true } })
+  cands[1].confidence = 0.6
+  local function fresh(o)
+    local out = {}
+    for _, w in ipairs(propose.wanted(book, cands, o)) do out[#out + 1] = w.field .. (w.over and "!" or "") end
+    return table.concat(out, " ")
+  end
+  eq("fresh: the file's reading of every field, whatever the book says", fresh { fresh = true }, "authors! publisher")
+  eq("only: kept to the fields named", { fresh { fresh = true, only = { publisher = true } }, fresh { only = { authors = true }, over = "any" } },
+    { "publisher", "authors!" })
+  eq("what is plainly no value is a gap", { propose.is_gap("title", "417675"), propose.is_gap("title", "annals-v163-n3-p05"),
+    propose.is_gap("title", "2019 44 31 x"), propose.is_gap("title", "A Course in Arithmetic"), propose.is_gap("authors", "libgen.li"),
+    propose.is_gap("authors", "Professor Emeritus"), propose.is_gap("authors", "Jean-Pierre Serre"), propose.is_gap("authors", "") },
+    { true, true, true, false, true, true, false, true })
   -- a rejection is remembered
   local ok, pid = proposals.add(2, "publisher", "Rejected House", { source = "test", confidence = 0.9 })
   eq("a proposal is added", ok, true)
@@ -604,6 +620,17 @@ do
     { "David Mumford", "first line, named twice", 0.85 })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
+  got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),
+    line("UNIVERSITY OF OXFORD", 7.6) }
+  eq("a title may begin with Introduction, and with a smaller line that leads into it", { got.title, got.authors },
+    { "Introduction to Commutative Algebra", { "M. F. ATIYAH" } })
+  got = titlepage.classify { line("ON THE LOGARITHMS OF", 10), line("NEGATIVE AND IMAGINARY NUMBERS", 10), line("Leonhard Euler", 10),
+    line("1. In the exchange of letters between Messrs. Leibnitz and Jean Bernoulli, we find", 10),
+    line("a great controversy over the logarithms of negative and imaginary numbers.", 10), line("more text here", 10) }
+  eq("a page in one size: the capitals at the top are the title, the name under them the author", { got.title, got.authors },
+    { "ON THE LOGARITHMS OF NEGATIVE AND IMAGINARY NUMBERS", { "Leonhard Euler" } })
+  eq("a title before a name is taken off it", { names.clean("Professor Karen E. Smith"), names.never("Professor Karen E. Smith"),
+    names.never("Professor Emeritus"), names.never("Professor") }, { "Karen E. Smith", false, true, true })
 end
 
 -- how far a record can be trusted, and the ones confirmed
@@ -728,6 +755,9 @@ do
   eq("two keys in a row are allowed", lulibre.place_keys("console"):find("gg  gt +the oldest entry") ~= nil, true)
   eq("an unknown action of a place is refused", (pcall(lulibre.map, "line", "<C-g>", "nosuch")), false)
   eq("no such place", lulibre.place_keys("nowhere"), nil)
+  lulibre.map("n", "gB", "run bib", "write the selection as BibTeX")
+  lulibre.map("n", "gH", function() end, false)
+  eq("a key can say what it does, or stay out of the help", { lulibre.key("run bib") }, { "gB" })
   lulibre.map("n", "<Leader>z", "echo led")
   local found
   for _, m in ipairs(lulibre.maps()) do

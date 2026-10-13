@@ -2,27 +2,50 @@
 -- Changes nothing by itself: go through the proposals with :review.
 --   :run propose                  the selection
 --   :run propose author:unknown   every book matching a filter
---   :run propose --over           also where the file disagrees with a value the
---                                 book already has, however weak the evidence,
---                                 and even if that was proposed and rejected before
---   :run propose --gaps           only fields that are empty
+--   :run propose --only title,ids author:conrad
+--                                 only those fields: title authors subject ids date publisher,
+--                                 or their letters t a s i d p
+--   :run propose --fresh FILTER   as if the fields were empty: the file's best reading of each,
+--                                 whatever the book says now, and even if it was rejected before.
+--                                 With --only, for when one field went wrong across many books.
+--   :run propose --over           also where the file disagrees with a value the book has,
+--                                 however weak the evidence
+--   :run propose --gaps           only fields that are empty or hold junk
 --   lulibre run propose 'tag:none fmt:pdf'
 -- Without a flag the option propose_over decides ("sure": a filled field is
 -- proposed for only when the file is confident and differs).
 local propose = require "lulibre.propose"
 
-local words, over, again = {}, nil, false
-for _, a in ipairs { ... } do
-  if a == "--over" then over, again = "any", true
-  elseif a == "--gaps" then over = "gaps"
-  else words[#words + 1] = a end
+local words, opts = {}, {}
+local args = { ... }
+local i = 1
+while i <= #args do
+  local a = args[i]
+  if a == "--over" then opts.over, opts.again = "any", true
+  elseif a == "--gaps" then opts.over = "gaps"
+  elseif a == "--fresh" then opts.fresh, opts.again = true, true
+  elseif a == "--only" or a:match("^%-%-only=") then
+    local list = a:match("^%-%-only=(.*)$")
+    if not list then
+      i = i + 1
+      list = args[i] or ""
+    end
+    local set, bad = propose.fields(list)
+    if not set or not next(set) then
+      error(("--only wants fields (title authors subject ids date publisher, or t a s i d p), not '%s'"):format(bad or list), 0)
+    end
+    opts.only = set
+  else
+    words[#words + 1] = a
+  end
+  i = i + 1
 end
 local filter = table.concat(words, " ")
 local ids = (lulibre.headless or filter ~= "") and lulibre.ids(filter) or lulibre.selection()
 
 local added, replacing, books = 0, 0, 0
 for n, id in ipairs(ids) do
-  local a, r = propose.book(id, { over = over, again = again })
+  local a, r = propose.book(id, opts)
   added, replacing = added + a, replacing + r
   if a > 0 then books = books + 1 end
   if n % 25 == 0 then lulibre.progress(("proposing %d/%d"):format(n, #ids)) end

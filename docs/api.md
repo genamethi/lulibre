@@ -93,7 +93,7 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.jump(id)` | move the cursor to a book |
 | `lulibre.exec(line)` | run a command line |
 | `lulibre.command(name, fn [, help])` | define a `:` command; `fn(args)` runs as a task |
-| `lulibre.map(modes, keys, target)` | bind keys to a command line or a function. With a panel's name for `modes` (`"review"`), or a place's (`"panel"`, `"line"`, `"picker"`, `"pager"`, `"console"`), put a key on one of its actions |
+| `lulibre.map(modes, keys, target [, about])` | bind keys to a command line or a function; `about` is what `?` shows for the key, `false` keeps it out. With a panel's name for `modes` (`"review"`), or a place's (`"panel"`, `"line"`, `"picker"`, `"pager"`, `"console"`), put a key on one of its actions |
 | `lulibre.key(command [, mode])` | the keys bound to a command line (`"gr"`), or nil |
 | `lulibre.hint(command)` | the same for a message: the keys, or `":command"` when there are none |
 | `lulibre.maps()` | every global binding: `{ {modes=, keys=, command=}, ... }` |
@@ -205,7 +205,7 @@ its own documentation.
 | `lulibre.proposals` | add, list, accept, apply |
 | `lulibre.quality` | a record's score, and the confirmed ones: `score(book)`, `ranked(opts)`, `set_good(ids, on)`, `is_good(id)`, `good_ids()`, `catchall(subject)` |
 | `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
-| `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, again=})`, `wanted(book, candidates, over)`, `same(field, a, b)` |
+| `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |

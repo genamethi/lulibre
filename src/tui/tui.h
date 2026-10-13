@@ -87,6 +87,8 @@ struct binding {
   uint32_t keys[KEYSEQ_MAX];
   int nkeys;
   char *command;
+  char *about; /* what the help overlay says the key does, when given; else the command */
+  int hidden;  /* left out of the help overlay */
 };
 
 struct keymap {
@@ -103,6 +105,10 @@ int key_parse(const char *spec, uint32_t out[KEYSEQ_MAX]);
 void key_format(sbuf *out, const uint32_t *keys, int n);
 /* Add or replace a binding. modes is a bitmask of enum mode. */
 int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command);
+/* The same, with what the help overlay is to say of it (NULL: the command
+ * itself), or hidden from it. */
+int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
+                   int hidden);
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
 const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
 /* Does a binding in this mode begin with key and run one of these commands
