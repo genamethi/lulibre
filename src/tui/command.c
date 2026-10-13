@@ -42,6 +42,11 @@ void command_register_lua(const char *name, int ref, const char *help) {
   add(name, NULL, ref, help);
 }
 
+void command_each(int (*fn)(const char *name, const char *help, void *ud), void *ud) {
+  for (int i = 0; i < ncmds; i++)
+    if (fn(cmds[i].name, cmds[i].help, ud)) return;
+}
+
 void commands_free(void) {
   for (int i = 0; i < ncmds; i++) {
     free(cmds[i].name);
@@ -245,7 +250,18 @@ static void c_preview(struct tui *t, const char *args) {
   else if (arg_is(args, "pan")) preview_pan(t, atoi(arg_rest(args)));
   else if (arg_is(args, "zoom")) preview_zoom(t, atoi(arg_rest(args)));
   else if (arg_is(args, "select")) preview_select(t);
-  else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N | select");
+  else if (arg_is(args, "add")) {
+    /* read the file as far as the page being looked at */
+    sqlite3_int64 book;
+    int page, indexed;
+    if (!preview_position(t, &book, &page, &indexed)) tui_msg(t, 1, "there is no file in the preview");
+    else if (page <= indexed) tui_msg(t, 0, "page %d is read already: the first %d pages of this file are", page, indexed);
+    else {
+      char *line = xasprintf("addpages %lld %d", (long long)book, page);
+      tui_exec(t, line);
+      free(line);
+    }
+  } else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N | select | add");
 }
 
 static void c_index(struct tui *t, const char *args) {
@@ -512,6 +528,7 @@ void commands_builtin(void) {
   command_register("set", c_set, "name[=value]  show or change an option");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "this screen");
+  command_register("help-plain", c_help, "keys and commands as one long page");
 }
 
 void command_help(struct tui *t) {

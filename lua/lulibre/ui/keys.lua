@@ -79,6 +79,16 @@ local DEFAULTS = {
     { "match", { "m" }, "matches", "have the library's list follow with the books that look like the file, or leave it be" },
     { "rescan", { "R" }, "look again", "read the sync folder again" },
   },
+  help = {
+    { "toggle", { "<Space>", "<CR>" }, "open or close", "open the heading, or close it; on a key, show what the guides say about it" },
+    { "open", { "<Right>", "l" }, "open", "open the heading" },
+    { "close", { "<Left>", "h" }, "close", "close the heading the cursor is on, or under" },
+    { "find", { "/" }, "search", "search every key and command as you type; an empty search shows all again" },
+    { "clear", { "<BS>" }, "all again", "leave the search and show everything" },
+    { "topic", { "K" }, "the guides", "what the guides say about the key or command under the cursor" },
+    { "all", { "O" }, "open all", "open every heading" },
+    { "none", { "C" }, "close all", "close every heading" },
+  },
   good = {
     { "confirm", { "<Space>", "<CR>" }, "confirm", "confirm the record as right, or take that back" },
     { "confirm_above", { "A" }, "confirm all above…", "confirm every record at or above a score you give" },

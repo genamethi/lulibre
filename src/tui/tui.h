@@ -350,6 +350,9 @@ void preview_page(struct tui *t, int delta);
 void preview_pan(struct tui *t, int delta);
 void preview_zoom(struct tui *t, int delta); /* 0 resets */
 void preview_toggle_graphic(struct tui *t);
+/* Where the preview is: its book, the page shown and how many pages of the
+ * file have been read. 0 when there is no preview, or no file in it. */
+int preview_position(struct tui *t, sqlite3_int64 *book, int *page, int *indexed);
 /* The mouse in a text preview: what is 0 for a press at that cell, 1 while
  * dragging, 2 on release. Dragging selects text, a double click a word, a
  * triple click a line; what was selected is copied. Returns 1 while a drag
@@ -471,6 +474,8 @@ void tui_exec(struct tui *t, const char *line);
 void commands_builtin(void);
 void commands_free(void);
 void command_help(struct tui *t);
+/* Call fn for each command, in the order they were made; a non-zero return stops. */
+void command_each(int (*fn)(const char *name, const char *help, void *ud), void *ud);
 
 /* ------------------------------------------------------------------ tui.c */
 

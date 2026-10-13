@@ -28,11 +28,37 @@ code.
 - Run `make check` and `make e2e` and read the result **before** the merge
   command, not in the same pipeline: a merge chained after a filtered test
   run went through with three failures in it.
-- The version is written in `src/version.h` and nowhere else. Bump the
-  pre-release tag there (`-alpha`, `-beta`, `-rc.1`, `""`).
-- Builds of a version are numbered by `make` (docs/development.md, Builds).
-  Tell the user the number of the build they are given: `lulibre -V`, or
-  the last line of `make builds`.
+- The version is written in `src/version.h` and nowhere else.
+- Builds of a version are numbered by `make` (docs/development.md, Builds),
+  each version as it is written in full having its own count: the first
+  build of `0.2.0-alpha.0` is 001 whatever `0.2.0-dev` had reached. Tell the
+  user the number of the build they are given: `lulibre -V`, or the last
+  line of `make builds`.
+
+### Moving to the next version
+
+The user says when (bumping is their call, never a consequence of a batch
+being finished). Then, on a branch in the second checkout:
+
+1. `src/version.h`: the pre-release tag (`-alpha.0`, `-alpha.1`, `-beta.0`,
+   `-rc.1`, `""` for a release), or the numbers. Nothing else holds the
+   version: `./configure` reads it, and `make` runs configure again by
+   itself when the header changes.
+2. `CHANGELOG.md`: the section that was "in development" takes the version
+   as its heading; a new "in development" section is opened above it only
+   when work for the next one begins.
+3. `man/lulibre.1`: the date and version in its `.TH` line.
+4. `make check` and `make e2e`, read, then merged into `0.2.0-dev` and
+   `main` like any other change. The build number starts again at 001 by
+   itself.
+5. In the user's tree, after the merge and `make`: an annotated tag,
+   `git tag -a v0.2.0-alpha.0 -m "lulibre 0.2.0-alpha.0"`. Releases and
+   pre-releases are both tagged; builds are not.
+6. Tell the user the version and the build number, and record in the memory
+   notes where the line stands.
+
+After 0.2.0 is released, 0.2.1 is the patch line the user has set aside for
+optimization, quality of life and bug fixes: features wait for 0.3.0.
 - Commit only when asked. A fix goes with a test that fails without it.
 - Record user-visible changes in `CHANGELOG.md`.
 

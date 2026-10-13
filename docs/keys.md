@@ -1,7 +1,11 @@
 # Keys and commands
 
-`?` inside lulibre shows this list as it currently stands, including anything
-`init.lua` has added. Every key runs a command; `:` runs one by name.
+`?` inside lulibre shows the keys as they currently stand, including
+anything `init.lua` has added, under headings that open and close: Enter
+opens one, `/` searches all of them as you type, `K` shows what the guides
+say about the key under the cursor. `:help TOPIC` shows the part of these
+guides about a word (`:help enrich`, `:help filters`). Every key runs a
+command; `:` runs one by name.
 
 ## The list
 
@@ -24,6 +28,7 @@
 | `gt` | `browse` | tree in a left column: `f` switches facet, `l`/`h` open and close, `/` finds |
 | `Space` | `mark toggle` | on a heading: every book under it. `:mark all`, `none`, `invert` |
 | `V` | `visual` | select a range; `Esc` ends it |
+| `gp` | `propose` | propose metadata for what is selected, from the files themselves |
 | `e` · `r` | `edit` · `review selection` | the edit form, or the waiting proposals, for what is selected: the range, else the marked books, else the books under the heading the cursor is on, else the book |
 | `R` | `reload` | re-read calibre's metadata now |
 
@@ -36,6 +41,7 @@
 | `P` | text ⇄ page image |
 | `+` `-` `=` | zoom the image in, out, reset |
 | `H` `L` | pan the image |
+| `a` | read the file as far as the page being shown, when it is past the pages that were indexed |
 | `v` | select text with the keys: a cursor comes out in the page's text. `h` `j` `k` `l` and the arrows move it, `w` `b` by words, `0` `$` to the ends of the line, `gg` `G` of the page; `v` begins a selection (again lets go of it), `V` takes the line; `y` or Enter copies and leaves, `Esc` or `q` leaves. These are the keys of the place `select`: `lulibre.map("select", "n", "down")` |
 
 ## Windows
