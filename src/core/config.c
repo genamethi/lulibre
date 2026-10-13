@@ -94,7 +94,8 @@ static const struct opt_def opts[] = {
   OPT(arxiv_snapshot, OPT_PATH, "", NULL,
       "a file of arXiv's records (its snapshot from Kaggle, or a hypergraph of arXiv; .json or .zip): "
       ":enrich reads a paper's record from it and asks arXiv only about papers newer than the file. "
-      "Empty: arxiv.json in lulibre's data folder (~/.local/share/lulibre) is used if it is there",
+      "Empty: arxiv-metadata-oai-snapshot.json or arxiv.json in lulibre's data folder "
+      "(~/.local/share/lulibre) is used if it is there",
       NULL),
   OPT(sync_dir, OPT_PATH, "", NULL,
       "a folder of files waiting to be added to the library; gS shows it", "The sync folder"),

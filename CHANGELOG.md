@@ -104,7 +104,8 @@ Added
   `:enrich` reads papers from it and asks arXiv only about those newer
   than the file. Both arXiv's own snapshot and a hypergraph of arXiv are
   read; from the second, authors are put in the order of the paper's first
-  page.
+  page. The snapshot is preferred where both are there, and betters the
+  records that were read from a hypergraph.
 - `:enrich` leaves out the record of a work the file only cites (an
   identifier found in the pages whose record has another title), puts TeX
   in arXiv's titles and names into plain text (`lulibre.detex`), and does

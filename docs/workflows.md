@@ -385,20 +385,26 @@ record from the file and asks arXiv only about papers the file does not
 hold (those newer than it). Put the file in lulibre's data folder, beside
 the index, under one of the names it looks for:
 
-    ~/.local/share/lulibre/arxiv.json
     ~/.local/share/lulibre/arxiv-metadata-oai-snapshot.json
+    ~/.local/share/lulibre/arxiv.json
     ~/.local/share/lulibre/arxiv.zip
 
-or say where it is: `lulibre.o.arxiv_snapshot = "/data/arxiv.json"`. Two
-kinds of file are read, told apart by how they begin:
+(the first of them that is there; a link to the file will do) or say where
+it is: `lulibre.o.arxiv_snapshot = "/data/arxiv-metadata-oai-snapshot.json"`.
+Two kinds of file are read, told apart by how they begin:
 
 | File | Holds | Lacks |
 |---|---|---|
 | arXiv's own snapshot, [on Kaggle](https://www.kaggle.com/Cornell-University/arxiv) as `arxiv-metadata-oai-snapshot.json`: one paper to a line | title, authors in order, classes, DOI, the day of each version | |
 | a hypergraph of arXiv (papers as "edges", authors as "nodes", one JSON document over many lines) | title, authors, classes | the order of the authors, the DOI, the day of submission |
 
-The file is read through once (half a minute for five gigabytes), only for
-the papers wanted; each record found is kept like any other answer, and a
+arXiv's own snapshot is the one to have: `kaggle datasets download
+Cornell-University/arxiv --unzip` fetches it, and it is renewed about once
+a week. A record that was read from a hypergraph is looked for again when
+the snapshot is there, and bettered from it.
+
+The file is read through once (ten seconds for the snapshot's three million
+papers, half a minute for a hypergraph), only for the papers wanted; each record found is kept like any other answer, and a
 paper the file does not hold is not looked for in it again until the file
 changes. A newer download replaces the old one; nothing else needs doing.
 

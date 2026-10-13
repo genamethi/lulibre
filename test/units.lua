@@ -1137,7 +1137,6 @@ do
   eq("a paper newer than the file is left to be asked for", net.kept("arxiv", "2501.00001"), nil)
   eq("a second reading has nothing left to look for but that", { net.arxiv_snapshot(snap, { "0704.0001", "0704.0002" }) }, { 0, 0 })
   eq("a file that is not there says so", (select(2, net.arxiv_snapshot("/nonexistent/snapshot.json", { "0801.0001" }))):find("cannot read") ~= nil, true)
-  os.remove(snap)
 
   -- the other file of arXiv's records: a hypergraph, set out over many lines
   fresh()
@@ -1219,6 +1218,19 @@ do
     { { "Jared Duker Lichtman", "Second Author" }, true })
   eq("and when it does not name them all, the order is not to be trusted",
     select(2, net.in_order_of({ "Second Author", "Jared Duker Lichtman" }, "A PROOF\nJ. D. Lichtman\nAbstract")), false)
+  -- arXiv's own snapshot says more than the hypergraph did: its record takes the place of the other
+  sf = assert(io.open(snap, "w"))
+  sf:write([=[{"id":"2202.02384","authors":"Jared Duker Lichtman, Second Author","title":"A proof of the Erd\\H{o}s primitive set conjecture","doi":"10.1017/fmp.2023.16","categories":"math.NT","versions":[{"version":"v1","created":"Fri, 4 Feb 2022 20:47:55 GMT"}],"authors_parsed":[["Lichtman","Jared Duker",""],["Author","Second",""]]}]=], "\n")
+  sf:close()
+  eq("a record from the hypergraph is looked for again in arXiv's own snapshot", { net.arxiv_snapshot(snap, { "2202.02384", "math/0601001" }) }, { 1, 1 })
+  net.offline = true
+  h1, h2 = net.arxiv("2202.02384"), net.arxiv("math/0601001")
+  eq("and bettered: the authors in order, the DOI, the day", { h1.authors, h1.authors_unordered, h1.ids.doi, h1.date },
+    { { "Jared Duker Lichtman", "Second Author" }, nil, "10.1017/fmp.2023.16", "2022-02-04" })
+  eq("what the snapshot does not hold keeps the record it had", h2.title, "On p-state p-adic Potts model")
+  net.offline = false
+  eq("and is not looked for there again", { net.arxiv_snapshot(snap, { "2202.02384", "math/0601001" }) }, { 0, 0 })
+  os.remove(snap)
   os.remove(hif)
   local nf = assert(io.open(hif, "w"))
   nf:write("just some text\n")
