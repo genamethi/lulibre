@@ -24,6 +24,7 @@
 -- wanted for are picked up by the next run.
 local edit = require "lulibre.edit"
 local extract = require "lulibre.extract"
+local junk = require "lulibre.junk"
 local net = require "lulibre.net"
 local proposals = require "lulibre.proposals"
 local propose = require "lulibre.propose"
@@ -47,33 +48,40 @@ for n, id in ipairs(ids) do
   local book = lulibre.book(id)
   if book then
     local known = { arxiv = book.idents.arxiv, doi = book.idents.doi, isbn = book.idents.isbn }
+    -- an identifier read from the file may be that of a work it cites: which
+    -- were, and what the file's own title seems to be, to tell by
+    local in_file, titles = {}, {}
     if not (known.arxiv and known.doi and known.isbn) then
       for _, c in ipairs(extract.candidates(id)) do
         if c.field == "identifiers" then
           for kind in pairs { arxiv = 1, doi = 1, isbn = 1 } do
-            known[kind] = known[kind] or c.value:match("^" .. kind .. ":(.+)")
+            local value = c.value:match("^" .. kind .. ":(.+)")
+            if value and not known[kind] then known[kind], in_file[kind] = value, true end
           end
+        elseif c.field == "title" then
+          titles[#titles + 1] = c.value
         end
       end
     end
+    if book.title and not junk.title(book.title) then titles[#titles + 1] = book.title end
     known.arxiv = known.arxiv and net.arxiv_id(known.arxiv)
-    books[#books + 1] = { id = id, book = book, known = known }
+    books[#books + 1] = { id = id, book = book, known = known, in_file = in_file, titles = titles }
   end
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
 
 -- arXiv's own snapshot of its records, if there is one here, is read before
 -- arXiv is asked anything: what it holds costs no request
-local snapshot = lulibre.o.arxiv_snapshot or ""
+local snapshot = net.arxiv_snapshot_path()
 local from_snapshot
-if use.arxiv and snapshot ~= "" then
+if use.arxiv and snapshot then
   local numbers = {}
   for _, b in ipairs(books) do
     if b.known.arxiv then numbers[#numbers + 1] = b.known.arxiv end
   end
-  lulibre.progress("reading arXiv's snapshot")
-  local found, lines = net.arxiv_snapshot(snapshot, numbers, function(n)
-    lulibre.progress(("reading arXiv's snapshot: %.1f million records"):format(n / 1e6))
+  lulibre.progress("reading arXiv's records from " .. snapshot)
+  local found, lines = net.arxiv_snapshot(snapshot, numbers, function(far)
+    lulibre.progress(("reading arXiv's records from the file: %s"):format(far))
   end)
   if found then
     from_snapshot = found
@@ -174,14 +182,34 @@ end
 -- subject, which it classifies by hand and nobody else does.
 local TRUST = { arxiv = 0.95, crossref = 0.95, openlibrary = 0.9, zbmath = 0.85, openalex = 0.85 }
 
-local added, found, replacing = 0, 0, 0
+-- Is the record that of the book in hand? A number or DOI that calibre
+-- holds is taken at its word; one read from the file's pages is believed
+-- only if the record's title is the book's, or the title the file shows.
+local function fits(b, kind, rec)
+  if not b.in_file[kind] or not rec.title or #b.titles == 0 then return true end
+  local theirs = lulibre.fold(rec.title)
+  for _, title in ipairs(b.titles) do
+    if net.same_title(title, rec.title) then return true end
+    -- a title cut short is still the title
+    local mine = lulibre.fold(title)
+    if #mine >= 12 and theirs:sub(1, #mine) == mine then return true end
+  end
+  return false
+end
+
+local added, found, replacing, cited = 0, 0, 0, 0
 local by_service = {}
 for n, b in ipairs(books) do
   lulibre.progress(("looking up %d/%d"):format(n, #books))
   local records = {}
-  local function ask(service, fn, ...)
-    if not use[service] then return nil end
+  local other = {} -- kinds of identifier that turned out to be another work's
+  local function ask(service, kind, fn, ...)
+    if not use[service] or other[kind] then return nil end
     local rec = fn(...)
+    if rec and not fits(b, kind, rec) then
+      other[kind], rec = true, nil
+      cited = cited + 1
+    end
     if rec then
       rec.service = service
       records[#records + 1] = rec
@@ -190,15 +218,20 @@ for n, b in ipairs(books) do
     return rec
   end
   local k = b.known
-  local ax = k.arxiv and ask("arxiv", net.arxiv, k.arxiv)
-  local doi = k.doi or (ax and ax.ids.doi)
-  local cr = doi and ask("crossref", net.crossref, doi)
-  if doi and not cr then ask("openalex", net.openalex, doi) end
-  if doi or k.arxiv then ask("zbmath", net.zbmath, doi and { doi = doi } or { arxiv = k.arxiv }) end
+  local ax = k.arxiv and ask("arxiv", "arxiv", net.arxiv, k.arxiv)
+  local doi, doi_kind = k.doi, "doi"
+  if not doi and ax and ax.ids.doi then doi, doi_kind = ax.ids.doi, "arxiv" end
+  local cr = doi and ask("crossref", doi_kind, net.crossref, doi)
+  if doi and not cr then ask("openalex", doi_kind, net.openalex, doi) end
+  if doi and not other[doi_kind] then
+    ask("zbmath", doi_kind, net.zbmath, { doi = doi })
+  elseif k.arxiv and not doi then
+    ask("zbmath", "arxiv", net.zbmath, { arxiv = k.arxiv })
+  end
   local isbn = k.isbn or (cr and cr.ids.isbn)
-  if isbn then ask("openlibrary", net.openlibrary, isbn) end
+  if isbn then ask("openlibrary", "isbn-record", net.openlibrary, isbn) end
   if #records == 0 and by_title and use.crossref and b.book.title and #b.book.title >= 20 then
-    ask("crossref", net.crossref_search, b.book.title)
+    ask("crossref", "title", net.crossref_search, b.book.title)
   end
 
   -- what the records say, as candidates, the surest first within a field
@@ -212,8 +245,22 @@ for n, b in ipairs(books) do
     end
     for _, r in ipairs(records) do
       local trust = TRUST[r.service] or 0.85
-      offer("title", r.title, r.source, trust)
-      if #r.authors > 0 then offer("authors", table.concat(r.authors, " & "), r.source, trust) end
+      -- a title with TeX left in it fills a gap, but is not put over a title that reads well
+      offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or r.source, r.title_tex and 0.75 or trust)
+      if #r.authors > 0 then
+        local authors, source, sure = r.authors, r.source, trust
+        if r.authors_unordered then
+          -- a file of arXiv's that does not say who comes first: the paper's own first page does
+          local ordered, all = net.in_order_of(authors, lulibre.text(b.id))
+          authors = ordered
+          if all then
+            source = source .. ", in the order of the first page"
+          else
+            source, sure = source .. " (in no order: the file gives none)", 0.75
+          end
+        end
+        offer("authors", table.concat(authors, " & "), source, sure)
+      end
       offer("pubdate", r.date or r.year, r.source, r.date and trust or trust - 0.05)
       offer("publisher", r.publisher, r.source, trust - 0.05)
       offer("series", r.series, r.source, 0.85)
@@ -246,6 +293,10 @@ print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already k
   #books, #books == 1 and "" or "s", found, #said > 0 and table.concat(said, ", ") or "none",
   net.stats.asked, net.stats.asked == 1 and "" or "s", net.stats.kept, added, added == 1 and "" or "s",
   replacing > 0 and (", %d for a field that has a value"):format(replacing) or "", lulibre.hint("review")))
+if cited > 0 then
+  print(("%d record%s left out: the identifier is in the file's pages, but the record's title is not the book's (a work it cites)"):format(
+    cited, cited == 1 and "" or "s"))
+end
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
   local till = use[name] and net.held(name)
   if till then

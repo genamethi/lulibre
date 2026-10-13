@@ -360,19 +360,45 @@ service would get and about how long the run would take.
 
 ### arXiv without asking arXiv
 
-arXiv publishes all of its metadata as one file, the
-[snapshot on Kaggle](https://www.kaggle.com/Cornell-University/arxiv)
-(`arxiv-metadata-oai-snapshot.json`: every paper, one to a line, several
-gigabytes, renewed about once a week). Say where it is:
+With a file of arXiv's records on this machine, `:enrich` reads a paper's
+record from the file and asks arXiv only about papers the file does not
+hold (those newer than it). Put the file in lulibre's data folder, beside
+the index, under one of the names it looks for:
 
-```lua
-lulibre.o.arxiv_snapshot = "~/data/arxiv-metadata-oai-snapshot.json"   -- or the .zip as downloaded
-```
+    ~/.local/share/lulibre/arxiv.json
+    ~/.local/share/lulibre/arxiv-metadata-oai-snapshot.json
+    ~/.local/share/lulibre/arxiv.zip
 
-and `:enrich` reads each paper's record from the file (once through it,
-some ten seconds) and keeps it like any other answer. arXiv is then asked
-only about papers the file does not hold, which are those newer than it.
-A newer download replaces the old one; nothing else needs doing.
+or say where it is: `lulibre.o.arxiv_snapshot = "/data/arxiv.json"`. Two
+kinds of file are read, told apart by how they begin:
+
+| File | Holds | Lacks |
+|---|---|---|
+| arXiv's own snapshot, [on Kaggle](https://www.kaggle.com/Cornell-University/arxiv) as `arxiv-metadata-oai-snapshot.json`: one paper to a line | title, authors in order, classes, DOI, the day of each version | |
+| a hypergraph of arXiv (papers as "edges", authors as "nodes", one JSON document over many lines) | title, authors, classes | the order of the authors, the DOI, the day of submission |
+
+The file is read through once (half a minute for five gigabytes), only for
+the papers wanted; each record found is kept like any other answer, and a
+paper the file does not hold is not looked for in it again until the file
+changes. A newer download replaces the old one; nothing else needs doing.
+
+From a hypergraph the authors come in no order, so they are put in the
+order the paper's own first page names them in; where the page does not
+name them all, the proposal says so and is not put over authors a book
+already has. The day of submission is still read from the stamp arXiv
+prints on the page.
+
+What a record says is checked before it is believed:
+
+- An arXiv number or DOI that calibre holds is taken at its word. One that
+  was read from the file's pages may belong to a work the file cites: its
+  record is left out unless the record's title is the book's title, or the
+  title the file itself shows.
+- Titles and names are held by arXiv as typed, TeX and all
+  (`Erd\H{o}s`): they are put into plain text. A title with mathematics
+  left in it fills a gap but is not put over a title that reads well.
+- The same people named less fully ("S. Joffily" for "Sérgio Joffily") are
+  not proposed; named more fully, they are.
 
 `contact_email`, if you set it, is sent with each request: CrossRef and
 OpenAlex give steadier service to callers they can reach. It is empty unless
