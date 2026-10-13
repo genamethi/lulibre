@@ -6,9 +6,49 @@ is recorded in a journal with the value it replaced, and can be undone with
 `u`.
 
 Most actions apply to the **selection**: the range being selected with `V`,
-else the marked books that are in the list, else the book under the cursor.
-With the cursor in review, duplicates or orphans, that is the book its row
-stands for; a command is refused when that book is no longer in the list.
+else the marked books that are in the list, else (in a grouped list, with
+the cursor on a heading) every book under that heading, else the book under
+the cursor. With the cursor in review, duplicates or orphans, that is the
+book its row stands for; a command is refused when that book is no longer
+in the list.
+
+## The list as a tree: `gh`
+
+The list can be set out under headings, and browsed as a hierarchy without
+leaving it:
+
+| Grouping | Headings |
+|---|---|
+| `author` | each author; a book by two stands under both |
+| `subject` | the tree of subjects: `math`, within it `number-theory`, within that `additive` |
+| `series` `publisher` `year` `format` | each value; years the newest first |
+| `folder` | the folders of the calibre library, as it is filed on disk |
+| `none` | the plain list |
+
+`gh` picks the grouping (`:group subject`), `gH` goes back to the plain
+list. A heading shows how many books are under it, and `◐` or `●` when some
+or all of them are marked.
+
+| Key | |
+|---|---|
+| Enter, `l`, `→`, `zo` | open a heading |
+| `h`, `←`, `zc` | close it; on a book, close the heading it is under; on a closed heading, step out to the one it is within |
+| `za` | open or close |
+| `zR` `zM` | open, or close, all of them |
+| a click on a heading | opens or closes it |
+| `Space` | on a heading: mark every book under it (or unmark, when they all are) |
+| `e` | the edit form: for the book, or for every book under the heading |
+| `r` | the proposals waiting for the book, or for the books under the heading |
+| Enter on a book | the edit form |
+| `s` | choose the order of the books (`:sort title`, `-year`, `-added` ...) |
+
+`:group count` puts the largest headings first, `:group name` back in
+order of name. Books with nothing to be grouped by stand under `(none)`,
+last. Filters and searches work as ever: a filter leaves the headings that
+still hold a book, with the counts of what it matched, and a search opens
+the headings that hold a match. A list of forty books or fewer starts with
+its headings open; a longer one, closed. The grouping is remembered between
+sessions.
 
 ## Editing: `e`
 
@@ -31,6 +71,15 @@ and leaves the rest alone, which is how one tag is added to two hundred books.
 To blank a field press `c`, or empty it (`<C-u>`, or backspace) and press
 `Enter`: the form shows `(blank)` where the value will be removed. Both work
 in review too.
+
+### Selecting text with the keys
+
+`v` puts a cursor in the preview's text. `h` `j` `k` `l` and the arrows
+move it, `w` and `b` by words, `0` and `$` to the ends of the line, `gg`
+and `G` of the page. `v` begins a selection where the cursor is (and lets
+go of it again), `V` takes the line; `y` or Enter copies what is selected
+(the line, when nothing is) and gives the keys back to where they were;
+`Esc` or `q` leaves without copying. Pages still turn with `]` and `[`.
 
 ### Copying from the page
 
@@ -555,6 +604,26 @@ edits are kept by lulibre; nothing reaches calibre until:
 
 `=` marks a staged file the library already has. Adding it adds nothing;
 moving it only clears it out of the folder.
+
+### Beside the library: `gb`
+
+`gb` (`:beside`) puts the sync folder in a column on the left and leaves the
+library's list beside it. The list follows the file under the cursor: to
+the book that is the very same file, when the library holds it already
+(`= 26`), else narrowed to the books whose title, authors or tags hold the
+longest words of the file's title, so that a copy under another name is
+seen before it is added twice. The preview shows the waiting file; `Tab`
+crosses to the library's list, and the preview then shows the book there.
+
+| Key | |
+|---|---|
+| `S` | add the file to the library; it stays in the folder |
+| `X` | add it, then delete it from the folder |
+| `D` | drop it |
+| `e` or Enter | edit what it will be added with |
+| `r` | review the proposals waiting for it |
+| `m` | have the library's list follow with look-alikes, or leave it be |
+| `R` | read the folder again |
 
 ## Metadata that comes with the files
 

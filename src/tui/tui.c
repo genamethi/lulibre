@@ -615,6 +615,8 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
       if (row < 0) row = 0;
       if (row >= t->rows.n) row = t->rows.n - 1;
       if (t->rows.n > 0) rows_move(t, row);
+      /* a click on a heading opens or closes it */
+      if (!wheel && t->rows.n > 0 && rows_head(t, row)) rows_fold(t, 't');
     }
   } else if (nd->cls == &view_panel) {
     if (wheel) panel_wheel(nd->state, wheel);
@@ -682,6 +684,8 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (key == (KEY_CTRL | 'c')) key = NCKEY_ESC;
+  /* selecting text in the preview with the keys: they are its own first */
+  if (t->mode == MODE_NORMAL && t->km->npending == 0 && preview_selecting(t) && preview_select_key(t, key)) return;
   if (key == NCKEY_ESC && t->km->npending == 0 && t->mode == MODE_NORMAL &&
       t->focus->cls == &view_panel) {
     panel_key(t, t->focus->state, key);
@@ -860,7 +864,7 @@ static void draw_status(struct tui *t, int y) {
     fx += dr_text(n, y, fx, end - fx, "filter ");
     dr_style(n, C_DEFAULT, theme.bar_bg, A_BOLD);
     fx += dr_text(n, y, fx, end - fx, r->filter);
-    char *hint = xasprintf("   %d of %d   %s shows all", r->n, r->total, key_hint("filter"));
+    char *hint = xasprintf("   %d of %d   %s shows all", r->nall, r->total, key_hint("filter"));
     if (!r->running && fx + dr_width(hint, strlen(hint)) <= end) {
       dr_style(n, theme.dim, theme.bar_bg, 0);
       dr_text(n, y, fx, end - fx, hint);
@@ -868,7 +872,9 @@ static void draw_status(struct tui *t, int y) {
     free(hint);
   } else {
     dr_style(n, theme.dim, theme.bar_bg, 0);
-    dr_text(n, y, x + 1, avail, r->source ? "every file in the sync folder" : "all books");
+    char *what = r->group && !r->source ? xasprintf("all books, by %s", r->group) : NULL;
+    dr_text(n, y, x + 1, avail, r->source ? "every file in the sync folder" : what ? what : "all books");
+    free(what);
   }
 }
 
