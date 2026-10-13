@@ -299,4 +299,189 @@ M.add {
   confidence = 0.95,
 }
 
+-- ---- dates ----
+
+local MONTHS = {
+  january = 1, february = 2, march = 3, april = 4, may = 5, june = 6, july = 7, august = 8, september = 9, october = 10,
+  november = 11, december = 12, jan = 1, feb = 2, mar = 3, apr = 4, jun = 6, jul = 7, aug = 8, sep = 9, sept = 9, oct = 10,
+  nov = 11, dec = 12,
+  janvier = 1, ["février"] = 2, fevrier = 2, mars = 3, avril = 4, mai = 5, juin = 6, juillet = 7, ["août"] = 8, aout = 8,
+  septembre = 9, octobre = 10, novembre = 11, ["décembre"] = 12, decembre = 12,
+  januar = 1, februar = 2, ["märz"] = 3, juni = 6, juli = 7, oktober = 10, dezember = 12,
+}
+local WORD = "[%a\128-\255]+"
+
+local function ymd(year, month, day)
+  year, month, day = tonumber(year), tonumber(month), tonumber(day)
+  if not year or year < 1600 or year > tonumber(os.date("%Y")) + 1 then return nil end
+  if not month or month < 1 or month > 12 then return nil end
+  if day and (day < 1 or day > 31) then return nil end
+  return ("%04d-%02d-%02d"):format(year, month, day or 1)
+end
+
+local function month_of(word)
+  return MONTHS[lulibre.lower(word)]
+end
+
+--- The date a piece of text opens with, as YYYY-MM-DD, and where it ends:
+-- "8 February 1972", "Feb. 8, 1972", "March 2004" (the first of the month),
+-- "2004-03-12". nil when it does not open with one. Dates written in
+-- figures alone (3/12/2004) are not read: which is the month?
+function M.date(s)
+  s = s:gsub("^%s+", "")
+  local d, m, y, e = s:match("^(%d%d?)%.?%s+(" .. WORD .. ")%.?,?%s+(%d%d%d%d)()")
+  if d and month_of(m) then return ymd(y, month_of(m), d), e end
+  m, d, y, e = s:match("^(" .. WORD .. ")%.?%s+(%d%d?)%a?%a?,?%s+(%d%d%d%d)()")
+  if m and month_of(m) then return ymd(y, month_of(m), d), e end
+  m, y, e = s:match("^(" .. WORD .. ")%.?,?%s+(%d%d%d%d)()")
+  if m and month_of(m) then return ymd(y, month_of(m)), e end
+  y, m, d, e = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)()")
+  if y then return ymd(y, m, d), e end
+  return nil
+end
+
+-- An article says when the journal received it: "Received 8 February 1972",
+-- "Received by the editors May 3, 1999", "Manuscript received March 2004",
+-- "Reçu le 12 mars 1985", "Eingegangen am 3. Mai 1962". That is the day the
+-- work was handed in, as the arXiv stamp is for a preprint.
+local RECEIVED = { "[Rr]eceived", "RECEIVED", "[Ss]ubmitted", "Reçu", "Recu", "Eingegangen" }
+local BETWEEN = { "^[%s:.]*", "^%s*by%s+the%s+[Ee]ditors?%s*:?%s*", "^%s*on%s+", "^%s*le%s+", "^%s*am%s+", "^%s*[Dd]ate%s*:?%s*",
+  "^%s*for%s+publication%s+", "^%s*in%s+" }
+M.add {
+  name = "received date",
+  find = function(doc)
+    for i = 1, math.min(2, #(doc.texts or {})) do
+      for _, word in ipairs(RECEIVED) do
+        if doc.texts[i]:find(word) then return doc.texts[i] end
+      end
+    end
+  end,
+  read = function(text)
+    for line in text:gmatch("[^\n]+") do
+      for _, word in ipairs(RECEIVED) do
+        local from = 1
+        while true do
+          local _, b = line:find(word, from)
+          if not b then break end
+          local rest = line:sub(b + 1)
+          for _, between in ipairs(BETWEEN) do
+            local _, e = rest:find(between)
+            local date = e and M.date(rest:sub(e + 1))
+            if date then return { pubdate = date } end
+          end
+          from = b + 1
+        end
+      end
+    end
+    return {}
+  end,
+  confidence = 0.7,
+}
+
+-- A paper, a set of notes or a magazine article with its date on a line of
+-- its own on the first page: "March 12, 2015", "Date: October 2009.",
+-- "Version of 3 January 2020", "SEPTEMBER 2002".
+local LABEL = { "^[Dd]ated?%s*:?%s*", "^DATE%s*:?%s*", "^[Tt]his%s+[Vv]ersion%s*:?%s*", "^[Vv]ersion%s+of%s*:?%s*", "^[Vv]ersion%s*:%s*",
+  "^[Dd]raft%s+of%s*:?%s*", "^[Dd]raft%s*:%s*", "^[Ll]ast%s+%a+%s*:?%s*", "^[Rr]evised%s*:?%s*", "^[Cc]ompiled%s+o?n?%s*:?%s*",
+  "^[Pp]reliminary%s+[Vv]ersion%s*,?%s*", "^" }
+M.add {
+  name = "dated page",
+  find = function(doc) return doc.texts and doc.texts[1] end,
+  read = function(text)
+    local before = "" -- the line above, when there is no gap between
+    for raw in (text .. "\n"):gmatch("(.-)\n") do
+      local line = trim(raw):gsub("^%((.*)%)$", "%1")
+      if #line > 0 and #line <= 48 then
+        for _, label in ipairs(LABEL) do
+          local _, e = line:find(label)
+          if e then
+            local date, stop = M.date(line:sub(e + 1))
+            -- The date is all there is on the line; and a bare date is not the
+            -- end of a sentence that began on the line above ("... in a
+            -- letter to Gauss dated / February 8, 1827.").
+            local prose = label == "^" and #before >= 60 and not before:find("[.:;]$")
+            if date and not prose and line:sub(e + stop):match("^%s*[.,;]?%s*$") then return { pubdate = date } end
+          end
+        end
+      end
+      before = trim(raw)
+    end
+    return {}
+  end,
+  confidence = 0.7,
+}
+
+-- A journal heads an article with where it stands: "Physica 63 (1973) 1-32",
+-- "Journal of Algebra 320 (2008) 1234–1256", "Invent. math. 123, 1–40
+-- (1996)", "Ann. of Math. (2) 141 (1995), 443–551". M.journal(text) gives
+-- { journal=, volume=, year=, pages= } for the first such line of a page.
+local DASH = "[%-\226]" -- a hyphen, or the first byte of an en or em dash
+function M.journal(text)
+  local n = 0
+  for raw in text:gmatch("[^\n]+") do
+    n = n + 1
+    if n > 40 then break end
+    -- without the number of a journal's series: "Ann. of Math. (2) 141"
+    local line = trim(raw):gsub("%s%(%d%)%s", " ", 1)
+    if #line <= 110 then
+      -- Name 63 (1973) 1-32
+      local name, vol, year, first = line:match("^(%u[%a\128-\255%.&,' %-]-)%s+(%d+)%s*%((%d%d%d%d)%)%s*,?%s*p?p?%.?%s*([%dlI]+)%s*" .. DASH)
+      if not name then
+        -- Name 123, 1–40 (1996)
+        name, vol, first, year = line:match("^(%u[%a\128-\255%.&,' %-]-)%s+(%d+)%s*,%s*([%dlI]+)%s*" .. DASH .. "[\128-\191]*%s*%d+%s*%((%d%d%d%d)%)")
+      end
+      year = tonumber(year)
+      if name and #name >= 4 and year and year >= 1700 and year <= tonumber(os.date("%Y")) + 1 then
+        return { journal = trim(name):gsub("[,%s]+$", ""), volume = tonumber(vol), year = year, pages = first }
+      end
+    end
+  end
+  return nil
+end
+
+M.add {
+  name = "journal header",
+  find = function(doc)
+    local text = doc.texts and doc.texts[1]
+    return text and M.journal(text) and text or nil
+  end,
+  read = function(text)
+    return { pubdate = tostring(M.journal(text).year) }
+  end,
+  confidence = 0.8,
+}
+
+-- The copyright line of a book or an article gives the year it came out:
+-- "© 2008 Elsevier Inc.", "Copyright (c) 1965, 1984 by ...". Where several
+-- years stand together the latest is the edition in hand.
+local function copyright_year(text)
+  -- the years after the sign: "1965, 1984", "1994–2023"
+  local YEARS = "([%d,%s%-\226\128\147\148]+)"
+  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*©?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*©?%s*" .. YEARS,
+    "%(c%)%s*" .. YEARS } do
+    for run in text:gmatch(pattern) do
+      local best
+      for digits in run:gmatch("%f[%d]%d%d%d%d%f[%D]") do
+        local year = tonumber(digits)
+        if year >= 1700 and year <= tonumber(os.date("%Y")) + 1 and (not best or year > best) then best = year end
+      end
+      if best then return best end
+    end
+  end
+  return nil
+end
+
+M.add {
+  name = "copyright line",
+  find = function(doc)
+    for i = 1, math.min(5, #(doc.texts or {})) do
+      if copyright_year(doc.texts[i]) then return doc.texts[i] end
+    end
+  end,
+  read = function(text)
+    return { pubdate = tostring(copyright_year(text)) }
+  end,
+  confidence = 0.75,
+}
+
 return M

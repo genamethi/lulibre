@@ -4,6 +4,7 @@
 --   :run enrich FILTER          the books a filter matches
 --   :run enrich --offline ...   only from what was fetched before: nothing is asked
 --   :run enrich --titles ...    also search CrossRef by title for books with no identifier
+--   :run enrich --plan ...      say what would be asked of whom, and ask nothing
 --
 -- Who is asked what (the option enrich_services says which of them):
 --   arXiv         by arXiv number: title, authors, the day of submission, the subject its class stands for
@@ -12,17 +13,22 @@
 --   Open Library  by ISBN: title, authors, publisher, year, series, the subject its shelf class stands for
 --   OpenAlex      by DOI, when CrossRef has nothing
 -- An identifier may be in calibre already or be found in the file. Every
--- answer is kept, so each work is asked about once, each service is asked no
--- faster than it wishes, and a run that is stopped loses nothing.
+-- answer is kept, so each work is asked about once, and a run that is stopped
+-- loses nothing. Each service is asked one thing at a time and no faster
+-- than it allows, many works to a request where it takes them (arXiv forty,
+-- five seconds apart; CrossRef and Open Library twenty), and one that says
+-- it is being asked too much is left alone for a while: the books it was
+-- wanted for are picked up by the next run.
 local edit = require "lulibre.edit"
 local extract = require "lulibre.extract"
 local net = require "lulibre.net"
 local proposals = require "lulibre.proposals"
 local propose = require "lulibre.propose"
 
-local words, by_title = {}, false
+local words, by_title, plan = {}, false, false
 for _, a in ipairs({ ... }) do
   if a == "--titles" then by_title = true
+  elseif a == "--plan" then plan = true
   elseif a == "--offline" then net.offline = true
   else words[#words + 1] = a end
 end
@@ -47,13 +53,56 @@ for n, id in ipairs(ids) do
         end
       end
     end
+    known.arxiv = known.arxiv and net.arxiv_id(known.arxiv)
     books[#books + 1] = { id = id, book = book, known = known }
   end
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
 
--- arXiv answers for forty numbers at a time, and wants three seconds between
--- requests: ask for them all first
+-- --plan: what a run would ask, from what is known before anything is asked
+-- (a DOI that arXiv or an ISBN that CrossRef turns out to know adds to it)
+if plan then
+  local function count(service, key_of)
+    local seen, n = {}, 0
+    for _, b in ipairs(books) do
+      local key = key_of(b.known)
+      if key and not seen[key] and net.kept(service, key) == nil then
+        seen[key] = true
+        n = n + 1
+      end
+    end
+    return n
+  end
+  local papers = count("arxiv", function(k) return k.arxiv end)
+  local dois = count("crossref", function(k) return k.doi and k.doi:lower() end)
+  local isbns = count("openlibrary", function(k) return k.isbn and k.isbn:gsub("[^%dXx]", ""):upper() end)
+  local rows = {
+    { "arxiv", papers, math.ceil(papers / net.ARXIV_BATCH) },
+    { "crossref", dois, math.ceil(dois / net.CROSSREF_BATCH) },
+    { "zbmath", count("zbmath", function(k)
+      return k.doi and "doi:" .. k.doi:lower() or k.arxiv and "arxiv:" .. k.arxiv
+    end) },
+    { "openlibrary", isbns, math.ceil(isbns / net.OPENLIBRARY_BATCH) },
+  }
+  local seconds = 0
+  print(("%d book%s; nothing has been asked. A run now would ask:"):format(#books, #books == 1 and "" or "s"))
+  for _, row in ipairs(rows) do
+    local service, works, requests = row[1], row[2], row[3] or row[2]
+    if use[service] then
+      local till = net.held(service)
+      print(("  %-12s %4d work%s not yet asked about, in %d request%s, %g s apart%s"):format(service, works,
+        works == 1 and "" or "s", requests, requests == 1 and "" or "s", net.PACE[service],
+        till and os.date(" (paused until %H:%M)", till) or ""))
+      seconds = seconds + requests * (net.PACE[service] + 1)
+    end
+  end
+  print(("  about %d minute%s in all; :run enrich --offline proposes from what is already kept"):format(
+    math.ceil(seconds / 60), math.ceil(seconds / 60) == 1 and "" or "s"))
+  return
+end
+
+-- arXiv answers for many numbers at a time, and allows one request every
+-- three seconds: ask for them all first
 if use.arxiv then
   local numbers = {}
   for _, b in ipairs(books) do
@@ -62,6 +111,34 @@ if use.arxiv then
   if #numbers > 0 then
     lulibre.progress(("asking arXiv about %d papers"):format(#numbers))
     net.arxiv_prefetch(numbers)
+  end
+end
+
+-- CrossRef and Open Library take many at a time as well. (A DOI that only
+-- arXiv knows is among them: its records are kept by now.)
+if use.crossref then
+  local dois = {}
+  for _, b in ipairs(books) do
+    local doi = b.known.doi
+    if not doi and b.known.arxiv and use.arxiv then
+      local rec = net.kept("arxiv", b.known.arxiv) and net.arxiv(b.known.arxiv)
+      doi = rec and rec.ids.doi
+    end
+    if doi then dois[#dois + 1] = doi end
+  end
+  if #dois > 0 then
+    lulibre.progress(("asking CrossRef about %d works"):format(#dois))
+    net.crossref_prefetch(dois)
+  end
+end
+if use.openlibrary then
+  local isbns = {}
+  for _, b in ipairs(books) do
+    if b.known.isbn then isbns[#isbns + 1] = b.known.isbn end
+  end
+  if #isbns > 0 then
+    lulibre.progress(("asking Open Library about %d books"):format(#isbns))
+    net.openlibrary_prefetch(isbns)
   end
 end
 
@@ -140,3 +217,10 @@ print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already k
   #books, #books == 1 and "" or "s", found, #said > 0 and table.concat(said, ", ") or "none",
   net.stats.asked, net.stats.asked == 1 and "" or "s", net.stats.kept, added, added == 1 and "" or "s",
   replacing > 0 and (", %d for a field that has a value"):format(replacing) or "", lulibre.hint("review")))
+for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
+  local till = use[name] and net.held(name)
+  if till then
+    print(("%s asked for a pause and was left alone: it is not asked again before %s. Run this again after that for the books it was wanted for."):format(
+      name, os.date("%H:%M", till)))
+  end
+end

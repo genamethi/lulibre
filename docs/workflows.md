@@ -206,10 +206,21 @@ are, with more confidence:
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | arXiv stamp | the day of submission |
+| received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
+| dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
+| journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year |
+| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984") | the year, the latest where several stand together |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
 What they read is proposed like anything else, marked with the layout's
-name. A layout of your own is a few lines in `init.lua`:
+name.
+
+The four that read a date are there for the books with none. All but the
+journal header are below the confidence at which a proposal replaces a value
+(`propose_over = "sure"`), so they fill gaps and leave dates alone. A date
+that calibre took from the file (the day a PDF was made, not the year the
+book came out) is one they would correct: `:propose --over --only d FILTER`
+proposes dates over what is there, for review. A layout of your own is a few lines in `init.lua`:
 
 ```lua
 require("lulibre.layouts").add {
@@ -308,15 +319,47 @@ file), `:enrich` asks what the record says and proposes it:
 None of them needs an account or a key; there is nothing to sign up for.
 
     :enrich [filter]             the selection, or the books a filter matches
+    :enrich --plan [filter]      say what would be asked of whom, and ask nothing
     :enrich --offline [filter]   only from what was fetched before: nothing is asked
     :enrich --titles [filter]    also search CrossRef by title for books with no identifier
 
 Every answer is kept in the index, "there is no such record" included, so a
 work is asked about once: a second run costs no requests, a run that was
 stopped loses nothing, and `--offline` proposes again from what is kept
-without touching the network. Each service is asked no faster than it
-wishes (arXiv: forty papers to a request, a request every three seconds), so
-a first run over many books takes a while and can be left to itself.
+without touching the network. ("No such record" is believed for thirty
+days, then asked again.)
+
+### How the services are asked
+
+lulibre is a guest of these services and asks as little as it can:
+
+- **One request at a time to a service, and a pause after each**: five
+  seconds for arXiv, one second for the others. The time of the last
+  request is kept in the index, so a second lulibre, or the same command
+  run again at once, keeps to the same pace.
+- **Many works to a request** where the service takes them: forty papers
+  for arXiv, twenty DOIs for CrossRef, twenty ISBNs for Open Library.
+  (zbMATH is asked one work at a time; it has no way to ask for several.)
+- **arXiv's rules are the strictest and are kept with room to spare.** Its
+  [terms of use](https://info.arxiv.org/help/api/tou.html) allow "no more
+  than one request every three seconds" on "a single connection at a
+  time", and its [manual](https://info.arxiv.org/help/api/user-manual.html)
+  asks that results be cached. A library with two hundred arXiv papers is
+  five requests, once.
+- **A service that says "too many requests" is left alone.** After an HTTP
+  429 or 503 nothing is retried: the service is not asked again for half
+  an hour (arXiv) or five minutes (the others), or for as long as it says
+  if that is longer. The run goes on with the other services and says at
+  the end who asked for a pause and until when; run it again later for the
+  books that were left.
+- **Nothing is asked twice.** A request that fails is not repeated in the
+  same hour, and a batch that fails is not broken up into single requests.
+
+`:enrich --plan` reads the identifiers and prints how many requests each
+service would get and about how long the run would take. To have all of
+arXiv's metadata without asking it anything, arXiv points to the
+[snapshot on Kaggle](https://www.kaggle.com/Cornell-University/arxiv);
+lulibre does not read that file yet.
 
 `contact_email`, if you set it, is sent with each request: CrossRef and
 OpenAlex give steadier service to callers they can reach. It is empty unless

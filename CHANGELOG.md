@@ -89,9 +89,20 @@ Added
   CrossRef, zbMATH Open (which gives a mathematics paper its subject from
   the MSC codes), Open Library (books by ISBN, with the subject from the
   shelf class) and OpenAlex. Every answer is kept, so a work is asked about
-  once and `--offline` proposes from what is kept; each service is asked at
-  its own pace, arXiv forty papers to a request. The options
+  once and `--offline` proposes from what is kept. The options
   `enrich_services` and `contact_email`.
+- `:enrich` keeps to each service's rules, arXiv's first (its terms: one
+  request every three seconds, one connection). One request at a time,
+  five seconds apart for arXiv and one for the others, across every running
+  lulibre; forty arXiv papers, twenty DOIs or twenty ISBNs to a request; a service that answers "too
+  many requests" is not asked again for half an hour and nothing is retried
+  or asked one by one instead; `:enrich --plan` says what a run would ask
+  before anything is asked. Old-style arXiv numbers with a subject class
+  (`math.AG/0601001`) are looked up as arXiv files them.
+- Four layouts that read a date, for the books that have none: the day a
+  journal received an article, a date on a line of its own on the first
+  page, the year in a journal's heading, the year of a copyright line.
+  `layouts.date(text)` and `layouts.journal(text)` for scripts.
 - The series-page layout knows some thirty series of several publishers
   (and takes more: `layouts.series`), with the volume, the house and the
   year. An author read off a title page who also heads entries of the
