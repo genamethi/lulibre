@@ -210,7 +210,7 @@ are, with more confidence:
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
 | journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year |
-| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984") | the year, the latest where several stand together |
+| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984 by McGraw-Hill") | the year, the latest where several stand together; the publisher, when the holder is one and not the author |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
 What they read is proposed like anything else, marked with the layout's
@@ -227,6 +227,13 @@ local layouts = require "lulibre.layouts"
 layouts.not_series["bertrand"] = true      -- "Bertrand Series" is a sum, not a set of books
 layouts.series_houses["polity"] = true     -- "Polity Series in ..." needs nothing else to bear it out
 ```
+
+A publisher on a copyright line is written one way whatever the line says
+("Springer-Verlag Berlin Heidelberg", "Springer Nature Switzerland AG" and
+"Springer Science+Business Media" are all Springer): `layouts.houses` is the
+list, `{ pattern, name }`, and takes more. A holder that is not on it but
+reads as a house ("Chelsea Publishing Company") is proposed as written, less
+surely; an author's own copyright names no publisher.
 
 The four that read a date are there for the books with none. All but the
 journal header are below the confidence at which a proposal replaces a value
