@@ -105,6 +105,13 @@ Added
   when a field went wrong across many books; in review `f` and a letter
   shows only that field's proposals, and accept-all then speaks for it
   alone. `:clear FIELDS` blanks fields outright.
+- A title of one word is no longer junk for being one word: "Algebra" and
+  "Topology" are titles; "infinite" and "E807en" are still what a file name
+  leaves behind. The option `one_word_titles` (`check`, `ok`, `junk`) sets
+  the rule, `good_titles` lists titles to leave alone, and nothing in a
+  record confirmed as good is treated as junk. (Every one-word title used
+  to count as empty, so a bulk accept could replace it unasked, the edit
+  form's "fill gaps" could overwrite it, and it scored as junk.)
 - A value that is plainly not one is treated as empty when proposing: a
   title that is a number, a file name or a heading, an author that is a
   program, a site or a rank. `:junk` marks and lists such records.

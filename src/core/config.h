@@ -23,6 +23,8 @@ struct config {
   char *review_sort;   /* confidence | id: the order of books in review */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
+  char *one_word_titles; /* check | ok | junk: is a title of one word a title? */
+  char *good_titles;   /* titles, comma-separated, that are titles whatever they look like */
   char *never_titles;  /* words and phrases that mark a title as not one */
   char *never_authors; /* words and phrases, comma-separated, that are never an author */
   int refs_pages;      /* closing pages of a file read when looking for its bibliography */

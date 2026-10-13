@@ -50,6 +50,14 @@ static const struct opt_def opts[] = {
       "proposes when the file is confident (0.8 or more) and says something different; any "
       "proposes whenever the file's best candidate differs",
       NULL),
+  OPT(one_word_titles, OPT_STR, "check", "check|ok|junk",
+      "a title of one word: check takes a plain capitalised word (Algebra, Topology) for a title "
+      "and what is left of a file name (infinite, E807en) for junk; ok takes any single word for "
+      "a title; junk takes none",
+      NULL),
+  OPT(good_titles, OPT_STR, "", NULL,
+      "titles, separated by commas, that are titles whatever they look like: \"Notes, Preface, 1984\"",
+      NULL),
   OPT(never_titles, OPT_STR, "", NULL,
       "words and phrases, separated by commas, that mark a title as not a title (added to the "
       "built-in ones such as untitled, or a file name): \"scan, downloaded from\"",

@@ -285,8 +285,8 @@ lulibre.command("junk", function(args)
   local n = 0
   for _, id in ipairs(ids) do
     local book = lulibre.book(id)
-    if book and (propose.is_gap("title", edit.current(book, "title"))
-        or (edit.current(book, "authors") ~= "" and propose.is_gap("authors", edit.current(book, "authors")))) then
+    if book and (propose.is_gap("title", edit.current(book, "title"), id)
+        or (edit.current(book, "authors") ~= "" and propose.is_gap("authors", edit.current(book, "authors"), id))) then
       lulibre.mark(id, true)
       n = n + 1
     end

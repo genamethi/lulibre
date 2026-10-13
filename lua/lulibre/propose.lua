@@ -25,6 +25,7 @@ local extract = require "lulibre.extract"
 local junk = require "lulibre.junk"
 local names = require "lulibre.names"
 local proposals = require "lulibre.proposals"
+local quality = require "lulibre.quality"
 
 local M = {}
 
@@ -66,13 +67,12 @@ end
 -- not one? A title that is a file name, a number or a heading; an author
 -- that is the program that made the file, a web site, a rank. Such a value
 -- has no claim to stay, and whatever the file offers is proposed for it.
-function M.is_gap(field, cur)
+-- id: the book, when known. A record confirmed as good (:good) has no junk:
+-- its values were looked at and stand.
+function M.is_gap(field, cur, id)
   if cur == "" then return true end
-  if field == "title" then
-    if junk.title(cur) or not cur:find("%s") then return true end
-    local digits, letters = select(2, cur:gsub("%d", "")), select(2, cur:gsub("[%a\128-\255]", ""))
-    return digits > 0 and digits * 3 >= letters -- mostly figures
-  end
+  if id and quality.is_good(id) then return false end
+  if field == "title" then return junk.unlikely_title(cur) end
   if field == "authors" then
     for _, a in ipairs(edit.split("authors", cur)) do
       if not (junk.author(a) or names.never(a) or a:find("%.%a%a%a?$") or a:find("%d%d")) then return false end
@@ -123,7 +123,7 @@ function M.wanted(book, candidates, over)
       local single = SINGLE[c.field]
       if not (single and settled[c.field]) and (single or c.field ~= "tags" or (c.confidence or 0) >= 0.9 or not settled.tags) then
         settled[c.field] = true
-        local replaces = cur ~= "" and not is_gap(c.field, cur)
+        local replaces = cur ~= "" and not is_gap(c.field, cur, book.id)
         if not (single and M.same(c.field, cur, c.value)) then
           out[#out + 1] = { field = c.field, value = c.value, op = single and "set" or "add", source = c.source,
             confidence = c.confidence, over = replaces }
@@ -138,8 +138,8 @@ function M.wanted(book, candidates, over)
       -- with the book, weaker ones that do not are not worth a proposal
       if not settled[c.field] then
         settled[c.field] = true
-        if is_gap(c.field, cur) then
-          want = cur == "" or not M.same(c.field, cur, c.value) -- a one-word title may simply be the title
+        if is_gap(c.field, cur, book.id) then
+          want = cur == "" or not M.same(c.field, cur, c.value) -- what looks like junk may simply be the title
         elseif over ~= "gaps" and not M.same(c.field, cur, c.value)
           and (over == "any" or (c.confidence or 0) >= M.SURE) then
           want, replaces = true, true
