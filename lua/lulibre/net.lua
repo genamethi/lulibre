@@ -47,10 +47,12 @@ local M = {}
 --                 (https://openlibrary.org/developers/api)
 --   OpenAlex      10 requests a second without a key, and a daily budget
 --                 (https://help.openalex.org/how-to-use-the-api/rate-limits-and-authentication)
---   zbMATH Open   its terms could not be read when this was written; asked as slowly as arXiv allows
+--   zbMATH Open   "keeping the number of HTTP requests per second to a reasonable rate"; when it is
+--                 "heavily loaded ... the use has to be retried" (its API's terms of June 2021,
+--                 https://static.zbmath.org/legal/api-terms-and-conditions.html; the data is CC-BY-SA 4.0)
 -- A request that was slow to be answered is followed by a pause as long as
 -- it took, so that a service under load is asked less.
-M.PACE = { arxiv = 5, crossref = 1, zbmath = 3, openlibrary = 2, openalex = 1 }
+M.PACE = { arxiv = 5, crossref = 1, zbmath = 2, openlibrary = 2, openalex = 1 }
 
 -- A service that answers "too many requests" (HTTP 429) or "unavailable"
 -- (503) is not asked again for this many seconds, or for as long as it says
@@ -883,6 +885,16 @@ function M.openlibrary(isbn)
     if type(b.subtitle) == "string" and b.subtitle ~= "" then title = title .. ": " .. trim(b.subtitle) end
     rec.title = title
   end
+  -- an edition's own note of its series: "Graduate texts in mathematics ; 52"
+  local noted = type(b.series) == "table" and b.series[1]
+  -- (the number may be noted apart: { "Progress in brain research ;", "v. 110" })
+  local apart = type(noted) == "string" and type(b.series[2]) == "string" and b.series[2]:match("^%s*[vVnN]%a*%.?%s*%d+%s*$")
+  if apart then noted = noted .. " " .. apart end
+  if not rec.series and type(noted) == "string" and noted:find("%a") then
+    local name, number = noted:match("^(.-)%s*[;,:]?%s*%-*%s*[vVnNoO.#]*%s*(%d+)%s*$")
+    if not (name and #name > 3) then name, number = noted:gsub("[%s;,:%-]+$", ""), nil end
+    rec.series, rec.series_index = require("lulibre.titlecase").apply(trim(name)), number
+  end
   for _, a in ipairs(type(b.authors) == "table" and b.authors or {}) do
     if type(a.name) == "string" then rec.authors[#rec.authors + 1] = a.name end
   end
@@ -913,6 +925,161 @@ function M.openlibrary(isbn)
     end
   end
   return rec
+end
+
+-- ---- files of records kept on this machine (lulibre.datasets) ----
+
+-- The lines of a file that hold any of some strings. grep does the reading,
+-- which it is built for, through gzip when the file is packed: the dumps
+-- are tens of gigabytes unpacked and a few hundred lines are wanted.
+-- Returns the lines and whether the file was read to its end (a file still
+-- being fetched is not), or nil and why.
+local function lines_with(path, strings)
+  local patterns, errors = os.tmpname(), os.tmpname()
+  local f = assert(io.open(patterns, "w"))
+  f:write(table.concat(strings, "\n"), "\n")
+  f:close()
+  local reader = path:match("%.gz$") and 'gzip -dc "$1" 2>"$3"' or 'cat "$1" 2>"$3"'
+  local r, err = lulibre.system({ "sh", "-c", reader .. ' | LC_ALL=C grep -F -f "$2"', "sh", path, patterns, errors }, { timeout = 2 * 3600 * 1000 })
+  local ef = io.open(errors, "r")
+  local complaint = ef and ef:read("a") or ""
+  if ef then ef:close() end
+  os.remove(patterns)
+  os.remove(errors)
+  if not r then return nil, tostring(err) end
+  if r.code > 1 then return nil, trim(r.stderr or "") ~= "" and trim(r.stderr) or ("grep exited " .. r.code) end
+  local lines = {}
+  for line in (r.stdout or ""):gmatch("[^\n]+") do lines[#lines + 1] = line end
+  return lines, trim(complaint) == ""
+end
+
+local function missed(service, key, stamp)
+  local row = lulibre.sql("SELECT at FROM lookups WHERE service = ? AND key = ?", service, key)[1]
+  return row ~= nil and stamp > 0 and (row.at or 0) >= stamp
+end
+
+--- Read books' records out of Open Library's dumps instead of asking it: the
+-- editions (ol_dump_editions_latest.txt.gz) for a book by its ISBN, and the
+-- authors (ol_dump_authors_latest.txt.gz) for their names, which an edition
+-- holds only keys to. Both are looked for in lulibre's data folder (see
+-- lulibre.datasets); with no editions there, nothing is done. Each record
+-- found is kept as an answer from Open Library; an ISBN the dump does not
+-- hold is not looked for in it again until the file changes. Returns how
+-- many were found, or nil and why.
+function M.openlibrary_dump(isbns)
+  local datasets = require "lulibre.datasets"
+  local ids = require "lulibre.ids"
+  local editions, people = datasets.path("ol_dump_editions_latest.txt.gz"), datasets.path("ol_dump_authors_latest.txt.gz")
+  if not editions then return 0 end
+  local stamp = file_time(editions)
+  -- every way an ISBN is written, and the ISBN it was asked for as
+  local asked, strings, n, wanted = {}, {}, 0, {}
+  for _, raw in ipairs(isbns) do
+    local isbn = plain_isbn(raw)
+    if not wanted[isbn] and not M.kept("openlibrary", isbn) and not missed("openlibrary-dump", isbn, stamp) then
+      wanted[isbn] = true
+      n = n + 1
+      for _, form in ipairs { isbn, ids.isbn13(isbn) or false, ids.isbn10(isbn) or false } do
+        if form and not asked[form] then
+          asked[form] = isbn
+          strings[#strings + 1] = '"' .. form .. '"'
+        end
+      end
+    end
+  end
+  if n == 0 then return 0 end
+  local lines, whole = lines_with(editions, strings)
+  if not lines then return nil, whole end
+
+  -- the edition that says most, for each ISBN
+  local best, keys = {}, {}
+  for _, line in ipairs(lines) do
+    local ok, e = pcall(json.decode, line:match("\t({.*})%s*$") or "")
+    if ok and type(e) == "table" and type(e.title) == "string" then
+      local score = (type(e.authors) == "table" and #e.authors > 0 and 4 or 0) + (type(e.lc_classifications) == "table" and 2 or 0)
+        + (type(e.publishers) == "table" and 1 or 0) + (type(e.publish_date) == "string" and 1 or 0) + (type(e.series) == "table" and 1 or 0)
+      for _, field in ipairs { "isbn_13", "isbn_10" } do
+        for _, written in ipairs(type(e[field]) == "table" and e[field] or {}) do
+          local isbn = type(written) == "string" and asked[plain_isbn(written)]
+          if isbn and (not best[isbn] or score > best[isbn].score) then best[isbn] = { score = score, e = e } end
+        end
+      end
+    end
+  end
+  for _, b in pairs(best) do
+    for _, a in ipairs(type(b.e.authors) == "table" and b.e.authors or {}) do
+      if type(a) == "table" and type(a.key) == "string" then keys[a.key] = true end
+    end
+  end
+  -- the authors' names
+  local names = {}
+  if people and next(keys) then
+    local wanted = {}
+    for key in pairs(keys) do wanted[#wanted + 1] = "\t" .. key .. "\t" end
+    for _, line in ipairs(lines_with(people, wanted) or {}) do
+      local key = line:match("^[^\t]*\t([^\t]+)\t")
+      local ok, a = pcall(json.decode, line:match("\t({.*})%s*$") or "")
+      if key and ok and type(a) == "table" and type(a.name) == "string" then names[key] = a.name end
+    end
+  end
+
+  -- kept in the shape Open Library's own answer has, so that one reader reads both
+  local found = 0
+  for isbn, b in pairs(best) do
+    local e, authors, publishers = b.e, {}, {}
+    for _, a in ipairs(type(e.authors) == "table" and e.authors or {}) do
+      local name = type(a) == "table" and names[a.key]
+      if name then authors[#authors + 1] = { name = name } end
+    end
+    for _, p in ipairs(type(e.publishers) == "table" and e.publishers or {}) do
+      if type(p) == "string" then publishers[#publishers + 1] = { name = p } end
+    end
+    local record = {
+      title = (type(e.title_prefix) == "string" and e.title_prefix or "") .. e.title, subtitle = e.subtitle, publish_date = e.publish_date,
+      classifications = { lc_classifications = e.lc_classifications, dewey_decimal_class = e.dewey_decimal_class }, series = e.series, key = e.key,
+    }
+    -- (a list with nothing in it is left out: written out it would read as a table of fields)
+    if #authors > 0 then record.authors = authors end
+    if #publishers > 0 then record.publishers = publishers end
+    -- under every way of writing the ISBN that was asked for
+    for form in pairs(wanted) do
+      if asked[form] == isbn then
+        M.keep("openlibrary", form, 200, json.encode { ["ISBN:" .. form] = record })
+        found = found + 1
+      end
+    end
+  end
+  if whole then
+    for isbn in pairs(wanted) do
+      if not best[asked[isbn]] then M.keep("openlibrary-dump", isbn, 404) end
+    end
+  end
+  return found, whole
+end
+
+--- The zbMATH number of arXiv papers, from the table of zbMATH's links to
+-- full texts (zbmath-oa_links.csv in the data folder: "zbmath_id,link", the
+-- link mostly "https://arxiv.org/pdf/1111.2222.pdf"). Returns { [arXiv
+-- number] = zbMATH number }; an empty table when the file is not there.
+function M.zbmath_links(arxiv_ids)
+  local path = require("lulibre.datasets").path("zbmath-oa_links.csv")
+  local out, wanted, strings = {}, {}, {}
+  if not path then return out end
+  for _, raw in ipairs(arxiv_ids) do
+    local id = M.arxiv_id(raw)
+    if id and not wanted[id] then
+      wanted[id] = true
+      strings[#strings + 1] = "arxiv.org/pdf/" .. id
+      strings[#strings + 1] = "arxiv.org/abs/" .. id
+    end
+  end
+  if #strings == 0 then return out end
+  for _, line in ipairs(lines_with(path, strings) or {}) do
+    local number, id = line:match("^(%d+),https?://arxiv%.org/%a+/(.-)%s*$")
+    id = id and M.arxiv_id((id:gsub("%.pdf$", "")))
+    if id and wanted[id] then out[id] = number end
+  end
+  return out
 end
 
 -- ---- OpenAlex ----
