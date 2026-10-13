@@ -97,13 +97,6 @@ elseif lulibre.headless then
   if not names then error(("'%s' is not one of them"):format(bad), 0) end
   fetch(names)
 else
-  -- in the interface: pick one; it is fetched behind
-  local items = {}
-  for i, ds in ipairs(datasets.list) do items[i] = ("%-12s %s  [%s]  %s"):format(ds.name, ds.title, datasets.state(ds), ds.useful) end
-  local _, index = lulibre.pick(items, { title = "fetch a database for looking books up offline" })
-  if index then
-    local ds = datasets.list[index]
-    local ok, why = datasets.fetch(ds, { force = force, with = with, say = function(text) lulibre.log(text) end })
-    print(ok and ("%s: %s"):format(ds.name, datasets.state(ds)) or why)
-  end
+  -- in the interface: a dialog with a box for each
+  require("lulibre.ui.dialogs").datasets()
 end

@@ -16,6 +16,11 @@ written in `src/version.h`.
   own records, field by field; `:weights` (`<Leader>w`) shows the table and
   lets any weight be set by hand. With `weigh_sources = "on"` confidences
   are worked out from them. Off by default.
+- More dialogs over what lulibre already does: `<Leader>e` looks the
+  selection up (what would be asked of whom, a box for each service),
+  `<Leader>c` makes one change to every selected book, `<Leader>d` shows
+  the databases with boxes for which to fetch, `<Leader>s` adds, moves or
+  drops the selected waiting files. `<Leader><Space>` unmarks every book.
 - `lulibre.ui.form`: the dialog pane, for scripts.
 
 ## 0.2.0-alpha.0

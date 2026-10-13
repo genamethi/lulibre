@@ -30,6 +30,11 @@ command; `:` runs one by name.
 | `V` | `visual` | select a range; `Esc` ends it |
 | `gp` | `propose` | propose metadata for what is selected, from the files themselves |
 | `<Leader>pr` | `propose-review` | a dialog: which books, what is asked, which fields, what review then shows; then propose, and review |
+| `<Leader>e` | `enrich-dialog` | look the selection up: what would be asked of whom, boxes for the services, then go and review |
+| `<Leader>c` | `change` | one change to every selected book: add or remove a subject, set authors, series, publisher, date, language, title case |
+| `<Leader>d` | `datasets-dialog` | the databases kept on this machine, with boxes for which to fetch (`:datasets`) |
+| `<Leader>s` | `sync-dialog` | in the sync folder: add, add and remove, or drop the selected files, having seen what each is |
+| `<Leader><Space>` | `mark none` | unmark every book |
 | `<Leader>w` | `weights` | how much each kind of source is believed, field by field (`:weigh` measures them) |
 | `e` · `r` | `edit` · `review selection` | the edit form, or the waiting proposals, for what is selected: the range, else the marked books, else the books under the heading the cursor is on, else the book |
 | `R` | `reload` | re-read calibre's metadata now |
