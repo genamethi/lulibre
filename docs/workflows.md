@@ -206,10 +206,21 @@ are, with more confidence:
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | arXiv stamp | the day of submission |
+| received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
+| dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
+| journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year |
+| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984") | the year, the latest where several stand together |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
 What they read is proposed like anything else, marked with the layout's
-name. A layout of your own is a few lines in `init.lua`:
+name.
+
+The four that read a date are there for the books with none. All but the
+journal header are below the confidence at which a proposal replaces a value
+(`propose_over = "sure"`), so they fill gaps and leave dates alone. A date
+that calibre took from the file (the day a PDF was made, not the year the
+book came out) is one they would correct: `:propose --over --only d FILTER`
+proposes dates over what is there, for review. A layout of your own is a few lines in `init.lua`:
 
 ```lua
 require("lulibre.layouts").add {
