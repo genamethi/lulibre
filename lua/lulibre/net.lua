@@ -5,8 +5,13 @@
 -- Everything that is fetched is kept (the table `lookups`), so a work is
 -- asked about once: a later run, or the same question from another book, is
 -- answered from what was kept, and with M.offline set nothing is asked at
--- all. Each service is asked no faster than it wishes (M.PACE), whatever
--- else is going on.
+-- all.
+--
+-- These services are other people's, and free. Each is asked one thing at a
+-- time and no faster than M.PACE, whatever else is going on; many works go
+-- in one request where the service takes them (arXiv, CrossRef, Open
+-- Library); one that says it is asked too much is left alone (M.HOLD) and
+-- nothing is retried; and no failure is answered by asking more.
 --
 -- Every function here waits, so call them from a task. Each gives a record
 --
@@ -18,7 +23,8 @@
 --   net.arxiv("1012.6008")            net.crossref("10.2307/2118559")
 --   net.zbmath { doi = "10.2307/2118559" }     net.zbmath { arxiv = "1012.6008" }
 --   net.openlibrary("9780387900407")  net.openalex("10.2307/2118559")
---   net.arxiv_prefetch { "1012.6008", "hep-th/9711200" }    -- many in one request
+--   net.arxiv_prefetch { "1012.6008", "hep-th/9711200" }    -- many in one request;
+--   net.crossref_prefetch(dois)  net.openlibrary_prefetch(isbns)   -- likewise
 --   net.offline = true                -- answer from what is kept, or not at all
 --
 -- The option contact_email, when set, is sent with each request (in the
@@ -29,11 +35,28 @@ local taxonomy = require "lulibre.taxonomy"
 
 local M = {}
 
--- seconds between two requests to one service
-M.PACE = { arxiv = 3.2, crossref = 0.25, zbmath = 0.5, openlibrary = 1.0, openalex = 0.25 }
+-- Seconds between two requests to one service, counted from the end of one
+-- to the start of the next; one request at a time. arXiv's terms of use for
+-- its API say "make no more than one request every three seconds, and limit
+-- requests to a single connection at a time"; the others allow more than
+-- this, and a library is in no hurry.
+M.PACE = { arxiv = 5, crossref = 1, zbmath = 1, openlibrary = 1, openalex = 1 }
+
+-- A service that answers "too many requests" (HTTP 429) or "unavailable"
+-- (503) is not asked again for this many seconds, or for as long as it says
+-- (Retry-After) if that is longer. Nothing is retried in the meantime: the
+-- books it was wanted for are picked up by the next run.
+M.HOLD = { arxiv = 1800, default = 300 }
+
+-- how many arXiv numbers go in one request
+M.ARXIV_BATCH = 40
+
+-- "no such record" is believed for this many days, then asked again
+M.FORGET_DAYS = 30
 
 M.offline = false
-M.stats = { asked = 0, kept = 0 } -- requests made, and answers found already kept
+-- requests made, answers found already kept, and requests by service
+M.stats = { asked = 0, kept = 0, by = {} }
 
 local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
@@ -53,41 +76,100 @@ function M.agent()
   return ("lulibre/%s (library metadata lookup%s)"):format(lulibre.version, mail ~= "" and "; mailto:" .. mail or "")
 end
 
---- GET a URL. Returns the body and the HTTP status, or nil and a message
--- when nothing came back at all.
+--- GET a URL. Returns the body, the HTTP status and what the Retry-After
+-- header said (if anything), or nil and a message when nothing came back.
 function M.get(url)
-  local r, err = lulibre.system({ "curl", "-sS", "-L", "--max-time", "25", "-A", M.agent(), "-w", "\n%{http_code}", url },
-    { timeout = 30000 })
+  local r, err = lulibre.system({ "curl", "-sS", "-L", "--max-time", "25", "-A", M.agent(), "-w",
+    "\n%{http_code} %header{retry-after}", url }, { timeout = 30000 })
   if not r then return nil, err end
   if r.code ~= 0 then return nil, trim(r.stderr) ~= "" and trim(r.stderr) or ("curl exited " .. r.code) end
-  local body, status = r.stdout:match("^(.*)\n(%d%d%d)$")
-  return body or r.stdout, tonumber(status) or 0
+  local body, status, after = r.stdout:match("^(.*)\n(%d%d%d) ?([^\n]*)$")
+  return body or r.stdout, tonumber(status) or 0, tonumber(after and after:match("^%s*(%d+)%s*$"))
+end
+
+local function mark(key)
+  local row = lulibre.sql("SELECT value FROM kv WHERE key = ?", key)[1]
+  return row and tonumber(row.value)
 end
 
 local last, busy = {}, {}
 
--- wait this service's turn: one request at a time, PACE apart
+local function monotonic()
+  local ok, uv = pcall(require, "luv")
+  return ok and uv.hrtime() / 1e9 or os.time()
+end
+
+-- Wait this service's turn: one request at a time, PACE apart. The time of
+-- the last request is also kept in the index, so that another lulibre (a
+-- script run beside the interface, or the same command run again at once)
+-- keeps to the same pace.
 local function turn(service)
   while busy[service] do lulibre.sleep(50) end
   busy[service] = true
-  local ok, uv = pcall(require, "luv")
-  local now = ok and uv.hrtime() / 1e9 or os.time()
-  local wait = (last[service] or 0) + (M.PACE[service] or 0.5) - now
-  if wait > 0 then lulibre.sleep(math.ceil(wait * 1000)) end
+  local pace = M.PACE[service] or 1
+  local wait = (last[service] or -math.huge) + pace - monotonic()
+  local elsewhere = mark("net.last." .. service)
+  -- the clock on the wall counts in whole seconds: allow one more
+  if elsewhere then wait = math.max(wait, elsewhere + math.ceil(pace) + 1 - os.time()) end
+  if wait > 0 then lulibre.sleep(math.ceil(math.min(wait, pace + 2) * 1000)) end
 end
 
 local function done(service)
-  local ok, uv = pcall(require, "luv")
-  last[service] = ok and uv.hrtime() / 1e9 or os.time()
+  last[service] = monotonic()
+  lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", "net.last." .. service, tostring(os.time()))
   busy[service] = nil
 end
 
+--- Until when a service is not to be asked (a time, as os.time gives it), or
+-- nil when it may be.
+function M.held(service)
+  local till = mark("net.hold." .. service)
+  return till and till > os.time() and till or nil
+end
+
+--- Stop asking a service for a number of seconds (0: ask again).
+function M.hold(service, seconds)
+  if seconds <= 0 then
+    lulibre.store("DELETE FROM kv WHERE key = ?", "net.hold." .. service)
+  else
+    lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", "net.hold." .. service, tostring(os.time() + seconds))
+  end
+end
+
+local function paused(service, till)
+  return ("%s asked for a pause: it is not asked again before %s"):format(service, os.date("%H:%M", till))
+end
+
+--- One request to a service, in its turn. Returns the body and the status,
+-- or nil and why. A service that says it is being asked too much is left
+-- alone for a while (M.HOLD), and says so here until then.
+function M.request(service, url)
+  local till = M.held(service)
+  if till then return nil, paused(service, till) end
+  turn(service)
+  local ok, body, status, after = pcall(M.get, url)
+  done(service)
+  M.stats.asked = M.stats.asked + 1
+  M.stats.by[service] = (M.stats.by[service] or 0) + 1
+  if not ok then return nil, tostring(body) end
+  if not body then return nil, tostring(status) end
+  if status == 429 or status == 503 then
+    M.hold(service, math.max(after or 0, M.HOLD[service] or M.HOLD.default))
+    local why = paused(service, M.held(service) or os.time())
+    lulibre.log(("%s answered %d (%s): %s"):format(service, status, trim(body):sub(1, 60), why), "warn")
+    return nil, why
+  end
+  return body, status
+end
+
 --- What is kept for a key of a service: the body, or false when the service
--- was asked and had nothing; nil when it has not been asked.
+-- was asked and had nothing; nil when it has not been asked (or said "nothing"
+-- so long ago that it is worth asking again).
 function M.kept(service, key)
-  local row = lulibre.sql("SELECT status, body FROM lookups WHERE service = ? AND key = ?", service, key)[1]
+  local row = lulibre.sql("SELECT status, body, at FROM lookups WHERE service = ? AND key = ?", service, key)[1]
   if not row then return nil end
   if row.status == 200 then return row.body end
+  if (row.at or 0) < os.time() - M.FORGET_DAYS * 86400 then return nil end
   return false
 end
 
@@ -95,6 +177,19 @@ end
 function M.keep(service, key, status, body)
   lulibre.store("INSERT OR REPLACE INTO lookups(service, key, at, status, body) VALUES(?, ?, ?, ?, ?)", service, key,
     os.time(), status, status == 200 and body or nil)
+end
+
+-- what was asked for and not answered, and when: it is not asked for again
+-- within the hour, however often a caller wants it
+local unanswered = {}
+
+local function gave_up(service, key)
+  local at = unanswered[service .. "\0" .. key]
+  return at ~= nil and monotonic() - at < 3600
+end
+
+local function give_up(service, key)
+  unanswered[service .. "\0" .. key] = monotonic()
 end
 
 --- The body a service gives for a key: from what is kept if it has been
@@ -109,16 +204,14 @@ function M.fetch(service, key, url)
     return nil, ("%s has no record of %s"):format(service, key)
   end
   if M.offline then return nil, ("%s has not been asked about %s (offline)"):format(service, key) end
-  turn(service)
-  local ok, body, status = pcall(M.get, url)
-  if ok and status == 429 then -- asked too fast: stand back once, then try again
-    lulibre.sleep(15000)
-    ok, body, status = pcall(M.get, url)
+  local till = M.held(service)
+  if till then return nil, paused(service, till) end
+  if gave_up(service, key) then return nil, ("%s gave no answer about %s a moment ago"):format(service, key) end
+  local body, status = M.request(service, url)
+  if not body then
+    give_up(service, key)
+    return nil, status
   end
-  done(service)
-  M.stats.asked = M.stats.asked + 1
-  if not ok then return nil, tostring(body) end
-  if not body then return nil, status end
   if status == 200 then
     M.keep(service, key, 200, body)
     return body
@@ -126,10 +219,49 @@ function M.fetch(service, key, url)
     M.keep(service, key, 404)
     return nil, ("%s has no record of %s"):format(service, key)
   end
+  give_up(service, key)
   return nil, ("%s answered %d"):format(service, status) -- not kept: it may answer another day
 end
 
+-- Ask a service about many keys, `size` to a request. url_of(keys) is the
+-- request for some of them; take(keys, body) gives { key = what to keep for
+-- it }, or nil when the answer is not a whole one. A key a whole answer does
+-- not hold is remembered as not there. A request that fails is not made
+-- again, and its keys are not then asked for one by one. Returns how many
+-- answers were newly kept.
+local function in_batches(service, keys, size, url_of, take)
+  local want, have = {}, {}
+  for _, key in ipairs(keys) do
+    if not have[key] and M.kept(service, key) == nil and not gave_up(service, key) then
+      want[#want + 1] = key
+      have[key] = true
+    end
+  end
+  if M.offline then return 0 end
+  local got = 0
+  for from = 1, #want, size do
+    local chunk = { table.unpack(want, from, math.min(from + size - 1, #want)) }
+    local body, status = M.request(service, url_of(chunk))
+    local found = body and status == 200 and take(chunk, body) or nil
+    for _, key in ipairs(chunk) do
+      if found and found[key] then
+        M.keep(service, key, 200, found[key])
+        got = got + 1
+      elseif found then
+        M.keep(service, key, 404)
+      else
+        give_up(service, key)
+      end
+    end
+    if not body and M.held(service) then break end -- told to wait: the rest is not sent either
+  end
+  return got
+end
+
 -- ---- arXiv ----
+-- Its API: https://info.arxiv.org/help/api/user-manual.html (id_list is "a
+-- comma-delimited list of arXiv id's"; "Please cache your results"), under
+-- the terms at https://info.arxiv.org/help/api/tou.html.
 
 local function arxiv_record(entry)
   local title = entry:match("<title[^>]*>(.-)</title>")
@@ -150,60 +282,116 @@ local function arxiv_record(entry)
   return rec
 end
 
+--- An arXiv number as arXiv itself writes it, or nil if it is not one:
+-- without a version ("1012.6008v2" is "1012.6008") and, for the numbers of
+-- before April 2007, without the subject class ("math.AG/0601001" is
+-- "math/0601001").
+function M.arxiv_id(id)
+  id = trim(tostring(id)):gsub("^[aA][rR][xX][iI][vV]:", ""):gsub("v%d+$", "")
+  if id:match("^%d%d%d%d%.%d%d%d%d%d?$") then return id end
+  local archive, number = id:match("^([%a%-]+)%.?%u*/(%d%d%d%d%d%d%d)$")
+  return archive and (archive:lower() .. "/" .. number) or nil
+end
+
 -- "http://arxiv.org/abs/hep-th/9711200v3" -> "hep-th/9711200"
-local function arxiv_id(entry)
+local function entry_id(entry)
   local id = entry:match("<id>%s*https?://arxiv%.org/abs/(.-)%s*</id>")
-  return id and id:gsub("v%d+$", "")
+  return id and M.arxiv_id(id)
 end
 
---- arXiv's record for an id ("1012.6008", "hep-th/9711200"; a version is ignored).
-function M.arxiv(id)
-  id = id:gsub("v%d+$", "")
-  local body, err = M.fetch("arxiv", id, "https://export.arxiv.org/api/query?max_results=1&id_list=" .. encode(id))
-  if not body then return nil, err end
-  local rec = arxiv_record(body:match("<entry>(.-)</entry>") or body)
-  if not rec then
-    M.keep("arxiv", id, 404)
-    return nil, "arXiv has no record of " .. id
+--- The requests arXiv would be sent for these numbers: one URL for each
+-- M.ARXIV_BATCH of them, with the numbers each asks for.
+function M.arxiv_urls(ids)
+  local out = {}
+  for from = 1, #ids, M.ARXIV_BATCH do
+    local chunk = { table.unpack(ids, from, math.min(from + M.ARXIV_BATCH - 1, #ids)) }
+    -- the numbers as they are, with commas between: letters, digits, dots, a
+    -- hyphen and a slash, none of which a URL needs to have escaped
+    out[#out + 1] = { ids = chunk, url = ("https://export.arxiv.org/api/query?id_list=%s&start=0&max_results=%d"):format(
+      table.concat(chunk, ","), #chunk) }
   end
-  rec.ids.arxiv, rec.source = id, "arXiv " .. id
-  return rec
+  return out
 end
 
---- Ask arXiv about many ids in as few requests as it takes (forty to a
--- request), keeping each answer; M.arxiv then answers from what was kept.
--- Returns how many were newly fetched.
-function M.arxiv_prefetch(ids)
-  local want = {}
-  for _, raw in ipairs(ids) do
-    local id = raw:gsub("v%d+$", "")
-    if M.kept("arxiv", id) == nil then want[#want + 1] = id end
+--- Take what an answer from arXiv holds for the numbers that were asked for:
+-- each record is kept, and a number it has no record of is remembered as
+-- such, but only when the answer is a whole one. Returns how many records.
+function M.arxiv_take(asked, body)
+  local seen, got = {}, 0
+  for entry in body:gmatch("<entry>(.-)</entry>") do
+    local id = entry_id(entry)
+    if id and arxiv_record(entry) then
+      M.keep("arxiv", id, 200, "<entry>" .. entry .. "</entry>")
+      seen[id] = true
+      got = got + 1
+    end
   end
-  if M.offline or #want == 0 then return 0 end
-  local got = 0
-  for from = 1, #want, 40 do
-    local chunk = { table.unpack(want, from, math.min(from + 39, #want)) }
-    turn("arxiv")
-    local ok, body, status = pcall(M.get, ("https://export.arxiv.org/api/query?max_results=%d&id_list=%s"):format(#chunk,
-      encode(table.concat(chunk, ","))))
-    done("arxiv")
-    M.stats.asked = M.stats.asked + 1
-    if ok and body and status == 200 then
-      local seen = {}
-      for entry in body:gmatch("<entry>(.-)</entry>") do
-        local id = arxiv_id(entry)
-        if id and arxiv_record(entry) then
-          M.keep("arxiv", id, 200, "<entry>" .. entry .. "</entry>")
-          seen[id] = true
-          got = got + 1
-        end
-      end
-      for _, id in ipairs(chunk) do
-        if not seen[id] then M.keep("arxiv", id, 404) end
+  -- An answer cut short, an error, or an empty one to a question about many
+  -- numbers is not arXiv saying that it has none of them.
+  local whole = body:find("</feed>", 1, true) ~= nil and not body:find("arxiv.org/api/errors", 1, true)
+  local total = tonumber(body:match("<opensearch:totalResults[^>]*>%s*(%d+)"))
+  for _, id in ipairs(asked) do
+    if not seen[id] then
+      if whole and (got > 0 or (#asked == 1 and total == 0)) then
+        M.keep("arxiv", id, 404)
+      else
+        give_up("arxiv", id)
       end
     end
   end
   return got
+end
+
+--- Ask arXiv about many numbers in as few requests as it takes, keeping each
+-- answer; M.arxiv then answers from what was kept. Returns how many were
+-- newly fetched. A request that fails is not made again, and none of its
+-- numbers is asked for one by one.
+function M.arxiv_prefetch(ids)
+  local want, have = {}, {}
+  for _, raw in ipairs(ids) do
+    local id = M.arxiv_id(raw)
+    if id and not have[id] and M.kept("arxiv", id) == nil and not gave_up("arxiv", id) then
+      want[#want + 1] = id
+      have[id] = true
+    end
+  end
+  if M.offline or #want == 0 then return 0 end
+  local got = 0
+  for _, req in ipairs(M.arxiv_urls(want)) do
+    local body, status = M.request("arxiv", req.url)
+    if body and status == 200 then
+      got = got + M.arxiv_take(req.ids, body)
+    else
+      for _, id in ipairs(req.ids) do give_up("arxiv", id) end
+      if M.held("arxiv") then
+        -- told to wait: the batches after this one are not sent either
+        break
+      end
+    end
+  end
+  return got
+end
+
+--- arXiv's record for a number ("1012.6008", "hep-th/9711200"; a version is ignored).
+function M.arxiv(raw)
+  local id = M.arxiv_id(raw)
+  if not id then return nil, ("'%s' is not an arXiv number"):format(tostring(raw)) end
+  local kept = M.kept("arxiv", id)
+  if kept == nil then
+    M.arxiv_prefetch { id }
+    kept = M.kept("arxiv", id)
+  else
+    M.stats.kept = M.stats.kept + 1
+  end
+  if kept == nil then
+    if M.offline then return nil, ("arxiv has not been asked about %s (offline)"):format(id) end
+    local till = M.held("arxiv")
+    return nil, till and paused("arxiv", till) or ("arXiv gave no answer about " .. id)
+  end
+  local rec = kept and arxiv_record(kept)
+  if not rec then return nil, "arXiv has no record of " .. id end
+  rec.ids.arxiv, rec.source = id, "arXiv " .. id
+  return rec
 end
 
 -- ---- CrossRef ----
@@ -246,6 +434,36 @@ function M.crossref(doi)
   local rec = crossref_record(data.message)
   rec.source = "CrossRef " .. doi
   return rec
+end
+
+-- how many DOIs go in one request to CrossRef
+M.CROSSREF_BATCH = 20
+
+--- Ask CrossRef about many DOIs in as few requests as it takes (its `filter`
+-- takes several, and `select` leaves out the reference lists and the rest
+-- that is not wanted), keeping each answer; M.crossref then answers from
+-- what was kept. Returns how many were newly fetched.
+function M.crossref_prefetch(dois)
+  local keys = {}
+  for _, doi in ipairs(dois) do
+    -- a comma would end the DOI in a list of them: such a one is asked for alone
+    if not doi:find("[,%s]") then keys[#keys + 1] = doi:lower() end
+  end
+  return in_batches("crossref", keys, M.CROSSREF_BATCH, function(chunk)
+    local list = {}
+    for i, doi in ipairs(chunk) do list[i] = "doi:" .. encode(doi) end
+    return ("https://api.crossref.org/works?filter=%s&rows=%d&select=DOI,type,title,author,issued,publisher,ISBN,container-title%s"):format(
+      table.concat(list, ","), #chunk, mailto("&"))
+  end, function(_, body)
+    local ok, data = pcall(json.decode, body)
+    local items = ok and type(data) == "table" and type(data.message) == "table" and data.message.items
+    if type(items) ~= "table" then return nil end
+    local found = {}
+    for _, item in ipairs(items) do
+      if type(item.DOI) == "string" then found[item.DOI:lower()] = json.encode { status = "ok", message = item } end
+    end
+    return found
+  end)
 end
 
 --- Are two titles the same work? Deliberately strict: a wrong match would
@@ -343,11 +561,40 @@ end
 local MONTHS = { january = 1, february = 2, march = 3, april = 4, may = 5, june = 6, july = 7, august = 8, september = 9,
   october = 10, november = 11, december = 12 }
 
+-- how many ISBNs go in one request to Open Library
+M.OPENLIBRARY_BATCH = 20
+
+local function plain_isbn(isbn)
+  return (isbn:gsub("[^%dXx]", ""):upper())
+end
+
+--- Ask Open Library about many ISBNs in as few requests as it takes, keeping
+-- each answer; M.openlibrary then answers from what was kept. Returns how
+-- many were newly fetched.
+function M.openlibrary_prefetch(isbns)
+  local keys = {}
+  for i, isbn in ipairs(isbns) do keys[i] = plain_isbn(isbn) end
+  return in_batches("openlibrary", keys, M.OPENLIBRARY_BATCH, function(chunk)
+    local list = {}
+    for i, isbn in ipairs(chunk) do list[i] = "ISBN:" .. isbn end
+    return "https://openlibrary.org/api/books?format=json&jscmd=data&bibkeys=" .. table.concat(list, ",")
+  end, function(chunk, body)
+    local ok, data = pcall(json.decode, body)
+    if not ok or type(data) ~= "table" then return nil end
+    local found = {}
+    for _, isbn in ipairs(chunk) do
+      local b = data["ISBN:" .. isbn]
+      if type(b) == "table" then found[isbn] = json.encode { ["ISBN:" .. isbn] = b } end
+    end
+    return found
+  end)
+end
+
 --- Open Library's record for an ISBN: a book's title, authors, publisher and
 -- year, the series when the title carries it in brackets, and its subject
 -- from the class number libraries shelve it under.
 function M.openlibrary(isbn)
-  isbn = isbn:gsub("[^%dXx]", ""):upper()
+  isbn = plain_isbn(isbn)
   local body, err = M.fetch("openlibrary", isbn,
     "https://openlibrary.org/api/books?format=json&jscmd=data&bibkeys=ISBN:" .. isbn)
   if not body then return nil, err end
