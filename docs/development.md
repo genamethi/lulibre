@@ -143,7 +143,7 @@ list, the filters and the API treat them as books.
 
 A few tables are lulibre's own and are never dropped: `proposals`,
 `journal`, `kv`, `hashes`, `staged`, `good` (records confirmed as right),
-`terms` (the phrases learned for each subject) and `refs` (what each book
-cites).
+`terms` (the phrases learned for each subject), `refs` (what each book
+cites) and `lookups` (what metadata services answered).
 
 lulibre reads `metadata.db` read-only. Every change goes through `calibredb`.

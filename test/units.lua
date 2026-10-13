@@ -784,6 +784,18 @@ QA9.AIL64 1991
     { publisher = "TS 0.7", series = "Memoirs of the Test Society 0.7", series_index = "412 0.7" })
   eq("it does not apply where its marks are not all on a page", #layouts.read { texts = { "memoirs of the", "test society" } }, 0)
   layouts.remove("test memoirs")
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "Algebraic Curves and Riemann Surfaces\nRick Miranda\nGraduate Studies in Mathematics\nVolume 5\nAmerican Mathematical Society\n© 1995 by the American Mathematical Society" } }) do
+    if c.source == "series page" then got[c.field] = c.value end
+  end
+  eq("a series page: the series, the volume, the house, the year",
+    got, { publisher = "American Mathematical Society", pubdate = "1995", series = "Graduate Studies in Mathematics", series_index = "5" })
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer\nalso available: Undergraduate Texts in Mathematics" } }) do
+    if c.source == "series page" then got[c.field] = c.value end
+  end
+  eq("the series named first on the page, and a reprint's own year",
+    { got.series, got.series_index, got.pubdate, got.publisher }, { "Graduate Texts in Mathematics", "52", "1977", "Springer" })
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 end
@@ -825,7 +837,65 @@ do
   eq("the books that cite what a book cites", { #c, c[1].book, c[1].shared }, { 1, 2, 2 })
   eq("one such book is not enough to name a subject", refs.subject(1), nil)
   eq("what a book cites", #refs.of(2), 3)
+  eq("how often a book's references are headed by a name", { refs.cites(2, "Jean-Pierre Serre"), refs.cites(2, "A. Wiles"), refs.cites(2, "N. Obody") },
+    { 1, 1, 0 })
+  lulibre.store("INSERT OR IGNORE INTO refs(book, key, raw) VALUES(1, 'lang:2002', '')")
+  local near = refs.neighbours(1)
+  eq("who wrote the books that share its references", { #near, near[1] and near[1].name, near[1] and near[1].shared }, { 1, "Paul Erdős", 3 })
   lulibre.store("DELETE FROM refs")
+end
+
+-- metadata services: answered from what is kept, never from the network here
+do
+  local net = require "lulibre.net"
+  net.offline = true
+  net.keep("arxiv", "1012.6008", 200, [[<entry>
+    <id>http://arxiv.org/abs/1012.6008v2</id>
+    <published>2010-12-29T18:01:10Z</published>
+    <title>A Note on
+  Sieve Methods</title>
+    <summary>  We prove a thing. </summary>
+    <author><name>Paul Erd&#39;os</name></author>
+    <author><name>A. N. Other</name></author>
+    <arxiv:doi xmlns:arxiv="http://arxiv.org/schemas/atom">10.1000/xyz</arxiv:doi>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="math.NT" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>]])
+  local r = net.arxiv("1012.6008v2")
+  eq("arXiv: title, authors, the day, the class as a subject, the DOI it knows",
+    { r.title, r.authors, r.date, r.subjects[1].tag, r.ids.doi, r.ids.arxiv, r.source },
+    { "A Note on Sieve Methods", { "Paul Erd'os", "A. N. Other" }, "2010-12-29", "math/number-theory", "10.1000/xyz", "1012.6008", "arXiv 1012.6008" })
+  net.keep("crossref", "10.2307/2118559", 200, [=[{"status":"ok","message":{"DOI":"10.2307/2118559","type":"journal-article",
+    "title":["Modular Elliptic Curves and Fermat's Last Theorem"],"author":[{"given":"Andrew","family":"Wiles"}],
+    "publisher":"JSTOR","issued":{"date-parts":[[1995,5]]},"container-title":["The Annals of Mathematics"]}}]=])
+  r = net.crossref("10.2307/2118559")
+  eq("CrossRef: an article's registrant is not offered as its publisher", { r.title, r.authors, r.year, r.publisher, r.ids.doi },
+    { "Modular Elliptic Curves and Fermat's Last Theorem", { "Andrew Wiles" }, 1995, nil, "10.2307/2118559" })
+  net.keep("zbmath", "doi:10.2307/2118559", 200, [=[{"result":[{"contributors":{"authors":[{"name":"Wiles, Andrew"}]},
+    "document_type":{"code":"j","description":"journal article"},"identifier":"0823.11029","year":"1995",
+    "msc":[{"code":"11G05","scheme":"msc2020"},{"code":"11F11","scheme":"msc2020"},{"code":"14H52","scheme":"msc2020"}],
+    "title":{"title":"Modular elliptic curves and Fermat's Last Theorem","subtitle":null}}],"status":{"status_code":200}}]=])
+  r = net.zbmath { doi = "10.2307/2118559" }
+  eq("zbMATH: the subject from the MSC codes, the main one surest, an area named once",
+    { r.authors, r.ids.zbl, #r.subjects, r.subjects[1].tag, r.subjects[1].confidence, r.subjects[1].why, r.subjects[2].tag },
+    { { "Andrew Wiles" }, "0823.11029", 2, "math/number-theory", 0.9, "MSC 11G05", "math/algebraic-geometry" })
+  net.keep("openlibrary", "9780387902449", 200, [=[{"ISBN:9780387902449":{"title":"Algebraic Geometry (Graduate Texts in Mathematics)",
+    "authors":[{"name":"Robin Hartshorne"}],"publishers":[{"name":"Springer"}],"publish_date":"April 1, 1997",
+    "classifications":{"lc_classifications":["QA564-609"]}}}]=])
+  r = net.openlibrary("978-0-387-90244-9")
+  eq("Open Library: the series out of the title's bracket, the subject from the shelf class",
+    { r.title, r.series, r.authors, r.publisher, r.date, r.subjects[1].tag }, { "Algebraic Geometry", "Graduate Texts in Mathematics",
+      { "Robin Hartshorne" }, "Springer", "1997-04-01", "math/algebraic-geometry" })
+  net.keep("crossref", "10.9999/none", 404)
+  local none, why = net.crossref("10.9999/none")
+  eq("what a service did not have is remembered as such", { none, why }, { nil, "crossref has no record of 10.9999/none" })
+  none, why = net.crossref("10.1000/never-asked")
+  eq("offline, nothing is asked", { none, why:find("offline") ~= nil }, { nil, true })
+  eq("requests carry the contact address only when one is set", { net.agent():find("mailto") },  {})
+  lulibre.o.contact_email = "me@example.org"
+  eq("and then they do", net.agent():find("mailto:me@example.org", 1, true) ~= nil, true)
+  lulibre.o.contact_email = ""
+  lulibre.store("DELETE FROM lookups")
+  net.offline = false
 end
 
 -- one record's values offered to another

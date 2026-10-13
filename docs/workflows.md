@@ -204,7 +204,7 @@ are, with more confidence:
 | Layout | Read from it |
 |---|---|
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
-| Springer series page | the series and the volume's number, the year, the publisher |
+| series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | arXiv stamp | the day of submission |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
@@ -226,7 +226,9 @@ require("lulibre.layouts").add {
 ```
 
 `marks` are Lua patterns matched without regard to case; the page they are
-all found on is the text the fields are read from. `:run candidates` shows
+all found on is the text the fields are read from. A series the series-page
+layout does not know is one line:
+`table.insert(require("lulibre.layouts").series, { "Astérisque", "Société Mathématique de France" })`. `:run candidates` shows
 what every layout reads from the book under the cursor, which is the way to
 try one out. This is a first pass: three layouts come with lulibre, and
 books from one publisher and era are where more of them will pay.
@@ -290,6 +292,42 @@ before catch-alls, however many books sit in the latter. The option
 `subject_catchall` names more of them than the built-in ones (`general`,
 `papers`, `books`, `handbook`, `misc`, `other`).
 
+## Looking books up: `:enrich`
+
+For books that have an identifier (in calibre already, or found in the
+file), `:enrich` asks what the record says and proposes it:
+
+| Service | Asked by | Gives |
+|---|---|---|
+| arXiv | arXiv number | title, authors, the day of submission, the subject its class stands for |
+| CrossRef | DOI | title, authors, year; publisher and ISBN of a book |
+| zbMATH Open | DOI or arXiv number | **the subject**, from the MSC codes each work is classified under by hand; the Zbl number |
+| Open Library | ISBN | title, authors, publisher, year, series; the subject from the class it is shelved under |
+| OpenAlex | DOI, when CrossRef has nothing | title, authors, date |
+
+None of them needs an account or a key; there is nothing to sign up for.
+
+    :enrich [filter]             the selection, or the books a filter matches
+    :enrich --offline [filter]   only from what was fetched before: nothing is asked
+    :enrich --titles [filter]    also search CrossRef by title for books with no identifier
+
+Every answer is kept in the index, "there is no such record" included, so a
+work is asked about once: a second run costs no requests, a run that was
+stopped loses nothing, and `--offline` proposes again from what is kept
+without touching the network. Each service is asked no faster than it
+wishes (arXiv: forty papers to a request, a request every three seconds), so
+a first run over many books takes a while and can be left to itself.
+
+`contact_email`, if you set it, is sent with each request: CrossRef and
+OpenAlex give steadier service to callers they can reach. It is empty unless
+you set it, and nothing else about you is sent. `enrich_services` says
+which services are asked.
+
+What the records say is proposed like anything else and decided in review.
+A title or author from a record is taken as surer than one read from a
+title page, so with `propose_over = "sure"` it is proposed over a value
+that differs.
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.
@@ -313,6 +351,14 @@ that share references with it ("shares references with 3 books of that
 subject"), when at least two books each share at least two works with it.
 A work that half the library cites counts for little, one that two books
 cite for much. `lulibre.refs` gives scripts the lists and the coupling.
+
+References also say something of who wrote a book. People cite
+themselves, so a name read off a title page that also heads several
+entries of the book's own bibliography is proposed with more confidence
+("cited 4 times in its references"). And for a book with no author at all
+the edit form lists, among its suggestions, who wrote the books that share
+the most references with it: who writes on the same things, which is a
+place to look and not an answer.
 
 Finding the heading needs no more than the text: it is a short line that is
 one of a few words and nothing else. Type size and position are there for
