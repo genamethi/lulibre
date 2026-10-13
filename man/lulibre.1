@@ -1,0 +1,185 @@
+.\" lulibre(1). The guides in docs/ say more; :help inside lulibre reads them.
+.TH LULIBRE 1 "October 2026" "lulibre 0.2.0" "User Commands"
+.SH NAME
+lulibre \- look after the metadata of a calibre library, from the terminal
+.SH SYNOPSIS
+.B lulibre
+.RB [ \-L
+.IR library ]
+.RB [ \-C
+.IR confdir ]
+.RB [ \-o
+.IR name=value ]...
+.RB [ \-\-clean ]
+.RI [ command
+.RI [ args ]]
+.SH DESCRIPTION
+.B lulibre
+reads a calibre library (its
+.I metadata.db
+and the book files) and helps put its metadata right: it reads the first
+pages of every file into a search index, proposes titles, authors, subjects,
+dates, publishers and identifiers from what the files themselves say,
+looks books up by identifier, finds duplicates and records without files,
+and takes files from a sync folder into the library.
+.PP
+It never writes to the library itself. Every change goes to calibre through
+.BR calibredb (1),
+is recorded with the value it replaced, and can be undone.
+.PP
+With no
+.I command
+it opens the interactive interface: a list of the books, a preview of the
+file under the cursor, and screens for editing and review. There,
+.B ?
+shows the keys under headings that open and close, with a search;
+.BI :help " topic"
+shows what the guides say about a word.
+.SH COMMANDS
+Each takes
+.B \-h
+for its own options.
+.TP
+.BR index " [" \-\-pages " \fIN\fR] [" \-\-force "] [" \-\-retry "] [\fIfilter\fR]"
+Read the first pages of every file into the search index. Files that have
+not changed are skipped, so it is cheap to run again and safe to interrupt.
+.TP
+.BR query " [" \-f " \fIcols\fR] [" \-n " \fIN\fR] [" \-c "] [" \-H "] [\fIfilter\fR]"
+List the books a filter matches, one to a line, tab-separated.
+.B \-c
+prints only how many.
+.TP
+.BR show " [" \-p " \fIpage\fR] [" \-l "] \fIid\fR"
+One book: its metadata, its files, the indexed text of a page.
+.TP
+.B stats
+What is missing across the library, each line with the filter behind it.
+.TP
+.BR propose " [" \-\-only " \fIfields\fR] [" \-\-fresh "] [" \-\-over | \-\-gaps "] [\fIfilter\fR]"
+Propose metadata from the files themselves. Nothing is changed: the
+proposals wait for review in the interface.
+.TP
+.BR enrich " [" \-\-plan "] [" \-\-offline "] [" \-\-titles "] [\fIfilter\fR]"
+Look books up by arXiv number, DOI or ISBN and propose what the records
+say.
+.B \-\-plan
+says what would be asked of whom and asks nothing;
+.B \-\-offline
+proposes only from what was fetched before.
+.TP
+.BR datasets " [" list " | " fetch " \fIname\fR... | " add " \fIfile\fR...]"
+Databases kept on this machine so that books can be looked up without
+asking anybody: arXiv's records, Open Library's editions and authors,
+zbMATH's links to arXiv. With no argument it says what there is and asks
+which to fetch. It can be run again whenever.
+.TP
+.BR refs " [" \-\-force "] [\fIfilter\fR | " all ]
+Read what the books cite, from the bibliography at the end of each file.
+.TP
+.BR sync " [" add " | " move " | " drop "] [\fIfilter\fR | " all ]
+The sync folder: list the files waiting there, add them to the library,
+add and remove them, or drop them.
+.TP
+.B dupes
+Books whose files are the same, byte for byte.
+.TP
+.B orphans
+Records with no file, files with no record, broken links.
+.TP
+.BR bib " [\fIfilter\fR]"
+BibTeX for the books a filter matches.
+.TP
+.BR ocr " [\fIfilter\fR | " all ]
+Read text from page images with
+.BR tesseract (1).
+.TP
+.BR run " \fIscript\fR [\fIargs\fR]"
+Run a Lua script without the interface: a path, or the name of a script in
+the configuration directory or of a bundled one.
+.TP
+.BR config " [" \-\-write " | " \-\-path ]
+Print the configuration as a Lua file, every option with what it does.
+.B \-\-write
+saves it as a first
+.IR init.lua .
+.SH OPTIONS
+.TP
+.BI \-L " dir"
+The calibre library. Otherwise
+.BR LULIBRE_LIBRARY ,
+the option
+.B library
+of
+.IR init.lua ,
+or the current directory.
+.TP
+.BI \-o " name=value"
+Set an option for this run.
+.B "lulibre \-o help"
+lists them all.
+.TP
+.BI \-C " dir"
+The configuration directory.
+.TP
+.B \-\-clean
+Do not load
+.IR init.lua .
+.TP
+.B \-V
+Print the version and the number of the build.
+.SH FILTERS
+One language everywhere a filter is taken. Terms separated by spaces must
+all hold;
+.B or
+starts an alternative; a leading
+.B \-
+negates.
+.PP
+.nf
+    word  "a phrase"            in title, authors or tags
+    author:erdos  subject:number-theory  year:>1990  fmt:djvu
+    title:~^%d+   field:=exact   field:^prefix   field:none
+    text:"class field"          the indexed pages
+    no:author  no:date  has:doi  is:marked  is:filetitle
+    sort:-added                 the order
+.fi
+.SH FILES
+.TP
+.I ~/.config/lulibre/init.lua
+The configuration: plain Lua, loaded at startup.
+.B "lulibre config \-\-write"
+writes a first one. Scripts of your own go in
+.I scripts/
+beside it, modules in
+.IR lua/ .
+.TP
+.I ~/.local/share/lulibre/
+The index (one file for each library), the databases
+.B "lulibre datasets"
+fetches, and files dropped from the sync folder.
+.SH ENVIRONMENT
+.TP
+.B LULIBRE_LIBRARY
+The calibre library, when
+.B \-L
+is not given.
+.TP
+.B LULIBRE_CONFIG_DIR
+The configuration directory, when
+.B \-C
+is not given.
+.TP
+.BR XDG_DATA_HOME ", " XDG_CONFIG_HOME
+Where the data and configuration folders are looked for.
+.SH EXIT STATUS
+0 on success, 1 when a command or a script fails.
+.SH SEE ALSO
+.BR calibredb (1),
+.BR calibre\-server (1)
+.PP
+The guides installed with lulibre (workflows, keys, filters, configuration,
+api, development):
+.BI ":help " topic
+in the interface, or the files of
+.I docs/
+under its data directory.

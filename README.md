@@ -138,6 +138,10 @@ end
 
 ## Documentation
 
+Inside lulibre, `?` shows the keys under headings (with a search), and
+`:help TOPIC` shows what these guides say about a word. `man lulibre`
+covers the command line.
+
 - [Workflows](docs/workflows.md) — editing, review, capture, duplicates, orphans, the sync folder, BibTeX, OCR
 - [Filters](docs/filters.md) — the query language
 - [Keys and commands](docs/keys.md)

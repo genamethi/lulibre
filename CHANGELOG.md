@@ -3,7 +3,11 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## 0.2.0 (in development: branch `0.2.0-dev`, merged into `main` as it goes)
+## 0.2.0-alpha.0
+
+The first alpha of 0.2.0: everything below is in it. (Put together on the
+branch `0.2.0-dev` and merged into `main` as it went; builds of it are
+numbered from 001 again.)
 
 Added
 - Thesis and dissertation cover pages are read by rule (title above "by",
@@ -117,6 +121,32 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- The cataloguing block is read in the form the Library of Congress has
+  used since 2015 (`Names: ... | Title: ... | Description: ...`), which was
+  being taken for the old form and gave titles such as "Names: Miyagawa,
+  Shigeru, author"; in the German national library's form; and not at all
+  where it only says that a record exists. A title from a block printed in
+  a scanned book is taken at 0.8, not 0.9. Found by stripping a copy of the
+  library of all its metadata and proposing it back: titles proposed at 0.9
+  or more went from 34% to 92% agreeing with the library's own.
+- Embedded metadata in Latin-1 is read as such, not passed on as broken
+  UTF-8.
+- Computing has finer subjects. The vocabulary tells machine learning, AI,
+  language processing, vision, complexity, algorithms, programming
+  languages, information theory, systems and security apart (it knew one
+  `cs`), thirty more arXiv classes have a subject of their own, and a finer
+  subject under one a book already has (`cs/ml` for a book filed under
+  `cs`) is proposed. `stat.*` is statistics, not computing.
+- Help that can be found in: `?` shows the keys under headings that open
+  and close (all but "Start here" closed to begin with), each key with what
+  it does; `/` searches every key and command as you type; `K` on a key, or
+  `:help TOPIC` anywhere, shows what the guides say about it. The guides are
+  installed with lulibre. `:help-plain` is the old single page.
+- `gp` proposes metadata for what is selected.
+- `a` reads a file as far as the page being previewed, when that page is
+  past what was indexed (`:addpages`); `lulibre.index { pages = N }`.
+- A man page, `lulibre(1)`. `propose`, `enrich` and `refs` are commands of
+  the command line too, and every script-backed command answers `-h`.
 - The list as a tree. `gh` groups it by author, subject (subjects nest),
   series, publisher, year, format, or the folders of the calibre library;
   headings open and close (Enter, `l`/`h`, `za` `zo` `zc` `zR` `zM`, a

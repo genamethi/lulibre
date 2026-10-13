@@ -505,6 +505,17 @@ do
   local proposals = require "lulibre.proposals"
   eq("same: quotes, case and punctuation do not matter",
     propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
+  eq("a finer subject under one the book has", { propose.refines("cs, math/logic", "cs/ml"), propose.refines("cs/ml", "cs/ml"),
+    propose.refines("cs, cs/ml/theory", "cs/ml"), propose.refines("math", "cs/ml"), propose.refines("", "cs/ml") },
+    { true, false, false, false, false })
+  do
+    local subjects, taxonomy = require "lulibre.subjects", require "lulibre.taxonomy"
+    local best = subjects.score("We train a neural network by stochastic gradient descent; the transformer uses an attention mechanism and a learning rate schedule for deep learning.")[1]
+    eq("the vocabulary tells machine learning from computing at large", best.subject, "cs/ml")
+    eq("and complexity theory", subjects.score("We show the problem is NP-hard and lies in PSPACE; a polynomial time reduction gives a lower bound in circuit complexity.")[1].subject, "cs/complexity")
+    eq("arXiv's classes of computing, each to its own subject", { taxonomy.from_arxiv("cs.CV"), taxonomy.from_arxiv("cs.CC"), taxonomy.from_arxiv("cs.NE"),
+      taxonomy.from_arxiv("stat.ME"), taxonomy.from_arxiv("cs.XX") }, { "cs/vision", "cs/complexity", "cs/ml", "math/statistics", "cs" })
+  end
   eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
   eq("same: the same people named less fully say nothing new", { propose.same("authors", "Sérgio Joffily", "S. Joffily"),
     propose.same("authors", "Todd K. Timberlake & Jeffery M. Tucker", "Todd Timberlake & Jeffery Tucker"),
@@ -768,6 +779,47 @@ ISBN 978-1-4612-9581-5]]
     { "Serge Lang", "SL2(R)", "Graduate Texts in Mathematics", "105" })
   eq("and the subject its class stands for", { cip.tags, cip.identifiers }, { "math/analysis", "isbn:9781461295815" })
   cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+
+Names: Miyagawa, Shigeru, author.
+Title: Agreement beyond Phi / Shigeru Miyagawa.
+Description: Cambridge, MA : The MIT Press, [2017] | Series: Linguistic
+
+inquiry monographs ; 75 | Includes bibliographical references and index.
+Identifiers: LCCN 2016030743| ISBN 9780262035880 (hardcover : alk. paper) |
+
+ISBN 9780262533324 (pbk. : alk. paper)
+Subjects: LCSH: Grammar, Comparative and general--Agreement. | Minimalist theory (Linguistics)
+Classification: LCC P299.A35 M59 2017 | DDC 415--dc23
+LC record available at https://lccn.loc.gov/2016030743]]
+  eq("the block as it is set out since 2015, read by its labels",
+    { cip.title, cip.authors, cip.publisher, cip.pubdate, cip.series, cip.series_index, cip.identifiers },
+    { "Agreement beyond Phi", "Shigeru Miyagawa", "The MIT Press", "2017", "Linguistic Inquiry Monographs", "75", "isbn:9780262035880" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Names: Friederici, Angela D., author. | Chomsky, Noam, writer of foreword.
+Title: Language in our brain : the origins of a uniquely human capacity / Angela D. Friederici.
+Description: Cambridge, MA : The MIT Press, [2017]
+Classification: LCC QP399 .F75 2017 | DDC 612.8/2336--dc23]]
+  eq("its title with a subtitle, and who is named as author", { cip.title, cip.authors:match("^Angela D%. Friederici") ~= nil },
+    { "Language in our brain: the origins of a uniquely human capacity", true })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+
+Main entry under title:
+
+Methods in experimental psychopharmacology.
+
+(Contemporary neuroscience)
+Includes bibliographies and index.
+1. Experimental psychopharmacology. I. Greenshaw, Andrew J.
+RM315.M44 1987]]
+  eq("a book filed under its title: the title is the line after saying so", cip.title, "Methods in experimental psychopharmacology")
+  eq("a block that only says a record exists holds none",
+    layouts.cip("Library of Congress Cataloging-in-Publication Data\nA catalog record for this book is available from the Library of Congress.\nISBN 0-387-90040-3").title, nil)
+  cip = layouts.cip("Die Deutsche Bibliothek - CIP-Einheitsaufnahme\nCourant, Richard: Introduction to calculus and analysis / Richard Courant; Fritz John.\nBerlin: Springer")
+  eq("the German national library's block: who, a colon, the title", { cip.title, cip.authors }, { "Introduction to calculus and analysis", "Richard Courant" })
+  cip = layouts.cip("Library of Congress Cataloging in Publication Data\nWallace, D.A.R. (David Alexander Ross)\nGroups, rings, and fields / D.A.R. Wallace.\np. cm.")
+  eq("a main entry that does not read as a name is still not the title", cip.title, "Groups, rings, and fields")
+  eq("a title from a printed block is taken for less than one that came as text", cip.confidence.title, 0.8)
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
 Logic from computer science: proceedings of a workshop held November
 13-17, 1989/Yiannis Moschovakis, editor.
 p. cm. - (Mathematical Sciences Research Institute
@@ -940,6 +992,37 @@ do
     beside.likely("Notes on the Theory of Sieves"), beside.likely("Érdős–Kac: an introduction"), beside.likely("2104 07"), beside.likely(nil) },
     { "functions transfer operators", "sieves", "erdos" })
   eq("the keys of that screen are a table like the others'", require("lulibre.ui.keys").of("beside"):action("D"), "drop")
+end
+
+-- Every Lua file of lulibre compiles. (Lua 5.5 refuses, when it loads a
+-- file, an assignment to a loop's own variable, which 5.4 let pass: a file
+-- nothing here happens to load would only fail in the user's hands.)
+do
+  local src = debug.getinfo(1, "S").source:gsub("^@", "")
+  local root = src:match("^(.*)/test/units%.lua$") or "."
+  local r = lulibre.system { "find", root .. "/lua", root .. "/scripts", "-name", "*.lua" }
+  local bad, n = {}, 0
+  for path in (r and r.stdout or ""):gmatch("[^\n]+") do
+    n = n + 1
+    local ok, err = loadfile(path)
+    if not ok then bad[#bad + 1] = err end
+  end
+  eq("every Lua file compiles", { n > 40, bad }, { true, {} })
+end
+
+-- help: the guides as plain text, and found by topic
+do
+  local help = require "lulibre.ui.help"
+  eq("a guide as plain lines: links as their text, a table's cells side by side, fences dropped",
+    help.plain("## The list\n\nSee [the keys](keys.md) and `gh`.\n\n| Key | Does |\n|---|---|\n| `gh` | **groups** |\n\n```lua\nlulibre.o.x = 1\n```\n"),
+    { "THE LIST", "", "See the keys and gh.", "", "  Key   ·   Does", "  gh   ·   groups", "", "    lulibre.o.x = 1", "" })
+  local long = help.plain("| arXiv | " .. ("a long cell of words "):rep(8) .. "|")
+  eq("a row too long for the page is set out cell under cell", { long[1], long[2]:sub(1, 12), #long >= 3 }, { "  arXiv", "        a lo", true })
+  eq("the guides are found beside the Lua code", help.docs_dir() ~= nil, true)
+  local found = help.find("enrich")
+  eq("a topic is the part of the guides headed with it", { found[1] and found[1].guide, found[1] and found[1].title:find("enrich", 1, true) ~= nil,
+    found[1] and found[1].text:find("zbMATH", 1, true) ~= nil }, { "workflows", true, true })
+  eq("a word no heading has finds none", #help.find("xyzzy-no-such-topic"), 0)
 end
 
 -- references: the bibliography at the end of a file

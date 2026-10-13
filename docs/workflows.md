@@ -230,6 +230,12 @@ own keys still work: `P` for the page as an image, `]` `[` to turn pages,
 
 Proposals are kept between sessions.
 
+A book that already has a subject is offered another only when the file
+states one (an arXiv class, MSC codes, a shelf class), with one exception:
+a finer subject under the one it has. A book filed under `cs` whose pages
+are plainly about machine learning is offered `cs/ml`, on the vocabulary's
+word alone. `:propose --only s subject:cs` asks for exactly that.
+
 ## Capture: `gc`
 
 Pull fields out of file names, titles or embedded metadata. Type a pattern

@@ -28,11 +28,37 @@ code.
 - Run `make check` and `make e2e` and read the result **before** the merge
   command, not in the same pipeline: a merge chained after a filtered test
   run went through with three failures in it.
-- The version is written in `src/version.h` and nowhere else. Bump the
-  pre-release tag there (`-alpha`, `-beta`, `-rc.1`, `""`).
-- Builds of a version are numbered by `make` (docs/development.md, Builds).
-  Tell the user the number of the build they are given: `lulibre -V`, or
-  the last line of `make builds`.
+- The version is written in `src/version.h` and nowhere else.
+- Builds of a version are numbered by `make` (docs/development.md, Builds),
+  each version as it is written in full having its own count: the first
+  build of `0.2.0-alpha.0` is 001 whatever `0.2.0-dev` had reached. Tell the
+  user the number of the build they are given: `lulibre -V`, or the last
+  line of `make builds`.
+
+### Moving to the next version
+
+The user says when (bumping is their call, never a consequence of a batch
+being finished). Then, on a branch in the second checkout:
+
+1. `src/version.h`: the pre-release tag (`-alpha.0`, `-alpha.1`, `-beta.0`,
+   `-rc.1`, `""` for a release), or the numbers. Nothing else holds the
+   version: `./configure` reads it, and `make` runs configure again by
+   itself when the header changes.
+2. `CHANGELOG.md`: the section that was "in development" takes the version
+   as its heading; a new "in development" section is opened above it only
+   when work for the next one begins.
+3. `man/lulibre.1`: the date and version in its `.TH` line.
+4. `make check` and `make e2e`, read, then merged into `0.2.0-dev` and
+   `main` like any other change. The build number starts again at 001 by
+   itself.
+5. In the user's tree, after the merge and `make`: an annotated tag,
+   `git tag -a v0.2.0-alpha.0 -m "lulibre 0.2.0-alpha.0"`. Releases and
+   pre-releases are both tagged; builds are not.
+6. Tell the user the version and the build number, and record in the memory
+   notes where the line stands.
+
+After 0.2.0 is released, 0.2.1 is the patch line the user has set aside for
+optimization, quality of life and bug fixes: features wait for 0.3.0.
 - Commit only when asked. A fix goes with a test that fails without it.
 - Record user-visible changes in `CHANGELOG.md`.
 
@@ -112,6 +138,15 @@ code.
   itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
   `-o index=scratch.db`. The library is still read, nothing of the user's
   is written.
+- The proposer is measured on a **bare copy**: links to the library's book
+  folders, a `metadata.db` stripped to "Untitled / Unknown" (triggers
+  dropped, written by hand with sqlite, **never through calibredb**: it
+  renames book folders, and here they are links to the real ones), a copy of
+  the index for the pages. Propose, then compare with the real records by
+  field and confidence. The first run showed titles at 0.9 right a third of
+  the time: one reader misreading a newer form of a page. The scripts are
+  kept in the session's scratch folder (`bare/compare.py`, `apply.py`,
+  `phase2.lua`); rebuild them from this note if they are gone.
 - A learned or statistical feature is reported with a held-out number, and
   the number goes in the report as measured. The first phrase learner looked
   finished and was teaching "delaware corporation" as a mark of computing.
@@ -119,6 +154,10 @@ code.
   list dropped "number", "series", "law" and "distribution", and with them
   number field, power series, reciprocity law. Test such a list against the
   phrases that must survive it.
+- Lua 5.5 will not load a file that assigns to a `for` loop's own variable
+  (`for line in ... do line = trim(line)`). It was written four times in
+  two days. The unit tests now compile every Lua file, so `make unit`
+  catches it; name the changed value something else (`local text = ...`).
 - Lua patterns work on bytes. A character outside ASCII is several of them,
   so `©?` asks for the first byte and makes the second optional, and a set
   like `[çc]` or `[‘’–]` matches single bytes of those characters. This went

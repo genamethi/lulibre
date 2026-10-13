@@ -48,6 +48,8 @@ make -C "$src" --no-print-directory DESTDIR="$stage" install >"$t/install.log" 2
 installed=$(find "$stage" -type f -name lulibre -perm -u+x | head -1)
 expect   "install puts a binary under DESTDIR" yes "$([ -n "$installed" ] && echo yes || echo no)"
 expect   "the installed binary is this build" "$(md5sum < "$bin")" "$(md5sum < "$installed")"
+expect   "the guides are installed, for :help" yes "$([ -n "$(find "$stage" -type f -path '*/lulibre/docs/workflows.md' | head -1)" ] && echo yes || echo no)"
+expect   "and the man page"                 yes "$([ -n "$(find "$stage" -type f -path '*/man/man1/lulibre.1' | head -1)" ] && echo yes || echo no)"
 expect   "and runs"                         "$want" "$("$installed" -V | cut -d' ' -f2)"
 data=$(dirname "$(find "$stage" -type f -path '*/lulibre/lua/lulibre/prelude.lua' | head -1)")
 expect   "the runtime is installed"         yes "$([ -f "$data/prelude.lua" ] && echo yes || echo no)"

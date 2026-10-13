@@ -547,9 +547,9 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     dr_style(n, theme.dim, C_DEFAULT, 0);
     if (ps->file && ps->fstatus == FILE_OK) {
       const char *why, *then;
-      char buf[160], image[96], past[160], scan[200];
+      char buf[160], image[96], past[320], scan[200];
       snprintf(image, sizeof image, "%s shows the page as an image.", key_hint("preview graphic"));
-      snprintf(past, sizeof past, "(the option `pages`). %s", image);
+      snprintf(past, sizeof past, "(the option `pages`). %s reads this file as far as this page. %s", key_hint("preview add"), image);
       snprintf(scan, sizeof scan, ":ocr reads the first pages with tesseract. %s", image);
       then = image;
       if (ps->page > ps->indexed) {
@@ -876,6 +876,15 @@ int preview_select_key(struct tui *t, uint32_t key) {
   }
   kb_show(ps);
   tui_dirty(t);
+  return 1;
+}
+
+int preview_position(struct tui *t, sqlite3_int64 *book, int *page, int *indexed) {
+  struct pstate *ps = target(t);
+  if (!ps || !ps->file || !ps->book) return 0;
+  *book = ps->book;
+  *page = ps->page;
+  *indexed = ps->indexed;
   return 1;
 }
 
