@@ -221,6 +221,28 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t q
   i=0; while screen | grep -q "how much each source" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
 
+  # dialogs over what lulibre already does
+  $T send-keys -t t g g j '\' e
+  shown "Leader e: what a lookup would ask"       "look up 1 book"
+  shown "service by service"                      "crossref  *[0-9]* works* to ask about"
+  $T send-keys -t t q
+  i=0; while screen | grep -q "look up 1 book" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  $T send-keys -t t '\' c
+  shown "Leader c: one change to every selected book" "change 1 book at once"
+  shown "with a line for each thing to set"       "add the subject"
+  $T send-keys -t t w
+  shown "nothing filled in changes nothing"       "nothing was filled in"
+  $T send-keys -t t '\' d
+  shown "Leader d: the databases, with boxes"     "databases for looking books up"
+  shown "and what is here"                        "arxiv  *arXiv's records  *here:"
+  $T send-keys -t t q
+  i=0; while screen | grep -q "databases for looking" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  $T send-keys -t t g g Space Space
+  shown "two books marked"                        "2 marked"
+  $T send-keys -t t '\' Space
+  shown "Leader Space unmarks them all"           "0 marked"
+  $T send-keys -t t g g
+
   # selecting text in the preview with the keys
   $T send-keys -t t g g v
   shown "v puts a cursor in the preview"          "^select: "
@@ -476,6 +498,11 @@ LUA
     shown "1 goes back to the library"   "all books"
     $T send-keys -t t -l "$(printf '\033[<0;24;1M\033[<0;24;1m')"
     shown "a click on the tab switches too" " SYNC "
+    $T send-keys -t t '\' s
+    shown "Leader s: what to do with the waiting files" "1 file waiting in the sync folder"
+    shown "add, move or drop, as a choice"        "add to the library; the files stay"
+    $T send-keys -t t q
+    i=0; while screen | grep -q "waiting in the sync folder" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
     # a staged file is edited like a book, before it is in calibre
     $T send-keys -t t e
     shown "e edits a staged file"        "edit .*note"

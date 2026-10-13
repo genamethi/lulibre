@@ -255,6 +255,20 @@ through a choice, Enter types a value, `w` (or Enter on the last lines)
 goes. Everything it does can also be done by hand with `:propose`,
 `:enrich`, `:refs` and `:review` and their flags.
 
+### Other dialogs
+
+The same kind of pane stands in front of a few more things, each saying
+what will happen before it does:
+
+| Key | Dialog |
+|---|---|
+| `\e` | **Look up** the selection: how many works each service would be asked about and in how many requests (nothing is asked to find out), a box for each service, then "ask, then review" or "ask nobody: propose from what is kept here" |
+| `\c` | **Change at once**: add or remove a subject, or set the authors, series, publisher, date or language, for every selected book (the books under a heading, the marked ones). Empty lines change nothing; one undo takes it all back |
+| `\d` | **Databases** kept on this machine: what is here, how old, and a box for each to fetch |
+| `\s` | In the sync folder, **the waiting files that are selected**: which are new and which the library holds, and a choice of add, add and remove, or drop |
+
+`\` then `Space` unmarks every book (`:mark none`).
+
 ### How far the sources agree
 
 A book is described by several sources at once: its title page, a
