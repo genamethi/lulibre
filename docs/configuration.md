@@ -32,6 +32,7 @@ o.library = "~/calibre-library"
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
 | `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
 | `arxiv_snapshot` | | a file of arXiv's records (its snapshot from Kaggle, or a hypergraph of arXiv; `.json` or the `.zip`). Empty: `arxiv-metadata-oai-snapshot.json`, `arxiv.json` or `arxiv.zip` in the data folder is used if there (the first of them; a link will do). `:enrich` reads papers from it and asks arXiv only about those newer than the file |
+| `weigh_sources` | `off` | `on`: a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right in this library (`:weigh`, `:weights`) |
 | `contact_email` | | an address sent to those services with each request; nothing is sent while it is empty |
 | `refs_pages` | `14` | closing pages of a file read when looking for its bibliography |
 | `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a title of one word is a title (`check`: a plain capitalised word is) |

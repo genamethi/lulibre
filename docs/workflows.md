@@ -236,6 +236,57 @@ a finer subject under the one it has. A book filed under `cs` whose pages
 are plainly about machine learning is offered `cs/ml`, on the vocabulary's
 word alone. `:propose --only s subject:cs` asks for exactly that.
 
+### Propose, then review, from one dialog: `<Leader>pr`
+
+`\pr` (`:propose-review`) opens a dialog that puts the whole round in one
+place and in order:
+
+| Part | What it sets |
+|---|---|
+| Which books | what is selected, everything the list shows, or the whole library |
+| What is asked | the files themselves; the records kept on this machine; the services; CrossRef by title; the bibliographies first; subjects from shared references and from learned phrases; whether the sources are weighed |
+| Which fields | a box for each: title, authors, subject, date, publisher, series, identifiers |
+| What is there already | as `propose_over` says, only gaps, or over whatever differs; as if the fields were empty; drop the proposals already waiting for these books |
+| Then, in review | accept by itself what is at or above a confidence (never over a value a book has); show nothing below a confidence; the order of the books |
+
+A line that cannot be used is greyed and says why ("nothing learned yet:
+confirm records with gk, then :learn"). `Space` ticks a box or steps
+through a choice, Enter types a value, `w` (or Enter on the last lines)
+goes. Everything it does can also be done by hand with `:propose`,
+`:enrich`, `:refs` and `:review` and their flags.
+
+### How far the sources agree
+
+A book is described by several sources at once: its title page, a
+cataloguing block, the data inside the file, an arXiv record. Where two of
+them speak of the same field they should agree. lulibre measures how far
+apart two values of a field are (titles by their words, authors by their
+family names, dates by their years, subjects by how near they are in the
+tree) and, for each field of a book:
+
+- the **value** most of the weight is behind;
+- how many sources **agree** on it, shown in review beside the source:
+  `title page 0.55  [2/3]`;
+- the **disagreement**: 0 when every source says the same, towards 1 when
+  they say unrelated things. `s` in review puts the books whose sources
+  disagree most first: where a look is most needed.
+
+### How much each source is believed
+
+`:weigh` measures every kind of source against the library as it stands:
+of the times the title page gave a title for a book whose title is worth
+trusting, how often was it that title? `:weights` (`\w`) shows the table,
+and any line of it can be set by hand (Enter) or given back to the
+measurement (`x`). `:weigh good` measures against the records you have
+confirmed (`gk`) only, which is the better measure once there are a few
+dozen: a field the library itself has wrong for many books (dates taken
+from the files, say) makes the sources that are right look bad.
+
+With the option `weigh_sources = "on"` (or its box in the dialog) a
+proposal's confidence is no longer what its rule claims but what the
+sources that agree on it come to, each taken for what it was measured to be
+worth. It is off unless you turn it on.
+
 ## Capture: `gc`
 
 Pull fields out of file names, titles or embedded metadata. Type a pattern

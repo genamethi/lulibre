@@ -299,6 +299,8 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL | MODE_VISUAL, "gc", "capture"},
     {MODE_NORMAL | MODE_VISUAL, "gT", "titlecase"},
     {MODE_NORMAL | MODE_VISUAL, "gp", "propose"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>pr", "propose-review"},
+    {MODE_NORMAL, "<Leader>w", "weights"},
     {MODE_NORMAL, "gr", "review"},
     {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
     {MODE_NORMAL, "gt", "browse"},

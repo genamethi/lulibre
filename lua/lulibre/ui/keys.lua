@@ -42,7 +42,7 @@ local DEFAULTS = {
     { "expand_all", { "X" }, "all", "show, or hide, every book's other fields" },
     { "accept_above", { "A" }, "accept all above…", "accept every pending proposal at or above a confidence you give" },
     { "reject_rest", { "R" }, "reject rest", "reject everything still pending" },
-    { "sort", { "s" }, "sort", "order the books by their surest proposal, or by id" },
+    { "sort", { "s" }, "sort", "order the books: the surest proposals first, those whose sources disagree most first, or by id" },
     { "field", { "f" }, "field…", "show one field's proposals only: then t title, a authors, s subject, i identifiers, d date, p publisher; f again for all" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "write", "write what has been accepted, as one change that can be undone" },
@@ -88,6 +88,18 @@ local DEFAULTS = {
     { "topic", { "K" }, "the guides", "what the guides say about the key or command under the cursor" },
     { "all", { "O" }, "open all", "open every heading" },
     { "none", { "C" }, "close all", "close every heading" },
+  },
+  form = {
+    { "toggle", { "<Space>" }, "tick", "tick or untick a box; step through a choice" },
+    { "change", { "<CR>" }, "change", "tick a box, step through a choice, type a value, or do what the line says" },
+    { "next", { "<Right>", "l" }, "next", "the next of a choice" },
+    { "prev", { "<Left>", "h" }, "previous", "the one before" },
+    { "go", { "w" }, "go", "do the first thing the dialog offers, with things as they are set" },
+  },
+  weights = {
+    { "set", { "<CR>", "e" }, "set", "say yourself how much this source is believed about this field (0 to 1)" },
+    { "clear", { "x" }, "measured", "give the weight back to the measurement" },
+    { "measure", { "M" }, "measure again", "measure every source against the library as it stands now" },
   },
   good = {
     { "confirm", { "<Space>", "<CR>" }, "confirm", "confirm the record as right, or take that back" },
