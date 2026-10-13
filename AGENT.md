@@ -7,23 +7,32 @@ code.
 
 ## Branches and versions
 
-- **The tree at `/media/servd/staging/lulibre` stays on `main`, always.**
-  The user runs `./build/lulibre` from it, and a binary run from its tree
-  reads its Lua files from the tree as it needs them: checking out another
-  branch there, even for a minute, breaks the program they have open (it did:
-  "unknown option 'propose_over'" from a beta binary reading 0.2.0's files).
-  All branch work, fixes for `main` included, happens in the second checkout,
-  `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). A fix reaches
-  `main` by `git merge --no-ff` run in the main tree, followed by `make`
-  there; nothing else changes that tree.
+- **The user's tree, `/media/servd/staging/lulibre`, is theirs.** They run
+  `./build/lulibre` from it, and a binary run from its tree reads its Lua
+  files from the tree as it needs them: changing the files under it, by a
+  checkout or a merge, breaks the program they have open (it did: "unknown
+  option 'propose_over'" from a beta binary reading 0.2.0's files). All
+  branch work happens in the second checkout,
+  `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). Their tree
+  changes only by `git merge --no-ff` into the branch it is on, followed by
+  `make` there, and only when they have said they are not running it or
+  have asked for the update. Before any merge:
+  `git -C /media/servd/staging/lulibre branch --show-current`, and
+  `pgrep -a lulibre`. They do switch that tree themselves.
 
-- `main` is the released line. Bug fixes go to it through `fix-<name>`
-  branches, merged with `--no-ff`.
-- `0.2.0` is the next minor. Each feature is a branch `0.2.0-<name>` merged
-  into `0.2.0` with `--no-ff`. After fixes land on `main`, merge `main` into
-  `0.2.0` so it stays current; `src/version.h` conflicts there, keep 0.2.0's.
+- `v0.1.0` is the first release; the branch `0.1` is kept at it for patches.
+- `main` is the 0.2.0 line, what the user runs. `0.2.0-dev` is where it is
+  put together, in the second checkout: each feature is a branch
+  `0.2.0-<name>` merged into `0.2.0-dev` with `--no-ff`, and `0.2.0-dev` is
+  merged into `main` when a batch is whole and passes.
+- Run `make check` and `make e2e` and read the result **before** the merge
+  command, not in the same pipeline: a merge chained after a filtered test
+  run went through with three failures in it.
 - The version is written in `src/version.h` and nowhere else. Bump the
-  pre-release tag there (`-alpha.2`, `-beta`, `-rc.1`, `""`).
+  pre-release tag there (`-alpha`, `-beta`, `-rc.1`, `""`).
+- Builds of a version are numbered by `make` (docs/development.md, Builds).
+  Tell the user the number of the build they are given: `lulibre -V`, or
+  the last line of `make builds`.
 - Commit only when asked. A fix goes with a test that fails without it.
 - Record user-visible changes in `CHANGELOG.md`.
 
@@ -129,5 +138,8 @@ code.
 - The shell here is zsh: unquoted variables do not split into words, and a
   here-document ends at the first line equal to its delimiter, even inside
   a quoted block of another language.
+- A test that starts a tmux server stops it in its EXIT trap, with
+  `|| true`. Failed runs of the smoke test left six lulibre processes
+  running for two days.
 - Test scripts do not `rm` paths built from variables; plant and remove
   files from Lua with exact paths.
