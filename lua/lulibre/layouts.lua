@@ -124,7 +124,8 @@ end
 
 -- "Lang, Serge" or "Lyndon, Roger C., 1917-" the right way round
 local function person(entry)
-  entry = entry:gsub("%s*%d%d%d%d%s*%-%s*%d*%s*%.?$", ""):gsub("[,.]%s*$", "")
+  -- (the full stop that ends the entry goes; the one after an initial stays)
+  entry = entry:gsub("%s*%d%d%d%d%s*%-%s*%d*%s*%.?$", ""):gsub(",%s*$", ""):gsub("(%l)%.%s*$", "%1"):gsub(",%s*$", "")
   local family, given = entry:match("^([^,]+),%s*(.+)$")
   if not family then return nil end
   given = given:gsub(",.*$", "")
@@ -178,23 +179,114 @@ end
 --   512'.55                                   its Dewey number
 --
 -- Returns a table of fields; what cannot be made out is left out.
+-- The block as the Library of Congress has set it out since 2015, each part
+-- under a label and the parts of a part between bars:
+--   Names: Miyagawa, Shigeru, author.
+--   Title: Agreement beyond Phi / Shigeru Miyagawa.
+--   Description: Cambridge, MA : The MIT Press, [2017] | Series: Linguistic inquiry monographs ; 75 | Includes ...
+--   Identifiers: LCCN 2016030743 | ISBN 9780262035880 (hardcover : alk. paper)
+--   Subjects: LCSH: Grammar, Comparative and general--Agreement. | ...
+--   Classification: LCC P299.A35 M59 2017 | DDC 415--dc23
+local LABELS = { "Names", "Title", "Other titles", "Description", "Series", "Identifiers", "Subjects", "Classification", "LC record", "LC ebook record" }
+local function labelled_cip(block, text)
+  -- one line, so that a part broken over lines is whole; then cut at the labels
+  local flat = " " .. block:gsub("%s+", " ") .. " "
+  local found = {}
+  for _, label in ipairs(LABELS) do
+    local a, b = flat:find("[ |]" .. label .. ":%s", 1)
+    if a then found[#found + 1] = { label = label, at = a, from = b + 1 } end
+  end
+  table.sort(found, function(x, y) return x.at < y.at end)
+  local part = {}
+  for k, f in ipairs(found) do
+    local to = found[k + 1] and found[k + 1].at - 1 or math.min(#flat, f.from + 600)
+    part[f.label] = part[f.label] or trim(flat:sub(f.from, to)):gsub("%s*|%s*$", "")
+  end
+  if not part.Title then return nil end
+  local out = {}
+  local title = part.Title:match("^(.-)%s+/%s") or part.Title
+  title = trim(title):gsub("%s*[.:]$", ""):gsub("%s+:%s+", ": ")
+  if #title >= 3 and title:find("%a") then out.title = title end
+  -- who it is filed under: the people named as authors, else as editors
+  local people, editors = {}, {}
+  for entry in ((part.Names or "") .. "|"):gmatch("%s*(.-)%s*|") do
+    -- "Friederici, Angela D., author." : the last part says what they did, when it is one of these words
+    local last = entry:match(",%s*([%a ]-)%.?$") or ""
+    local role
+    for _, word in ipairs { "author", "editor", "translator", "writer", "illustrator", "compiler", "contributor", "photographer" } do
+      if last:find(word, 1, true) then role = role or word end
+    end
+    local bare = entry:gsub(",%s*%d%d%d%d%s*%-%s*%d*", "")
+    if role then bare = bare:gsub(",%s*[%a ]-%.?$", "") end
+    local who = person(bare)
+    if who then
+      if role == nil or role == "author" then people[#people + 1] = who
+      elseif role == "editor" or role == "translator" or role == "compiler" then editors[#editors + 1] = who end
+    end
+  end
+  if #people == 0 then people = editors end
+  if #people > 0 then out.authors = table.concat(people, " & ") end
+  local desc = part.Description or ""
+  out.pubdate = desc:match("%[?([12]%d%d%d)%]?")
+  local house = desc:match("^[^:|]-:%s*([^,|%[]-)%s*,") -- "Place : House, [year]"
+  if house and #trim(house) >= 3 then out.publisher = trim(house) end
+  local series = part.Series or desc:match("|%s*Series:%s*([^|]+)")
+  if series then
+    local name, number = trim(series):match("^(.-)%s*;%s*[vVnNoO. ]*(%d+)")
+    name = name or trim(series):gsub("%s*|.*$", "")
+    if #name > 6 then
+      out.series = M.series_name(name)
+      out.series_index = number
+    end
+  end
+  local class = part.Classification or ""
+  local lcc = class:match("LCC%s+([%u][%w.]+)")
+  if lcc then out.tags = taxonomy.from_lcc(lcc) end
+  if not out.tags then
+    local dewey = class:match("DDC%s+(%d%d%d[%d./']*)")
+    if dewey then out.tags = taxonomy.from_dewey(dewey) end
+  end
+  local isbn = ids.isbn(part.Identifiers or text)
+  if isbn then out.identifiers = "isbn:" .. isbn end
+  return out
+end
+
 function M.cip(text)
-  local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication")
+  local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme")
   if not at then return {} end
+  at = text:sub(1, at):match(".*()\n") or at -- from the start of the line the words stand on
   local lines = {}
   for raw in text:sub(at):gmatch("[^\n]+") do -- (a loop variable cannot be assigned to in Lua 5.5)
     local line = trim(raw)
     if line ~= "" then lines[#lines + 1] = line end
     if #lines >= 22 then break end
   end
+  -- the labelled form of the block is read by its labels
+  if text:sub(at, at + 1500):find("\n%s*Title:%s") then
+    local read = labelled_cip(text:sub(at, at + 2400):gsub("^[^\n]*\n", "", 1), text)
+    if read then return read end
+  end
   local out, i = {}, 2
+  -- "A catalog record for this book is available from ..." is a block that holds no record
+  if lines[i] and lines[i]:lower():find("catalog%a* record for this") then return {} end
+  -- the German national library heads its own: "Die Deutsche Bibliothek - CIP-Einheitsaufnahme",
+  -- then "Surname, Given: Title / ..." on one line
+  if lines[i] and lines[i]:find("CIP%-?%s*Einheits") then i = i + 1 end
+  local german = lines[i - 1] and lines[i - 1]:find("Einheits") and lines[i] and { lines[i]:match("^([%a%-' ]+,%s*[%a%-.' ]+):%s+(.+)$") }
+  if german and german[1] then
+    out.authors = person(german[1])
+    lines[i] = german[2]
+  end
+  -- "Main entry under title:" says the book is filed under its title: the title follows
+  if lines[i] and lines[i]:lower():find("^main entry under title") then i = i + 1 end
   -- the main entry, when the book is filed under a person
   local who = lines[i] and person(lines[i])
   if who then
     out.authors = who
     i = i + 1
-  elseif lines[i] and lines[i]:find("^[^,]+,[^,]+,%s*%d%d%d%d%s*%-") then
-    i = i + 1 -- a main entry with its dates that did not read as a name (a poor scan): not the title, at least
+  elseif lines[i] and (lines[i]:find("^[^,]+,[^,]+,%s*%d%d%d%d%s*%-") or lines[i]:find("^[^,]+,[^,]+,%s*date%s*$")
+      or lines[i]:find("^[%a%-' ]+,%s*[%a%-.' ]+%(.-%)%s*$")) and lines[i + 1] then
+    i = i + 1 -- a main entry (with its dates, or its name in full in brackets) that did not read as a name: not the title, at least
   end
   -- the title: up to the statement of responsibility, the full stop that ends
   -- it, or the line that begins the description
@@ -219,7 +311,17 @@ function M.cip(text)
     if line:find("%.$") then break end
   end
   local title = table.concat(parts, " "):gsub("%s+", " "):gsub("%s*[.:]$", ""):gsub("%s+:%s+", ": ")
-  if #title >= 3 and title:find("%a") then out.title = title end
+  -- (a line that is a label, a copyright notice or an imprint is no title)
+  local label = title:match("^(%a[%a ]-):%s") or (title:lower():find("^main entry") and "Names")
+  for _, known in ipairs(LABELS) do
+    if label == known then title = "" end
+  end
+  -- (nor is an address, which is what follows where the words stand in a preface)
+  if title:find("Department") or title:find("University") or title:find("College") or title:lower():find("catalog%a* record") then title = "" end
+  if #title >= 3 and title:find("%a") and #title <= 200 and not title:find("©") then out.title = title end
+  -- A block printed in a book is often a scan read by machine: its word is
+  -- taken for less than that of a block that came as text.
+  out.confidence = { title = 0.8, authors = 0.85 }
   local rest = table.concat(lines, "\n", math.min(i, #lines))
   -- "(Graduate texts in mathematics; 105)" or "(... ; v. 27)"
   local series, number = rest:match("%(([%a][^();]-)%s*;%s*[vVnNoO. ]*(%d+)%s*%)")
@@ -246,7 +348,11 @@ end
 
 M.add {
   name = "cataloguing data",
-  marks = { "cataloging%s*%-?%s*in%s*%-?%s*publication" },
+  find = function(doc)
+    for _, text in ipairs(doc.texts or {}) do
+      if text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme") then return text end
+    end
+  end,
   read = M.cip,
   confidence = 0.9,
 }

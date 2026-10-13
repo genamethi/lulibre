@@ -779,6 +779,47 @@ ISBN 978-1-4612-9581-5]]
     { "Serge Lang", "SL2(R)", "Graduate Texts in Mathematics", "105" })
   eq("and the subject its class stands for", { cip.tags, cip.identifiers }, { "math/analysis", "isbn:9781461295815" })
   cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+
+Names: Miyagawa, Shigeru, author.
+Title: Agreement beyond Phi / Shigeru Miyagawa.
+Description: Cambridge, MA : The MIT Press, [2017] | Series: Linguistic
+
+inquiry monographs ; 75 | Includes bibliographical references and index.
+Identifiers: LCCN 2016030743| ISBN 9780262035880 (hardcover : alk. paper) |
+
+ISBN 9780262533324 (pbk. : alk. paper)
+Subjects: LCSH: Grammar, Comparative and general--Agreement. | Minimalist theory (Linguistics)
+Classification: LCC P299.A35 M59 2017 | DDC 415--dc23
+LC record available at https://lccn.loc.gov/2016030743]]
+  eq("the block as it is set out since 2015, read by its labels",
+    { cip.title, cip.authors, cip.publisher, cip.pubdate, cip.series, cip.series_index, cip.identifiers },
+    { "Agreement beyond Phi", "Shigeru Miyagawa", "The MIT Press", "2017", "Linguistic Inquiry Monographs", "75", "isbn:9780262035880" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Names: Friederici, Angela D., author. | Chomsky, Noam, writer of foreword.
+Title: Language in our brain : the origins of a uniquely human capacity / Angela D. Friederici.
+Description: Cambridge, MA : The MIT Press, [2017]
+Classification: LCC QP399 .F75 2017 | DDC 612.8/2336--dc23]]
+  eq("its title with a subtitle, and who is named as author", { cip.title, cip.authors:match("^Angela D%. Friederici") ~= nil },
+    { "Language in our brain: the origins of a uniquely human capacity", true })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+
+Main entry under title:
+
+Methods in experimental psychopharmacology.
+
+(Contemporary neuroscience)
+Includes bibliographies and index.
+1. Experimental psychopharmacology. I. Greenshaw, Andrew J.
+RM315.M44 1987]]
+  eq("a book filed under its title: the title is the line after saying so", cip.title, "Methods in experimental psychopharmacology")
+  eq("a block that only says a record exists holds none",
+    layouts.cip("Library of Congress Cataloging-in-Publication Data\nA catalog record for this book is available from the Library of Congress.\nISBN 0-387-90040-3").title, nil)
+  cip = layouts.cip("Die Deutsche Bibliothek - CIP-Einheitsaufnahme\nCourant, Richard: Introduction to calculus and analysis / Richard Courant; Fritz John.\nBerlin: Springer")
+  eq("the German national library's block: who, a colon, the title", { cip.title, cip.authors }, { "Introduction to calculus and analysis", "Richard Courant" })
+  cip = layouts.cip("Library of Congress Cataloging in Publication Data\nWallace, D.A.R. (David Alexander Ross)\nGroups, rings, and fields / D.A.R. Wallace.\np. cm.")
+  eq("a main entry that does not read as a name is still not the title", cip.title, "Groups, rings, and fields")
+  eq("a title from a printed block is taken for less than one that came as text", cip.confidence.title, 0.8)
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
 Logic from computer science: proceedings of a workshop held November
 13-17, 1989/Yiannis Moschovakis, editor.
 p. cm. - (Mathematical Sciences Research Institute

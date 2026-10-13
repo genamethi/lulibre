@@ -73,10 +73,15 @@ function M.from_doc(doc)
     for _, c in ipairs(require("lulibre.layouts").read(doc)) do add(c.field, c.value, c.source, c.confidence) end
   end
 
-  -- what the file says about itself
-  if doc.title and not junk.title(doc.title) then add("title", doc.title, "embedded", 0.6) end
-  if doc.author and not junk.author(doc.author) then
-    add("authors", join(names.split(doc.author)), "embedded", 0.6)
+  -- what the file says about itself (in Latin-1, as old PDFs write it, when it is not UTF-8)
+  local function text_of(v)
+    if type(v) ~= "string" or utf8.len(v) then return v end
+    return (v:gsub("[\128-\255]", function(c) return utf8.char(c:byte()) end))
+  end
+  local own_title, own_author = text_of(doc.title), text_of(doc.author)
+  if own_title and not junk.title(own_title) then add("title", own_title, "embedded", 0.6) end
+  if own_author and not junk.author(own_author) then
+    add("authors", join(names.split(own_author)), "embedded", 0.6)
   end
 
   -- a cover sheet that labels its fields is the best witness there is

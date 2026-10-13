@@ -121,6 +121,16 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- The cataloguing block is read in the form the Library of Congress has
+  used since 2015 (`Names: ... | Title: ... | Description: ...`), which was
+  being taken for the old form and gave titles such as "Names: Miyagawa,
+  Shigeru, author"; in the German national library's form; and not at all
+  where it only says that a record exists. A title from a block printed in
+  a scanned book is taken at 0.8, not 0.9. Found by stripping a copy of the
+  library of all its metadata and proposing it back: titles proposed at 0.9
+  or more went from 34% to 92% agreeing with the library's own.
+- Embedded metadata in Latin-1 is read as such, not passed on as broken
+  UTF-8.
 - Computing has finer subjects. The vocabulary tells machine learning, AI,
   language processing, vision, complexity, algorithms, programming
   languages, information theory, systems and security apart (it knew one
