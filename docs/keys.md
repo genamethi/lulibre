@@ -120,7 +120,7 @@ and pasted with `<C-v>`.
 | `sort [-]key` | `id title author year series added modified` |
 | `set name[=value]` | show or change an option |
 | `bib [file]` | write the selection as BibTeX |
-| `propose` `enrich` `ocr` `onboard DIR` | shortcuts for `run` of those scripts |
+| `propose` `enrich` `refs` `arxiv-fetch` `ocr` `onboard DIR` | shortcuts for `run` of those scripts |
 | `help` · `quit` | `?` · `q`, `ZZ` |
 
 ## Inside a panel

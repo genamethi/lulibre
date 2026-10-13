@@ -88,8 +88,8 @@ static const struct opt_def opts[] = {
       "openlibrary (by ISBN). None needs an account",
       "Looking things up"),
   OPT(contact_email, OPT_STR, "", NULL,
-      "an address sent with each request to those services (CrossRef and OpenAlex give steadier "
-      "service to callers they can reach); nothing is sent while this is empty",
+      "an address sent with each request to those services (CrossRef and Open Library allow more "
+      "to callers they can reach); nothing is sent while this is empty",
       NULL),
   OPT(arxiv_snapshot, OPT_PATH, "", NULL,
       "a file of arXiv's records (its snapshot from Kaggle, or a hypergraph of arXiv; .json or .zip): "

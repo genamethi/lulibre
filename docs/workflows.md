@@ -209,7 +209,7 @@ are, with more confidence:
 | arXiv stamp | the day of submission |
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
-| journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year |
+| journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year; the journal, as the publisher |
 | copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984 by McGraw-Hill") | the year, the latest where several stand together; the publisher, when the holder is one and not the author |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
@@ -234,6 +234,13 @@ A publisher on a copyright line is written one way whatever the line says
 list, `{ pattern, name }`, and takes more. A holder that is not on it but
 reads as a house ("Chelsea Publishing Company") is proposed as written, less
 surely; an author's own copyright names no publisher.
+
+An article's publisher is its journal. Where the house that puts the
+journal out is known too (from the page's copyright line, from the record a
+service gives, or because the book has it already), the journal goes after
+it: `Elsevier: Journal of Algebra`. A society's own journal says whose it
+is and stands alone, and an archive that only registers the articles (JSTOR)
+is not named. `layouts.journal_join` is what stands between the two.
 
 The four that read a date are there for the books with none. All but the
 journal header are below the confidence at which a proposal replaces a value
@@ -354,9 +361,15 @@ days, then asked again.)
 lulibre is a guest of these services and asks as little as it can:
 
 - **One request at a time to a service, and a pause after each**: five
-  seconds for arXiv, one second for the others. The time of the last
-  request is kept in the index, so a second lulibre, or the same command
-  run again at once, keeps to the same pace.
+  seconds for arXiv, three for zbMATH, two for Open Library, one for
+  CrossRef and OpenAlex. Each is well inside what the service allows callers
+  who do not say who they are (arXiv: one every three seconds; Open
+  Library: one a second; CrossRef: five a second, one at a time; OpenAlex:
+  ten a second). The time of the last request is kept in the index, so a
+  second lulibre, or the same command run again at once, keeps to the same
+  pace.
+- **A slow answer is followed by a longer pause**: as long as the answer
+  took, so a service under load is asked less (CrossRef asks for this).
 - **Many works to a request** where the service takes them: forty papers
   for arXiv, twenty DOIs for CrossRef, twenty ISBNs for Open Library.
   (zbMATH is asked one work at a time; it has no way to ask for several.)
@@ -398,9 +411,19 @@ Two kinds of file are read, told apart by how they begin:
 | arXiv's own snapshot, [on Kaggle](https://www.kaggle.com/Cornell-University/arxiv) as `arxiv-metadata-oai-snapshot.json`: one paper to a line | title, authors in order, classes, DOI, the day of each version | |
 | a hypergraph of arXiv (papers as "edges", authors as "nodes", one JSON document over many lines) | title, authors, classes | the order of the authors, the DOI, the day of submission |
 
-arXiv's own snapshot is the one to have: `kaggle datasets download
-Cornell-University/arxiv --unzip` fetches it, and it is renewed about once
-a week. A record that was read from a hypergraph is looked for again when
+arXiv's own snapshot is the one to have, and `:arxiv-fetch` fetches it:
+
+    :arxiv-fetch            if there is none here, or the one here is over a week old
+    :arxiv-fetch --force    whatever is here
+
+It is the dataset `Cornell-University/arxiv` on Kaggle (1.7 GB to fetch,
+5.6 GB on disk, renewed about once a week), fetched with Kaggle's own
+program run through [pixi](https://pixi.sh) (`pixi exec kaggle`: nothing is
+installed), or with a `kaggle` on the PATH where there is no pixi. Kaggle
+wants an account, and its token in `~/.kaggle/`. The file lands in the data
+folder; where its name there is a link, the file the link points to is
+renewed. A fetch that stops half way leaves the file that was there as it
+was. A record that was read from a hypergraph is looked for again when
 the snapshot is there, and bettered from it.
 
 The file is read through once (ten seconds for the snapshot's three million
@@ -427,7 +450,7 @@ What a record says is checked before it is believed:
   not proposed; named more fully, they are.
 
 `contact_email`, if you set it, is sent with each request: CrossRef and
-OpenAlex give steadier service to callers they can reach. It is empty unless
+Open Library allow more to callers they can reach. It is empty unless
 you set it, and nothing else about you is sent. `enrich_services` says
 which services are asked.
 

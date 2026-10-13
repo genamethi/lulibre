@@ -626,22 +626,42 @@ function M.journal(text)
         name, vol, first, year = line:match("^(%u[%a\128-\255%.&,' %-]-)%s+(%d+)%s*,%s*([%dlI]+)%s*" .. DASH .. "[\128-\191]*%s*%d+%s*%((%d%d%d%d)%)")
       end
       year = tonumber(year)
+      -- "Milan J. Math. Vol. 78 (2010)", "Physics, volume 209 (1984)"
+      name = name and trim(name):gsub("[,%s]*[Vv][Oo][Ll]%a*%.?$", ""):gsub("[,%s]*[Ss][Yy][Mm][Pp]%a*%.?%s*[Nn][Oo]%.?$", ""):gsub("[,%s]*[Nn][Oo]%.$", "")
+        :gsub("[,%s]+$", "")
       if name and #name >= 4 and year and year >= 1700 and year <= tonumber(os.date("%Y")) + 1 then
-        return { journal = trim(name):gsub("[,%s]+$", ""), volume = tonumber(vol), year = year, pages = first }
+        return { journal = dressed(name), volume = tonumber(vol), year = year, pages = first }
       end
     end
   end
   return nil
 end
 
+-- An article's publisher is its journal, with the house that puts the
+-- journal out before it when the page names that too (on its copyright
+-- line): "Elsevier: Journal of Algebra".
 M.add {
   name = "journal header",
   find = function(doc)
     local text = doc.texts and doc.texts[1]
     return text and M.journal(text) and text or nil
   end,
-  read = function(text)
-    return { pubdate = tostring(M.journal(text).year) }
+  read = function(text, doc)
+    local j = M.journal(text)
+    local house
+    for i = 1, math.min(3, #(doc.texts or {})) do
+      local holder, known = M.copyright_holder(doc.texts[i])
+      if holder and known then
+        house = holder
+        break
+      end
+    end
+    -- the page names no house, but the book has one already: the journal goes after it
+    if not house and doc.id then
+      local book = lulibre.book(doc.id)
+      house = book and M.known_house(book.publisher)
+    end
+    return { pubdate = tostring(j.year), publisher = M.with_journal(house, j.journal), confidence = { publisher = 0.82 } }
   end,
   confidence = 0.8,
 }
@@ -684,12 +704,62 @@ M.houses = {
   { "association for computing machinery", "ACM" }, { "%f[%a]acm%f[%A]", "ACM" }, { "mcgraw%-hill", "McGraw-Hill" },
   { "wiley", "Wiley" }, { "addison%-wesley", "Addison-Wesley" }, { "pearson", "Pearson" }, { "prentice", "Prentice Hall" },
   { "crc press", "CRC Press" }, { "chapman", "Chapman & Hall" }, { "taylor & francis", "Taylor & Francis" },
+  { "informa uk", "Taylor & Francis" }, { "duke university press", "Duke University Press" },
+  { "mathematical sciences publishers", "Mathematical Sciences Publishers" }, { "institute of mathematical statistics", "Institute of Mathematical Statistics" },
   { "routledge", "Routledge" }, { "de gruyter", "De Gruyter" }, { "kluwer", "Kluwer" }, { "world scientific", "World Scientific" },
   { "dover publications", "Dover" }, { "o'reilly", "O'Reilly" }, { "no starch", "No Starch Press" }, { "manning", "Manning" },
   { "apress", "Apress" }, { "packt", "Packt" }, { "nature publishing", "Nature Publishing Group" }, { "annual reviews", "Annual Reviews" },
   { "hindawi", "Hindawi" }, { "john benjamins", "John Benjamins" }, { "sage publications", "SAGE" }, { "w%. ?h%. ?freeman", "W. H. Freeman" },
   { "benjamin", "W. A. Benjamin" }, { "van nostrand", "Van Nostrand" }, { "hermann", "Hermann" }, { "interscience", "Interscience" },
 }
+
+--- A publisher's name written the one way its house is (M.houses), or as it
+-- is when the house is not known: "Springer-Verlag New York, Inc." and
+-- "Springer Science and Business Media LLC" are "Springer".
+function M.house(name)
+  if type(name) ~= "string" or trim(name) == "" then return nil end
+  local low = lulibre.lower(name)
+  for _, house in ipairs(M.houses) do
+    if low:find(house[1]) then return house[2] end
+  end
+  -- "American Institute of Mathematical Sciences (AIMS)"
+  return (trim(name):gsub("%s*%([%u&]+%)$", ""))
+end
+
+--- The house a name is one of (as M.houses writes it), or nil when it is
+-- none that is known.
+function M.known_house(name)
+  if type(name) ~= "string" then return nil end
+  local low = lulibre.lower(name)
+  for _, house in ipairs(M.houses) do
+    if low:find(house[1]) then return house[2] end
+  end
+  return nil
+end
+
+-- Who registers a journal's articles without publishing the journal: not
+-- named as its publisher.
+M.archives = { "jstor", "project euclid", "project muse", "crossref" }
+
+-- what stands between a house and its journal
+M.journal_join = ": "
+
+--- The publisher of an article: its journal, after the house that puts the
+-- journal out when there is one ("Elsevier: Journal of Algebra"). Either
+-- alone when the other is missing; nil when both are.
+function M.with_journal(publisher, journal)
+  publisher, journal = M.house(publisher), type(journal) == "string" and trim(journal) ~= "" and trim(journal) or nil
+  if publisher then
+    local low = lulibre.lower(publisher)
+    for _, archive in ipairs(M.archives) do
+      if low:find(archive, 1, true) then publisher = nil end
+    end
+  end
+  if not journal then return publisher end
+  -- a society's own journal already says whose it is
+  if not publisher or lulibre.lower(journal):find(lulibre.lower(publisher), 1, true) then return journal end
+  return publisher .. M.journal_join .. journal
+end
 
 -- what else a holder that is a publisher, not a person, is called
 local ORG = { "press", "publish", "verlag", "society", "university", "books", "media", "institute", "association", "& sons",
