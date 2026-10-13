@@ -6,6 +6,28 @@ function M.doi(text)
   return d and (d:gsub("%.+$", "")) or nil
 end
 
+--- The DOI in a text, and whether it reads as the text's own rather than
+-- that of a work it cites. Its own: near the top (a journal's heading, a
+-- cover sheet), or on a line that holds nothing but the DOI and its label
+-- ("DOI 10.1007/...", "https://doi.org/10...") before any list of
+-- references has begun. One that follows other words on its line further
+-- down ("... Linearization for Dylan: https://doi.org/10...") or stands
+-- among the references is a citation.
+M.DOI_TOP = 4000 -- bytes from the start that count as the top
+function M.doi_in(text)
+  local s, e = text:find("10%.%d%d%d%d+/[^%s,;\"'%)%]>]+")
+  if not s then return nil end
+  local doi = text:sub(s, e):gsub("%.+$", "")
+  if s <= M.DOI_TOP then return doi, true end
+  local low = text:sub(1, s - 1):lower()
+  if low:find("\n%s*references%s*\n", M.DOI_TOP) or low:find("\n%s*bibliography%s*\n", M.DOI_TOP) then return doi, false end
+  local label = (low:match("([^\n]*)$") or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  -- "doi", "doi:" (and what a scan makes of it: "dol:", "d0i"), or an address with it and nothing else
+  local own = label:find("^d[o0][il1]:?$") or label:find("^digital object identifier:?$")
+    or (not label:find("%s") and label:find("d[o0][il1]"))
+  return doi, own and true or false
+end
+
 local function isbn13_ok(d)
   local sum = 0
   for i = 1, 13 do sum = sum + (d:byte(i) - 48) * (i % 2 == 0 and 3 or 1) end

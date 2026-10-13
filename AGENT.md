@@ -154,6 +154,17 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   in the user's library 62 were wrong, 29 of them already written. A search
   always returns something; "two words in three" is not a test. List what
   the rule accepts on a copy, read the list, and count.
+- "The library holds it" is not evidence. An identifier in the library may
+  have been proposed by this program from a reference list and accepted in
+  a batch; believing its record outright closes the loop on the program's
+  own mistake. Whatever a value rests on is checked against something
+  independent (the file's text, the book's other fields) each time.
+- After a matching rule changes, run it over the whole library on a copy
+  starting from no waiting proposals, and read two lists: everything it
+  now refuses, and everything it would still put over a value a book has.
+  Both lists were short enough to read (33 and 60), and each showed a
+  class the rule had missed (chapters holding their volume's ISBN; a
+  catalogue's first author alone).
 - A confidence says how sure *this* value is, not how good its source is in
   general: a record reached through a guess (a title search) carries the
   guess's confidence on every field, identifiers included, never the

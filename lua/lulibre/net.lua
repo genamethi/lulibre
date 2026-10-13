@@ -790,6 +790,68 @@ local function family_names(people)
   return set, n
 end
 
+-- how many letters apart two words are (insert, drop, change)
+local function apart(a, b)
+  if math.abs(#a - #b) > 2 then return 3 end
+  local prev = {}
+  for j = 0, #b do prev[j] = j end
+  for i = 1, #a do
+    local cur = { [0] = i }
+    for j = 1, #b do
+      cur[j] = math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a:byte(i) == b:byte(j) and 0 or 1))
+    end
+    prev = cur
+  end
+  return prev[#b]
+end
+
+-- Do two lists of people have somebody in common, going by family names?
+-- true, false, or nil when either list is empty. A name spelled a little
+-- differently is the same name ("Bugrii" and "Bugrij", "Schloze" for
+-- "Scholze"): that is what a record is there to put right.
+local function people_in_common(mine, theirs)
+  local fa, na = family_names(mine)
+  local fb, nb = family_names(theirs)
+  if na == 0 or nb == 0 then return nil end
+  for x in pairs(fa) do
+    if fb[x] then return true end
+    for y in pairs(fb) do
+      if #x >= 5 and #y >= 5 and apart(x, y) <= (math.min(#x, #y) >= 7 and 2 or 1) then return true end
+    end
+  end
+  return false
+end
+
+--- Has a record none of the people a book has? (False when either names
+-- nobody.) Its authors are then not offered over the book's as if sure.
+function M.other_people(mine, theirs)
+  return people_in_common(mine, theirs) == false
+end
+
+--- Does a record name some of the people a book has and nobody else: the
+-- first author alone, where the book has all three? Catalogues often do.
+function M.fewer_people(mine, theirs)
+  local fa, na = family_names(mine)
+  local fb, nb = family_names(theirs)
+  if nb == 0 or nb >= na then return false end
+  for y in pairs(fb) do
+    if not fa[y] then return false end
+  end
+  return true
+end
+
+--- Is a record's title the book's with words left out ("Extending Python"
+-- for "Extending and Embedding Python")? Not something to put over it.
+function M.shorter_title(mine, theirs)
+  local a, sa = title_words(mine)
+  local b = title_words(theirs)
+  if #b == 0 or #b >= #a then return false end
+  for _, w in ipairs(b) do
+    if not sa[w] then return false end
+  end
+  return true
+end
+
 --- Is a record that a search for a title turned up the work in hand, and how
 -- far can it be believed? mine: the book's title; theirs: the record's;
 -- my_authors, their_authors: lists of names, either may be empty. Returns a
@@ -823,18 +885,67 @@ function M.title_match(mine, theirs, my_authors, their_authors)
     end
   end
   if not same and not runs_on then return nil end
-  local fa, na = family_names(my_authors)
-  local fb, nb = family_names(their_authors)
-  local agree
-  if na > 0 and nb > 0 then
-    agree = false
-    for name in pairs(fa) do
-      if fb[name] then agree = true end
-    end
-    if not agree then return nil end
-  end
+  local agree = people_in_common(my_authors, their_authors)
+  if agree == false then return nil end
   if same then return agree and 0.9 or (#short >= 4 and 0.8 or nil) end
   return agree and 0.85 or 0.7
+end
+
+--- Is a record that an identifier led to the record of the book in hand?
+-- An identifier can be wrong: read off a page where it stood for a cited
+-- work, written by an earlier mistake, or a chapter's or a review's in
+-- place of the book's. rec: the record. titles: the book's own title, when
+-- it has one worth the name, and those its file shows. authors: the book's,
+-- when it has any worth the name. head: how the file's text opens.
+--
+-- It is the book's record when the titles say the same thing, or the
+-- record's title stands in the opening of the file. A looser likeness (a
+-- title cut short, most of the words) counts unless the authors plainly
+-- differ, which is how a review "..., by Sutton and Barto" is told from
+-- the book. With no likeness at all, an author in common is enough: the
+-- same people's work under another form of its title, or the book this
+-- is a part of; the third value is then "people", and the record's title
+-- is not one to put over the book's.
+-- Returns true, or false and whether both title and authors speak
+-- against it (the identifier is then very likely another work's).
+function M.fits(rec, titles, authors, head)
+  if not rec.title or (#(titles or {}) == 0 and #(authors or {}) == 0) then return true end
+  local agree = people_in_common(authors, rec.authors)
+  local theirs, their_set = title_words(rec.title)
+  local folded = lulibre.fold(rec.title)
+  local alike = false
+  for _, title in ipairs(titles or {}) do
+    local mine, my_set = title_words(title)
+    local same = #mine == #theirs and #mine > 0
+    for _, w in ipairs(mine) do
+      if not their_set[w] then same = false end
+    end
+    if same then return true end
+    local low = lulibre.fold(title)
+    -- the book's title with a subtitle after it is the book
+    if #low >= 12 and folded:sub(1, #low) == low and folded:sub(#low + 1):find("^%s*[:%.%-(]") then return true end
+    if M.same_title(title, rec.title) or (#low >= 12 and folded:sub(1, #low) == low) or (#folded >= 12 and low:sub(1, #folded) == folded) then
+      alike = true
+    end
+    local _ = my_set
+  end
+  -- the record's title, word for word, in the opening of the file (its first six telling words, at least three)
+  if head and head ~= "" then
+    local want = {}
+    for w in folded:gmatch("[%w]+") do
+      if not TITLE_STOP[w] and #want < 6 then want[#want + 1] = w end
+    end
+    if #want >= 3 then
+      local opening = {}
+      for w in lulibre.fold(head):gmatch("[%w]+") do
+        if not TITLE_STOP[w] then opening[#opening + 1] = w end
+      end
+      if (" " .. table.concat(opening, " ") .. " "):find(" " .. table.concat(want, " ") .. " ", 1, true) then return true end
+    end
+  end
+  if alike then return agree ~= false, false end
+  if agree then return true, false, #(titles or {}) > 0 and "people" or nil end
+  return false, agree == false and #(titles or {}) > 0
 end
 
 --- Search CrossRef by title; the record only if it is that work (title_match
@@ -976,7 +1087,8 @@ function M.openlibrary(isbn)
     rec.series, rec.series_index = require("lulibre.titlecase").apply(trim(name)), number
   end
   for _, a in ipairs(type(b.authors) == "table" and b.authors or {}) do
-    if type(a.name) == "string" then rec.authors[#rec.authors + 1] = a.name end
+    -- "Cohen, Henri." is Henri Cohen: a catalogue's way of writing a name is not news
+    if type(a.name) == "string" then rec.authors[#rec.authors + 1] = forename_first((a.name:gsub("(%l%l)%.$", "%1"))) end
   end
   local pub = type(b.publishers) == "table" and b.publishers[1]
   if type(pub) == "table" and type(pub.name) == "string" then rec.publisher = pub.name end

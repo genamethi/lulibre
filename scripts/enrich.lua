@@ -66,7 +66,16 @@ for n, id in ipairs(ids) do
     end
     if book.title and not junk.title(book.title) then titles[#titles + 1] = book.title end
     known.arxiv = known.arxiv and net.arxiv_id(known.arxiv)
-    books[#books + 1] = { id = id, book = book, known = known, in_file = in_file, titles = titles }
+    books[#books + 1] = { id = id, book = book, known = known, in_file = in_file, titles = titles,
+      -- the authors the book has, when they are worth the name; and how its file opens
+      people = function(b)
+        if not b.authors then
+          local has = edit.current(b.book, "authors")
+          b.authors = propose.is_gap("authors", has, b.id) and {} or edit.split("authors", has)
+          b.head = (lulibre.text(b.id) or ""):sub(1, 3000)
+        end
+        return b.authors
+      end }
   end
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
@@ -225,33 +234,65 @@ end
 local ARTICLE = { ["journal-article"] = true, ["proceedings-article"] = true, article = true }
 local TRUST = { arxiv = 0.95, crossref = 0.95, openlibrary = 0.9, zbmath = 0.85, openalex = 0.85 }
 
--- Is the record that of the book in hand? A number or DOI that calibre
--- holds is taken at its word; one read from the file's pages is believed
--- only if the record's title is the book's, or the title the file shows.
+-- Is the record that of the book in hand? An identifier read from the
+-- file's pages may be a cited work's: its record is believed only if the
+-- record's title is the book's, or the title the file shows. One the
+-- library holds is not taken at its word either (it may have come from such
+-- a page, or from an earlier mistake): net.fits says how it is judged.
+-- Returns whether it fits, and when it does not, whether title and authors
+-- both speak against it.
 local function fits(b, kind, rec)
-  if not b.in_file[kind] or not rec.title or #b.titles == 0 then return true end
-  local theirs = lulibre.fold(rec.title)
-  for _, title in ipairs(b.titles) do
-    if net.same_title(title, rec.title) then return true end
-    -- a title cut short is still the title
-    local mine = lulibre.fold(title)
-    if #mine >= 12 and theirs:sub(1, #mine) == mine then return true end
+  if b.in_file[kind == "isbn-record" and "isbn" or kind] then
+    if not rec.title or #b.titles == 0 then return true end
+    local theirs = lulibre.fold(rec.title)
+    for _, title in ipairs(b.titles) do
+      if net.same_title(title, rec.title) then return true end
+      -- a title cut short is still the title
+      local mine = lulibre.fold(title)
+      if #mine >= 12 and theirs:sub(1, #mine) == mine then return true end
+    end
+    return false, false
   end
-  return false
+  local people = b:people()
+  return net.fits(rec, b.titles, people, b.head)
 end
 
-local added, found, replacing, cited = 0, 0, 0, 0
+local added, found, replacing, cited, others, removals = 0, 0, 0, 0, 0, 0
 local by_service = {}
 for n, b in ipairs(books) do
   lulibre.progress(("looking up %d/%d"):format(n, #books))
   local records = {}
   local other = {} -- kinds of identifier that turned out to be another work's
+  local wrong = {} -- kind of identifier the library holds -> the title of the other work its record is of
+  local fitting = {} -- kind of identifier -> a record it led to has been found to be the book's
   local function ask(service, kind, fn, ...)
     if not use[service] or other[kind] then return nil end
     local rec = fn(...)
-    if rec and not fits(b, kind, rec) then
-      other[kind], rec = true, nil
-      cited = cited + 1
+    if rec then
+      -- once one record an identifier led to is the book's, so are the others it leads to
+      local ok, plain, how = true, false, nil
+      if not fitting[kind] then
+        ok, plain, how = fits(b, kind, rec)
+        fitting[kind] = ok and (how or true)
+      end
+      -- known for the book's by its people alone: its title may be another work's, or the whole this is a part of
+      if fitting[kind] == "people" then rec.by_people = true end
+      if not ok then
+        local in_file = b.in_file[kind == "isbn-record" and "isbn" or kind]
+        if in_file then cited = cited + 1 else others = others + 1 end
+        -- which, and why: in the log (:messages), and on the terminal when there is no interface
+        local line = ("book %d (%s): the record %s is left out, it is of \"%s\"%s"):format(b.id, b.book.title or "", rec.source or service,
+          rec.title or "", #rec.authors > 0 and (" by " .. table.concat(rec.authors, ", ")) or "")
+        if lulibre.headless then print("  " .. line) else lulibre.log("enrich: " .. line) end
+        -- what an earlier run proposed from this record is withdrawn with it
+        if rec.source then
+          lulibre.store("DELETE FROM proposals WHERE book = ? AND status = 'pending' AND (source = ? OR instr(source, ? || ' (') = 1)", b.id, rec.source, rec.source)
+        end
+        if plain and not in_file and ((service == "arxiv" and kind == "arxiv") or (kind == "doi" and (service == "crossref" or service == "openalex"))) then
+          wrong[kind] = rec.title
+        end
+        other[kind], rec = true, nil
+      end
     end
     if rec then
       rec.service = service
@@ -280,6 +321,15 @@ for n, b in ipairs(books) do
     if not propose.is_gap("authors", has, b.id) then who = require("lulibre.edit").split("authors", has) end
     ask("crossref", "title", net.crossref_search, b.book.title, who)
   end
+  -- An identifier the library holds whose record is plainly another work's
+  -- (neither its title nor its authors are the book's): taking it off is proposed.
+  for kind, title in pairs(wrong) do
+    local value = b.book.idents[kind]
+    if value and proposals.add(b.id, "identifiers", kind .. ":" .. value, { op = "remove", confidence = 0.6,
+        source = ("its record is another work: %s"):format(#title > 60 and title:sub(1, 57) .. "..." or title) }) then
+      removals = removals + 1
+    end
+  end
   -- the number zbMATH knows the paper by, from its table of links: no request, and not a record of its own
   local zb = k.arxiv and not other.arxiv and zb_numbers[k.arxiv]
   if zb then
@@ -299,9 +349,19 @@ for n, b in ipairs(books) do
       -- a record found by its title is believed as far as the titles and authors bear it out
       local trust = math.min(TRUST[r.service] or 0.85, r.trust or 1)
       -- a title with TeX left in it fills a gap, but is not put over a title that reads well
-      offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or r.source, r.title_tex and 0.75 or trust)
+      -- A record does not get to put a shorter title, or other people, over
+      -- what a book has as if it were sure: those are offered low, so they
+      -- fill a gap or answer --over, and are not pressed on a good value.
+      local has_title = b.book.title and not propose.is_gap("title", b.book.title, b.id)
+      local short = r.title and has_title and net.shorter_title(b.book.title, r.title)
+      local elsewhere = has_title and r.by_people
+      offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
+        or elsewhere and r.source .. " (another title, the same people: the whole this is part of?)" or r.source,
+        math.min(r.title_tex and 0.75 or trust, short and 0.6 or 1, elsewhere and 0.5 or 1))
       if #r.authors > 0 then
         local authors, source, sure = r.authors, r.source, trust
+        if net.other_people(b:people(), r.authors) then source, sure = source .. " (none of the names the book has)", math.min(sure, 0.6)
+        elseif net.fewer_people(b:people(), r.authors) then source, sure = source .. " (fewer names than the book has)", math.min(sure, 0.6) end
         if r.authors_unordered then
           -- a file of arXiv's that does not say who comes first: the paper's own first page does
           local ordered, all = net.in_order_of(authors, lulibre.text(b.id))
@@ -309,7 +369,7 @@ for n, b in ipairs(books) do
           if all then
             source = source .. ", in the order of the first page"
           else
-            source, sure = source .. " (in no order: the file gives none)", 0.75
+            source, sure = source .. " (in no order: the file gives none)", math.min(sure, 0.75)
           end
         end
         offer("authors", table.concat(authors, " & "), source, sure)
@@ -369,6 +429,10 @@ print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already k
 if cited > 0 then
   print(("%d record%s left out: the identifier is in the file's pages, but the record's title is not the book's (a work it cites)"):format(
     cited, cited == 1 and "" or "s"))
+end
+if others > 0 then
+  print(("%d record%s left out: the book has the identifier, but the record is not the book's by its title and authors%s"):format(
+    others, others == 1 and "" or "s", removals > 0 and ("; taking the identifier off is proposed for %d"):format(removals) or ""))
 end
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
   local till = use[name] and net.held(name)
