@@ -40,6 +40,7 @@ help:
 	@echo
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
 	@echo "  make uninstall       remove what install put there"
+	@echo "  make datasets        optional: fetch databases for looking books up offline"
 	@echo
 	@echo "  make clean           remove what make built; keeps the configuration"
 	@echo "  make distclean       also remove what ./configure wrote: back to a bare source tree"
@@ -121,6 +122,12 @@ install: $(BIN)
 	  install -D -m 644 $$f $(DESTDIR)$(DATADIR)/lulibre/$$f || exit 1; \
 	done
 	@echo "installed lulibre $(VERSION) ($(BUILD)) in $(DESTDIR)$(BINDIR)"
+	@echo "optional: 'lulibre datasets' (or 'make datasets') fetches databases for looking books up offline; it can be run again whenever"
+
+# the databases for looking books up offline: says what there is and asks
+# which to fetch (into ~/.local/share/lulibre, never under the prefix)
+datasets: $(BIN)
+	$(BIN) datasets
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/lulibre
@@ -136,4 +143,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status builds unit check check-offline check-write check-forms e2e install uninstall clean distclean
+.PHONY: all help status builds unit check check-offline check-write check-forms e2e install datasets uninstall clean distclean

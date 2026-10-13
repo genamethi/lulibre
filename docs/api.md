@@ -211,6 +211,7 @@ its own documentation.
 | `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)`, `date(text)` (the date a text opens with, as YYYY-MM-DD), `journal(text)` (a journal heading: `{journal=, volume=, year=, pages=}`), `series_line(text)` (the series a page names, its volume, and what bears it out); `copyright_holder(text)` (the publisher a copyright line names), `house(name)` (a publisher written the one way its house is), `with_journal(publisher, journal)`; the tables `series`, `not_series`, `series_houses`, `houses` |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
+| `lulibre.datasets` | databases kept on this machine: `list` (`{name=, title=, useful=, size=, from=, renewed=, files=}`), `get(name)`, `path(file)`, `status(ds)`, `state(ds)`, `fetch(ds, {force=})`, `adopt(file)` |
 | `lulibre.detex` | `plain(s)`: TeX in a title or a name put into plain text (`Erd\H{o}s` is `Erdős`), and whether none is left; the tables `accents`, `letters` |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |
@@ -219,7 +220,7 @@ its own documentation.
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
-| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `arxiv_snapshot(path, ids)` (read papers from a file of arXiv's records instead; `arxiv_snapshot_path()` says which file), `in_order_of(names, text)`, `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
+| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `openlibrary_dump(isbns)` (read books from Open Library's dumps instead), `zbmath_links(arxiv_ids)`, `arxiv_snapshot(path, ids)` (read papers from a file of arXiv's records instead; `arxiv_snapshot_path()` says which file), `in_order_of(names, text)`, `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
 | `lulibre.json` | encode, decode |
 
 ## Example

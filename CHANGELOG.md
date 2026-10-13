@@ -117,6 +117,14 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- `lulibre datasets`: databases for looking books up without asking
+  anybody. It says what there is (arXiv's records, Open Library's editions
+  and authors, zbMATH's links to arXiv), each with a line on whom it is for,
+  asks which to fetch, and can be run again whenever; `datasets add FILE`
+  takes up files fetched by other means. `:datasets` in the interface.
+- `:enrich` reads books by ISBN out of Open Library's dumps where they are
+  here, and proposes an arXiv paper's zbMATH number from zbMATH's table of
+  links, before asking either.
 - An article's publisher is its journal, after the house behind it where
   that is known: `Elsevier: Journal of Algebra`. Read from a journal's
   heading and from CrossRef's and OpenAlex's records; houses are written one
@@ -125,7 +133,7 @@ Added
   running Kaggle's program through pixi; not again within a week unless
   forced.
 - `:enrich` paces each service by its published policy, read and linked in
-  `net.lua` (Open Library two seconds, zbMATH three), waits longer after a
+  `net.lua` (Open Library and zbMATH two seconds), waits longer after a
   slow answer, and no longer sends `contact_email` to OpenAlex, which has no
   use for it.
 - The publisher from the copyright line ("© Springer-Verlag Berlin

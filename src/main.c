@@ -30,13 +30,14 @@ static const struct {
   {"orphans", cmd_script, "records with no file, files with no record, broken links"},
   {"bib", cmd_script, "write BibTeX for the books matching a filter"},
   {"ocr", cmd_script, "read text from page images with tesseract"},
+  {"datasets", cmd_script, "databases for looking books up offline: see them, fetch them"},
 };
 
 static void usage(FILE *f) {
   fprintf(f, "usage: lulibre [-L library] [-C confdir] [-o name=value]... [--clean] [command [args]]\n\n"
              "With no command, lulibre opens the interactive interface (? for help).\n\n");
   for (size_t i = 0; i < ARRAY_LEN(commands); i++)
-    fprintf(f, "  %-7s %s\n", commands[i].name, commands[i].summary);
+    fprintf(f, "  %-8s %s\n", commands[i].name, commands[i].summary);
   fprintf(f, "\n  -L DIR          calibre library (else $LULIBRE_LIBRARY, init.lua, or .)\n"
              "  -o name=value   set an option; `lulibre -o help` lists them\n"
              "  -C DIR          configuration directory: init.lua, scripts/, lua/\n"

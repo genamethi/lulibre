@@ -1275,6 +1275,76 @@ do
   eq("mathematics is left as it is, and said to be", { detex.plain("On $\\mathbb{Z}_p$-extensions") }, { "On $\\mathbb{Z}_p$-extensions", false })
   eq("plain text is not touched", { detex.plain("Sums of Primes & Squares") }, { "Sums of Primes & Squares", true })
 
+  -- databases kept on this machine
+  do
+    local datasets = require "lulibre.datasets"
+    local ids = require "lulibre.ids"
+    eq("an ISBN of ten figures as one of thirteen, and back", { ids.isbn13("0387900403"), ids.isbn10("9780387900407"), ids.isbn13("044482149X"),
+      ids.isbn10("9780444821492"), ids.isbn10("9791234567896"), ids.isbn13("0387900404") }, { "9780387900407", "0387900403", "9780444821492", "044482149X" })
+    fresh()
+    local dir = datasets.dir()
+    lulibre.system { "mkdir", "-p", dir }
+    eq("three datasets, each with a word on whom it is for", { #datasets.list, datasets.get("openlibrary").useful:find("^Useful if you have") ~= nil,
+      datasets.get("nope") }, { 3, true })
+    eq("what is not here says so", { datasets.state(datasets.get("zbmath")), datasets.path("zbmath-oa_links.csv") }, { "not here" })
+
+    -- fetched with curl, here from a file so that nothing is asked of anybody
+    local src = os.tmpname()
+    local f = assert(io.open(src, "w"))
+    f:write("zbmath_id,link\n10,https://arxiv.org/pdf/1111.2222.pdf\n4922,https://arxiv.org/pdf/math/9201241.pdf\n992,https://ir.cwi.nl/pub/1578\n11112,https://arxiv.org/pdf/1111.22223.pdf\n")
+    f:close()
+    local zb = datasets.get("zbmath")
+    local said = {}
+    eq("a dataset is fetched into the data folder", { datasets.fetch(zb, { url = "file://" .. src, say = function(t) said[#said + 1] = t end }) }, { true })
+    eq("and is then here", { datasets.path("zbmath-oa_links.csv"), datasets.state(zb):find("^here: ") ~= nil, datasets.status(zb).here },
+      { dir .. "/zbmath-oa_links.csv", true, true })
+    eq("what is here and does not go stale is not fetched again", { datasets.fetch(zb, { url = "file:///nonexistent", say = function() end }) }, { true, "fresh" })
+    local ok, why = datasets.fetch(zb, { url = "file:///nonexistent", force = true, say = function() end })
+    eq("a fetch that fails says so, and leaves what was here", { ok, why:find("was not fetched") ~= nil, datasets.status(zb).here }, { nil, true, true })
+    eq("zbMATH's number for an arXiv paper, from its table of links", net.zbmath_links { "1111.2222v3", "math/9201241", "2609.99999" },
+      { ["1111.2222"] = "10", ["math/9201241"] = "4922" })
+    os.remove(src)
+
+    -- Open Library's dumps: lines as they are in the dump of 2026-09-30, cut short
+    local T = "\t"
+    local editions = table.concat({
+      "/type/edition" .. T .. "/books/OL1000073M" .. T .. "17" .. T .. "2025-12-08T01:33:01.867590" .. T
+        .. [=[{"publishers": ["Cambridge University Press"], "isbn_10": ["0521413826"], "series": ["Cambridge texts in the history of political thought"], "lc_classifications": ["JC179 .R7 1997"], "key": "/books/OL1000073M", "authors": [{"key": "/authors/OL23513A"}], "publish_date": "1997", "title": "The social contract and other later political writings", "by_statement": "Rousseau ; edited and translated by Victor Gourevitch.", "dewey_decimal_class": ["320.1/1"], "type": {"key": "/type/edition"}}]=],
+      "/type/edition" .. T .. "/books/OL1000101M" .. T .. "9" .. T .. "2024-01-01T00:00:00.000000" .. T
+        .. [=[{"publishers": ["Elsevier"], "isbn_10": ["044482149X"], "series": ["Progress in brain research ;", "v. 110"], "lc_classifications": ["QP376 .P7 vol. 110"], "key": "/books/OL1000101M", "publish_date": "1996", "title": "Towards the neurobiology of chronic pain"}]=],
+      "/type/edition" .. T .. "/books/OL9999999M" .. T .. "1" .. T .. "2024-01-01T00:00:00.000000" .. T
+        .. [=[{"title": "A book that only mentions it", "notes": "see also \"0521413826\" in the catalogue", "isbn_10": ["0000000019"]}]=],
+    }, "\n") .. "\n"
+    local authors = "/type/author" .. T .. "/authors/OL23513A" .. T .. "40" .. T .. "2026-01-01T00:00:00.000000" .. T
+      .. [=[{"name": "Jean-Jacques Rousseau", "key": "/authors/OL23513A", "type": {"key": "/type/author"}}]=] .. "\n"
+    for name, text in pairs { ["ol_dump_editions_2026-09-30.txt"] = editions, ["ol_dump_authors_2026-09-30.txt"] = authors } do
+      local g = assert(io.open(dir .. "/" .. name, "w"))
+      g:write(text)
+      g:close()
+      lulibre.system { "gzip", "-f", dir .. "/" .. name }
+    end
+    local ds, as = datasets.adopt(dir .. "/ol_dump_editions_2026-09-30.txt.gz")
+    eq("a file fetched by other means is taken up under the name its dataset knows", { ds and ds.name, as }, { "openlibrary", "ol_dump_editions_latest.txt.gz" })
+    eq("one of its two files is not all of it", { datasets.status(ds).here, datasets.state(ds) }, { false, "partly here (ol_dump_authors_latest.txt.gz missing)" })
+    datasets.adopt(dir .. "/ol_dump_authors_2026-09-30.txt.gz")
+    eq("both are", datasets.status(ds).here, true)
+    eq("a file of no dataset is not taken up", (select(2, datasets.adopt(src .. ".nothing"))):find("there is no file") ~= nil, true)
+    eq("books are read out of Open Library's dump by ISBN, however it was written", { net.openlibrary_dump { "978-0-521-41382-4", "0521413826", "044482149X", "0387900403" } },
+      { 3, true })
+    net.offline = true
+    local b1, b2 = net.openlibrary("9780521413824"), net.openlibrary("044482149X")
+    eq("an edition of the dump: its author by name, its series, the subject its class stands for",
+      { b1.title, b1.authors, b1.publisher, b1.year, b1.series, b1.series_index, net.openlibrary("0521413826").title },
+      { "The social contract and other later political writings", { "Jean-Jacques Rousseau" }, "Cambridge University Press", 1997,
+        "Cambridge Texts in the History of Political Thought", nil, "The social contract and other later political writings" })
+    eq("a volume's number noted apart from its series", { b2.series, b2.series_index, #b2.authors }, { "Progress in Brain Research", "110", 0 })
+    net.offline = false
+    eq("what the dump does not hold is remembered, and not looked for in it again", { net.kept("openlibrary", "0387900403"), (net.openlibrary_dump { "0387900403" }) }, { nil, 0 })
+    for _, name in ipairs { "ol_dump_editions_latest.txt.gz", "ol_dump_authors_latest.txt.gz", "ol_dump_editions_2026-09-30.txt.gz",
+      "ol_dump_authors_2026-09-30.txt.gz", "zbmath-oa_links.csv" } do os.remove(dir .. "/" .. name) end
+    fresh()
+  end
+
   -- CrossRef and Open Library take many at a time too
   fresh()
   local pace_cr, pace_ol = net.PACE.crossref, net.PACE.openlibrary
