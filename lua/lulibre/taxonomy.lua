@@ -50,13 +50,23 @@ M.arxiv = {
   ["cs.DC"] = "cs/distributed",
   ["cs.DS"] = "cs/algorithms",
   ["cs.IT"] = "cs/information-theory",
+  ["cs.NE"] = "cs/ml", ["cs.CV"] = "cs/vision", ["cs.MA"] = "cs/ai", ["cs.RO"] = "cs/robotics",
+  ["cs.CC"] = "cs/complexity", ["cs.LO"] = "cs/logic", ["cs.FL"] = "cs/formal-languages",
+  ["cs.PL"] = "cs/programming-languages", ["cs.SE"] = "cs/software-engineering", ["cs.CR"] = "cs/security",
+  ["cs.DB"] = "cs/systems", ["cs.OS"] = "cs/systems", ["cs.NI"] = "cs/systems", ["cs.AR"] = "cs/systems",
+  ["cs.IR"] = "cs/information-retrieval", ["cs.HC"] = "cs/hci", ["cs.SI"] = "cs/networks", ["cs.GT"] = "cs/game-theory",
+  ["cs.CG"] = "cs/geometry", ["cs.SC"] = "cs/symbolic", ["cs.DM"] = "math/combinatorics", ["cs.NA"] = "math/applied",
+  ["cs.SD"] = "cs/audio", ["eess.AS"] = "cs/audio", ["eess.SP"] = "cs/signal-processing", ["eess.IV"] = "cs/vision",
+  ["stat.TH"] = "math/statistics", ["stat.ME"] = "math/statistics", ["stat.AP"] = "math/statistics",
+  ["stat.CO"] = "math/statistics", ["math.ST"] = "math/statistics",
 }
 
 -- when the exact class is not listed, its archive decides
 local archive = {
   math = "math/general",
   cs = "cs",
-  stat = "cs",
+  stat = "math/statistics",
+  eess = "cs",
   ["cond-mat"] = "physics/condensed-matter",
   ["astro-ph"] = "sciences/physical",
   ["nucl-th"] = "sciences/physical",

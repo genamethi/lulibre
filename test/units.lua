@@ -505,6 +505,17 @@ do
   local proposals = require "lulibre.proposals"
   eq("same: quotes, case and punctuation do not matter",
     propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
+  eq("a finer subject under one the book has", { propose.refines("cs, math/logic", "cs/ml"), propose.refines("cs/ml", "cs/ml"),
+    propose.refines("cs, cs/ml/theory", "cs/ml"), propose.refines("math", "cs/ml"), propose.refines("", "cs/ml") },
+    { true, false, false, false, false })
+  do
+    local subjects, taxonomy = require "lulibre.subjects", require "lulibre.taxonomy"
+    local best = subjects.score("We train a neural network by stochastic gradient descent; the transformer uses an attention mechanism and a learning rate schedule for deep learning.")[1]
+    eq("the vocabulary tells machine learning from computing at large", best.subject, "cs/ml")
+    eq("and complexity theory", subjects.score("We show the problem is NP-hard and lies in PSPACE; a polynomial time reduction gives a lower bound in circuit complexity.")[1].subject, "cs/complexity")
+    eq("arXiv's classes of computing, each to its own subject", { taxonomy.from_arxiv("cs.CV"), taxonomy.from_arxiv("cs.CC"), taxonomy.from_arxiv("cs.NE"),
+      taxonomy.from_arxiv("stat.ME"), taxonomy.from_arxiv("cs.XX") }, { "cs/vision", "cs/complexity", "cs/ml", "math/statistics", "cs" })
+  end
   eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
   eq("same: the same people named less fully say nothing new", { propose.same("authors", "Sérgio Joffily", "S. Joffily"),
     propose.same("authors", "Todd K. Timberlake & Jeffery M. Tucker", "Todd Timberlake & Jeffery Tucker"),
@@ -940,6 +951,22 @@ do
     beside.likely("Notes on the Theory of Sieves"), beside.likely("Érdős–Kac: an introduction"), beside.likely("2104 07"), beside.likely(nil) },
     { "functions transfer operators", "sieves", "erdos" })
   eq("the keys of that screen are a table like the others'", require("lulibre.ui.keys").of("beside"):action("D"), "drop")
+end
+
+-- Every Lua file of lulibre compiles. (Lua 5.5 refuses, when it loads a
+-- file, an assignment to a loop's own variable, which 5.4 let pass: a file
+-- nothing here happens to load would only fail in the user's hands.)
+do
+  local src = debug.getinfo(1, "S").source:gsub("^@", "")
+  local root = src:match("^(.*)/test/units%.lua$") or "."
+  local r = lulibre.system { "find", root .. "/lua", root .. "/scripts", "-name", "*.lua" }
+  local bad, n = {}, 0
+  for path in (r and r.stdout or ""):gmatch("[^\n]+") do
+    n = n + 1
+    local ok, err = loadfile(path)
+    if not ok then bad[#bad + 1] = err end
+  end
+  eq("every Lua file compiles", { n > 40, bad }, { true, {} })
 end
 
 -- help: the guides as plain text, and found by topic
