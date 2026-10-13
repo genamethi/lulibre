@@ -1,6 +1,6 @@
 /* Indexing, from Lua.
  *
- *   lulibre.index([{filter=, force=, retry=}])
+ *   lulibre.index([{filter=, force=, retry=, pages=}])
  *
  * Extract text from files that are new or have changed (every file with
  * force; only books matching a filter with filter), and wait until it is
@@ -84,6 +84,12 @@ static int start_ui(lua_State *L) {
   o.layout_pages = app->cfg.layout_pages < o.pages ? app->cfg.layout_pages : o.pages;
   o.inflight = app_jobs(app) + app_jobs(app) / 2;
   if (lua_istable(L, 1)) {
+    lua_getfield(L, 1, "pages"); /* read this many pages of each file, not the option's number */
+    if (lua_isinteger(L, -1) && lua_tointeger(L, -1) > 0) {
+      o.pages = (int)lua_tointeger(L, -1);
+      if (o.layout_pages > o.pages) o.layout_pages = o.pages;
+    }
+    lua_pop(L, 1);
     lua_getfield(L, 1, "force");
     o.force = lua_toboolean(L, -1);
     lua_getfield(L, 1, "retry");

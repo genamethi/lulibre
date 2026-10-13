@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "app.h"
+#include "lua/lapi.h"
 #include "config.h"
 #include "version.h"
 #include "core/log.h"
@@ -30,6 +31,9 @@ static const struct {
   {"orphans", cmd_script, "records with no file, files with no record, broken links"},
   {"bib", cmd_script, "write BibTeX for the books matching a filter"},
   {"ocr", cmd_script, "read text from page images with tesseract"},
+  {"propose", cmd_script, "propose metadata from the files themselves, for review"},
+  {"enrich", cmd_script, "look books up by their identifiers and propose what the records say"},
+  {"refs", cmd_script, "read what the books cite, from the bibliography at the end of each file"},
   {"datasets", cmd_script, "databases for looking books up offline: see them, fetch them"},
 };
 
@@ -60,7 +64,29 @@ static void list_options(const struct config *c) {
   }
 }
 
+/* A command that is one of the bundled scripts. Its help is what the script
+ * says of itself: the comment it opens with. */
 static int cmd_script(struct app *app, int argc, char **argv) {
+  if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+    char *path = lapi_find_script(app, argv[0]);
+    FILE *f = path ? fopen(path, "r") : NULL;
+    if (!f) {
+      fprintf(stderr, "lulibre %s: no help found for it\n", argv[0]);
+      free(path);
+      return 1;
+    }
+    char line[512];
+    printf("usage: lulibre %s [args]\n\n", argv[0]);
+    while (fgets(line, sizeof line, f) && !strncmp(line, "--", 2)) {
+      const char *text = line + 2;
+      if (*text == ' ') text++;
+      fputs(text, stdout);
+    }
+    printf("\n(In the interface this is :%s; a filter picks the books, else the selection.)\n", argv[0]);
+    fclose(f);
+    free(path);
+    return 0;
+  }
   char **args = xcalloc((size_t)argc + 2, sizeof *args);
   args[0] = "run";
   for (int i = 0; i < argc; i++) args[i + 1] = argv[i];

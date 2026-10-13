@@ -4,7 +4,8 @@
 #   build-number.sh VERSION --log     prints the log
 #   build-number.sh VERSION --where   prints where the log is kept
 #
-# Builds of one version are numbered 001, 002, ... in the order they are made,
+# Builds of one version (0.2.0-alpha.0 is one, 0.2.0-alpha.1 another) are
+# numbered 001, 002, ... in the order they are made,
 # whichever checkout of the repository makes them: the log is kept beside the
 # repository's own data (.git/lulibre-builds/), which every worktree shares,
 # and is not part of any commit. Each line gives the number, the time, the
@@ -16,7 +17,9 @@
 # The number is for telling builds apart while a version is in the making;
 # it is not part of the version.
 version=$1
-base=${version%%-*} # 0.2.0-dev -> 0.2.0
+# One count for each version as it is written in full: 0.2.0-alpha.0 starts
+# again at 001, as 0.2.0-alpha.1 and 0.2.0 will.
+base=$version
 common=$(git rev-parse --git-common-dir 2>/dev/null) || common=
 if [ -n "$common" ]; then
   dir=$(cd "$common" && pwd)/lulibre-builds/$base

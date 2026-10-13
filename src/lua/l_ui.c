@@ -212,12 +212,37 @@ static int l_maps_ui(lua_State *L) {
     lua_setfield(L, -2, "keys");
     lua_pushstring(L, b->command);
     lua_setfield(L, -2, "command");
+    if (b->about) {
+      lua_pushstring(L, b->about);
+      lua_setfield(L, -2, "about");
+    }
+    lua_pushboolean(L, b->hidden);
+    lua_setfield(L, -2, "hidden");
     lua_rawseti(L, -2, ++n);
     sb_free(&k);
   }
   return 1;
 }
 ON_UI(l_maps)
+
+/* lulibre.commands(): every command there is, { {name = "group", help = "..."}, ... } */
+static int add_command(const char *name, const char *help, void *ud) {
+  lua_State *L = ud;
+  lua_createtable(L, 0, 2);
+  lua_pushstring(L, name);
+  lua_setfield(L, -2, "name");
+  lua_pushstring(L, help);
+  lua_setfield(L, -2, "help");
+  lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
+  return 0;
+}
+
+static int l_commands_ui(lua_State *L) {
+  lua_newtable(L);
+  command_each(add_command, L);
+  return 1;
+}
+ON_UI(l_commands)
 
 /* lulibre._place_map(place, key, action): the binding of a key to an action
  * of a place that has keys of its own ("panel", "line", "picker", "pager",
@@ -974,6 +999,7 @@ void l_ui_open(lua_State *L) {
     {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
+    {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
     {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},
     {"place_keys", l_place_keys}, {NULL, NULL},

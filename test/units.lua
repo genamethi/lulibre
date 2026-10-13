@@ -942,6 +942,21 @@ do
   eq("the keys of that screen are a table like the others'", require("lulibre.ui.keys").of("beside"):action("D"), "drop")
 end
 
+-- help: the guides as plain text, and found by topic
+do
+  local help = require "lulibre.ui.help"
+  eq("a guide as plain lines: links as their text, a table's cells side by side, fences dropped",
+    help.plain("## The list\n\nSee [the keys](keys.md) and `gh`.\n\n| Key | Does |\n|---|---|\n| `gh` | **groups** |\n\n```lua\nlulibre.o.x = 1\n```\n"),
+    { "THE LIST", "", "See the keys and gh.", "", "  Key   ·   Does", "  gh   ·   groups", "", "    lulibre.o.x = 1", "" })
+  local long = help.plain("| arXiv | " .. ("a long cell of words "):rep(8) .. "|")
+  eq("a row too long for the page is set out cell under cell", { long[1], long[2]:sub(1, 12), #long >= 3 }, { "  arXiv", "        a lo", true })
+  eq("the guides are found beside the Lua code", help.docs_dir() ~= nil, true)
+  local found = help.find("enrich")
+  eq("a topic is the part of the guides headed with it", { found[1] and found[1].guide, found[1] and found[1].title:find("enrich", 1, true) ~= nil,
+    found[1] and found[1].text:find("zbMATH", 1, true) ~= nil }, { "workflows", true, true })
+  eq("a word no heading has finds none", #help.find("xyzzy-no-such-topic"), 0)
+end
+
 -- references: the bibliography at the end of a file
 do
   local refs = require "lulibre.refs"

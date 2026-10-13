@@ -133,6 +133,8 @@ lulibre.command("review", function(args)
   if args == "selection" then args = { ids = lulibre.selection() } end
   require("lulibre.ui.review").run(args)
 end, "[filter | selection]  go through proposed changes and write the accepted ones; with a filter, only those books'")
+lulibre.command("help", screen("lulibre.ui.help"),
+  "[topic]  the keys under headings that open and close, with a search; with a topic, what the guides say about it (:help enrich)")
 lulibre.command("beside", screen("lulibre.ui.beside"),
   "the sync folder in a column beside the library: each waiting file next to the book that is the same, or that looks like it")
 lulibre.command("capture", screen("lulibre.ui.capture"),
@@ -189,6 +191,17 @@ lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page image
 lulibre.command("enrich", script("enrich"),
   "[--offline] [--titles] [filter]  look books up by their identifiers (arXiv, CrossRef, zbMATH, Open Library); proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
+lulibre.command("addpages", function(args)
+  -- read a file as far as a page: "addpages BOOK PAGE" (the preview's key for it gives both)
+  local id, page = args:match("^(%-?%d+)%s+(%d+)$")
+  if not id then error("addpages BOOK PAGE", 0) end
+  lulibre.progress(("reading book %s as far as page %s"):format(id, page))
+  local r, err = lulibre.index { filter = (tonumber(id) < 0 and "in:sync " or "") .. "id:" .. math.abs(tonumber(id)), pages = tonumber(page), force = true }
+  lulibre.progress(nil)
+  if not r then error(err, 0) end
+  lulibre.exec("reload")
+  print(r.failed > 0 and "the file could not be read" or ("read as far as page %s"):format(page))
+end, "BOOK PAGE  read a file as far as that page (the preview's `a` does it for the page being shown)")
 lulibre.command("datasets", script("datasets"),
   "[list | fetch NAME... | add FILE...]  databases for looking books up offline (arXiv, Open Library, zbMATH): pick one to fetch")
 lulibre.command("arxiv-fetch", script("arxiv-fetch"),

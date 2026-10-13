@@ -43,17 +43,18 @@ tag `vX.Y.Z[-pre]`.
 ## Builds
 
 While a version is in the making its builds are numbered: 001, 002, ... in
-the order they are made. `make` gives the binary the next number whenever it
+the order they are made, each version as it is written in full having its
+own count (`0.2.0-alpha.0` begins again at 001, as `0.2.0-alpha.1` will). `make` gives the binary the next number whenever it
 links it, which is whenever anything it is made of has changed, the Lua
 runtime and the bundled scripts included. The number is for telling one
 build from another when something is reported; it is not part of the
 version.
 
-    lulibre -V          lulibre 0.2.0-dev (debug build 007, Lua 5.5)
+    lulibre -V          lulibre 0.2.0-alpha.0 (debug build 007, Lua 5.5)
     make builds         the log: number, time, version, commit, branch, checkout
 
 ```
-007  2026-10-12 21:40  0.2.0-dev  3b3ddb3+  0.2.0-dev  /media/servd/staging/lulibre-0.2.0
+007  2026-10-13 05:10  0.2.0-alpha.0  3b3ddb3+  0.2.0-dev  /media/servd/staging/lulibre-0.2.0
 ```
 
 The commit carries a `+` when the tree had changes not yet committed; those

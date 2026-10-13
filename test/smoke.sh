@@ -99,6 +99,9 @@ expect   "the title, the publisher of a book, the Zbl number" \
   "identifiers:zbl:0001.00001|publisher:Example Press|title:Notes on Additive Number Theory" \
   "$(run query -f id id:2 >/dev/null 2>&1; printf 'for _, p in ipairs(lulibre.sql("SELECT field, value FROM proposals WHERE book = 2 AND status = \x27pending\x27 AND field IN (\x27title\x27, \x27publisher\x27) OR value LIKE \x27zbl:%%\x27 ORDER BY field")) do io.write(p.field, ":", p.value, "|") end\n' > "$t/p.lua"; run run "$t/p.lua" 2>&1 | sed 's/|$//')"
 contains "a book with no identifier is passed over" "a record for 0" "$(run run enrich --offline id:1 2>&1)"
+contains "a command that is a script says what it is with -h" "usage: lulibre enrich" "$(run enrich -h 2>&1)"
+contains "from the script's own opening lines" "--plan" "$(run enrich -h 2>&1)"
+contains "propose is a command of the command line" "proposal" "$(run propose id:1 2>&1)"
 
 # fetching arXiv's snapshot: a stand-in for Kaggle's program, so nothing is asked of Kaggle
 cat > "$t/fakekaggle" <<'SH'
@@ -380,17 +383,33 @@ LUA
   $T send-keys -t t Enter
   shown "and is named by the key it is on" "^bound to ,e *$"
   $T send-keys -t t "?"
-  shown "? opens the help"                 "KEYS"
-  # page down to the end of the keys, where bindings made later are listed
-  found=no hidden=ok
-  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
-    screen | grep -q "gz  *a key of my own, described" && found=yes
-    screen | grep -q "echo why" && hidden=shown
-    $T send-keys -t t Space; sleep 0.15
-  done
-  expect "a binding's own description is listed" yes "$found"
-  expect "a hidden binding stays out of the help" ok "$hidden"
+  shown "? opens the help, under headings"  "▾ Start here"
+  shown "the others closed, with their counts" "▸ Windows   ([0-9]*)"
+  $T send-keys -t t "/"
+  shown "/ searches the keys"               "^search the keys and commands:"
+  $T send-keys -t t -l "my own"
+  shown "a binding's own description is found" "gz  *a key of my own, described"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "why"
+  shown "the search follows what is typed"  "matching 'why'"
+  expect "a hidden binding stays out of the help" "" "$(screen | grep -o 'echo why' | head -1)"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "leave lulibre" ; $T send-keys -t t Enter
+  shown "a key is found by what it does"    "q  *ZZ  *leave lulibre"
+  $T send-keys -t t BSpace
+  shown "Backspace shows everything again"  "keys, by what they are for"
+  $T send-keys -t t C
+  shown "C closes every heading"            "▸ Start here"
+  $T send-keys -t t g g Enter
+  shown "Enter opens the one under the cursor" "▾ Start here"
   $T send-keys -t t q
+  i=0; while screen | grep -q "Start here" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  $T send-keys -t t : ; $T send-keys -t t -l "help filters" ; $T send-keys -t t Enter
+  shown ":help with a guide's name shows it" "help: filters"
+  $T send-keys -t t q
+  sleep 0.2
+  $T send-keys -t t : ; $T send-keys -t t -l "help enrich" ; $T send-keys -t t Enter
+  shown ":help with a word shows the part about it" "LOOKING BOOKS UP"
+  $T send-keys -t t q
+  sleep 0.2
   $T send-keys -t t g t
   shown "the tree browser opens"           "browse  "
   $T send-keys -t t "?"

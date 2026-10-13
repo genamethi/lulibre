@@ -11,6 +11,8 @@ BIN  := build/lulibre
 SRC  := $(wildcard src/*.c src/*/*.c)
 OBJ  := $(SRC:%.c=build/%.o)
 LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
+# the guides, which :help reads
+DOCS := $(wildcard docs/*.md)
 # everything but main(), for the C unit tests to link against
 LIBOBJ := $(filter-out build/src/main.o,$(OBJ))
 UNIT := build/test/unit
@@ -118,9 +120,10 @@ e2e: $(BIN)
 install: $(BIN)
 	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(DATADIR)/lulibre
 	install -m 755 $(BIN) $(DESTDIR)$(BINDIR)/lulibre
-	@for f in $(LUA); do \
+	@for f in $(LUA) $(DOCS); do \
 	  install -D -m 644 $$f $(DESTDIR)$(DATADIR)/lulibre/$$f || exit 1; \
 	done
+	install -D -m 644 man/lulibre.1 $(DESTDIR)$(DATADIR)/man/man1/lulibre.1
 	@echo "installed lulibre $(VERSION) ($(BUILD)) in $(DESTDIR)$(BINDIR)"
 	@echo "optional: 'lulibre datasets' (or 'make datasets') fetches databases for looking books up offline; it can be run again whenever"
 
@@ -132,6 +135,7 @@ datasets: $(BIN)
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/lulibre
 	rm -rf $(DESTDIR)$(DATADIR)/lulibre
+	rm -f $(DESTDIR)$(DATADIR)/man/man1/lulibre.1
 
 # ---- cleaning ----
 
