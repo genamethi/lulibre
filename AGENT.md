@@ -119,6 +119,17 @@ code.
   list dropped "number", "series", "law" and "distribution", and with them
   number field, power series, reciprocity law. Test such a list against the
   phrases that must survive it.
+- Code that talks to somebody else's service is written from that service's
+  own terms, read first and linked in a comment, not from memory of what is
+  usual. The first arXiv code kept to a pace but retried after "rate
+  exceeded" and, when a batch failed, asked for each paper singly: forty
+  requests to a service that had just asked for fewer. The rules now
+  (`lua/lulibre/net.lua`): one request at a time, no retry after 429/503 but
+  a pause that outlives the run, never a fallback that multiplies requests,
+  and an empty or broken answer is not remembered as "no such record".
+- A parser for a service's answers is checked against a real answer before
+  it is called done, and that answer (cut down) becomes the test. One
+  request is enough; if the service refuses it, say so and stop.
 
 - `make check` always; `make e2e` before a merge that touches writing.
   A change to a form (edit, review, duplicates, orphans) gets a keystroke

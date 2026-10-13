@@ -896,6 +896,145 @@ do
   lulibre.o.contact_email = ""
   lulibre.store("DELETE FROM lookups")
   net.offline = false
+
+  -- how arXiv is asked: its terms allow one request every three seconds on
+  -- one connection, and its manual wants a comma-delimited id_list
+  eq("an arXiv number as arXiv writes it", { net.arxiv_id("1012.6008v2"), net.arxiv_id("arXiv:2301.00001"),
+    net.arxiv_id("math.AG/0601001v3"), net.arxiv_id("hep-th/9711200"), net.arxiv_id("10.1000/xyz"), net.arxiv_id("1012.60") },
+    { "1012.6008", "2301.00001", "math/0601001", "hep-th/9711200", nil, nil })
+  eq("no faster than its terms allow", net.PACE.arxiv >= 3, true)
+  local ids = {}
+  for i = 1, net.ARXIV_BATCH + 2 do ids[i] = ("1012.%04d"):format(i) end
+  local urls = net.arxiv_urls(ids)
+  eq("many numbers to a request", { #urls, #urls[1].ids, #urls[2].ids }, { 2, net.ARXIV_BATCH, 2 })
+  eq("the numbers as they are, commas between",
+    net.arxiv_urls({ "1012.6008", "hep-th/9711200" })[1].url,
+    "https://export.arxiv.org/api/query?id_list=1012.6008,hep-th/9711200&start=0&max_results=2")
+
+  local function feed(total, entries)
+    return ('<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>ArXiv Query: id_list=x</title>'
+      .. '<opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">%d</opensearch:totalResults>%s</feed>'):format(
+      total, entries)
+  end
+  local function entry(id)
+    return ("<entry><id>http://arxiv.org/abs/%sv1</id><published>2010-12-29T18:01:10Z</published><title>Paper %s</title>"
+      .. "<author><name>A. N. Other</name></author></entry>"):format(id, id)
+  end
+  -- an answer as arXiv gave it on 2026-10-13 (summary cut, one of its two
+  -- entries): a number it does not have is simply not among the entries
+  local real = [==[<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/d48WUdaM37IuC4PL4Oaz32kJO40</id>
+  <title>arXiv Query: search_query=&amp;id_list=hep-th/9711200,0704.9999&amp;start=0&amp;max_results=2</title>
+  <updated>2026-10-13T06:27:49Z</updated>
+  <opensearch:itemsPerPage>2</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9711200v3</id>
+    <title>The Large N Limit of Superconformal Field Theories and Supergravity</title>
+    <updated>1998-01-22T15:42:41Z</updated>
+    <link href="https://arxiv.org/abs/hep-th/9711200v3" rel="alternate" type="text/html"/>
+    <summary>  We show that the large $N$ limit of certain conformal field theories ...</summary>
+    <category term="hep-th" scheme="http://arxiv.org/schemas/atom"/>
+    <published>1997-11-27T23:53:13Z</published>
+    <arxiv:primary_category term="hep-th"/>
+    <arxiv:journal_ref>Adv.Theor.Math.Phys.2:231-252,1998</arxiv:journal_ref>
+    <author>
+      <name>Juan M. Maldacena</name>
+    </author>
+    <arxiv:doi>10.1023/A:1026654312961</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1023/A:1026654312961" title="doi"/>
+  </entry>
+</feed>]==]
+  eq("arXiv's own answer: one record of the two asked for", net.arxiv_take({ "hep-th/9711200", "0704.9999" }, real), 1)
+  net.offline = true
+  local m = net.arxiv("hep-th/9711200")
+  eq("read as it is written", { m.title, m.authors, m.date, m.class, m.ids.doi },
+    { "The Large N Limit of Superconformal Field Theories and Supergravity", { "Juan M. Maldacena" }, "1997-11-27", "hep-th", "10.1023/A:1026654312961" })
+  eq("and the number it did not return is known not to be there", net.kept("arxiv", "0704.9999"), false)
+  net.offline = false
+
+  local real_get, calls, answer = net.get, {}, nil
+  local pace = net.PACE.arxiv
+  net.PACE.arxiv = 0
+  net.get = function(url)
+    calls[#calls + 1] = url
+    return answer(url)
+  end
+  local function fresh()
+    lulibre.store("DELETE FROM lookups")
+    lulibre.store("DELETE FROM kv WHERE key LIKE 'net.%'")
+    calls = {}
+  end
+
+  fresh()
+  answer = function() return feed(2, entry("1012.0001") .. entry("math/0601001")), 200 end
+  eq("a batch: one request for three numbers", { net.arxiv_prefetch { "1012.0001", "math.AG/0601001v2", "1012.0003" }, #calls }, { 2, 1 })
+  eq("each record kept under its number", { net.arxiv("1012.0001").title, net.arxiv("math.AG/0601001").title }, { "Paper 1012.0001", "Paper math/0601001" })
+  local r3, why3 = net.arxiv("1012.0003")
+  eq("the one arXiv did not return is remembered as not there, and nothing more was asked", { r3, why3, #calls },
+    { nil, "arXiv has no record of 1012.0003", 1 })
+
+  fresh()
+  answer = function() return feed(0, ""), 200 end
+  net.arxiv_prefetch { "1012.0001", "1012.0002" }
+  eq("an empty answer about several numbers is not taken as 'none of them exists'",
+    { net.kept("arxiv", "1012.0001"), net.kept("arxiv", "1012.0002") }, {})
+  local r1, why1 = net.arxiv("1012.0001")
+  eq("nor are they then asked for one by one", { r1, why1, #calls }, { nil, "arXiv gave no answer about 1012.0001", 1 })
+  net.arxiv("1012.0009")
+  eq("an empty answer about one number is", { net.kept("arxiv", "1012.0009"), #calls }, { false, 2 })
+  eq("the feed's own title is not a paper's", net.arxiv("1012.0009"), nil)
+
+  fresh()
+  answer = function() return "Rate exceeded.", 429, 2400 end
+  for i = 1, net.ARXIV_BATCH * 2 do ids[i] = ("1101.%04d"):format(i) end
+  net.arxiv_prefetch(ids)
+  eq("told 'too many requests': the request is not made again and the next batch is not sent", #calls, 1)
+  local till = net.held("arxiv")
+  eq("arXiv is left alone for as long as it asked, or longer", till ~= nil and till - os.time() >= 2390, true)
+  local held, why = net.arxiv("1101.0001")
+  eq("and until then nothing is asked of it", { held, why:find("pause") ~= nil, #calls }, { nil, true, 1 })
+  held, why = net.arxiv("1201.0001")
+  eq("not even about something else", { held, why:find("pause") ~= nil, #calls }, { nil, true, 1 })
+  eq("another service is still asked", net.held("crossref"), nil)
+  net.hold("arxiv", 0)
+  eq("a pause can be lifted", net.held("arxiv"), nil)
+
+  fresh()
+  lulibre.store("INSERT INTO lookups(service, key, at, status) VALUES('arxiv', '0901.0001', ?, 404)", os.time() - 86400 * (net.FORGET_DAYS + 1))
+  lulibre.store("INSERT INTO lookups(service, key, at, status) VALUES('arxiv', '0901.0002', ?, 404)", os.time() - 86400)
+  eq("'no such record' is believed for a while, then asked again", { net.kept("arxiv", "0901.0001"), net.kept("arxiv", "0901.0002") }, { nil, false })
+
+  -- CrossRef and Open Library take many at a time too
+  fresh()
+  net.PACE.crossref, net.PACE.openlibrary = 0, 0
+  answer = function(url)
+    if url:find("crossref", 1, true) then
+      return [=[{"status":"ok","message":{"total-results":1,"items":[{"DOI":"10.1000/ABC","type":"book","title":["A Book"],
+        "author":[{"given":"A. N.","family":"Other"}],"publisher":"Example Press","issued":{"date-parts":[[1977]]},"ISBN":["9780387902449"]}]}}]=], 200
+    end
+    return [=[{"ISBN:9780387902449":{"title":"Algebraic Geometry","authors":[{"name":"Robin Hartshorne"}]}}]=], 200
+  end
+  eq("CrossRef: one request for several DOIs", { net.crossref_prefetch { "10.1000/abc", "10.1000/none", "10.1000/abc" }, #calls }, { 1, 1 })
+  eq("asked for by filter, with only the fields that are read",
+    { calls[1]:find("filter=doi:10.1000%2Fabc,doi:10.1000%2Fnone&rows=2", 1, true) ~= nil, calls[1]:find("select=DOI,", 1, true) ~= nil }, { true, true })
+  local c = net.crossref("10.1000/ABC")
+  eq("each kept as its own record", { c.title, c.authors, c.year, c.publisher, c.ids.isbn, #calls },
+    { "A Book", { "A. N. Other" }, 1977, "Example Press", "9780387902449", 1 })
+  eq("and the one it did not return as not there", { net.kept("crossref", "10.1000/none"), #calls }, { false, 1 })
+  eq("Open Library: one request for several ISBNs", { net.openlibrary_prefetch { "978-0-387-90244-9", "9780000000019" }, #calls }, { 1, 2 })
+  eq("asked for together", calls[2]:find("bibkeys=ISBN:9780387902449,ISBN:9780000000019", 1, true) ~= nil, true)
+  eq("each kept", { net.openlibrary("9780387902449").title, net.kept("openlibrary", "9780000000019"), #calls }, { "Algebraic Geometry", false, 2 })
+  answer = function() return "<html>busy</html>", 503 end
+  net.crossref_prefetch { "10.1000/later1", "10.1000/later2" }
+  local l1, lwhy = net.crossref("10.1000/later1")
+  eq("a batch that fails is not asked for again piece by piece", { l1, lwhy:find("pause") ~= nil, #calls, net.kept("crossref", "10.1000/later1") },
+    { nil, true, 3 })
+
+  net.get, net.PACE.arxiv, net.PACE.crossref, net.PACE.openlibrary = real_get, pace, 1, 1
+  fresh()
 end
 
 -- one record's values offered to another
