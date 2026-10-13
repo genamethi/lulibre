@@ -85,6 +85,14 @@ Added
   `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
 - In the edit form, subjects that say what a book is about come before
   catch-alls such as `math/general` (option `subject_catchall`).
+- `:refs` reads what each book cites from the bibliography on its last
+  pages: the heading is found, the entries cut apart by numbering or hanging
+  indent, and each given a key (DOI, arXiv number, or author, year and first
+  page) by which the same work is known in another book's list. Books that
+  share references suggest each other's subject in the edit form.
+  `lulibre.extract` takes `tail = true` for a file's last pages.
+- Fuller records teach more when `:learn` runs: a confirmed record counts by
+  its score. The option `never_titles` adds to what marks a title as junk.
 - Layouts: pages that say their facts in known places are read by rule. A
   book's cataloguing block gives author, title, series and number, year and,
   from its class number, the subject; a Springer series page the series and

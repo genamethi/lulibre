@@ -173,19 +173,22 @@ function M.run(opts)
     local text = book and M.text(id)
     local subjects = book and taught(book) or {}
     if text and #subjects > 0 then
-      taught_n = taught_n + 1
+      -- a fuller record teaches more: one with nothing wrong counts once,
+      -- one that scores 0.6 a little over half
+      local w = math.max(0.5, (quality.score(book)))
+      taught_n = taught_n + w
       local who = lulibre.fold(book.author or "")
       local phrases = counter:of(text)
-      for _, g in ipairs(phrases) do all_in[g] = (all_in[g] or 0) + 1 end
+      for _, g in ipairs(phrases) do all_in[g] = (all_in[g] or 0) + w end
       for _, s in ipairs(subjects) do
-        books[s] = (books[s] or 0) + 1
+        books[s] = (books[s] or 0) + w
         local count, authors = in_s[s], by[s]
         if not count then
           count, authors = {}, {}
           in_s[s], by[s] = count, authors
         end
         for _, g in ipairs(phrases) do
-          count[g] = (count[g] or 0) + 1
+          count[g] = (count[g] or 0) + w
           -- how many different authors use it, counted as far as it matters
           local seen = authors[g]
           if not seen then
@@ -225,7 +228,7 @@ function M.run(opts)
           local elsewhere = (all_in[g] - k + 0.5) / (taught_n - n_s + 1)
           local lift = share / elsewhere
           if k / n_s >= M.MIN_SHARE and lift >= M.MIN_LIFT then
-            scored[#scored + 1] = { term = g, score = share * math.log(lift), books = k, raw = k / n_s }
+            scored[#scored + 1] = { term = g, score = share * math.log(lift), books = math.floor(k + 0.5), raw = k / n_s }
           end
         end
       end
@@ -280,7 +283,7 @@ function M.run(opts)
     end
   end
   M.loaded = nil
-  local out = { books = taught_n, read = total, subjects = nsubjects, terms = nterms, phrases = counter:size(),
+  local out = { books = math.floor(taught_n + 0.5), read = total, subjects = nsubjects, terms = nterms, phrases = counter:size(),
     seconds = os.time() - t0 }
   lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES('learn:last', ?)",
     ("%d\t%d\t%d\t%d"):format(os.time(), out.books, out.subjects, out.terms))

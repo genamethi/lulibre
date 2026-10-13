@@ -176,6 +176,7 @@ function M.book(id, opts)
   if lulibre.o.subject_learned == "propose" then
     -- after the file's own, so a stated subject (arXiv, MSC) is heard first
     candidates[#candidates + 1] = require("lulibre.learn").candidate(id)
+    candidates[#candidates + 1] = require("lulibre.refs").candidate(id)
   end
   for _, w in ipairs(M.wanted(book, candidates, opts)) do
     if proposals.add(id, w.field, w.value, { op = w.op, source = w.source, confidence = w.confidence, again = opts.again }) then

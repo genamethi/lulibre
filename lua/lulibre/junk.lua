@@ -34,11 +34,28 @@ local function any(s, patterns)
   return false
 end
 
+-- the user's own additions, from the option never_titles; read when it changes
+local never_text, never_list
+local function never_titles()
+  local text = lulibre.o.never_titles or ""
+  if text ~= never_text then
+    never_text, never_list = text, {}
+    for item in text:gmatch("[^,]+") do
+      local phrase = item:lower():gsub("^%s+", ""):gsub("%s+$", "")
+      if phrase ~= "" then never_list[#never_list + 1] = phrase end
+    end
+  end
+  return never_list
+end
+
 function M.title(t)
   if not t then return true end
   t = t:gsub("^%s+", ""):gsub("%s+$", "")
   if #t < 3 or #t > 300 then return true end
   local low = t:lower()
+  for _, phrase in ipairs(never_titles()) do
+    if low:find(phrase, 1, true) then return true end
+  end
   return generic[low] or low:find("^list of") ~= nil or not low:find("%a") or any(low, title_patterns)
 end
 

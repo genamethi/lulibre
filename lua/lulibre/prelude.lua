@@ -183,6 +183,7 @@ lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTe
 lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page images with tesseract")
 lulibre.command("enrich", script("enrich"), "[filter]  look the selection up on arXiv and CrossRef; proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
+lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")
 lulibre.command("sync", script("sync"),

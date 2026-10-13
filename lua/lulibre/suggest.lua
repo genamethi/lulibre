@@ -58,6 +58,9 @@ function M.for_field(field, ids)
     for i = 1, math.min(#ids, 8) do
       local c = learn.candidate(ids[i])
       if c then add(c.value, ("%s %.2f"):format(c.source, c.confidence), "candidate") end
+      -- and the subject of the books that cite what it cites
+      c = require("lulibre.refs").candidate(ids[i])
+      if c then add(c.value, ("%s %.2f"):format(c.source, c.confidence), "candidate") end
     end
   end
 

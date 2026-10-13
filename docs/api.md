@@ -36,7 +36,7 @@ must not count in a shared variable (`n = n + 1` can lose a count). Use
 | `lulibre.count(filter)` | number |
 | `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index |
-| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`); returns rows, rows changed, last insert id |
+| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`, `refs`); returns rows, rows changed, last insert id |
 | `lulibre.reload()` | pick up changes calibre has made |
 | `lulibre.source([name])` | what the list shows, `"library"` or `"sync"`; sets it when given |
 
@@ -60,7 +60,7 @@ Library books have positive ids; files staged from the sync folder negative ones
 | `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds |
 | `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=}, ... }` |
 | `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }` |
-| `lulibre.extract(path [, {pages=, layout_pages=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
+| `lulibre.extract(path [, {pages=, layout_pages=, tail=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
 | `lulibre.render(path, page [, width])` | *waits.* The page as a greyscale PGM string |
 | `lulibre.page_put(id, page, {text=, lines=, src=})` | replace a page's indexed text, as OCR does |
 | `lulibre.md5(path)` | *waits* the first time. Content hash, remembered in the index |
@@ -207,6 +207,7 @@ its own documentation.
 | `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
 | `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
+| `lulibre.refs` | what a book cites: `index_book(id)`, `of(id)`, `coupled(id)`, `subject(id)`, `key(entry)`, `entries(lines)`, `find(pages)` |
 | `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)` |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
