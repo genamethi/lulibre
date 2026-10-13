@@ -765,6 +765,46 @@ QA9.AIL64 1991
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 end
 
+-- references: the bibliography at the end of a file
+do
+  local refs = require "lulibre.refs"
+  eq("the heading of a bibliography", { refs.is_heading("References"), refs.is_heading("  BIBLIOGRAPHY "), refs.is_heading("7. References"),
+    refs.is_heading("References 213"), refs.is_heading("References to the literature are given below") }, { true, true, true, false, false })
+  local function l(text, x0) return { text = text, x0 = x0, size = 9 } end
+  local pages = {
+    { no = 18, lines = { l("so the theorem follows.", 70), l("References", 270), l("[1] F. V. Atkinson, Some aspects of Baxter's functional", 75),
+      l("equation, J. Math. Anal. Appl. 7 (1963), 1–30.", 88), l("[2] G. Baxter, An analytic problem, Pacific J. Math. 10", 75) } },
+    { no = 19, lines = { l("(1960), 731–742.", 88), l("19", 300), l("[3] see the remark above", 75) } },
+  }
+  local lines, page = refs.find(pages)
+  eq("the lines under it, over the page break, without the page number", { #lines, page }, { 5, 18 })
+  local entries = refs.entries(lines)
+  eq("numbered entries, their continuation lines joined", { #entries, entries[2] },
+    { 3, "[2] G. Baxter, An analytic problem, Pacific J. Math. 10 (1960), 731–742." })
+  entries = refs.entries { l("Abdulali, S. 1994. Algebraic cycles in families of abelian", 108), l("varieties. Canad. J. Math. 46, 1121–1134.", 122),
+    l("André, Y. 2004. Une introduction aux motifs. Panoramas et", 108), l("Synthèses, 17. Société Mathématique de France.", 123) }
+  eq("entries told apart by their hanging indent", { #entries, entries[2]:sub(1, 16) }, { 2, "André, Y. 2004." })
+  eq("a key by which a work is known, however a list writes it", {
+    refs.key("[1] F. V. Atkinson, Some aspects of Baxter's functional equation, J. Math. Anal. Appl. 7 (1963), 1–30."),
+    refs.key("Abdulali, S. 1994. Algebraic cycles in families of abelian varieties. Canad. J. Math. 46 (1994), 1121–1134."),
+    refs.key("[DG67] Jean Dieudonné and Alexander Grothendieck, Éléments de géométrie algébrique, Publ. Math. IHES (1967)."),
+    refs.key("J.-P. Serre. A course in arithmetic. Springer, 1973."),
+    refs.key("Serre, J.-P.: A course in arithmetic. Springer (1973)"),
+    refs.key("Wiles, A. (1995). Modular elliptic curves. Annals of Mathematics 141, 443-551. doi:10.2307/2118559"),
+    refs.key("H. Cohen, Number theory, arXiv:1012.6008v2, 2010."),
+    refs.key("see the remark above") },
+    { "atkinson:1963:1", "abdulali:1994:1121", "dieudonne:1967", "serre:1973", "serre:1973", "doi:10.2307/2118559", "arxiv:1012.6008" })
+  -- coupling: books 1 and 2 cite the same two works
+  for _, row in ipairs { { 1, "serre:1973" }, { 1, "wiles:1995:443" }, { 2, "serre:1973" }, { 2, "wiles:1995:443" }, { 2, "lang:2002" } } do
+    lulibre.store("INSERT OR IGNORE INTO refs(book, key, raw) VALUES(?, ?, '')", row[1], row[2])
+  end
+  local c = refs.coupled(1)
+  eq("the books that cite what a book cites", { #c, c[1].book, c[1].shared }, { 1, 2, 2 })
+  eq("one such book is not enough to name a subject", refs.subject(1), nil)
+  eq("what a book cites", #refs.of(2), 3)
+  lulibre.store("DELETE FROM refs")
+end
+
 -- one record's values offered to another
 do
   local dupes = require "lulibre.dupes"

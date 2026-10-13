@@ -142,7 +142,8 @@ mirror tables under negative ids (`src/db/stage.c`), which is what lets the
 list, the filters and the API treat them as books.
 
 A few tables are lulibre's own and are never dropped: `proposals`,
-`journal`, `kv`, `hashes`, `staged`, `good` (records confirmed as right) and
-`terms` (the phrases learned for each subject).
+`journal`, `kv`, `hashes`, `staged`, `good` (records confirmed as right),
+`terms` (the phrases learned for each subject) and `refs` (what each book
+cites).
 
 lulibre reads `metadata.db` read-only. Every change goes through `calibredb`.

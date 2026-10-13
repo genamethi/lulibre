@@ -98,14 +98,16 @@ static void extract_locked(const char *path, const struct doc_opts *o, struct do
   out->npages = ddjvu_document_get_pagenum(doc);
   int n = out->npages < o->pages ? out->npages : o->pages;
   out->pages = xcalloc((size_t)(n > 0 ? n : 0), sizeof *out->pages);
+  int from = o->tail ? out->npages - n : 0; /* the last pages instead of the first */
   for (int i = 0; i < n; i++) {
     struct doc_page *pg = &out->pages[i];
-    pg->no = i + 1;
+    int page = from + i;
+    pg->no = page + 1;
     out->n = i + 1;
 
     ddjvu_pageinfo_t info;
     ddjvu_status_t st;
-    while ((st = ddjvu_document_get_pageinfo(doc, i, &info)) < DDJVU_JOB_OK) doc_djvu_pump(1, NULL);
+    while ((st = ddjvu_document_get_pageinfo(doc, page, &info)) < DDJVU_JOB_OK) doc_djvu_pump(1, NULL);
     if (st >= DDJVU_JOB_FAILED || info.dpi <= 0) {
       doc_page_finish(pg, 0);
       continue;
@@ -115,7 +117,7 @@ static void extract_locked(const char *path, const struct doc_opts *o, struct do
     pg->h = (float)info.height * w.scale;
 
     miniexp_t r;
-    while ((r = ddjvu_document_get_pagetext(doc, i, "line")) == miniexp_dummy) doc_djvu_pump(1, NULL);
+    while ((r = ddjvu_document_get_pagetext(doc, page, "line")) == miniexp_dummy) doc_djvu_pump(1, NULL);
     if (r != miniexp_nil) {
       walk(&w, r, 1);
       ddjvu_miniexp_release(doc, r);

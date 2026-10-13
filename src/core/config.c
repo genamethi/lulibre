@@ -50,10 +50,16 @@ static const struct opt_def opts[] = {
       "proposes when the file is confident (0.8 or more) and says something different; any "
       "proposes whenever the file's best candidate differs",
       NULL),
+  OPT(never_titles, OPT_STR, "", NULL,
+      "words and phrases, separated by commas, that mark a title as not a title (added to the "
+      "built-in ones such as untitled, or a file name): \"scan, downloaded from\"",
+      NULL),
   OPT(never_authors, OPT_STR, "", NULL,
       "words and phrases, separated by commas, that are never proposed as an author (added to the "
       "built-in ones such as professor emeritus): \"visiting scholar, lecture notes\"",
       NULL),
+  OPT(refs_pages, OPT_INT, "14", NULL,
+      "how many of a file's last pages :refs reads when looking for its bibliography", NULL),
   OPT(subject_learned, OPT_STR, "suggest", "off|suggest|propose",
       "what a subject worked out from the learned phrases is used for: suggest offers it in the "
       "edit form, propose also makes it a proposal when :propose runs, off neither",

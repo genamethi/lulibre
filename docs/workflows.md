@@ -282,6 +282,34 @@ before catch-alls, however many books sit in the latter. The option
 `subject_catchall` names more of them than the built-in ones (`general`,
 `papers`, `books`, `handbook`, `misc`, `other`).
 
+## What books cite: `:refs`
+
+The index holds each file's first pages; a bibliography is on its last.
+`:refs` reads those (the option `refs_pages`, 14 by default), finds the
+heading the bibliography stands under ("References", "Bibliography", numbered
+or not), cuts what follows into entries, by their numbering or by the
+hanging indent, and gives each a key by which the same work is recognised in
+another book's list however each writes it: a DOI or arXiv number where the
+entry has one, else first author, year and first page.
+
+    :refs                the selection
+    :refs all            the whole library (a couple of thousand books take seconds)
+    :refs --force ...    again, for books already read
+
+Nothing is fetched: it is all read from the files, several at a time, and
+each book is remembered, so a run can be stopped and taken up again.
+
+Books that cite the same works are about the same thing. Once references
+are read, the edit form offers for a book's tags the subject of the books
+that share references with it ("shares references with 3 books of that
+subject"), when at least two books each share at least two works with it.
+A work that half the library cites counts for little, one that two books
+cite for much. `lulibre.refs` gives scripts the lists and the coupling.
+
+Finding the heading needs no more than the text: it is a short line that is
+one of a few words and nothing else. Type size and position are there for
+the asking (each line carries them) where a layout needs them.
+
 ## Duplicates: `gd`
 
 Books whose files are byte for byte the same. Only files that share a size

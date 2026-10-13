@@ -44,6 +44,7 @@ struct doc_info {
 struct doc_opts {
   int pages;        /* extract the first N pages */
   int layout_pages; /* keep tagged lines for the first M of them */
+  int tail;         /* the last N pages instead of the first: where a bibliography is */
 };
 
 /* Fills *out (zeroed first). Check out->error. */

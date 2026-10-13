@@ -48,6 +48,12 @@ const char db_schema[] =
   /* the phrases that tell one subject from the others, learned from the good
    * records; state is 'learned', 'kept' (the user's own, or pinned) or
    * 'dropped' (never to come back) */
+  /* what each book cites, one key for each entry of its bibliography
+   * (lua/lulibre/refs.lua): books that cite the same things are about the
+   * same thing */
+  "CREATE TABLE IF NOT EXISTS refs("
+  " book INTEGER NOT NULL, key TEXT NOT NULL, raw TEXT, PRIMARY KEY(book, key)) WITHOUT ROWID;"
+  "CREATE INDEX IF NOT EXISTS refs_key ON refs(key);"
   "CREATE TABLE IF NOT EXISTS terms("
   " subject TEXT NOT NULL, term TEXT NOT NULL, score REAL, books INTEGER, state TEXT NOT NULL DEFAULT 'learned',"
   " PRIMARY KEY(subject, term)) WITHOUT ROWID;"

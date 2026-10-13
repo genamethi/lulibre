@@ -30,6 +30,8 @@ o.library = "~/calibre-library"
 | `ocr_pages` `ocr_lang` | `3` `eng` | pages per file the OCR pass reads; tesseract language |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
+| `refs_pages` | `14` | closing pages of a file read when looking for its bibliography |
+| `never_titles` | | words and phrases, separated by commas, that mark a title as not one |
 | `subject_learned` | `suggest` | `off` · `suggest` · `propose`: what a subject worked out from the learned phrases is used for |
 | `subject_terms` | `20` | marking phrases `:learn` keeps for each subject |
 | `subject_catchall` | | subjects (or their last part), separated by commas, that file a book by form rather than topic |
