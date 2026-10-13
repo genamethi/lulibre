@@ -78,6 +78,19 @@ local function same_people(a, b)
   return true
 end
 
+--- Is a subject a finer one under a subject the book has, and not one it
+-- has already? tags: the book's, as "a, b/c". ("cs/ml" refines "cs"; not
+-- when the book has "cs/ml" or "cs/ml/theory" too.)
+function M.refines(tags, subject)
+  local under = false
+  for raw in (tags or ""):gmatch("[^,]+") do
+    local tag = raw:gsub("^%s+", ""):gsub("%s+$", "")
+    if tag == subject or tag:sub(1, #subject + 1) == subject .. "/" then return false end
+    if subject:sub(1, #tag + 1) == tag .. "/" then under = true end
+  end
+  return under
+end
+
 --- Do two values of a field say the same thing? Authors are compared as a
 -- set of names; dates by year when either gives no more than a year. a is
 -- what the book has, b what is offered: the same people named less fully
@@ -193,7 +206,12 @@ function M.wanted(book, candidates, over)
       -- a stated subject (arXiv class, MSC) is worth adding; vocabulary only fills a gap
       op = "add"
       if cur == "" then want = (c.confidence or 0) >= 0.9 or not settled.tags
-      else want = over ~= "gaps" and (c.confidence or 0) >= 0.9 end
+      else
+        want = over ~= "gaps" and (c.confidence or 0) >= 0.9
+        -- A finer subject under one the book has ("cs/ml" for a book filed
+        -- under "cs") is news whoever says it, once: the vocabulary's best.
+        if not want and over ~= "gaps" and not settled.tags and (c.confidence or 0) >= 0.4 and M.refines(cur, c.value) then want = true end
+      end
       if want then settled.tags = true end
     elseif c.field == "identifiers" then
       want, op = true, "add"

@@ -121,6 +121,12 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- Computing has finer subjects. The vocabulary tells machine learning, AI,
+  language processing, vision, complexity, algorithms, programming
+  languages, information theory, systems and security apart (it knew one
+  `cs`), thirty more arXiv classes have a subject of their own, and a finer
+  subject under one a book already has (`cs/ml` for a book filed under
+  `cs`) is proposed. `stat.*` is statistics, not computing.
 - Help that can be found in: `?` shows the keys under headings that open
   and close (all but "Start here" closed to begin with), each key with what
   it does; `/` searches every key and command as you type; `K` on a key, or

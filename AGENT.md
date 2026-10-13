@@ -145,6 +145,10 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   list dropped "number", "series", "law" and "distribution", and with them
   number field, power series, reciprocity law. Test such a list against the
   phrases that must survive it.
+- Lua 5.5 will not load a file that assigns to a `for` loop's own variable
+  (`for line in ... do line = trim(line)`). It was written four times in
+  two days. The unit tests now compile every Lua file, so `make unit`
+  catches it; name the changed value something else (`local text = ...`).
 - Lua patterns work on bytes. A character outside ASCII is several of them,
   so `©?` asks for the first byte and makes the second optional, and a set
   like `[çc]` or `[‘’–]` matches single bytes of those characters. This went
