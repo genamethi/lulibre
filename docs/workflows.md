@@ -488,6 +488,27 @@ a handful of phrases on a book's first pages and is often wrong; it is
 there to be looked at, not trusted. `subject_learned = "propose"` makes
 `:propose` use it too, `"off"` hides it.
 
+`:run holdout` says how well this does on the library as it stands. The
+confirmed records are cut into five parts; each part in turn is left out,
+the phrases are learned from the other four, and the subject of every book
+left out is asked for and held against the tags it has. It reports how
+often a subject was said and how often that was one of the book's, by
+subject and by how many phrases the book had, and `--wrong` names the
+books it missed with the phrases that misled it. Nothing is kept or
+changed, and it takes a few seconds. `:run holdout 10` cuts into ten.
+
+Read it for what it is. A book has several subjects and its tags name one
+or two, so "not among its tags" is sometimes a subject the book should
+have; and a few dozen confirmed books for a subject are few. It is for
+seeing whether something you changed (more records confirmed, a phrase
+dropped in `:terms`, a threshold in `lulibre.learn`) made it better or
+worse.
+
+Phrases that say how a book was published ("editorial board", "graduate
+texts", "mathematics subject classification") are never learned as a
+subject's; `require("lulibre.learn").FURNITURE["lecture notes"] = true` in
+`init.lua` adds one.
+
 In the edit form, subjects that say what a book is about are now listed
 before catch-alls, however many books sit in the latter. The option
 `subject_catchall` names more of them than the built-in ones (`general`,
@@ -559,6 +580,41 @@ lists the matches made that way which no longer hold; `:run unmatch --fix`
 withdraws what still waits from them and proposes putting back what the
 books said before, as a run of its own in review ("wrong title matches").
 It asks no service anything: the answers were kept.
+
+### Works no catalogue has: `:noncatalog`
+
+A handout, the notes of a course, a chapter of the Stacks project, a page
+saved from the web: no catalogue has a record of these. Such a work has no
+DOI and no ISBN of its own, so one in its pages is that of a work it
+cites, and a record found by searching for its title is somebody else's.
+Marking it says so once:
+
+| | |
+|---|---|
+| `:noncatalog add` | mark the selection |
+| `:noncatalog remove` | take the mark back |
+| `:noncatalog` | list the marked books (the filter `is:noncatalog`) |
+
+For a marked book:
+
+- a DOI or ISBN in its pages is not offered as its own;
+- `:enrich` does not look it up by DOI or ISBN, nor search for it by
+  title. An arXiv number is still followed: arXiv is where such works
+  are kept;
+- having no identifiers does not count against it in `:good`, and
+  `:stats` counts it apart;
+- when it is marked, what waits for it from CrossRef, Open Library,
+  OpenAlex and zbMATH is withdrawn, and taking off a DOI or ISBN it holds
+  is proposed (at 0.8, for review like anything else).
+
+To mark many at once, filter to them, select them all and `:noncatalog
+add`: `author:"keith conrad"`, say. Look at what the filter caught first:
+`author:conrad` also finds Brian Conrad's book with Springer, which has an
+ISBN and should keep it. A removal you did not expect in review is the
+sign of a book marked by mistake.
+
+The mark is lulibre's own, kept in its index. Nothing is written to
+calibre for it.
 
 ### How the services are asked
 

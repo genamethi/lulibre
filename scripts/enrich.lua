@@ -27,6 +27,7 @@ local extract = require "lulibre.extract"
 local junk = require "lulibre.junk"
 local layouts = require "lulibre.layouts"
 local net = require "lulibre.net"
+local noncatalog = require "lulibre.noncatalog"
 local proposals = require "lulibre.proposals"
 local propose = require "lulibre.propose"
 
@@ -44,11 +45,17 @@ local use = {}
 for name in (lulibre.o.enrich_services or ""):gmatch("[^,%s]+") do use[name:lower()] = true end
 
 -- what each book goes by
-local books = {}
+local books, uncatalogued = {}, 0
 for n, id in ipairs(ids) do
   local book = lulibre.book(id)
   if book then
-    local known = { arxiv = book.idents.arxiv, doi = book.idents.doi, isbn = book.idents.isbn }
+    -- A work no catalogue has a record of (:noncatalog) is not looked up by
+    -- DOI or ISBN, whoever put one on it, nor searched for by title: an
+    -- arXiv number is all it goes by.
+    local outside = noncatalog.is(id)
+    local known = { arxiv = book.idents.arxiv, doi = not outside and book.idents.doi or nil,
+      isbn = not outside and book.idents.isbn or nil }
+    if outside then uncatalogued = uncatalogued + 1 end
     -- an identifier read from the file may be that of a work it cites: which
     -- were, and what the file's own title seems to be, to tell by
     local in_file, titles = {}, {}
@@ -57,7 +64,7 @@ for n, id in ipairs(ids) do
         if c.field == "identifiers" then
           for kind in pairs { arxiv = 1, doi = 1, isbn = 1 } do
             local value = c.value:match("^" .. kind .. ":(.+)")
-            if value and not known[kind] then known[kind], in_file[kind] = value, true end
+            if value and not known[kind] and (kind == "arxiv" or not outside) then known[kind], in_file[kind] = value, true end
           end
         elseif c.field == "title" then
           titles[#titles + 1] = c.value
@@ -66,7 +73,7 @@ for n, id in ipairs(ids) do
     end
     if book.title and not junk.title(book.title) then titles[#titles + 1] = book.title end
     known.arxiv = known.arxiv and net.arxiv_id(known.arxiv)
-    books[#books + 1] = { id = id, book = book, known = known, in_file = in_file, titles = titles,
+    books[#books + 1] = { id = id, book = book, known = known, in_file = in_file, titles = titles, outside = outside,
       -- the authors the book has, when they are worth the name; and how its file opens
       people = function(b)
         if not b.authors then
@@ -314,7 +321,7 @@ for n, b in ipairs(books) do
   end
   local isbn = k.isbn or (cr and cr.ids.isbn)
   if isbn then ask("openlibrary", "isbn-record", net.openlibrary, isbn) end
-  if #records == 0 and by_title and use.crossref and b.book.title and #b.book.title >= 20 then
+  if #records == 0 and by_title and not b.outside and use.crossref and b.book.title and #b.book.title >= 20 then
     -- the book's authors help tell the work from another of the same name, when it has any
     local who = {}
     local has = require("lulibre.edit").current(b.book, "authors")
@@ -433,6 +440,9 @@ end
 if others > 0 then
   print(("%d record%s left out: the book has the identifier, but the record is not the book's by its title and authors%s"):format(
     others, others == 1 and "" or "s", removals > 0 and ("; taking the identifier off is proposed for %d"):format(removals) or ""))
+end
+if uncatalogued > 0 then
+  print(("%d marked as non-catalog: not looked up by DOI or ISBN, nor searched for by title"):format(uncatalogued))
 end
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
   local till = use[name] and net.held(name)

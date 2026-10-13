@@ -5,6 +5,23 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: `:noncatalog add` marks the selection as works no catalogue has a
+  record of (a handout, course notes, a chapter of the Stacks project).
+  Such a book is not looked up by DOI or ISBN nor searched for by title,
+  a DOI or ISBN in its pages is not offered as its own, and having no
+  identifiers does not count against it. Marking withdraws what waits for
+  it from catalogue records and proposes taking off a DOI or ISBN it
+  holds. `is:noncatalog` filters by it; `:noncatalog remove` takes it back.
+  The mark is kept in lulibre's index, not written to calibre.
+- New: `:run holdout` tries the learned subjects on books they were not
+  taught by: each fifth of the confirmed records is left out in turn, and
+  the subject said for each book is held against its tags. It keeps and
+  changes nothing. (`lulibre.learn` gained `census`, `work` and `model`
+  for learning without storing the result.)
+- Fixed: `:learn` took phrases of a publisher's front matter for a
+  subject's ("editorial board" for geometry, "graduate texts" for
+  algebra). They are now left out (`learn.FURNITURE`). Run `:learn` again
+  to be rid of the ones already learned.
 - Fixed: a record was believed whenever the library held the identifier
   that led to it. But a DOI or ISBN in the library can be a cited work's
   (read off a reference list and accepted), a chapter's, a review's, or

@@ -215,7 +215,8 @@ its own documentation.
 | `lulibre.edit` | apply, undo, history, remove; a field's current value; the write route |
 | `lulibre.proposals` | add, list, accept, apply |
 | `lulibre.quality` | a record's score, and the confirmed ones: `score(book)`, `ranked(opts)`, `set_good(ids, on)`, `is_good(id)`, `good_ids()`, `catchall(subject)` |
-| `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
+| `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text [, model])`, `suggest(text [, model])`, `candidate(id)`; without keeping the result: `census()`, `work{from=, census=}`, `model(got)`; `FURNITURE` (phrases never learned) |
+| `lulibre.noncatalog` | works no catalogue has a record of: `is(id)`, `set(ids, on)` → `{withdrawn=, removals=}`, `ids()`; `RECORDS`, `KINDS` (what counts as a catalogue's) |
 | `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
 | `lulibre.refs` | what a book cites: `index_book(id)`, `of(id)`, `coupled(id)`, `subject(id)`, `key(entry)`, `entries(lines)`, `find(pages)` |

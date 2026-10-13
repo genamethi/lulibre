@@ -1727,5 +1727,63 @@ do
   local _ = edit
 end
 
+-- learning without keeping: what :run holdout goes by
+do
+  local learn = require "lulibre.learn"
+  eq("phrases of how a book is published are not a subject's", { learn.FURNITURE["editorial board"], learn.FURNITURE["number theory"] },
+    { true, nil })
+  local model = learn.model { terms = { ["math/topology"] = { { term = "fundamental group", score = 0.8, books = 5 },
+    { term = "covering space", score = 0.5, books = 4 } } } }
+  eq("a model made of phrases that were not kept", { learn.suggest("The fundamental group of a covering space.", model) ~= nil,
+    learn.suggest("The fundamental group of a covering space.") }, { true, nil })
+  eq("and nothing of it is stored", lulibre.sql("SELECT count(*) AS n FROM terms")[1].n, 0)
+end
+
+-- works no catalogue has a record of
+do
+  local nc = require "lulibre.noncatalog"
+  local proposals = require "lulibre.proposals"
+  local quality = require "lulibre.quality"
+  local extract = require "lulibre.extract"
+  local id = 2 -- Notes, by Paul Erdős: the library holds a DOI for it
+  local page = "Notes on Groups of Order 12\nA. Handout\n\nDOI: 10.1234/abcd.5678\nISBN 978-0-387-90040-7\n"
+  local function offered(doc_id)
+    local out = {}
+    for _, c in ipairs(extract.from_doc { id = doc_id, text = page, pages = {} }) do
+      if c.field == "identifiers" then out[#out + 1] = c.value:match("^%a+") end
+    end
+    table.sort(out)
+    return table.concat(out, ",")
+  end
+  eq("a DOI and an ISBN in the pages are offered", offered(id), "doi,isbn")
+  proposals.add(id, "publisher", "From A Record", { source = "CrossRef 10.1234/abcd.5678", confidence = 0.9 })
+  proposals.add(id, "identifiers", "doi:10.1234/abcd.5678", { op = "add", source = "page text", confidence = 0.8 })
+  proposals.add(id, "series", "From The File", { source = "series page", confidence = 0.7 })
+  eq("nothing is marked to begin with", { nc.is(id), #nc.ids(), lulibre.count("is:noncatalog") }, { false, 0, 0 })
+  local did = nc.set({ id }, true)
+  eq("marking withdraws what waits from catalogues, and leaves the rest", { did.withdrawn,
+    lulibre.store("SELECT source FROM proposals WHERE book = ? AND status = 'pending' AND field = 'series'", id)[1].source,
+    lulibre.store("SELECT count(*) AS n FROM proposals WHERE book = ? AND source LIKE 'CrossRef%'", id)[1].n },
+    { 2, "series page", 0 })
+  eq("the mark is kept and can be filtered by", { nc.is(id), nc.ids()[1], lulibre.count("is:noncatalog"),
+    lulibre.count("-is:noncatalog") }, { true, id, 1, lulibre.count("") - 1 })
+  eq("its pages' DOI and ISBN are no longer offered", offered(id), "")
+  local bare = { id = id, title = "Notes on Sieves", author = "P. Erdos", authors = { "P. Erdos" }, tags = { "math/number-theory" },
+    year = 1950, idents = {} }
+  local _, why = quality.score(bare)
+  local _, why_other = quality.score { title = bare.title, author = bare.author, authors = bare.authors, tags = bare.tags,
+    year = 1950, idents = {} }
+  eq("having no identifier does not count against it", { table.concat(why, ";"), table.concat(why_other, ";") },
+    { "", "no identifiers" })
+  local expect = 1
+  eq("taking off the DOI it holds is proposed, for review", { did.removals,
+    lulibre.store("SELECT value FROM proposals WHERE book = ? AND source = ? AND op = 'remove' AND status = 'pending'", id, nc.SOURCE)[1].value },
+    { expect, "doi:" .. lulibre.book(id).idents.doi })
+  local back = nc.set({ id }, false)
+  eq("taking the mark back withdraws that again", { nc.is(id), back.withdrawn, lulibre.count("is:noncatalog"), offered(id) },
+    { false, expect, 0, "doi,isbn" })
+  lulibre.store("DELETE FROM proposals")
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

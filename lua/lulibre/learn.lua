@@ -33,6 +33,20 @@ M.MIN_IN = 3        -- ... and in at least this many of them
 M.MIN_LIFT = 2.5    -- ... and that much more often than in books of other subjects
 M.MIN_AUTHORS = 3   -- ... by at least this many different authors (fewer for a subject of few books)
 
+-- Phrases that say how a book was published and not what it is about. They
+-- stand in the front matter of one publisher's series, so the subjects that
+-- series serves use them far more than the others do; and the library holds
+-- titles that are such headings ("Handbook of Algebra: Editorial Board"),
+-- which is how they pass for words a title is made of. Add your own:
+--   require("lulibre.learn").FURNITURE["lecture notes"] = true
+M.FURNITURE = {}
+for _, g in ipairs { "editorial board", "series editors", "series editor", "managing editor", "advisory board",
+  "graduate texts", "texts in mathematics", "graduate texts in", "undergraduate texts", "undergraduate texts in",
+  "lecture notes", "lecture notes in", "notes in mathematics", "subject classification", "mathematics subject",
+  "mathematics subject classification", "second edition", "third edition", "revised edition", "university press" } do
+  M.FURNITURE[g] = true
+end
+
 -- Text that many books share word for word says nothing of any one of
 -- them: a publisher's imprint, the list of a series, a journal's notice to
 -- readers. It is found by counting whole lines across the library (copies of
@@ -141,19 +155,12 @@ local function taught(book)
   return out
 end
 
---- Learn. Waits (a few seconds for a library of a couple of thousand
--- books). opts.from: the ids to learn from (default: the confirmed records).
--- Returns what was done, or nil and why nothing could be.
-function M.run(opts)
-  opts = opts or {}
-  local t0 = os.time()
+--- Read the whole library once: how many of its books use each phrase.
+-- A phrase common to the whole library marks nothing, whatever the
+-- confirmed books do with it. Waits. Returns what work() takes as
+-- opts.census.
+function M.census()
   M.forget()
-  local from = opts.from or quality.good_ids()
-  if #from == 0 then
-    return nil, ("no records are confirmed as good yet: %s lists them by how complete they look"):format(lulibre.hint("good"))
-  end
-  -- every book's phrases are counted: a phrase common to the whole library
-  -- marks nothing, whatever the confirmed books do with it
   local counter, ids = lulibre.counter(), lulibre.ids("in:library")
   for n, id in ipairs(ids) do
     local text = M.text(id)
@@ -165,7 +172,24 @@ function M.run(opts)
   end
   local total = counter:texts()
   counter:prune(M.MIN_IN, math.max(M.MIN_IN, math.floor(total * 0.4)))
+  lulibre.progress(nil)
+  return { counter = counter, total = total }
+end
 
+--- Work out the marking phrases without keeping them. opts.from: the ids to
+-- learn from (default: the confirmed records); opts.census: the library as
+-- census() read it, when it is to be used for several goes. Returns
+-- { terms = { [subject] = { {term=, score=, books=}, ... strongest first },
+-- books=, read=, subjects=, nterms=, phrases= }, or nil and why nothing
+-- could be learned. Phrases dropped in :terms are left out, as run() does.
+function M.work(opts)
+  opts = opts or {}
+  local from = opts.from or quality.good_ids()
+  if #from == 0 then
+    return nil, ("no records are confirmed as good yet: %s lists them by how complete they look"):format(lulibre.hint("good"))
+  end
+  local census = opts.census or M.census()
+  local counter, total = census.counter, census.total
   -- how the confirmed books of each subject use what is left
   local books, in_s, by, all_in, taught_n = {}, {}, {}, {}, 0
   for n, id in ipairs(from) do
@@ -218,7 +242,7 @@ function M.run(opts)
     if n_s >= M.MIN_BOOKS then
       local scored = {}
       for g, k in pairs(in_s[s]) do
-        if k >= M.MIN_IN and in_titles[g] and by[s][g].n >= math.min(M.MIN_AUTHORS, n_s // 4 + 1)
+        if k >= M.MIN_IN and in_titles[g] and not M.FURNITURE[g] and by[s][g].n >= math.min(M.MIN_AUTHORS, n_s // 4 + 1)
           and not dropped[s .. "\0" .. g] then
           -- the share of the subject's books that use it, held back for a
           -- subject of few books: three books out of five are not sixty in a hundred
@@ -248,8 +272,7 @@ function M.run(opts)
   local function same_branch(a, b)
     return a == b or a:sub(1, #b + 1) == b .. "/" or b:sub(1, #a + 1) == a .. "/"
   end
-  lulibre.store("DELETE FROM terms WHERE state = 'learned'")
-  local nsubjects, nterms = 0, 0
+  local terms, nsubjects, nterms = {}, 0, 0
   -- how much of each subject's books use each of its phrases
   local raw = {}
   for s, scored in pairs(scored_by) do
@@ -275,20 +298,42 @@ function M.run(opts)
       if a.score ~= b.score then return a.score > b.score end
       return a.term < b.term
     end)
-    if #mine > 0 then nsubjects = nsubjects + 1 end
-    for i = 1, math.min(keep, #mine) do
+    if #mine > 0 then
+      nsubjects = nsubjects + 1
+      terms[s] = {}
+      for i = 1, math.min(keep, #mine) do
+        terms[s][i] = { term = mine[i].term, score = mine[i].score, books = mine[i].books }
+        nterms = nterms + 1
+      end
+    end
+  end
+  return { terms = terms, books = math.floor(taught_n + 0.5), read = total, subjects = nsubjects, nterms = nterms,
+    phrases = counter:size() }
+end
+
+--- Learn, and keep what was learned. Waits (a few seconds for a library of a
+-- couple of thousand books). opts.from: the ids to learn from (default: the
+-- confirmed records). Returns { books=, read=, subjects=, terms=, phrases=,
+-- seconds= }, or nil and why nothing could be.
+function M.run(opts)
+  local t0 = os.time()
+  local got, why = M.work(opts)
+  if not got then return nil, why end
+  lulibre.store("DELETE FROM terms WHERE state = 'learned'")
+  for s, list in pairs(got.terms) do
+    for _, t in ipairs(list) do
       lulibre.store("INSERT OR IGNORE INTO terms(subject, term, score, books, state) VALUES(?, ?, ?, ?, 'learned')",
-        s, mine[i].term, mine[i].score, mine[i].books)
-      nterms = nterms + 1
+        s, t.term, t.score, t.books)
     end
   end
   M.loaded = nil
-  local out = { books = math.floor(taught_n + 0.5), read = total, subjects = nsubjects, terms = nterms, phrases = counter:size(),
+  local out = { books = got.books, read = got.read, subjects = got.subjects, terms = got.nterms, phrases = got.phrases,
     seconds = os.time() - t0 }
   lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES('learn:last', ?)",
     ("%d\t%d\t%d\t%d"):format(os.time(), out.books, out.subjects, out.terms))
   return out
 end
+
 
 --- A subject's marking phrases, strongest first (kept ones before learned),
 -- or every subject's when none is named. Dropped ones are left out unless
@@ -330,15 +375,31 @@ local function load()
   return by
 end
 
+--- What classify and suggest go by, for a result of work() that was not
+-- kept: its phrases, and those added by hand in :terms.
+function M.model(got)
+  local by = {}
+  for _, r in ipairs(lulibre.sql("SELECT subject, term, score FROM terms WHERE state = 'kept'")) do
+    by[r.subject] = by[r.subject] or {}
+    by[r.subject][r.term] = r.score or 1
+  end
+  for s, list in pairs(got.terms) do
+    by[s] = by[s] or {}
+    for _, t in ipairs(list) do by[s][t.term] = by[s][t.term] or t.score end
+  end
+  return by
+end
+
 --- Has anything been learned?
 function M.ready()
   return next(load()) ~= nil
 end
 
 --- The subjects whose marking phrases a text holds, best first:
--- { {subject=, score=, matched={ phrase, ... }}, ... }.
-function M.classify(text)
-  local by = load()
+-- { {subject=, score=, matched={ phrase, ... }}, ... }. model: go by that
+-- (see model) and not by what has been learned and kept.
+function M.classify(text, model)
+  local by = model or load()
   local has = {}
   for _, g in ipairs(lulibre.phrases(text or "")) do has[g] = true end
   local out = {}
@@ -372,9 +433,9 @@ end
 --- The subject to suggest for a text, how sure, and the phrases that say so;
 -- nil when its phrases mark nothing, or too little. At least two marking
 -- phrases are wanted; of a subject and one below it that both fit, the more
--- particular is taken when it fits nearly as well.
-function M.suggest(text)
-  local ranked = M.classify(text)
+-- particular is taken when it fits nearly as well. model: as for classify.
+function M.suggest(text, model)
+  local ranked = M.classify(text, model)
   local best
   for _, r in ipairs(ranked) do
     if #r.matched >= 2 then
