@@ -808,6 +808,38 @@ QA9.AIL64 1991
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 
+  -- a series named in so many words
+  local function series(text) return { layouts.series_line(text) } end
+  eq("a house's series", series("Elementary Number Theory\nSpringer Undergraduate Mathematics Series\nGareth A. Jones"),
+    { "Springer Undergraduate Mathematics Series", nil, "a house's series" })
+  eq("with its volume on the line, or below", { series("IAS/Park City Mathematics Series, Volume 12")[1], series("IAS/Park City Mathematics Series, Volume 12")[2],
+    series("Potsdam Cognitive Science Series | 7")[2], series("Association for Women in Mathematics Series\nVolume 3")[2] },
+    { "IAS/Park City Mathematics Series", "12", "7", "3" })
+  eq("a series of mathematics is not one of books", { series("Fourier Series\nSeries Editors\nA. N. Other")[1], series("1.2 The Taylor Series 179")[1],
+    series("Dirichlet Series in Number Theory, Volume 41")[1], series("CHAPTER 5 SERIES AND PRODUCT DEVELOPMENTS 175")[1],
+    series("a series of lectures given at Princeton University")[1], series("1. Algebra. I. Title. II. Series.")[1] }, {})
+  eq("the line above the editors of the series", series("Graduate Texts in Mathematics\nSeries Editors\nSheldon Axler\nKenneth Ribet"),
+    { "Graduate Texts in Mathematics", nil, "above the series' editors" })
+  eq("above the first list of editors, past the volume", series("UNITEXT - La Matematica per il 3+2\nVolume 109\nEditor-in-chief\nAlfio Quarteroni\nSeries editors\nL. Ambrosio"),
+    { "UNITEXT - La Matematica per il 3+2", "109", "above the series' editors" })
+  eq("not an editor, who stands above 'Series editors' too", series("Springer Monographs in Mathematics\nEditors-in-chief\nIsabelle Gallagher, Paris, France\nMinhyong Kim, Oxford, UK\nSeries editors\nSheldon Axler")[1],
+    "Springer Monographs in Mathematics")
+  eq("nor the credit for a cover", series("Cover image: shuoshu / DigitalVision\nVectors / Getty Images\nSeries Editor\nRobert Freidin")[1], nil)
+  eq("a name set over two lines", { series("Studies in Neuroscience, Psychology\nand Behavioral Economics\nSeries editors\nMartin Reuter, Bonn, Germany")[1],
+    series("CAMBRIDGE TEXTS IN THE\nHISTORY OF POLITICAL THOUGHT\nSeries editors\nRAYMOND GEUSS")[1],
+    series("SPRINGER SERIES IN COMPUTATIONAL NEURO-\nSCIENCE\nVolume 4")[1] },
+    { "Studies in Neuroscience, Psychology and Behavioral Economics", "Cambridge Texts in the History of Political Thought",
+      "Springer Series in Computational Neuroscience" })
+  eq("a line about the series may stand between it and its editors",
+    series("Lecture Notes in Computer Science\nCommenced Publication in 1973\nFounding and Former Series Editors:\nGerhard Goos")[1], "Lecture Notes in Computer Science")
+  eq("a label says it outright", series("Series: Lecture Notes in Physics, Vol. 870"), { "Lecture Notes in Physics", "870", "labelled" })
+  eq("a name alone, with nothing to bear it out, is not taken", series("Some Mathematics Series\nA. N. Other")[1], nil)
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "x", "Mathematics of Planet Earth\nVolume 4\nSeries editors\nKen Golden" } }) do
+    if c.source == "series line" then got[c.field] = c.value end
+  end
+  eq("read as a layout", got, { series = "Mathematics of Planet Earth", series_index = "4" })
+
   -- dates
   eq("a date, however it is written", { layouts.date("8 February 1972"), layouts.date("Feb. 8, 1972"), layouts.date("March 2004"),
     layouts.date("SEPTEMBER 2002"), layouts.date("2004-03-12"), layouts.date("July, 2012"), layouts.date("12 mars 1985"),

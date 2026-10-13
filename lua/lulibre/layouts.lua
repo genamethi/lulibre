@@ -329,7 +329,11 @@ M.series_houses = words [[springer cambridge oxford princeton wiley mit chapman 
   schaum's schaum university chicago harvard yale stanford american european society international carus pitman van
   wadsworth brooks/cole benjamin interscience kluwer reidel plenum teubner vieweg hermann masson dunod]]
 
-local MINOR = words "in of the and on for to a an und der die das de des du et la le von zur für & - –"
+local MINOR = words "in of the and on for to a an und der die das de des du et la le von zur für per il e y & - – /"
+
+local function minor(word)
+  return MINOR[lulibre.lower((word or ""):gsub("^%p+", ""):gsub("[%p]+$", ""))] ~= nil
+end
 
 -- is the line set like a name: its words capitalised, but for the small ones
 local function titled(line)
@@ -339,25 +343,53 @@ local function titled(line)
     local bare = w:gsub("^[%p]+", ""):gsub("[%p]+$", "")
     if bare ~= "" and not MINOR[lulibre.lower(bare)] and not bare:match("^[%u%d\128-\255]") then return false end
   end
-  return n >= 2 and n <= 12
+  return n >= 2 and n <= 14
 end
 
 -- "Name, Volume 12" -> "Name", "12"
 local function with_number(line)
-  line = line:gsub("%s*ISSN%s*:?%s*[%dXx%-]+", ""):gsub("%s+$", "")
+  line = line:gsub("%s*ISSN%s*:?%s*[%dXx%-]+", ""):gsub("[%s|,;:]+$", "")
   for _, pattern in ipairs { "^(.-)[,;:]?%s*[Vv][Oo][Ll]%a*%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]o%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]umber%s*(%d+)$",
     "^(.-)%s*#%s*(%d+)$", "^(.-)[,;]?%s+(%d+)$" } do
     local name, number = line:match(pattern)
-    if name and #name >= 6 and tonumber(number) < 3000 then return name:gsub("[,;:%s]+$", ""), number end
+    if name and #name >= 6 and tonumber(number) < 3000 then return name:gsub("[|,;:%s]+$", ""), number end
   end
   return line, nil
 end
 
--- a line of a table of contents, a cataloguing entry, a sentence: not a name
+-- a line of a table of contents, a cataloguing entry, a sentence, a credit: not a name
 local function not_a_name(line)
-  return #line > 80 or line:find("^%d+[%.%d]*%s") or line:find("%.%s?%.%s?%.") or line:find("[Cc]hapter") or line:find("Title%.")
-    or line:find("[%.;:!?]$") or line:find("[Ee]ditor") or line:find("%(New Series%)") or line:find("^Source") or line:find("published")
-    or line:find("@") or line:find("http") or line:find("ISBN")
+  return #line > 80 or line:find("^%d+[%.%d]*%s") or line:find("%.%s?%.%s?%.") or line:find("[Cc][Hh][Aa][Pp][Tt][Ee][Rr]") or line:find("Title%.")
+    or line:find("[%.;:!?]$") or line:find("[Ee]ditor") or line:find("EDITOR") or line:find("%(New Series%)") or line:find("^Source")
+    or line:find("published") or line:find("@") or line:find("http") or line:find("ISBN") or line:find("^A Series of")
+    or line:find("[Ii]mage") or line:find("[Cc]over") or line:find("©") or line:find("[Pp]hoto") or line:find("[Dd]esign")
+    or line:find("[Pp]ublication") or line:find("Commenced")
+end
+
+-- the heading of a list of a series' editors, or of its board
+local function editors_heading(line)
+  return #line <= 40 and not line:find(",") and (line:find("^[%a%-%s]*[Ee]ditors?[%a%-%s]*:?$") or line:find("^[%a%-%s]*EDITORS?[%a%-%s]*:?$")
+    or line:find("^[%a%s]*Board:?$")) ~= nil
+end
+
+local function volume_line(line)
+  return line:match("^[Vv][Oo][Ll]%a*%.?%s*(%d+)$") or line:match("^[Nn]umber%s*(%d+)$") or line:match("^[Nn]o%.%s*(%d+)$")
+end
+
+-- a name as it is proposed: one found in capitals in title case, without "Subseries of"
+local function dressed(name)
+  name = name:gsub("^[%p%s]+", ""):gsub("^Subseries of%s+", ""):gsub("[|,;:%s]+$", "")
+  local lower, letters = 0, 0
+  for w in name:gmatch("%S+") do
+    if not minor(w) then
+      for c in w:gmatch("%a") do
+        letters = letters + 1
+        if c:match("%l") then lower = lower + 1 end
+      end
+    end
+  end
+  if letters > 0 and lower == 0 then name = require("lulibre.titlecase").apply(lulibre.upper(name)) end
+  return name
 end
 
 --- The series a page names, if it names one: its name, the volume's number
@@ -371,7 +403,7 @@ function M.series_line(text)
   -- a number on the line below: "Volume 12"
   local function below(i)
     for k = i + 1, math.min(i + 2, #lines) do
-      local n = lines[k]:match("^[Vv][Oo][Ll]%a*%.?%s*(%d+)$") or lines[k]:match("^[Nn]umber%s*(%d+)$") or lines[k]:match("^[Nn]o%.%s*(%d+)$")
+      local n = volume_line(lines[k])
       if n then return n end
     end
   end
@@ -380,34 +412,65 @@ function M.series_line(text)
       if k ~= i and lines[k]:find(pattern) then return true end
     end
   end
+  -- A name set over two lines: the second begins, or the first ends, with a
+  -- small word or a hyphen ("Studies in Neuroscience, Psychology / and
+  -- Behavioral Economics", "CAMBRIDGE TEXTS IN THE / HISTORY OF ..."). k: the
+  -- line found; returns the whole name and the line it begins on.
+  local function whole(k)
+    local name, first = lines[k], k
+    local prev = lines[k - 1]
+    if prev and not not_a_name(prev) and not editors_heading(prev) and not volume_line(prev)
+      and (minor(name:match("^%S+")) or minor(prev:match("%S+$")) or prev:find("%-$")) and titled(prev .. " X") then
+      name, first = (prev:find("%a%-$") and prev:sub(1, -2) .. name or prev .. " " .. name), k - 1
+    end
+    local nxt = lines[k + 1]
+    if nxt and not not_a_name(nxt) and not editors_heading(nxt) and not volume_line(nxt)
+      and (minor(nxt:match("^%S+")) or minor(name:match("%S+$")) or name:find("%a%-$")) and titled("X " .. nxt) then
+      name = name:find("%a%-$") and name:sub(1, -2) .. nxt or name .. " " .. nxt
+    end
+    return name, first
+  end
+  local has_series_editors = text:find("[Ss]eries%s+[Ee]ditors?") or text:find("SERIES%s+EDITORS?")
   for i, line in ipairs(lines) do
     -- a label says it outright
     local labelled = line:match("^Series%s*:%s*(.+)$") or line:match("^Series%s+[Tt]itle%s*:%s*(.+)$")
     if labelled and not labelled:find("[Ee]ditor") then
       local name, number = with_number(labelled)
-      if titled(name) then return name, number or below(i), "labelled" end
+      if titled(name) then return dressed(name), number or below(i), "labelled" end
     end
-    -- the line above the editors of the series
-    if line:find("^Series%s+[Ee]ditors?") or line:find("^SERIES%s+EDITORS?") or line:find("^Founding%s+[Ee]ditors?") then
-      for k = i - 1, math.max(1, i - 2), -1 do
-        local name, number = with_number(lines[k])
-        if not not_a_name(lines[k]) and titled(name) and not names.is_person(name) then
-          return name, number or below(k), "above the series' editors"
+    -- The first heading of the series' editors: the name stands above it,
+    -- with the volume's number perhaps between ("UNITEXT ... / Volume 109 /
+    -- Editor-in-chief / ... / Series editors").
+    if has_series_editors and editors_heading(line) then
+      local k, number = i - 1, nil
+      if lines[k] and volume_line(lines[k]) then number, k = volume_line(lines[k]), k - 1 end
+      -- a line about the series may stand between: "Commenced Publication in 1973"
+      if lines[k] and lines[k - 1] and (lines[k]:find("[Pp]ublication") or lines[k]:find("ISSN")) then k = k - 1 end
+      if lines[k] and not not_a_name(lines[k]) and not editors_heading(lines[k]) then
+        local full = whole(k)
+        local name, n = with_number(full)
+        local before = name:match("(%S+)%s+[Ss][Ee][Rr][Ii][Ee][Ss]%f[%A]")
+        local sum = before and M.not_series[lulibre.lower(before:gsub("^%p+", ""):gsub("%p+$", ""))]
+        if titled(name) and not sum and not names.is_person(name) and not name:find("^Series") then
+          return dressed(name), number or n, "above the series' editors"
         end
       end
+      has_series_editors = nil -- only the first heading on the page has the name above it
     end
     -- a line that is the name of one
     if (line:find("%f[%a]Series%f[%A]") or line:find("%f[%a]SERIES%f[%A]")) and not not_a_name(line) then
-      local name, number = with_number(line)
+      local full, first = whole(i)
+      local name, number = with_number(full)
       local before = lulibre.lower(name:match("(%S+)%s+[Ss][Ee][Rr][Ii][Ee][Ss]%f[%A]") or "the")
       local after = name:match("[Ss][Ee][Rr][Ii][Ee][Ss]%s+(%S+)")
       before = before:gsub("^%p+", ""):gsub("%p+$", "")
       if titled(name) and not M.not_series[before] and after ~= "of" and not name:find("^Series") then
         number = number or below(i)
         local house = M.series_houses[lulibre.lower(name:match("^[%a\128-\255/%-']+") or "")]
-        local why = number and "with its volume" or near(i, "[Ee]ditor") and "beside its editors" or near(i, "ISSN") and "beside its ISSN"
-          or house and "a house's series"
-        if why then return name, number, why end
+          or M.series_houses[lulibre.lower(name:match("^[Tt][Hh][Ee]%s+([%a\128-\255/%-']+)") or "")]
+        local why = number and "with its volume" or (near(i, "[Ee]ditor") or near(first, "[Ee]ditor") or near(i, "EDITOR")) and "beside its editors"
+          or near(i, "ISSN") and "beside its ISSN" or house and "a house's series"
+        if why then return dressed(name), number, why end
       end
     end
   end
