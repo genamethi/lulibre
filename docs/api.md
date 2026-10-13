@@ -207,6 +207,7 @@ its own documentation.
 | `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
 | `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
+| `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)` |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |

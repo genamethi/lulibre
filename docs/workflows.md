@@ -188,6 +188,41 @@ and the table shows what it finds in each selected book:
 | `m` | mark the books that matched |
 | `S` `L` | save the pattern as a named rule, load one |
 
+## Layouts: pages that say their facts in known places
+
+Some pages can be read by rule rather than by the size of their type, and
+are, with more confidence:
+
+| Layout | Read from it |
+|---|---|
+| cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
+| Springer series page | the series and the volume's number, the year, the publisher |
+| arXiv stamp | the day of submission |
+| a cover sheet with labelled fields; a thesis cover | as above, under proposals |
+
+What they read is proposed like anything else, marked with the layout's
+name. A layout of your own is a few lines in `init.lua`:
+
+```lua
+require("lulibre.layouts").add {
+  name = "ams memoirs",
+  marks = { "memoirs of the", "american mathematical society" },   -- all on one of the first pages
+  fields = {
+    series = "Memoirs of the American Mathematical Society",       -- a value as it stands
+    series_index = "Number%s+(%d+)",                                -- a pattern: its capture is the value
+    pubdate = "(%d%d%d%d)%s+%S*%s*Volume",
+    publisher = function(text, doc) return "AMS" end,               -- or a function
+  },
+  confidence = 0.85,
+}
+```
+
+`marks` are Lua patterns matched without regard to case; the page they are
+all found on is the text the fields are read from. `:run candidates` shows
+what every layout reads from the book under the cursor, which is the way to
+try one out. This is a first pass: three layouts come with lulibre, and
+books from one publisher and era are where more of them will pay.
+
 ## Known good records: `gk`
 
 Every record has a score from 0 to 1 for how complete and clean it looks: a

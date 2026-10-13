@@ -85,6 +85,13 @@ Added
   `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
 - In the edit form, subjects that say what a book is about come before
   catch-alls such as `math/general` (option `subject_catchall`).
+- Layouts: pages that say their facts in known places are read by rule. A
+  book's cataloguing block gives author, title, series and number, year and,
+  from its class number, the subject; a Springer series page the series and
+  volume; the arXiv stamp the day of submission. Your own are a few lines
+  (`require("lulibre.layouts").add{...}`): marks that identify the page and,
+  for each field, a constant, a pattern or a function. Series and series
+  number can now be proposed.
 - One field at a time. `:propose --only title,ids` keeps to the fields
   named; `--fresh` proposes the file's reading whatever the record says, for
   when a field went wrong across many books; in review `f` and a letter

@@ -506,7 +506,8 @@ do
   eq("same: quotes, case and punctuation do not matter",
     propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
   eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
-  eq("same: a bare year against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
+  eq("same: a bare year offered against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
+  eq("but a full date offered against a bare year is news", propose.same("pubdate", "2010-01-01", "2010-12-29"), false)
   eq("not the same", { propose.same("authors", "Bernhard Riemann", "W. Dittrich"), propose.same("pubdate", "2017-08-03", "2016") },
     { false, false })
   local book = lulibre.book(2) -- Notes, by Paul Erdős, 1996
@@ -707,6 +708,61 @@ do
   lulibre.store("DELETE FROM terms")
   learn.loaded = nil
   eq("with nothing learned there is nothing to suggest", { learn.ready(), learn.candidate(1) }, { false })
+end
+
+-- layouts: pages that say their facts in known places
+do
+  local layouts = require "lulibre.layouts"
+  local cip = layouts.cip [[Mathematics Subject Classification: 22E46
+
+Library of Congress Cataloging in Publication Data
+Lang, Serge
+SL2(R).
+(Graduate texts in mathematics; 105)
+Originally published: Reading, Mass.:
+Addison-Wesley, 1975.
+Bibliography: p.
+Includes index.
+I. Lie groups.
+2. Representations of groups.
+I. Title.
+II. Series.
+QA387.L35
+1985
+512'.55
+85-14802
+ISBN 978-1-4612-9581-5]]
+  eq("a cataloguing block: who, what, the series and its number", { cip.authors, cip.title, cip.series, cip.series_index },
+    { "Serge Lang", "SL2(R)", "Graduate Texts in Mathematics", "105" })
+  eq("and the subject its class stands for", { cip.tags, cip.identifiers }, { "math/analysis", "isbn:9781461295815" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Logic from computer science: proceedings of a workshop held November
+13-17, 1989/Yiannis Moschovakis, editor.
+p. cm. - (Mathematical Sciences Research Institute
+publications; 27)
+1. Logic, Symbolic and mathematical-Congresses.
+QA9.AIL64 1991
+511.3-dc20]]
+  eq("a title filed under itself, with its editor after the stroke", { cip.title:sub(1, 27), cip.authors, cip.tags, cip.pubdate },
+    { "Logic from computer science", "Yiannis Moschovakis", "math/logic", "1991" })
+  eq("classes to subjects", { taxonomy.from_lcc("QA247 .S47"), taxonomy.from_lcc("QA564.H25"), taxonomy.from_lcc("QA76.9"),
+    taxonomy.from_lcc("P291"), taxonomy.from_lcc("ZZ1"), taxonomy.from_dewey("512'.7"), taxonomy.from_dewey("516.3/5"), taxonomy.from_dewey("x") },
+    { "math/number-theory", "math/algebraic-geometry", "cs", "linguistics", nil, "math/number-theory", "math/algebraic-geometry" })
+  layouts.add {
+    name = "test memoirs", marks = { "memoirs of the", "test society" },
+    fields = { series = "Memoirs of the Test Society", series_index = "Number%s+(%d+)", publisher = function() return "TS" end },
+    confidence = 0.7,
+  }
+  local got = {}
+  for _, c in ipairs(layouts.read { texts = { "nothing here", "MEMOIRS OF THE\nTest Society\nNumber 412\nMay 1989" } }) do
+    if c.source == "test memoirs" then got[c.field] = c.value .. " " .. c.confidence end
+  end
+  eq("a layout of one's own: a constant, a pattern, a function", got,
+    { publisher = "TS 0.7", series = "Memoirs of the Test Society 0.7", series_index = "412 0.7" })
+  eq("it does not apply where its marks are not all on a page", #layouts.read { texts = { "memoirs of the", "test society" } }, 0)
+  layouts.remove("test memoirs")
+  got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
+  eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 end
 
 -- one record's values offered to another

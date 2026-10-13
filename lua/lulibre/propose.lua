@@ -52,10 +52,12 @@ function M.same(field, a, b)
     return names(a) == names(b)
   end
   if field == "pubdate" then
+    -- a is what the book has, b what is offered. A bare year (kept as the
+    -- first of January) offered against a date in that year adds nothing;
+    -- a full date offered against a bare year is news.
     local ya, yb = (a or ""):match("^%d%d%d%d"), (b or ""):match("^%d%d%d%d")
-    local bare = (a or ""):match("^%d%d%d%d$") or (b or ""):match("^%d%d%d%d$")
-      or (a or ""):match("%-01%-01$") or (b or ""):match("%-01%-01$")
-    if ya and yb and bare then return ya == yb end
+    local offered_bare = (b or ""):match("^%d%d%d%d$") or (b or ""):match("%-01%-01$")
+    if ya and yb and offered_bare then return ya == yb end
   end
   return plain(a) == plain(b)
 end
@@ -85,7 +87,8 @@ local is_gap = M.is_gap
 M.FIELD = { t = "title", title = "title", a = "authors", author = "authors", authors = "authors", s = "tags",
   subject = "tags", tags = "tags", tag = "tags", i = "identifiers", id = "identifiers", ids = "identifiers",
   identifiers = "identifiers", identifier = "identifiers", d = "pubdate", date = "pubdate", pubdate = "pubdate",
-  year = "pubdate", p = "publisher", publisher = "publisher" }
+  year = "pubdate", p = "publisher", publisher = "publisher", e = "series", series = "series",
+  series_index = "series_index", n = "series_index" }
 
 --- "title,authors" or "t,a" as a set of field names; nil and the offending
 -- word when one is not a field.
@@ -99,7 +102,7 @@ function M.fields(list)
   return set
 end
 
-local SINGLE = { title = true, authors = true, pubdate = true, publisher = true }
+local SINGLE = { title = true, authors = true, pubdate = true, publisher = true, series = true, series_index = true }
 
 --- Which of a file's candidates (strongest first within a field, as
 -- extract gives them) are worth proposing for a book. over: "gaps", "sure"
