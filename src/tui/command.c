@@ -197,6 +197,13 @@ static void c_mark(struct tui *t, const char *args) {
     for (int i = 0; i < n; i++) rows_mark(t, ids[i], !all);
     free(ids);
     c_visual(t, "");
+  } else if (rows_head(t, r->cur)) {
+    /* a heading: every book under it, unless they all are already */
+    const struct ghead *h = rows_head(t, r->cur);
+    int all = 1;
+    for (int i = 0; i < h->nbooks; i++) all = all && rows_marked(t, r->all[h->books[i]]);
+    for (int i = 0; i < h->nbooks; i++) rows_mark(t, r->all[h->books[i]], !all);
+    rows_move(t, r->cur + 1);
   } else if (rows_current(t)) {
     rows_mark(t, rows_current(t), -1);
     rows_move(t, r->cur + 1);
@@ -237,7 +244,8 @@ static void c_preview(struct tui *t, const char *args) {
   else if (arg_is(args, "graphic")) preview_toggle_graphic(t);
   else if (arg_is(args, "pan")) preview_pan(t, atoi(arg_rest(args)));
   else if (arg_is(args, "zoom")) preview_zoom(t, atoi(arg_rest(args)));
-  else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N");
+  else if (arg_is(args, "select")) preview_select(t);
+  else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N | select");
 }
 
 static void c_index(struct tui *t, const char *args) {
@@ -299,8 +307,74 @@ static void c_source(struct tui *t, const char *args) {
 
 /* ---- pickers ---- */
 
+/* ---- the list as a tree ---- */
+
+static void group_save(struct tui *t) {
+  const struct rows *r = &t->rows;
+  sqlite3_stmt *st;
+  if (sqlite3_prepare_v2(t->app->db.h, "INSERT OR REPLACE INTO kv(key, value) VALUES('list:group', ?)", -1, &st, NULL) != SQLITE_OK)
+    return;
+  char *v = xasprintf("%s%s", r->group ? r->group : "none", r->group_by_count ? " count" : "");
+  sqlite3_bind_text(st, 1, v, -1, SQLITE_TRANSIENT);
+  sqlite3_step(st);
+  sqlite3_finalize(st);
+  free(v);
+}
+
+static void c_pick(struct tui *t, const char *args);
+
+static void c_group(struct tui *t, const char *args) {
+  struct rows *r = &t->rows;
+  if (!*args) {
+    c_pick(t, "group");
+    return;
+  }
+  char by[32] = "", order[32] = "";
+  sscanf(args, "%31s %31s", by, order);
+  int by_count = r->group_by_count;
+  /* ":group count" and ":group name" change the order of the headings alone */
+  if (!strcmp(by, "count") || !strcmp(by, "name")) {
+    snprintf(order, sizeof order, "%s", by);
+    snprintf(by, sizeof by, "%s", r->group ? r->group : "none");
+  }
+  if (*order) by_count = !strcmp(order, "count");
+  if (rows_set_group(t, by, by_count)) {
+    tui_msg(t, 1, "group: there is no grouping '%s' (author, subject, series, publisher, year, format, folder, none)", by);
+    return;
+  }
+  group_save(t);
+  if (r->source) tui_msg(t, 0, "the library will be grouped by %s; the sync folder is listed plainly", r->group ? r->group : "nothing");
+  else if (r->group)
+    tui_msg(t, 0, "grouped by %s, %s: %s opens a heading, %s all of them; %s changes the grouping", r->group,
+            r->group_by_count ? "the largest first" : "by name", key_hint("enter"), key_hint("fold all"), key_hint("pick group"));
+  else tui_msg(t, 0, "the plain list");
+}
+
+static void c_fold(struct tui *t, const char *args) {
+  if (!t->rows.head_of) {
+    if (!t->rows.group) tui_msg(t, 0, "the list is not grouped: %s groups it", key_hint("pick group"));
+    return;
+  }
+  rows_fold(t, arg_is(args, "open") ? 'o' : arg_is(args, "close") ? 'c' : arg_is(args, "all") ? 'O' : arg_is(args, "none") ? 'C' : 't');
+}
+
+/* Enter: a heading opens or closes; a book goes to the edit form. */
+static void c_enter(struct tui *t, const char *args) {
+  if (rows_head(t, t->rows.cur)) rows_fold(t, 't');
+  else if (rows_current(t)) tui_exec(t, "edit");
+}
+
+static void accept_word(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
+  /* ud: the command; the choice's first word is what it is given */
+  char word[32] = "";
+  sscanf(text, "%31s", word);
+  char *line = xasprintf("%s %s", (const char *)ud, !strcmp(word, "(none)") ? "" : word);
+  tui_exec(t, line);
+  free(line);
+}
+
 static void accept_book(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
-  if (rows_goto_id(t, id)) {
+  if (rows_reveal(t, id)) {
     preview_book_changed(t);
     return;
   }
@@ -353,6 +427,23 @@ static void c_pick(struct tui *t, const char *args) {
       }
       sqlite3_finalize(st);
     }
+  } else if (arg_is(args, "group")) {
+    static const char *const ways[][2] = {
+      {"none", "the plain list"}, {"author", "under their authors"}, {"subject", "the tree of subjects"},
+      {"series", "under their series"}, {"publisher", "under their publishers (and journals)"}, {"year", "by year, the newest first"},
+      {"format", "pdf, djvu, epub ..."}, {"folder", "as the calibre library is filed on disk"},
+      {"count", "order the headings by size"}, {"name", "order the headings by name"},
+    };
+    p = picker_new(t, "group the list by", accept_word, "group");
+    for (size_t i = 0; i < ARRAY_LEN(ways); i++) picker_add(p, 0, ways[i][0], ways[i][1]);
+  } else if (arg_is(args, "sort")) {
+    static const char *const orders[][2] = {
+      {"title", "by title"}, {"author", "by author"}, {"-year", "the newest first"}, {"year", "the oldest first"},
+      {"-added", "the latest additions first"}, {"-modified", "the latest changes first"}, {"series", "by series and number"},
+      {"id", "in calibre's own order"}, {"(none)", "as the filter gives them"},
+    };
+    p = picker_new(t, "sort the books by", accept_word, "sort");
+    for (size_t i = 0; i < ARRAY_LEN(orders); i++) picker_add(p, 0, orders[i][0], orders[i][1]);
   } else if (arg_is(args, "filters")) {
     static const char *const presets[] = {
       "everything  →  ",
@@ -399,6 +490,10 @@ void commands_builtin(void) {
                    "next | prev | clear | <filter>  jump between matching books without narrowing");
   command_register("prompt", c_prompt, "command | search | filter  open the bottom line for typing");
   command_register("sort", c_sort, "[-]id | title | author | year | series | added | modified");
+  command_register("group", c_group,
+                   "[author | subject | series | publisher | year | format | folder | none] [name | count]  the list as a tree");
+  command_register("fold", c_fold, "toggle | open | close | all | none  open and close the headings of a grouped list");
+  command_register("enter", c_enter, "open or close the heading under the cursor; on a book, edit it");
   command_register("mark", c_mark, "toggle | all | none | invert");
   command_register("visual", c_visual, "start or end a range selection");
   command_register("focus", c_focus, "next | prev | h | j | k | l");

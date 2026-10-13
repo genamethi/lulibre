@@ -133,7 +133,9 @@ void tui_setup(void);
 
 /* Keys that belong to a place: each place has named actions, and its code
  * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
-enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_N };
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_N };
+enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END, SA_TOP, SA_BOTTOM, SA_MARK, SA_LINE,
+       SA_COPY, SA_LEAVE };
 enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE };
 enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PREV, LA_UP, LA_DOWN,
        LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
@@ -175,9 +177,37 @@ void le_free(struct lineedit *le);
 
 /* The current list: the ids matching the filter, in order, plus cursor and
  * marks. Rows themselves are fetched from the index only when drawn. */
+/* A heading of a grouped list: an author, a series, a subject (subjects
+ * nest: "math/number-theory" is under "math") with the books under it. */
+struct ghead {
+  char *path;        /* what it is known by: "math/number-theory" */
+  char *label;       /* its last part, as shown */
+  char *sortkey;
+  int depth, parent; /* parent: a heading's number, -1 at the top */
+  int count;         /* books under it, those of the headings within it included */
+  int *books;        /* those books, as rows of rows.all, in the list's order */
+  int nbooks, bcap;
+  int *direct;       /* the books that stand right under it */
+  int ndirect, dcap;
+  int *kids;         /* the headings within it */
+  int nkids, kcap;
+  int open, last, seen;
+};
+
 struct rows {
+  /* What the list draws. Without a grouping these are the books the filter
+   * matched; with one, headings stand among them, as rows whose id is 0. */
   sqlite3_int64 *ids;
   int n;
+  sqlite3_int64 *all; /* the books the filter matched, in its order */
+  int nall;
+  char *group;        /* what the list is grouped by, NULL when it is not */
+  int group_by_count; /* headings in order of size, not of name */
+  struct ghead *heads;
+  int nheads;
+  int *head_of;       /* per drawn row: the heading it is, or is under (-1: none) */
+  char **opened;      /* headings opened ("+grouping\tpath") and closed ("-...") by hand */
+  int nopened;
   int total;         /* how many the source holds, filter or no filter */
   int cur, top;
   int anchor; /* visual mode anchor row, -1 when not selecting */
@@ -209,7 +239,28 @@ void rows_set_filter(struct tui *t, const char *filter);
 void rows_reload(struct tui *t);
 /* Switch what the list shows: the library (0) or the sync folder (1). */
 void rows_set_source(struct tui *t, int source);
-sqlite3_int64 rows_current(const struct tui *t); /* 0 when the list is empty */
+/* The book under the cursor; on a heading, the first book under it. 0 when
+ * the list is empty. */
+sqlite3_int64 rows_current(const struct tui *t);
+/* Group the list: by author, subject, series, publisher, year, format or
+ * folder (the folders of the calibre library); NULL or "none" for the plain
+ * list. by_count orders the headings by size. Returns 0, or -1 for a
+ * grouping there is not. */
+int rows_set_group(struct tui *t, const char *by, int by_count);
+extern const char *const rows_groupings[]; /* their names, NULL at the end */
+/* The heading at a drawn row, or NULL when the row is a book. */
+const struct ghead *rows_head(const struct tui *t, int row);
+/* How deep a drawn row stands under headings: 0 in a plain list. */
+int rows_depth(const struct tui *t, int row);
+/* Open and close headings. how: 't' toggle, 'o' open, 'c' close the one at
+ * the cursor (on a book, 'c' closes the heading it is under); 'O' open all,
+ * 'C' close all. */
+void rows_fold(struct tui *t, int how);
+/* Put the cursor on a book, opening the headings it is under if need be. */
+int rows_reveal(struct tui *t, sqlite3_int64 id);
+/* group.c: build what is drawn from rows.all and the grouping */
+void rows_regroup(struct tui *t);
+void rows_group_free(struct rows *r);
 void rows_move(struct tui *t, int to);
 int rows_goto_id(struct tui *t, sqlite3_int64 id); /* 1 if found */
 
@@ -306,6 +357,12 @@ void preview_toggle_graphic(struct tui *t);
 int preview_mouse(struct tui *t, void *state, int y, int x, int what);
 
 int preview_has_selection(void *state);
+/* Selecting text with the keys: preview_select puts a cursor in the page's
+ * text and takes the focus there; while preview_selecting, preview_select_key
+ * is given each key first and returns 1 for those that were its own. */
+void preview_select(struct tui *t);
+int preview_selecting(struct tui *t);
+int preview_select_key(struct tui *t, uint32_t key);
 /* Is this cell in a preview's page text, where the preview does the selecting? */
 int preview_owns(void *state, int y, int x);
 

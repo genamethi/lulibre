@@ -70,6 +70,15 @@ local DEFAULTS = {
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "write", { "w" }, "do it", "carry out the actions" },
   },
+  beside = {
+    { "add", { "S", "a" }, "add", "add this file to the library; the file stays in the folder" },
+    { "move", { "X" }, "add and remove", "add it, then delete it from the sync folder" },
+    { "drop", { "D" }, "drop", "take it out of the folder without adding it (undo puts it back)" },
+    { "edit", { "<CR>", "e" }, "edit", "edit what the file will be added with" },
+    { "review", { "r" }, "review", "go through the proposals waiting for this file" },
+    { "match", { "m" }, "matches", "have the library's list follow with the books that look like the file, or leave it be" },
+    { "rescan", { "R" }, "look again", "read the sync folder again" },
+  },
   good = {
     { "confirm", { "<Space>", "<CR>" }, "confirm", "confirm the record as right, or take that back" },
     { "confirm_above", { "A" }, "confirm all above…", "confirm every record at or above a score you give" },

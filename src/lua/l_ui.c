@@ -286,7 +286,7 @@ static void selection_under_panel(lua_State *L, struct tui *t) {
     lua_pushliteral(L, "the row under the cursor is not a book: nothing is selected");
     lua_error(L);
   }
-  if (rows_goto_id(t, id)) {
+  if (rows_reveal(t, id)) { /* under a closed heading, it is brought out */
     preview_book_changed(t);
     return;
   }
@@ -619,8 +619,10 @@ ON_UI(l_progress)
 static int l_goto_ui(lua_State *L) {
   struct tui *t = need_tui(L);
   lua_Integer id = luaL_checkinteger(L, 1);
-  int found = rows_goto_id(t, id);
+  int found = rows_reveal(t, id);
   if (found) preview_book_changed(t);
+  /* a list that is still being read may yet hold it: land there when it comes */
+  else if (t->rows.running || t->rows.queued[0]) t->rows.want_id = id;
   lua_pushboolean(L, found);
   return 1;
 }

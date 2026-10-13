@@ -15,9 +15,16 @@
 | `&` | `prompt filter` | narrow the list as you type |
 | `<BS>` | `filter` | show everything |
 | `f` `ga` `gs` `gf` | `pick books` / `authors` / `subjects` / `filters` | fuzzy finders |
+| `gh` | `pick group` | the list as a tree: by author, subject, series, publisher, year, format, or folder (as the library is filed on disk); `:group count` orders the headings by size, `:group name` by name |
+| `gH` | `group none` | the plain list again |
+| `<CR>` | `enter` | on a heading: open or close it; on a book: the edit form |
+| `l` `<Right>` `zo` · `h` `<Left>` `zc` · `za` | `fold open` / `close` / `toggle` | closing a closed heading steps out to the one it is within |
+| `zR` `zM` | `fold all` / `none` | open, or close, every heading |
+| `s` | `pick sort` | the order of the books: title, author, year, latest additions ... (`:sort -added`) |
 | `gt` | `browse` | tree in a left column: `f` switches facet, `l`/`h` open and close, `/` finds |
-| `Space` | `mark toggle` | `:mark all`, `none`, `invert` |
+| `Space` | `mark toggle` | on a heading: every book under it. `:mark all`, `none`, `invert` |
 | `V` | `visual` | select a range; `Esc` ends it |
+| `e` · `r` | `edit` · `review selection` | the edit form, or the waiting proposals, for what is selected: the range, else the marked books, else the books under the heading the cursor is on, else the book |
 | `R` | `reload` | re-read calibre's metadata now |
 
 ## The preview
@@ -29,6 +36,7 @@
 | `P` | text ⇄ page image |
 | `+` `-` `=` | zoom the image in, out, reset |
 | `H` `L` | pan the image |
+| `v` | select text with the keys: a cursor comes out in the page's text. `h` `j` `k` `l` and the arrows move it, `w` `b` by words, `0` `$` to the ends of the line, `gg` `G` of the page; `v` begins a selection (again lets go of it), `V` takes the line; `y` or Enter copies and leaves, `Esc` or `q` leaves. These are the keys of the place `select`: `lulibre.map("select", "n", "down")` |
 
 ## Windows
 
@@ -102,6 +110,7 @@ and pasted with `<C-v>`.
 | `gd` | `dupes` | books with identical files |
 | `go` | `orphans` | records without files, files without records, broken links |
 | `2` `gS` | `sync` | read the sync folder and show it |
+| `gb` | `beside` | the sync folder in a column beside the library: each waiting file next to the book that is the same, or looks like it |
 | `1` `gl` | `source library` | back to the library |
 | `S` `X` `D` | `sync add` / `sync move` / `sync drop` | staged files into the library, or out of the folder |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |

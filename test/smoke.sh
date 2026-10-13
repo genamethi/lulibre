@@ -159,6 +159,57 @@ if command -v tmux >/dev/null; then
   shown "tui starts"                 "NORMAL"
   shown "tui lists both books"       "1/2"
   shown "tui previews indexed text"  "A Note on Sieve Methods"
+
+  # the list as a tree
+  $T send-keys -t t : ; $T send-keys -t t -l "group subject" ; $T send-keys -t t Enter
+  shown "the list grouped by subject"            "all books, by subject"
+  shown "subjects nest, a short list shown open"  "▾ number-theory"
+  shown "the books stand under their headings"    "▾ additive"
+  shown "what has no subject, last"               "▾ (none)"
+  $T send-keys -t t g g h
+  shown "a heading closes"                        "▸ math"
+  expect "and what was under it is put away" "" "$(screen | grep -o '[▾▸] number-theory' | head -1)"
+  $T send-keys -t t Space
+  shown "Space on a heading marks its books"      "1 marked"
+  $T send-keys -t t : ; $T send-keys -t t -l "mark none" ; $T send-keys -t t Enter
+  $T send-keys -t t g g Enter
+  shown "Enter opens it again"                    "▾ math"
+  $T send-keys -t t z M
+  shown "zM closes them all"                      "▸ (none)"
+  $T send-keys -t t z R
+  shown "zR opens them all"                       "▾ additive"
+  $T send-keys -t t "/" ; $T send-keys -t t -l "paper" ; $T send-keys -t t Enter
+  shown "a search finds a book under a heading"   "› .*paper"
+  $T send-keys -t t Escape
+  $T send-keys -t t : ; $T send-keys -t t -l "group folder" ; $T send-keys -t t Enter
+  shown "grouped as the library is filed on disk" "▾ Paul Erdos"
+  $T send-keys -t t g h
+  shown "gh asks what to group by"                "group the list by"
+  $T send-keys -t t Escape
+  $T send-keys -t t s
+  shown "s asks what to sort by"                  "sort the books by"
+  $T send-keys -t t Escape
+  $T send-keys -t t g H
+  shown "gH gives the plain list back"            "the plain list"
+  expect "with no headings" "" "$(screen | grep -o '▾' | head -1)"
+
+  # selecting text in the preview with the keys
+  $T send-keys -t t g g v
+  shown "v puts a cursor in the preview"          "^select: "
+  $T send-keys -t t V y
+  shown "V and y copy a line"                     "^copied [0-9]* characters"
+  expect "what was copied is the page's first line" "A Note on Sieve Methods" "$($T show-buffer 2>/dev/null | head -1)"
+  $T send-keys -t t v w v w w y
+  shown "v ... v ... y copies a stretch"          "^copied [0-9]* characters"
+  expect "from where it began to the cursor" "Note on S" "$($T show-buffer 2>/dev/null | head -1)"
+  $T send-keys -t t v
+  sleep 0.2
+  $T send-keys -t t Escape # (alone: Escape with a key right behind it reads as Alt and that key)
+  sleep 0.3
+  $T send-keys -t t j
+  shown "Esc leaves, and the keys are the list's again" "2/2"
+  $T send-keys -t t k
+
   $T send-keys -t t / ; $T send-keys -t t -l "erdos" ; $T send-keys -t t Enter
   shown "tui / jumps to the match"   "/erdos: 1   2/2"
   $T send-keys -t t n
@@ -381,6 +432,29 @@ LUA
     shown "1 goes back to the library"   "all books"
     $T send-keys -t t -l "$(printf '\033[<0;24;1M\033[<0;24;1m')"
     shown "a click on the tab switches too" " SYNC "
+    # a staged file is edited like a book, before it is in calibre
+    $T send-keys -t t e
+    shown "e edits a staged file"        "edit .*note"
+    $T send-keys -t t q
+    sleep 0.3
+    # the sync folder in a column beside the library
+    $T send-keys -t t 1
+    shown "back in the library"          "all books"
+    $T send-keys -t t g b
+    shown "gb puts the sync folder beside the library" "sync folder beside the library   1 file, 1 new"
+    shown "the waiting file in its column" "new  *note"
+    shown "and the library's list beside it" "Paul Erd"
+    $T send-keys -t t "?"
+    shown "its keys are listed"          "add this file to the library"
+    $T send-keys -t t q
+    sleep 0.2
+    $T send-keys -t t e
+    shown "e edits the file from there"  "edit .*note"
+    $T send-keys -t t q
+    sleep 0.3
+    $T send-keys -t t q
+    i=0; while screen | grep -q "beside the library" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+    expect "q closes the column" "" "$(screen | grep -o 'beside the library' | head -1)"
     $T send-keys -t t q
     i=0; while [ ! -s "$t/rc2" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
     expect "and exits cleanly" 0 "$(cat "$t/rc2" 2>/dev/null)"
