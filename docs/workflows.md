@@ -205,6 +205,7 @@ are, with more confidence:
 |---|---|
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
+| series line (a series named in so many words: "Springer Undergraduate Mathematics Series", the line above "Series Editors", "Series: Lecture Notes in Physics") | the series and, where it is given, the volume's number |
 | arXiv stamp | the day of submission |
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
@@ -214,6 +215,18 @@ are, with more confidence:
 
 What they read is proposed like anything else, marked with the layout's
 name.
+
+The word "series" proves nothing by itself ("Fourier Series", "a series of
+lectures given at ..."), so a line is taken for a series' name only when it
+is set like a name, is not a piece of mathematics, and something beside it
+bears it out: a volume number, the series' editors, an ISSN, or a
+publishing house's name. Two tables say what counts, and take more:
+
+```lua
+local layouts = require "lulibre.layouts"
+layouts.not_series["bertrand"] = true      -- "Bertrand Series" is a sum, not a set of books
+layouts.series_houses["polity"] = true     -- "Polity Series in ..." needs nothing else to bear it out
+```
 
 The four that read a date are there for the books with none. All but the
 journal header are below the confidence at which a proposal replaces a value
