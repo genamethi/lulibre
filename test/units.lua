@@ -697,6 +697,9 @@ do
   lulibre.store("DELETE FROM proposals WHERE source = 'book 2'")
 end
 
+-- which build this is
+eq("the build has a number and a commit", { lulibre.build.number:match("^%d%d%d+$") ~= nil, #lulibre.build.commit > 0 }, { true, true })
+
 -- keys: the screens' tables, and the global keymap as scripts see it
 do
   local screens = require "lulibre.ui.keys"

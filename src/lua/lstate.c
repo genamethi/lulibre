@@ -136,7 +136,7 @@ lua_State *lstate_new(struct app *app) {
   /* lulibre.version: "0.1.0-alpha"; lulibre.build: its parts and the kind of build */
   lua_pushstring(L, LULIBRE_VERSION);
   lua_setfield(L, -2, "version");
-  lua_createtable(L, 0, 7);
+  lua_createtable(L, 0, 9);
   lua_pushstring(L, LULIBRE_VERSION);
   lua_setfield(L, -2, "version");
   lua_pushinteger(L, LULIBRE_VERSION_MAJOR);
@@ -151,6 +151,11 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "debug");
   lua_pushstring(L, LULIBRE_LUA_VER);
   lua_setfield(L, -2, "lua");
+  /* which build of the version this is, and the commit it was made from */
+  lua_pushstring(L, lulibre_build_number);
+  lua_setfield(L, -2, "number");
+  lua_pushstring(L, lulibre_build_commit);
+  lua_setfield(L, -2, "commit");
   lua_setfield(L, -2, "build");
   l_opt_open(L);
   l_job_open(L);

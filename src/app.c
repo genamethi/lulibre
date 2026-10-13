@@ -6,6 +6,11 @@
 #include "app.h"
 #include "core/util.h"
 
+/* the real ones are in build/buildno.c, written when the binary is linked;
+ * these stand in where that is not linked (the unit tests) */
+__attribute__((weak)) const char lulibre_build_number[] = "";
+__attribute__((weak)) const char lulibre_build_commit[] = "";
+
 int app_apply_cli(struct app *app, char **err) {
   if (app->cli_library && config_set(&app->cfg, "library", app->cli_library, err)) return -1;
   for (int k = 0; k < app->ncli_sets; k++) {

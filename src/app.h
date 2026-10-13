@@ -32,6 +32,11 @@ struct app {
   int ncli_sets;
 };
 
+/* This build's number among the builds of its version ("007"), and the
+ * commit it was made from ("3b3ddb3", with + when the tree had changes);
+ * both "" in a binary that was not linked by the Makefile's rule. */
+extern const char lulibre_build_number[], lulibre_build_commit[];
+
 /* Apply the command line's options. Returns 0, or -1 with *err set. */
 int app_apply_cli(struct app *app, char **err);
 
