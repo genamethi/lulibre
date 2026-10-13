@@ -71,6 +71,12 @@ for n, id in ipairs(ids) do
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
 
+-- a run of its own, unless this is a step of one (the propose-and-review
+-- dialog) or only a plan is asked for
+local step = net.offline and "records" or "records and services"
+local run <close> = not plan and require("lulibre.runs").join { ids = ids, steps = { step } } or nil
+if run then run:step(step) end
+
 -- arXiv's own snapshot of its records, if there is one here, is read before
 -- arXiv is asked anything: what it holds costs no request
 local snapshot = net.arxiv_snapshot_path()
@@ -339,6 +345,7 @@ for n, b in ipairs(books) do
   end
 end
 lulibre.progress(nil)
+if run then run:done() end
 
 local said = {}
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do

@@ -620,7 +620,7 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     }
   } else if (nd->cls == &view_panel) {
     if (wheel) panel_wheel(nd->state, wheel);
-    else panel_click(nd->state, ni->y - nd->r.y);
+    else panel_click(nd->state, ni->y - nd->r.y, ni->x - nd->r.x);
   } else if (nd->cls == &view_preview) {
     if (wheel) preview_scroll(t, wheel);
     else if ((in_text = preview_owns(nd->state, ni->y, ni->x)) && preview_mouse(t, nd->state, ni->y, ni->x, 0))
@@ -812,6 +812,28 @@ static void log_arrived(void *ud) {
 
 /* ---------------------------------------------------------------- render */
 
+void tui_badge(struct tui *t, const char *name, const char *text, int color) {
+  int i = 0;
+  while (i < t->nbadges && strcmp(t->badges[i].name, name)) i++;
+  if (i < t->nbadges) {
+    free(t->badges[i].text);
+    if (!text || !*text) { /* taken away: the later ones move up */
+      free(t->badges[i].name);
+      memmove(&t->badges[i], &t->badges[i + 1], (size_t)(t->nbadges - i - 1) * sizeof t->badges[0]);
+      t->nbadges--;
+    } else {
+      t->badges[i].text = xstrdup(text);
+      t->badges[i].color = color;
+    }
+  } else if (text && *text && t->nbadges < TUI_BADGES) {
+    t->badges[i].name = xstrdup(name);
+    t->badges[i].text = xstrdup(text);
+    t->badges[i].color = color;
+    t->nbadges++;
+  }
+  tui_dirty(t);
+}
+
 static void draw_status(struct tui *t, int y) {
   struct ncplane *n = t->std;
   struct rows *r = &t->rows;
@@ -826,6 +848,12 @@ static void draw_status(struct tui *t, int y) {
   if (r->source) { /* the list is showing the sync folder, not the library */
     dr_style(n, theme.on_accent, theme.ok, A_BOLD);
     x += dr_text(n, y, x, W - x, " SYNC ");
+  }
+  for (int i = 0; i < t->nbadges && x < W / 2; i++) { /* what scripts say is going on */
+    dr_style(n, theme.on_accent, t->badges[i].color, A_BOLD);
+    x += dr_text(n, y, x, 1, " ");
+    x += dr_text(n, y, x, W / 2 - x, t->badges[i].text);
+    x += dr_text(n, y, x, 1, " ");
   }
 
   /* right side first, so the filter gets whatever is left */
@@ -1228,6 +1256,10 @@ int tui_run(struct app *app) {
   free(t->prompt_saved);
   free(t->input_label);
   free(t->progress);
+  for (int i = 0; i < t->nbadges; i++) {
+    free(t->badges[i].name);
+    free(t->badges[i].text);
+  }
   suggest_clear(t);
   free(t->pager_title);
   free(t->help);

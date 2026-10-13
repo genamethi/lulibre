@@ -27,6 +27,24 @@ written in `src/version.h`.
   outranks its stamp, and when a record gives the day the proposals read
   off the stamp or the number are withdrawn instead of left beside it.
 - `lulibre.ui.form`: the dialog pane, for scripts.
+- Each go of proposing is a run (`lulibre.runs`). While one is going on the
+  status line carries a badge beside the mode (`⟳ PROPOSING  280 books:
+  records, step 2 of 2`). Review shows the runs as tabs: one for each that
+  still has something waiting, and "all waiting"; `l` and `h` (or a click)
+  switch, and `D` drops what the run in view added, stopping it first if it
+  is still going on. `gr` opens on what was just proposed.
+- Fixed: "propose, then review" from the dialog told you to press `gr`
+  after its first step, while the later steps were still working; that
+  opened review on everything that waited, and the run's own review then
+  came up over it. The steps now keep their closing lines for the log, and
+  the run's proposals come up in the review that is open, if one is.
+- Fixed: a round stopped with `:cancel` left the options the dialog had set
+  for it (`weigh_sources`, `subject_learned`) in place.
+- For scripts: `lulibre.status(name, text, style)` keeps a badge in the
+  status line; panels take `tabs` and `p:tabs(names, current)`, and
+  `p:send(key)` wakes a panel from another task. The badge
+  (`runs.badge`) and the line at the top of a run's view
+  (`review.banner`) are functions to replace.
 
 ## 0.2.0-alpha.0
 

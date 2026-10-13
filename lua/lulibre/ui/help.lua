@@ -66,7 +66,7 @@ local ABOUT = {
   ["datasets-dialog"] = "a dialog: the databases kept here, with boxes for which to fetch",
   ["sync-dialog"] = "a dialog: add, move or drop the selected waiting files",
   ["mark none"] = "unmark every book",
-  ["review"] = "go through every proposal that is waiting", ["review selection"] = "go through the proposals of what is selected",
+  ["review"] = "go through the proposals: what was just proposed, else everything that waits", ["review selection"] = "go through the proposals of what is selected",
   ["browse"] = "a tree of the library in a column on the left", ["dupes"] = "books whose files are the same, byte for byte",
   ["orphans"] = "records with no file, files with no record, broken links", ["good"] = "confirm records as right; they are learned from",
   ["sync"] = "read the sync folder and show it", ["beside"] = "the sync folder in a column beside the library",

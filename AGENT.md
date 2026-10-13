@@ -138,6 +138,20 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
   `-o index=scratch.db`. The library is still read, nothing of the user's
   is written.
+- When the user may have lulibre open, a plain `cp` of the index can give
+  "database disk image is malformed": take the copy with
+  `sqlite3 'file:NAME.db?mode=ro' ".backup scratch.db"`, and remove any
+  `scratch.db-wal` / `-shm` left beside an earlier copy of that name first
+  (an old one is replayed into the new file).
+- Anything that deletes "what belongs to X" (a run's proposals, a group's
+  books) is counted on a copy before and after, by status: the numbers
+  outside X must come back exactly. Dropping a run first took 137
+  proposals, 44 of them accepted, that had waited for its books from
+  before; only the count showed it.
+- Putting existing commands end to end makes a new thing out of them: read
+  what each one says when it finishes. `:propose` closing with "gr goes
+  through them" was right alone and wrong as step one of three, where it
+  sent the user into review while the other two were still working.
 - The proposer is measured on a **bare copy**: links to the library's book
   folders, a `metadata.db` stripped to "Untitled / Unknown" (triggers
   dropped, written by hand with sqlite, **never through calibredb**: it
@@ -193,6 +207,10 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   one it needs, and leave the state as it found it.
 - A tmux session made with `-y 30` has 29 rows for the program (tmux keeps
   one for its status line): find a row by what is on it, never by number.
+- Keys go to whatever has the cursor when they arrive, not to what had it
+  when the test was written: `g r` sent after a review has already opened
+  rejects a proposal, and `q` sent after it has closed quits the program.
+  Wait for the screen the keys are meant for (`shown ...`) before sending.
 - A message left on the message line by an earlier step satisfies a later
   `shown "changed 1 book"`. Clear it (`Escape`) before a step that waits for
   the same words, or the check passes before the work is done.

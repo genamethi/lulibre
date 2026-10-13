@@ -419,6 +419,11 @@ int panel_is_open(const struct panel *p);
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud);
 void panel_set_title(struct panel *p, const char *title);
 void panel_set_help(struct panel *p, const char *help);
+/* Names shown in the bar after the title, one of them as the one in view.
+ * The panel only draws them: the script decides which keys switch, and is
+ * told "<Tab>" with the tab's index when one is clicked. */
+#define PANEL_TABS 12
+void panel_set_tabs(struct panel *p, int n, const char *const *names, int current);
 void panel_set_follow(struct panel *p, int follow);
 /* For a panel that follows: 1, and the book its cursor row stands for (0
  * when that row is not a book). 0 for a panel that does not follow. */
@@ -440,7 +445,7 @@ void panel_set_cursor(struct panel *p, int row);
 /* Returns 1 if the key was the panel's. */
 int panel_key(struct tui *t, struct panel *p, uint32_t key);
 /* The mouse: a click on the panel's line `line` (0 is its bar), the wheel. */
-void panel_click(struct panel *p, int line);
+void panel_click(struct panel *p, int line, int x);
 /* The whole text of the cell drawn at a screen position (r is the panel's
  * window), or NULL where there is none. */
 const char *panel_text_at(struct panel *p, struct rect r, int y, int x);
@@ -483,6 +488,7 @@ enum prompt_kind { PROMPT_NONE, PROMPT_COMMAND, PROMPT_FILTER, PROMPT_SEARCH, PR
 /* text is NULL when the prompt was cancelled */
 typedef void input_fn(struct tui *t, const char *text, void *ud);
 
+#define TUI_BADGES 6 /* named notes scripts may keep in the status line at once */
 struct tui {
   struct app *app;
   struct db rdb; /* read-only connection used by the query worker */
@@ -527,6 +533,11 @@ struct tui {
   int *sugg_order;  /* indexes of matching suggestions, best first */
   int nsugg_match, sugg_sel;
   char *progress;   /* a script's progress note for the status line */
+  struct badge {    /* named notes scripts keep in the status line, beside the mode */
+    char *name, *text;
+    int color;
+  } badges[TUI_BADGES];
+  int nbadges;
 
   struct picker *picker;
   char *help; /* pager overlay text (help, messages, script output); NULL when closed */
@@ -599,6 +610,9 @@ void tui_input_on_change(struct tui *t, input_fn *fn);
 void complete_refresh(struct tui *t);
 const char *command_at(int i, const char **help); /* the i-th command's name; NULL past the last */
 void tui_progress(struct tui *t, const char *text); /* NULL clears */
+/* A badge in the status line under a name of the script's choosing: set again
+ * to change it, with NULL text to take it away. color is a theme colour. */
+void tui_badge(struct tui *t, const char *name, const char *text, int color);
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
 /* Put text on the message line without logging it (tui_msg logs first). */

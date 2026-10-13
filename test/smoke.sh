@@ -197,6 +197,8 @@ if command -v tmux >/dev/null; then
   expect "with no headings" "" "$(screen | grep -o '▾' | head -1)"
 
   # the propose-and-review dialog, and the weights of the sources
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua local _ = lulibre.store("DELETE FROM proposals")' ; $T send-keys -t t Enter
+  sleep 0.3
   $T send-keys -t t '\' p r
   shown "Leader pr opens the dialog"              "propose, then review"
   shown "with what is asked, as boxes"            "\[x\]  the files themselves"
@@ -208,9 +210,24 @@ if command -v tmux >/dev/null; then
   shown "a choice steps on"                       "everything the list shows (2)"
   $T send-keys -t t w
   shown "w proposes, and review opens"            "review  [0-9]* pending"
+  shown "on the run, a tab beside all that waits" "books ([0-9]*)   all waiting ([0-9]*)"
+  shown "which says how to be rid of it"          "drops what this run added"
   $T send-keys -t t s
   shown "review can put the most disputed first"  "most disputed first"
-  $T send-keys -t t q
+  $T send-keys -t t l
+  i=0; while screen | grep -q "drops what this run added" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "l goes to everything that waits" "" "$(screen | grep -o 'drops what this run added' | head -1)"
+  $T send-keys -t t h
+  shown "h comes back to the run"                 "drops what this run added"
+  $T send-keys -t t D
+  shown "D asks before dropping the run"          "proposals* this run added? (deleted, not rejected"
+  $T send-keys -t t y Enter
+  shown "and with the run gone nothing is left"   "nothing left to review"
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.status("t", "BUSY HERE", "warn")' ; $T send-keys -t t Enter
+  shown "a script can keep a badge in the status line" "NORMAL  *BUSY HERE"
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.status("t")' ; $T send-keys -t t Enter
+  i=0; while screen | grep -q "BUSY HERE" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "and take it away" "" "$(screen | grep -o 'BUSY HERE' | head -1)"
   i=0; while screen | grep -q "review  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   $T send-keys -t t : ; $T send-keys -t t -l 'lua local _ = lulibre.store("DELETE FROM proposals")' ; $T send-keys -t t Enter
   sleep 0.3

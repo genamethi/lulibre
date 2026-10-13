@@ -214,10 +214,49 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `s` | sort: surest first, or by id |
 | `f` then a letter | only one field's proposals: `t` title, `a` authors, `s` subject, `i` identifiers, `d` date, `p` publisher; `f` `f` shows all again. Accept-all and reject-rest then speak for that field alone |
 | `p` | more preview: shrink the panel, and again to bring it back |
+| `l` `h` | the next view, the one before (the tabs in the bar; a click on one works too) |
+| `D` | drop what the view in front holds: deleted, not rejected, so it can be proposed again |
 | `w` | write the accepted ones as one batch |
 
 `:review FILTER` keeps the review to the books a filter matches
 (`:review author:unknown`); `w` then writes only theirs.
+
+#### Runs, and review's tabs
+
+Each go of proposing is a *run*: `gp`, `:propose`, `:enrich`, and the
+dialog below, which is one run however many steps it takes. While a run is
+going on the status line carries a badge beside the mode, in the warning
+colour:
+
+     NORMAL  ⟳ PROPOSING  280 books: records, step 2 of 2
+
+and nothing tells you to open review until it is done. Review shows the
+runs as tabs in its bar, the one in view standing out:
+
+     review  13 pending, 0 accepted   surest first   09:41 · 4 books (13)   all waiting (1140)
+
+| Tab | Holds |
+|---|---|
+| `09:41 · 4 books (13)` | everything that waits for the books of the run begun at 09:41, whether that run proposed it or it waited before |
+| `⟳ 09:50 · 280 books (96)` | a run still going on: what it has found so far. The view comes up by itself when the run is done |
+| `all waiting (1140)` | every proposal that waits |
+
+`gr` opens on a run that is going on or that you have not looked at yet,
+and otherwise on everything; a "propose, then review" from the dialog
+brings its own run up when it is done, in the review that is open if one
+is, so two reviews never lie on top of each other. The first line of a
+run's view says what it is and which keys act on it. `D` there drops what
+*that run added* and leaves what waited before; on a run still going on it
+stops the run first. A run is forgotten when nothing waits for its books
+any more, or when a later run covers the same books.
+
+All of this is Lua and yours to change, in `init.lua`:
+
+    local runs = require "lulibre.runs"
+    runs.badge = function(run) return "busy: " .. (run.step or ""), "accent" end  -- other words, another colour
+    runs.badge = function() end                                -- no badge
+    require("lulibre.ui.review").banner = function() end       -- no line at the top of a run's view
+    lulibre.map("review", "<C-n>", "next_view")                -- another key for the next tab
 
 Copying from the page does not take the cursor out of review: drag over a
 name in the preview, or double click a word, and the next key is still
@@ -254,6 +293,10 @@ confirm records with gk, then :learn"). `Space` ticks a box or steps
 through a choice, Enter types a value, `w` (or Enter on the last lines)
 goes. Everything it does can also be done by hand with `:propose`,
 `:enrich`, `:refs` and `:review` and their flags.
+
+The whole round is one run (see "Runs, and review's tabs" above): the
+status line says which step it is at, the steps keep their closing lines
+for the log, and when it is done review opens on that run's tab.
 
 ### Other dialogs
 
