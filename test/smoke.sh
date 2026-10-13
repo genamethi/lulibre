@@ -7,7 +7,10 @@ bin=$(realpath "$1")
 command -v sqlite3 >/dev/null || { echo "smoke: sqlite3 CLI not found, skipping"; exit 0; }
 
 t=$(mktemp -d)
-trap 'rm -rf "$t"' EXIT
+T="tmux -L lulibre-smoke-$$"
+# (stop the private tmux server too: a run that fails part-way would leave
+# its sessions, and the lulibre in them, running)
+trap '$T kill-server 2>/dev/null || true; rm -rf "$t"' EXIT
 lib=$t/lib
 sh "$(dirname "$0")/mklib.sh" "$lib"
 
@@ -92,7 +95,6 @@ contains "and when a script fails there"  "Quit, run make there" "$(tree run "$t
 
 # The interactive interface, driven through a private tmux server.
 if command -v tmux >/dev/null; then
-  T="tmux -L lulibre-smoke-$$"
   screen() { $T capture-pane -p -t t 2>/dev/null; }
   wait_for() { # pattern
     i=0
