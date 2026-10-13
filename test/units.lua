@@ -875,9 +875,30 @@ QA9.AIL64 1991
   eq("or a series before the volume", { j.journal, j.volume, j.year }, { "Ann. of Math.", 141, 1995 })
   eq("a line of prose with a year is not one", layouts.journal("We follow Serre 12 (1973) and others in this"), nil)
   eq("the year of the heading", reads("journal header", "Journal of Algebra 320 (2008) 1234–1256\nOn groups"), "2008")
-  eq("the year of a copyright line", { reads("copyright line", "© 2008 Elsevier Inc. All rights reserved."),
-    reads("copyright line", "Copyright (c) 1965, 1984, 2002 by A. N. Other"), reads("copyright line", "Copyright © 1994–2023 Lua.org, PUC-Rio."),
-    reads("copyright line", "no sign here, only 1999") }, { "2008", "2002", "2023" })
+  local function year_of(text)
+    for _, c in ipairs(layouts.read { texts = { text } }) do
+      if c.source == "copyright line" and c.field == "pubdate" then return c.value end
+    end
+  end
+  eq("the year of a copyright line", { year_of("© 2008 Elsevier Inc. All rights reserved."),
+    year_of("Copyright (c) 1965, 1984, 2002 by A. N. Other"), year_of("Copyright © 1994–2023 Lua.org, PUC-Rio."),
+    year_of("Copyright 1996, American Mathematical Society"), year_of("no sign here, only 1999") }, { "2008", "2002", "2023", "1996" })
+  eq("whose copyright it is, when it is a publisher's", { layouts.copyright_holder("© Springer-Verlag Berlin Heidelberg 1999"),
+    layouts.copyright_holder("© 2008 Elsevier Inc. All rights reserved."), layouts.copyright_holder("Copyright © 1984 by McGraw-Hill, Inc. All rights reserved. Printed in the"),
+    layouts.copyright_holder("© Springer International Publishing AG, part of Springer Nature 2018, 2020"),
+    layouts.copyright_holder("Copyright 1996, American Mathematical Society"),
+    (layouts.copyright_holder("Copyright 1996 by the American Mathematical Society")) },
+    { "Springer", "Elsevier", "McGraw-Hill", "Springer", "American Mathematical Society", "American Mathematical Society" })
+  eq("and whether the house is a known one", select(2, layouts.copyright_holder("© 2008 Elsevier Inc.")), true)
+  eq("a house that is not listed, as the line writes it", { layouts.copyright_holder("Copyright © 1971 by Chelsea Publishing Company.") },
+    { "Chelsea Publishing Company", false })
+  eq("an author's copyright names no publisher", { layouts.copyright_holder("© The Author(s) 2021"), layouts.copyright_holder("© 2019 Benjamin A. Smith"),
+    layouts.copyright_holder("Copyright (c) 2010 by Jane Hermann"), layouts.copyright_holder("© 2023 Copyright held by the owner/author(s).") }, {})
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "© 2008 Elsevier Inc. All rights reserved." } }) do
+    if c.source == "copyright line" then got[c.field] = { c.value, c.confidence } end
+  end
+  eq("the line gives the year and the house, each as sure as it is", got, { pubdate = { "2008", 0.75 }, publisher = { "Elsevier", 0.8 } })
   -- a reprint's series page knows better than its copyright line, and says so more surely
   local best
   for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer" } }) do

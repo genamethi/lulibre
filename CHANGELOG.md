@@ -116,6 +116,9 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- The publisher from the copyright line ("© Springer-Verlag Berlin
+  Heidelberg 1999", "Copyright © 1984 by McGraw-Hill, Inc."), written one
+  way per house (`layouts.houses`); an author's own copyright names none.
 - Four layouts that read a date, for the books that have none: the day a
   journal received an article, a date on a line of its own on the first
   page, the year in a journal's heading, the year of a copyright line.

@@ -105,11 +105,14 @@ function M.read(doc)
           fields[field] = value
         end
       end
+      -- a layout that is surer of one field than of another says so: confidence = { field = n }
+      local sure = type(fields.confidence) == "table" and fields.confidence or {}
+      fields.confidence = nil
       for field, value in pairs(fields) do
         if type(value) == "table" then value = table.concat(value, field == "authors" and " & " or ", ") end
         value = value ~= nil and trim(tostring(value)):gsub("%s+", " ") or ""
         if value ~= "" then
-          out[#out + 1] = { field = field, value = value, source = layout.name, confidence = layout.confidence or 0.8 }
+          out[#out + 1] = { field = field, value = value, source = layout.name, confidence = sure[field] or layout.confidence or 0.8 }
         end
       end
     end
@@ -649,7 +652,7 @@ M.add {
 local function copyright_year(text)
   -- the years after the sign: "1965, 1984", "1994–2023"
   local YEARS = "([%d,%s%-\226\128\147\148]+)"
-  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*©?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*©?%s*" .. YEARS,
+  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS,
     "%(c%)%s*" .. YEARS } do
     for run in text:gmatch(pattern) do
       local best
@@ -663,15 +666,83 @@ local function copyright_year(text)
   return nil
 end
 
+-- Whose copyright it is: on a book or a journal's article, the publisher.
+-- Houses are known by a word of their name and written one way (M.houses:
+-- { pattern, name }, the pattern matched against the holder in lower case);
+-- add to it for more.
+M.houses = {
+  { "springer", "Springer" }, { "birkh.-user", "Birkhäuser" }, { "elsevier", "Elsevier" }, { "north%-holland", "North-Holland" },
+  { "academic press", "Academic Press" }, { "cambridge university press", "Cambridge University Press" },
+  { "oxford university press", "Oxford University Press" }, { "princeton university press", "Princeton University Press" },
+  { "university of chicago", "University of Chicago Press" }, { "harvard university press", "Harvard University Press" },
+  { "yale university press", "Yale University Press" }, { "massachusetts institute of technology", "MIT Press" },
+  { "mit press", "MIT Press" }, { "american mathematical society", "American Mathematical Society" },
+  { "mathematical association of america", "Mathematical Association of America" },
+  { "society for industrial and applied", "SIAM" }, { "european mathematical society", "European Mathematical Society" },
+  { "london mathematical society", "London Mathematical Society" }, { "american physical society", "American Physical Society" },
+  { "institute of physics", "IOP Publishing" }, { "iop publishing", "IOP Publishing" }, { "ieee", "IEEE" },
+  { "association for computing machinery", "ACM" }, { "%f[%a]acm%f[%A]", "ACM" }, { "mcgraw%-hill", "McGraw-Hill" },
+  { "wiley", "Wiley" }, { "addison%-wesley", "Addison-Wesley" }, { "pearson", "Pearson" }, { "prentice", "Prentice Hall" },
+  { "crc press", "CRC Press" }, { "chapman", "Chapman & Hall" }, { "taylor & francis", "Taylor & Francis" },
+  { "routledge", "Routledge" }, { "de gruyter", "De Gruyter" }, { "kluwer", "Kluwer" }, { "world scientific", "World Scientific" },
+  { "dover publications", "Dover" }, { "o'reilly", "O'Reilly" }, { "no starch", "No Starch Press" }, { "manning", "Manning" },
+  { "apress", "Apress" }, { "packt", "Packt" }, { "nature publishing", "Nature Publishing Group" }, { "annual reviews", "Annual Reviews" },
+  { "hindawi", "Hindawi" }, { "john benjamins", "John Benjamins" }, { "sage publications", "SAGE" }, { "w%. ?h%. ?freeman", "W. H. Freeman" },
+  { "benjamin", "W. A. Benjamin" }, { "van nostrand", "Van Nostrand" }, { "hermann", "Hermann" }, { "interscience", "Interscience" },
+}
+
+-- what else a holder that is a publisher, not a person, is called
+local ORG = { "press", "publish", "verlag", "society", "university", "books", "media", "institute", "association", "& sons",
+  "company", "%f[%a]inc%f[%A]", "%f[%a]ltd%f[%A]", "%f[%a]llc%f[%A]", "gmbh", "éditions", "editions", "foundation", "académie", "academy" }
+
+-- (the sign is two bytes: "©?" in a pattern would ask for the first of them)
+local SIGNS = { "©%s*", "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*", "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*", "%(c%)%s*" }
+local YEARS = "[%d,%s%-\226\128\147\148]*%d%d%d%d"
+
+--- The holder a copyright line names, if it is a publisher: its name (as
+-- M.houses writes it, or as the line does), and whether the house is known.
+function M.copyright_holder(text)
+  for raw in text:gmatch("[^\n]+") do
+    local line = trim(raw)
+    if #line <= 140 then
+      for _, sign in ipairs(SIGNS) do
+        -- "© 2008 by Elsevier Inc. All rights reserved"  or  "© Springer-Verlag Berlin Heidelberg 1999"
+        local holder = line:match(sign .. YEARS .. "%s*,?%s*[Bb]?[Yy]?%s+(.+)$") or line:match(sign .. "(%u.-)%s*,?%s*" .. YEARS)
+        if holder then
+          holder = holder:gsub("^[Bb]y%s+", ""):gsub("^[Tt]he%s+", ""):gsub("%s*[.,]?%s*[Aa]ll [Rr]ights.*$", ""):gsub("%s*[.,]?%s*Printed in.*$", "")
+            :gsub(",%s*part of.*$", ""):gsub(",%s*corrected.*$", ""):gsub("[%s.,;:]+$", ""):gsub("%.?%s+All$", "")
+          local low = lulibre.lower(holder)
+          local org = false
+          for _, word in ipairs(ORG) do
+            if low:find(word) then org = true end
+          end
+          -- a house's name may be a person's too (Hermann, Benjamin, Wiley): a
+          -- holder who reads as a person is one
+          local person = not org and names.is_person(holder)
+          for _, house in ipairs(M.houses) do
+            if low:find(house[1]) and not person then return house[2], true end
+          end
+          if org and #holder >= 4 and #holder <= 60 and not low:find("author") and not low:find("owner") and not names.is_person(holder) then
+            return holder, false
+          end
+        end
+      end
+    end
+  end
+  return nil
+end
+
 M.add {
   name = "copyright line",
   find = function(doc)
     for i = 1, math.min(5, #(doc.texts or {})) do
-      if copyright_year(doc.texts[i]) then return doc.texts[i] end
+      if copyright_year(doc.texts[i]) or M.copyright_holder(doc.texts[i]) then return doc.texts[i] end
     end
   end,
   read = function(text)
-    return { pubdate = tostring(copyright_year(text)) }
+    local year = copyright_year(text)
+    local holder, known = M.copyright_holder(text)
+    return { pubdate = year and tostring(year) or nil, publisher = holder, confidence = { publisher = known and 0.8 or 0.65 } }
   end,
   confidence = 0.75,
 }
