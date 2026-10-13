@@ -180,7 +180,7 @@ The edit form and review can be opened for given books from a script:
 | `lulibre.settings.info(name)` | `{ name=, value=, default=, type=, choices=, help= }` |
 | `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library= }` |
 | `lulibre.theme.name = "#rrggbb"` | colours; `lulibre.theme()` lists them |
-| `lulibre.version` | `"0.1.0-beta.2"` |
+| `lulibre.version` | `"0.2.0-dev"` |
 | `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua= }` |
 
 The configuration directory is the option `config_dir`:

@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## 0.2.0 (in development, branch `0.2.0`)
+## 0.2.0 (in development: branch `0.2.0-dev`, merged into `main` as it goes)
 
 Added
 - Thesis and dissertation cover pages are read by rule (title above "by",
@@ -108,6 +108,20 @@ Added
 Changed
 - After duplicates or orphan records are removed, the message says plainly
   what was kept from them and where it went.
+
+## 0.1.0
+
+The first release: what 0.1.0-beta.2 was, with nothing changed but the
+version. A neovim-style interface to a calibre library for labelling and
+fixing metadata: an index of the first pages of every file, a filter
+language, an edit form with suggestions read from the files, proposals and
+their review, capture by pattern, duplicates by content, orphans, a sync
+folder, BibTeX in and out, OCR, undo, a Lua API. Changes reach calibre
+through `calibredb`, by the content server or directly.
+
+Tests
+- The smoke test stops its private tmux server however it ends: a failed
+  run used to leave its sessions, and the lulibre inside them, running.
 
 ## 0.1.0-beta.2
 
