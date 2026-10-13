@@ -25,6 +25,11 @@
  *                                       on_change(text) runs after each keystroke.
  *   lulibre.progress(text | nil)        a note in the status line while a
  *                                       script works
+ *   lulibre.status(name, text [, style])  a badge in the status line, beside
+ *                                       the mode, under a name of your own:
+ *                                       set again to change it, with nil to
+ *                                       take it away. style: accent (default)
+ *                                       ok warn error dim
  *   lulibre.jump(id)                    move the list cursor to a book; false if
  *                                       it is not in the list
  *   lulibre.show(text [, title])        scrollable overlay; text may be a
@@ -641,6 +646,19 @@ static int l_progress_ui(lua_State *L) {
 }
 ON_UI(l_progress)
 
+static int l_status_ui(lua_State *L) {
+  static const char *const styles[] = {"accent", "ok", "warn", "error", "dim", NULL};
+  struct app *app = lapi_app(L);
+  const char *name = luaL_checkstring(L, 1);
+  const char *text = lua_isnoneornil(L, 2) ? NULL : luaL_tolstring(L, 2, NULL);
+  int style = luaL_checkoption(L, 3, "accent", styles);
+  int color = style == 1 ? theme.ok : style == 2 ? theme.warn : style == 3 ? theme.error
+            : style == 4 ? theme.dim : theme.accent;
+  if (app->tui && app->tui->nc) tui_badge(app->tui, name, text, color);
+  return 0;
+}
+ON_UI(l_status)
+
 static int l_goto_ui(lua_State *L) {
   struct tui *t = need_tui(L);
   lua_Integer id = luaL_checkinteger(L, 1);
@@ -999,6 +1017,7 @@ void l_ui_open(lua_State *L) {
     {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
+    {"status", l_status},
     {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
     {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},

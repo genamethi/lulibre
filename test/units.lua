@@ -1569,5 +1569,60 @@ do
   eq("lulibre.maps lists bindings", found and found.modes, "n")
 end
 
+-- runs: one go of proposing, remembered while its proposals wait
+do
+  local runs = require "lulibre.runs"
+  local proposals = require "lulibre.proposals"
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local heard = {}
+  runs.on(function(event, run) heard[#heard + 1] = event .. ":" .. (run.step or "") end)
+  local id = lulibre.ids("")[1]
+  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.5 })
+  local run = runs.start { ids = { id }, steps = { "files", "records" } }
+  eq("a run going on is listed, and is the one review opens on", { #runs.list(), runs.running() == run, runs.fresh() == run }, { 1, true, true })
+  runs.step(run, "records")
+  eq("the badge says where it is", { runs.badge(run) }, { "⟳ PROPOSING  1 book: records, step 2 of 2", "warn" })
+  proposals.add(id, "series", "Run Made This", { source = "test", confidence = 0.7 })
+  runs.finish(run)
+  runs.finish(run, "failed")
+  eq("listeners hear it start, move on and end, once", heard, { "start:", "step:records", "finish:" })
+  eq("finished, it is kept while something waits for its books", { #runs.list(), runs.running(), runs.list()[1].label == run.label, runs.waiting(run) },
+    { 1, nil, true, 2 })
+  local mine, before = 0, 0
+  for _, pr in ipairs(proposals.list(nil)) do
+    if runs.own(runs.list()[1], pr) then mine = mine + 1 elseif runs.covers(runs.list()[1], pr) then before = before + 1 end
+  end
+  eq("what it made is told from what waited before", { mine, before }, { 1, 1 })
+  eq("not looked at yet, review opens on it; looked at, no more", { runs.fresh() ~= nil, (runs.seen(runs.list()[1])), runs.fresh() }, { true })
+  eq("dropping takes only what the run made", { runs.drop(runs.list()[1]), proposals.count("pending") }, { 1, 1 })
+  eq("and the run is forgotten", #runs.list(), 0)
+  -- a run nothing waits for any more goes by itself
+  local second = runs.start { ids = { id }, fields = { series = true } }
+  proposals.add(id, "series", "Another", { source = "test", confidence = 0.7 })
+  runs.finish(second)
+  eq("a run keeps to its fields", runs.waiting(second), 1)
+  lulibre.store("UPDATE proposals SET status = 'rejected' WHERE field = 'series'")
+  eq("decided, it is listed no longer", #runs.list(), 0)
+  -- joining: a script is a run of its own, or a step of the run its task is in
+  lulibre.store("DELETE FROM proposals")
+  local outer = runs.start { ids = { id } }
+  do
+    local inner <close> = runs.join { ids = { id } }
+    inner:step("files")
+    inner:done()
+    eq("inside a run of the same task a script joins it", { inner.mine, inner.run == outer }, { false, true })
+  end
+  eq("and leaves it going", runs.running() == outer, true)
+  runs.finish(outer, "cancelled")
+  do
+    local own <close> = runs.join { ids = { id }, steps = { "files" } }
+    own:step("files")
+    eq("with no run going on it starts one", { own.mine, runs.running() == own.run }, { true, true })
+  end
+  eq("which ends with the script, as stopped unless it said it was done", { runs.running(), #runs.list() }, { nil, 0 })
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

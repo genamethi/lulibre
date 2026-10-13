@@ -116,7 +116,7 @@ and pasted with `<C-v>`.
 |---|---|---|
 | `e` | `edit` | edit form for the selection |
 | `gc` | `capture` | fields from names by pattern |
-| `gr` | `review` | go through proposals |
+| `gr` | `review` | go through proposals: what was just proposed if you have not looked at it yet, else everything that waits (`l` `h` switch between the two in review) |
 | `gT` | `titlecase` | titles in CAPITALS to title case |
 | `gk` | `good` | the records by score, to confirm the right ones |
 | `u` | `undo` | `:undo N` for a given batch; `:history` lists them |
