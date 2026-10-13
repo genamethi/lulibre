@@ -244,7 +244,7 @@ function M.run(args)
       rank_books()
     elseif act == "field" then
       -- the next key says which field: a letter as in :propose --only, or f again for all
-      p:title(("show only: %s   (%s all)"):format("t title  a authors  s subject  i identifiers  d date  p publisher", key))
+      p:title(("show only: %s   (%s all)"):format("t title  a authors  s subject  i identifiers  d date  p publisher  e series", key))
       local second = p:wait()
       if not second then return end
       local propose = require "lulibre.propose"

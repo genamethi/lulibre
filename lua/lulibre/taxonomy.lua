@@ -94,6 +94,57 @@ M.msc = {
   ["90"] = "math/applied", ["91"] = "math/applied", ["94"] = "cs/information-theory",
 }
 
+-- Library of Congress classes, as the cataloguing block of a book gives
+-- them ("QA387.L35 1985"): a letter class and a number, here as ranges within
+-- a class, most particular first.
+local LCC = {
+  QA = { { 8, 10.9, "math/logic" }, { 75, 76.99, "cs" }, { 150, 162, "math/algebra" }, { 164, 167, "math/combinatorics" },
+    { 169, 169, "math/category-theory" }, { 171, 183, "math/algebra/group-theory" }, { 184, 240, "math/algebra" },
+    { 241, 247.9, "math/number-theory" }, { 248, 272, "math/algebra" }, { 273, 280, "math/probability" },
+    { 297, 299.4, "math/applied" }, { 299.6, 433, "math/analysis" }, { 440, 563, "math/geometry" },
+    { 564, 609, "math/algebraic-geometry" }, { 611, 614.99, "math/topology" }, { 615, 699, "math/geometry/differential" },
+    { 801, 939, "math/physics" }, { 1, 999, "math" } },
+  QC = { { 1, 999, "physics" } }, QB = { { 1, 999, "sciences/physical" } }, QD = { { 1, 999, "sciences/physical" } },
+  QP = { { 351, 495, "sciences/cognitive" }, { 1, 999, "sciences/bio" } }, QH = { { 1, 999, "sciences/bio" } },
+  Q = { { 300, 390, "cs" }, { 1, 999, "sciences/general" } },
+  BF = { { 1, 990, "sciences/cognitive" } }, BC = { { 1, 199, "math/logic" } },
+  B = { { 1, 5802, "philosophy" } }, BD = { { 1, 701, "philosophy" } },
+  P = { { 1, 1091, "linguistics" } }, PE = { { 1, 3729, "linguistics" } },
+  TK = { { 5100, 7895, "cs" } }, T = { { 55.4, 60.8, "math/applied" } },
+  HB = { { 1, 3840, "economics" } },
+}
+
+--- The subject a Library of Congress class number stands for
+-- ("QA247 .S47", "QA387.L35"), or nil.
+function M.from_lcc(class)
+  local letters, number = (class or ""):upper():match("^%s*(%u%u?)%s*(%d+%.?%d*)")
+  local ranges = letters and LCC[letters]
+  number = tonumber(number)
+  if not ranges or not number then return nil end
+  for _, r in ipairs(ranges) do
+    if number >= r[1] and number <= r[2] then return r[3] end
+  end
+  return nil
+end
+
+-- Dewey numbers, by their leading figures, longest first
+local DEWEY = { { "511.3", "math/logic" }, { "511.5", "math/combinatorics" }, { "511.6", "math/combinatorics" },
+  { "512.7", "math/number-theory" }, { "512.2", "math/algebra/group-theory" }, { "512", "math/algebra" },
+  { "514", "math/topology" }, { "515", "math/analysis" }, { "516.35", "math/algebraic-geometry" },
+  { "516.36", "math/geometry/differential" }, { "516", "math/geometry" }, { "519.2", "math/probability" },
+  { "519", "math/applied" }, { "51", "math" }, { "004", "cs" }, { "005", "cs" }, { "006", "cs" }, { "53", "physics" },
+  { "41", "linguistics" }, { "1", "philosophy" } }
+
+--- The subject a Dewey number stands for ("512'.55", "516.3/5"), or nil.
+function M.from_dewey(number)
+  local n = (number or ""):gsub("['/ ]", "")
+  if not n:match("^%d%d%d") then return nil end
+  for _, d in ipairs(DEWEY) do
+    if n:sub(1, #d[1]) == d[1] then return d[2] end
+  end
+  return nil
+end
+
 --- Tags that mean the same thing as another tag; used when normalising.
 M.alias = {
   ["math/geometry/algebraic"] = "math/algebraic-geometry",

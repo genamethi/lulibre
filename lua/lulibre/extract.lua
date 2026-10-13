@@ -60,6 +60,11 @@ function M.from_doc(doc)
     end
   end
 
+  -- pages laid out in a known way say their facts outright (layouts.lua)
+  if doc.texts then
+    for _, c in ipairs(require("lulibre.layouts").read(doc)) do add(c.field, c.value, c.source, c.confidence) end
+  end
+
   -- what the file says about itself
   if doc.title and not junk.title(doc.title) then add("title", doc.title, "embedded", 0.6) end
   if doc.author and not junk.author(doc.author) then
@@ -148,8 +153,10 @@ function M.candidates(id)
     if #lines == 0 and n > 1 then break end
     pages[#pages + 1] = lines
   end
+  local text, texts = lulibre.text(id), {}
+  for page in ((text or "") .. "\f"):gmatch("(.-)\f") do texts[#texts + 1] = page end
   return M.from_doc {
-    path = file.path, title = file.title, author = file.author, pages = pages, text = lulibre.text(id),
+    path = file.path, title = file.title, author = file.author, pages = pages, text = text, texts = texts,
   }
 end
 
