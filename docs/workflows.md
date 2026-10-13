@@ -519,6 +519,27 @@ stopped loses nothing, and `--offline` proposes again from what is kept
 without touching the network. ("No such record" is believed for thirty
 days, then asked again.)
 
+#### Is the record this book's?
+
+An identifier can be wrong: a DOI read off a reference list, a chapter's
+or a review's DOI, the ISBN of the whole volume a chapter is from. So a
+record is checked against the book before anything from it is proposed,
+whether the identifier was read from the file or the library holds it:
+
+| The record | |
+|---|---|
+| has the book's title, or its title stands word for word in the opening of the file, or is the book's title with a subtitle | is the book's |
+| is only like it (a title cut short, most of the words) | is the book's unless the authors differ: a review "..., by Sutton and Barto" is not the book |
+| has another title, but an author in common | is taken, without its title being pressed (0.5): another form of the title, or the volume this is part of |
+| has another title and no author in common | is left out; what it proposed before is withdrawn; and if the library holds the identifier, taking it off is proposed (0.6) |
+
+What was left out is listed in the log (`:messages`), and on the terminal
+by `lulibre enrich`. Even from a record that is the book's, a value that
+is plainly worse than the one the book has is offered at 0.6 or less,
+which means only into an empty field or when `--over` asks: a title with
+words left out ("Extending Python" for "Extending and Embedding Python"),
+authors with none of the book's names, or fewer of them.
+
 A search by title is the weakest of these, because a search always answers
 with something. The record is taken only when it is plainly the same work:
 
