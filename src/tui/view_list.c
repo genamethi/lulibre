@@ -58,7 +58,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   int wauth = clampi(r.w * 26 / 100, 8, 30);
   int wtitle = r.w - 2 - wauth - 1 - (wyear ? wyear + 1 : 0) - (wtags ? wtags + 1 : 0);
   if (wtitle < 4) wtitle = 4;
-  int xauth = r.x + 2, xtitle = xauth + wauth + 1, xyear = xtitle + wtitle + 1;
+  int xauth0 = r.x + 2, wauth0 = wauth, xauth = xauth0, xtitle = xauth + wauth + 1, xyear = xtitle + wtitle + 1;
   int xtags = xyear + (wyear ? wyear + 1 : 0);
 
   dr_bar(n, r, focused);
@@ -69,6 +69,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
 
   if (R->n == 0) {
     char nothing[160];
+    (void)xauth0;
     snprintf(nothing, sizeof nothing, "nothing is waiting in the sync folder (%s: the library)",
              key_hint("source library"));
     dr_style(n, theme.dim, C_DEFAULT, 0);
@@ -93,6 +94,31 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
            : (row >= va && row <= vb) ? theme.visual_bg : C_DEFAULT;
     dr_style(n, C_DEFAULT, bg, 0);
     if (bg != C_DEFAULT) dr_fill(n, y, r.x, r.w);
+
+    /* a heading of a grouped list: its name, how many books are under it */
+    const struct ghead *head = rows_head(t, row);
+    if (head) {
+      int x = r.x + 2 + 2 * head->depth;
+      char count[32];
+      int cw = snprintf(count, sizeof count, "%d", head->count);
+      int marked = 0;
+      for (int k = 0; k < head->nbooks; k++) marked += rows_marked(t, R->all[head->books[k]]);
+      if (marked) {
+        dr_style(n, theme.mark, bg, A_BOLD);
+        ncplane_putstr_yx(n, y, r.x, marked == head->nbooks ? "●" : "◐");
+      }
+      dr_style(n, theme.accent, bg, A_BOLD);
+      ncplane_putstr_yx(n, y, x, head->open ? "▾ " : "▸ ");
+      dr_style(n, head->last ? theme.dim : row == R->cur ? theme.title : C_DEFAULT, bg, A_BOLD);
+      dr_text(n, y, x + 2, r.x + r.w - (x + 2) - cw - 2, head->label);
+      dr_style(n, theme.dim, bg, 0);
+      dr_text(n, y, r.x + r.w - cw - 1, cw, count);
+      continue;
+    }
+    /* a book under a heading stands in from it; the columns give way */
+    int in = 2 * rows_depth(t, row);
+    if (in > wauth - 6) in = wauth > 6 ? wauth - 6 : 0;
+    int xauth = xauth0 + in, wauth = wauth0 - in;
 
     if (rows_marked(t, id)) {
       dr_style(n, theme.mark, bg, A_BOLD);

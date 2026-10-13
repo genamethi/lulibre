@@ -128,8 +128,13 @@ local function screen(module)
   return function(args) require(module).run(args) end
 end
 lulibre.command("edit", screen("lulibre.ui.edit"), "edit the selected books' fields, with suggestions")
-lulibre.command("review", screen("lulibre.ui.review"),
-  "[filter]  go through proposed changes and write the accepted ones; with a filter, only those books'")
+lulibre.command("review", function(args)
+  -- "selection": what is selected in the list (the books under a heading, the marked ones, the one under the cursor)
+  if args == "selection" then args = { ids = lulibre.selection() } end
+  require("lulibre.ui.review").run(args)
+end, "[filter | selection]  go through proposed changes and write the accepted ones; with a filter, only those books'")
+lulibre.command("beside", screen("lulibre.ui.beside"),
+  "the sync folder in a column beside the library: each waiting file next to the book that is the same, or that looks like it")
 lulibre.command("capture", screen("lulibre.ui.capture"),
   "[pattern]  pull fields out of file names or titles: %author% - %title%")
 

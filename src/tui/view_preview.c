@@ -37,6 +37,12 @@ struct pstate {
   long anchor_lo, anchor_hi; /* the character the drag began on */
   int selecting, clicks, click_y, click_x;
   double click_at;
+  /* selecting with the keys: a cursor in the text, and where a selection began */
+  int kb;             /* the cursor is out */
+  long caret, kanchor; /* bytes into text; kanchor -1 while nothing is being selected */
+  int kcol;           /* the column up and down try to keep */
+  uint32_t kpending;  /* the first key of a pair (gg) */
+  void *kfrom;        /* the window the focus came from, to give it back */
 
   int graphic;
   struct doc_image img;
@@ -93,6 +99,9 @@ static void load_page(struct pstate *ps) {
   free(ps->text);
   ps->text = NULL;
   ps->sel_lo = ps->sel_hi = 0; /* a selection belongs to the page it was made on */
+  ps->caret = 0;
+  ps->kanchor = -1;
+  ps->kcol = 0;
   ps->selecting = 0;
   ps->nwl = 0;
   ps->wrap_w = 0;
@@ -408,6 +417,16 @@ static void draw_image(struct pstate *ps, struct rect body, enum imode mode) {
 
 /* ---- drawing ---- */
 
+/* The wrapped line the keyboard cursor is on. */
+static int caret_line(const struct pstate *ps) {
+  int li = 0;
+  for (int i = 0; i < ps->nwl; i++) {
+    if (ps->wl[i].p - ps->text > ps->caret) break;
+    li = i;
+  }
+  return li;
+}
+
 static void *create(struct tui *t) {
   struct pstate *ps = xcalloc(1, sizeof *ps);
   ps->t = t;
@@ -582,6 +601,25 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     dr_style(n, C_DEFAULT, C_DEFAULT, 0);
     dr_textn(n, body.y + i, cx, w - (cx - x), l->p + s2, (size_t)l->len - s2);
   }
+  /* the cursor of keyboard selection: the character it is on, or a blank at a line's end */
+  if (ps->kb && ps->nwl > 0) {
+    int li = caret_line(ps);
+    if (li >= ps->scroll && li < ps->scroll + body.h) {
+      struct wline *l = &ps->wl[li];
+      long off = ps->caret - (l->p - ps->text);
+      if (off > l->len) off = l->len;
+      if (off < 0) off = 0;
+      int col = dr_width(l->p, (size_t)off);
+      if (col < w) {
+        unsigned cp;
+        int len = off < l->len ? utf8_decode(l->p + off, (size_t)(l->len - off), &cp) : 0;
+        dr_style(n, theme.bar_bg, focused ? theme.accent : theme.dim, A_BOLD);
+        if (len > 0) dr_textn(n, body.y + (li - ps->scroll), x + col, w - col, l->p + off, (size_t)len);
+        else dr_text(n, body.y + (li - ps->scroll), x + col, 1, " ");
+        dr_style(n, C_DEFAULT, C_DEFAULT, 0);
+      }
+    }
+  }
 }
 
 /* ---- selecting text with the mouse ---- */
@@ -695,6 +733,150 @@ const struct view_class view_preview = {"preview", create, destroy, draw, hide};
 static struct pstate *target(struct tui *t) {
   struct node *nd = wm_find(t, &view_preview);
   return nd ? nd->state : NULL;
+}
+
+/* ---- selecting text with the keys ---- */
+
+static void kb_show(struct pstate *ps) {
+  /* what is selected runs from where it began to the character under the cursor */
+  if (ps->kanchor >= 0) {
+    long lo = ps->kanchor < ps->caret ? ps->kanchor : ps->caret, hi = ps->kanchor < ps->caret ? ps->caret : ps->kanchor;
+    long len = (long)strlen(ps->text);
+    if (hi < len && ps->text[hi] != '\n') {
+      unsigned cp;
+      hi += utf8_decode(ps->text + hi, (size_t)(len - hi), &cp);
+    }
+    ps->sel_lo = lo;
+    ps->sel_hi = hi;
+  } else {
+    ps->sel_lo = ps->sel_hi = 0;
+  }
+  /* keep the cursor's line on the screen */
+  int li = caret_line(ps), h = ps->body.h > 0 ? ps->body.h : 1;
+  if (li < ps->scroll) ps->scroll = li;
+  if (li >= ps->scroll + h) ps->scroll = li - h + 1;
+}
+
+static void kb_leave(struct tui *t, struct pstate *ps) {
+  ps->kb = 0;
+  ps->kanchor = -1;
+  ps->sel_lo = ps->sel_hi = 0;
+  ps->kpending = 0;
+  /* the focus goes back to the window it came from, if that is still there */
+  struct node *back = ps->kfrom ? wm_leaf_of(t, ps->kfrom) : NULL;
+  if (back) t->focus = back;
+  ps->kfrom = NULL;
+  tui_dirty(t);
+}
+
+int preview_selecting(struct tui *t) {
+  struct pstate *ps = t->focus && t->focus->cls == &view_preview ? t->focus->state : NULL;
+  return ps && ps->kb && !ps->graphic && ps->text && ps->nwl > 0;
+}
+
+void preview_select(struct tui *t) {
+  struct node *nd = t->focus && t->focus->cls == &view_preview ? t->focus : wm_find(t, &view_preview);
+  struct pstate *ps = nd ? nd->state : NULL;
+  if (!ps) {
+    tui_msg(t, 1, "there is no preview to select in: %s opens one", key_hint("split v preview"));
+    return;
+  }
+  if (ps->graphic || !ps->text || ps->nwl == 0 || ps->body.h == 0) {
+    tui_msg(t, 1, "text is selected in the text of a page: %s shows it", key_hint("preview graphic"));
+    return;
+  }
+  if (nd != t->focus) {
+    ps->kfrom = t->focus ? t->focus->state : NULL;
+    t->focus = nd;
+  }
+  ps->kb = 1;
+  ps->kanchor = -1;
+  ps->kpending = 0;
+  /* the cursor comes out at the top of what is on the screen */
+  int li = ps->scroll < ps->nwl ? ps->scroll : ps->nwl - 1;
+  ps->caret = ps->wl[li].p - ps->text;
+  ps->kcol = 0;
+  kb_show(ps);
+  tui_msg(t, 0, "select: %s %s %s %s move, %s begins a selection, %s the line, %s copies, %s leaves", ctx_hint(KC_SELECT, SA_LEFT),
+          ctx_hint(KC_SELECT, SA_DOWN), ctx_hint(KC_SELECT, SA_UP), ctx_hint(KC_SELECT, SA_RIGHT), ctx_hint(KC_SELECT, SA_MARK),
+          ctx_hint(KC_SELECT, SA_LINE), ctx_hint(KC_SELECT, SA_COPY), ctx_hint(KC_SELECT, SA_LEAVE));
+}
+
+static int is_word(const char *s) {
+  unsigned char c = (unsigned char)*s;
+  return c >= 0x80 || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+int preview_select_key(struct tui *t, uint32_t key) {
+  struct pstate *ps = t->focus->state;
+  int action = ctx_feed(KC_SELECT, &ps->kpending, key);
+  if (action == CTX_PENDING) return 1;
+  if (!action) return 0;
+  const char *text = ps->text;
+  long len = (long)strlen(text);
+  int li = caret_line(ps);
+  struct wline *l = &ps->wl[li];
+  long a = l->p - text;
+  unsigned cp;
+  switch (action) {
+  case SA_LEFT:
+    if (ps->caret > 0) {
+      ps->caret--;
+      while (ps->caret > 0 && ((unsigned char)text[ps->caret] & 0xc0) == 0x80) ps->caret--;
+    }
+    break;
+  case SA_RIGHT:
+    if (ps->caret < len) ps->caret += utf8_decode(text + ps->caret, (size_t)(len - ps->caret), &cp);
+    break;
+  case SA_UP:
+  case SA_DOWN: {
+    int to = li + (action == SA_DOWN ? 1 : -1);
+    if (to < 0 || to >= ps->nwl) break;
+    struct wline *d = &ps->wl[to];
+    ps->caret = (d->p - text) + (long)dr_bytes_for_cols(d->p, (size_t)d->len, ps->kcol);
+    break;
+  }
+  case SA_WORD:
+    while (ps->caret < len && is_word(text + ps->caret)) ps->caret++;
+    while (ps->caret < len && !is_word(text + ps->caret)) ps->caret++;
+    break;
+  case SA_BACK:
+    while (ps->caret > 0 && !is_word(text + ps->caret - 1)) ps->caret--;
+    while (ps->caret > 0 && is_word(text + ps->caret - 1)) ps->caret--;
+    break;
+  case SA_START: ps->caret = a; break;
+  case SA_END: ps->caret = a + l->len; break;
+  case SA_TOP: ps->caret = 0; break;
+  case SA_BOTTOM: ps->caret = ps->wl[ps->nwl - 1].p - text; break;
+  case SA_MARK: ps->kanchor = ps->kanchor >= 0 ? -1 : ps->caret; break;
+  case SA_LINE:
+    ps->kanchor = a;
+    ps->caret = a + (l->len > 0 ? l->len - 1 : 0);
+    while (ps->caret > a && ((unsigned char)text[ps->caret] & 0xc0) == 0x80) ps->caret--;
+    break;
+  case SA_COPY:
+    if (ps->kanchor < 0) { /* nothing selected: the line */
+      ps->sel_lo = a;
+      ps->sel_hi = a + l->len;
+    } else {
+      kb_show(ps);
+    }
+    if (ps->sel_hi > ps->sel_lo) copy_selection(t, ps);
+    else tui_msg(t, 0, "nothing on this line to copy");
+    kb_leave(t, ps);
+    return 1;
+  case SA_LEAVE:
+    kb_leave(t, ps);
+    return 1;
+  }
+  if (action != SA_UP && action != SA_DOWN) {
+    struct wline *now = &ps->wl[caret_line(ps)];
+    long off = ps->caret - (now->p - text);
+    ps->kcol = dr_width(now->p, (size_t)(off < 0 ? 0 : off > now->len ? now->len : off));
+  }
+  kb_show(ps);
+  tui_dirty(t);
+  return 1;
 }
 
 void preview_scroll(struct tui *t, int delta) {

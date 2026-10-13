@@ -122,14 +122,16 @@ static void land_list(struct tui *t, struct lquery *lq) {
     lq->err = NULL;
     return;
   }
-  sqlite3_int64 keep = r->want_id ? r->want_id : rows_current(t);
-  free(r->ids);
-  r->ids = lq->ids;
-  r->n = lq->n;
+  free(r->all);
+  r->all = lq->ids;
+  r->nall = lq->n;
   lq->ids = NULL;
   r->took = lq->took;
+  sqlite3_int64 want = r->want_id;
+  rows_regroup(t); /* what is drawn: these books, under headings if the list is grouped */
   r->want_id = 0;
-  r->total = r->n;
+  if (want && rows_current(t) != want) rows_reveal(t, want); /* under a closed heading: bring it out */
+  r->total = r->nall;
   sqlite3_stmt *st;
   if (r->filter && r->filter[0] &&
       sqlite3_prepare_v2(t->app->db.h, r->source ? "SELECT count(*) FROM books WHERE id < 0"
@@ -138,9 +140,9 @@ static void land_list(struct tui *t, struct lquery *lq) {
     if (sqlite3_step(st) == SQLITE_ROW) r->total = sqlite3_column_int(st, 0);
     sqlite3_finalize(st);
   }
-  log_debug("list: %d %s for \"%s\" in %.1f ms", r->n, r->source ? "staged files" : "books",
+  log_debug("list: %d %s for \"%s\" in %.1f ms", r->nall, r->source ? "staged files" : "books",
             r->filter ? r->filter : "", r->took * 1000);
-  if (!keep || !rows_goto_id(t, keep)) clamp(t);
+  clamp(t);
   if (t->mode == MODE_VISUAL) {
     t->mode = MODE_NORMAL; /* the range no longer means what it did */
     r->anchor = -1;
@@ -155,7 +157,13 @@ static void land_search(struct tui *t, struct lquery *lq) {
   if (r->hits) memset(r->hits, 0, (size_t)(r->hits_cap >> 3));
   for (int i = 0; i < lq->n; i++) set_bit(&r->hits, &r->hits_cap, lq->ids[i]);
   r->nhits = 0;
-  for (int i = 0; i < r->n; i++) r->nhits += rows_hit(t, r->ids[i]);
+  for (int i = 0; i < r->nall; i++) r->nhits += rows_hit(t, r->all[i]);
+  if (r->head_of && r->nhits > 0 && r->nhits <= 200) {
+    /* a match under a closed heading would not be seen: open those that hold one */
+    for (int i = 0; i < r->nall; i++)
+      if (rows_hit(t, r->all[i]) && !rows_goto_id(t, r->all[i])) rows_reveal(t, r->all[i]);
+    if (r->search_origin >= r->n) r->search_origin = 0;
+  }
   if (r->search_origin >= 0) { /* still deciding where this search lands */
     int i = find_hit(t, r->search_origin, 1, NULL);
     r->cur = i >= 0 ? i : r->search_origin;
@@ -310,7 +318,10 @@ void rows_reload(struct tui *t) {
 
 sqlite3_int64 rows_current(const struct tui *t) {
   const struct rows *r = &t->rows;
-  return r->n > 0 && r->cur >= 0 && r->cur < r->n ? r->ids[r->cur] : 0;
+  if (r->n <= 0 || r->cur < 0 || r->cur >= r->n) return 0;
+  const struct ghead *h = rows_head(t, r->cur);
+  if (h) return h->nbooks > 0 ? r->all[h->books[0]] : 0; /* a heading: the first book under it */
+  return r->ids[r->cur];
 }
 
 void rows_move(struct tui *t, int to) {
@@ -387,10 +398,10 @@ void rows_mark_all(struct tui *t, int how) {
     if (r->marks) memset(r->marks, 0, (size_t)(r->marks_cap >> 3));
     r->nmarks = 0;
   } else {
-    for (int i = 0; i < r->n; i++) {
-      int on = how > 0 ? 1 : !rows_marked(t, r->ids[i]);
-      set_mark(r, r->ids[i], on);
-      persist(t, r->ids[i], on);
+    for (int i = 0; i < r->nall; i++) {
+      int on = how > 0 ? 1 : !rows_marked(t, r->all[i]);
+      set_mark(r, r->all[i], on);
+      persist(t, r->all[i], on);
     }
   }
   if (own_txn) sqlite3_exec(h, "COMMIT", NULL, NULL, NULL);
@@ -399,16 +410,28 @@ void rows_mark_all(struct tui *t, int how) {
 
 sqlite3_int64 *rows_selection(const struct tui *t, int *n) {
   const struct rows *r = &t->rows;
-  sqlite3_int64 *out = xmalloc(((size_t)r->n + 1) * sizeof *out);
+  sqlite3_int64 *out = xmalloc(((size_t)r->nall + (size_t)r->n + 1) * sizeof *out);
   *n = 0;
   if (t->mode == MODE_VISUAL && r->anchor >= 0) {
     int a = r->anchor < r->cur ? r->anchor : r->cur, b = r->anchor < r->cur ? r->cur : r->anchor;
-    for (int i = a; i <= b && i < r->n; i++) out[(*n)++] = r->ids[i];
+    for (int i = a; i <= b && i < r->n; i++) {
+      int dup = r->ids[i] == 0; /* a heading in the range is not a book; nor is a book taken twice */
+      for (int k = 0; k < *n && !dup; k++) dup = out[k] == r->ids[i];
+      if (!dup) out[(*n)++] = r->ids[i];
+    }
     return out;
   }
-  for (int i = 0; i < r->n; i++)
-    if (rows_marked(t, r->ids[i])) out[(*n)++] = r->ids[i];
-  if (*n == 0 && rows_current(t)) out[(*n)++] = rows_current(t);
+  /* the marked books the filter matched, shown or under a closed heading */
+  for (int i = 0; i < r->nall; i++)
+    if (rows_marked(t, r->all[i])) out[(*n)++] = r->all[i];
+  if (*n > 0) return out;
+  /* on a heading: every book under it */
+  const struct ghead *h = rows_head(t, r->cur);
+  if (h) {
+    for (int i = 0; i < h->nbooks; i++) out[(*n)++] = r->all[h->books[i]];
+    return out;
+  }
+  if (rows_current(t)) out[(*n)++] = rows_current(t);
   return out;
 }
 
@@ -419,6 +442,21 @@ void rows_init(struct tui *t) {
   r->search_origin = -1;
   r->filter = xstrdup("");
   sqlite3_stmt *st;
+  /* the grouping the list was last left in */
+  if (sqlite3_prepare_v2(t->app->db.h, "SELECT value FROM kv WHERE key = 'list:group'", -1, &st, NULL) == SQLITE_OK) {
+    if (sqlite3_step(st) == SQLITE_ROW) {
+      const char *v = (const char *)sqlite3_column_text(st, 0);
+      const char *sp = v ? strchr(v, ' ') : NULL;
+      char *by = v ? xstrndup(v, sp ? (size_t)(sp - v) : strlen(v)) : NULL;
+      for (int i = 0; by && rows_groupings[i]; i++)
+        if (!strcmp(rows_groupings[i], by)) {
+          r->group = xstrdup(by);
+          r->group_by_count = sp && !strcmp(sp + 1, "count");
+        }
+      free(by);
+    }
+    sqlite3_finalize(st);
+  }
   if (sqlite3_prepare_v2(t->app->db.h, "SELECT id FROM marks", -1, &st, NULL) == SQLITE_OK) {
     while (sqlite3_step(st) == SQLITE_ROW) set_mark(r, sqlite3_column_int64(st, 0), 1);
     sqlite3_finalize(st);
@@ -427,7 +465,12 @@ void rows_init(struct tui *t) {
 
 void rows_free(struct tui *t) {
   struct rows *r = &t->rows;
+  rows_group_free(r);
   free(r->ids);
+  free(r->all);
+  free(r->group);
+  for (int i = 0; i < r->nopened; i++) free(r->opened[i]);
+  free(r->opened);
   free(r->filter);
   free(r->error);
   free(r->marks);

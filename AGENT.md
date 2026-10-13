@@ -146,6 +146,12 @@ code.
 - `make check` always; `make e2e` before a merge that touches writing.
   A change to a form (edit, review, duplicates, orphans) gets a keystroke
   check in `test/forms.sh`.
+- In a test, Escape is sent alone and given a moment (`send-keys Escape`,
+  `sleep 0.2`): with a key right behind it the terminal reads Alt and that
+  key, and the program never sees an Escape.
+- A step added to a long tmux session inherits what the steps before it
+  left: a filter, a closed preview, a search. Put it where the state is the
+  one it needs, and leave the state as it found it.
 - A tmux session made with `-y 30` has 29 rows for the program (tmux keeps
   one for its status line): find a row by what is on it, never by number.
 - A message left on the message line by an earlier step satisfies a later

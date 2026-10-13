@@ -117,6 +117,19 @@ Added
   the line above "Series Editors"; a "Series:" label. Names set over two
   lines are joined, names in capitals put in title case. "Fourier Series"
   and its like are known for what they are (`layouts.not_series`).
+- The list as a tree. `gh` groups it by author, subject (subjects nest),
+  series, publisher, year, format, or the folders of the calibre library;
+  headings open and close (Enter, `l`/`h`, `za` `zo` `zc` `zR` `zM`, a
+  click), show their counts, and stand for their books: `Space` marks them,
+  `e` edits them, `r` reviews their proposals. `s` chooses the order of the
+  books. Enter on a book opens the edit form. `:group`, `:fold`.
+- `r` reviews the proposals of what is selected (`:review selection`).
+- Text in the preview can be selected with the keys: `v` puts a cursor
+  there, vim's movements move it, `v`/`V` select, `y` copies. A place of
+  its own for keys: `lulibre.map("select", key, action)`.
+- `gb`: the sync folder in a column beside the library, the list following
+  the file under the cursor to the book that is the same file or to those
+  that look like it; add, move, drop, edit and review from there.
 - `lulibre datasets`: databases for looking books up without asking
   anybody. It says what there is (arXiv's records, Open Library's editions
   and authors, zbMATH's links to arXiv), each with a line on whom it is for,

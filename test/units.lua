@@ -933,6 +933,15 @@ QA9.AIL64 1991
   eq("the surest date of a reprint is the edition's", { best.value, best.source }, { "1977", "series page" })
 end
 
+-- the sync folder beside the library: which books look like a waiting file
+do
+  local beside = require "lulibre.ui.beside"
+  eq("the three longest words of a title, in its order", { beside.likely("Selberg Zeta Functions and Transfer Operators"),
+    beside.likely("Notes on the Theory of Sieves"), beside.likely("Érdős–Kac: an introduction"), beside.likely("2104 07"), beside.likely(nil) },
+    { "functions transfer operators", "sieves", "erdos" })
+  eq("the keys of that screen are a table like the others'", require("lulibre.ui.keys").of("beside"):action("D"), "drop")
+end
+
 -- references: the bibliography at the end of a file
 do
   local refs = require "lulibre.refs"

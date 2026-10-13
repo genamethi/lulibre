@@ -81,6 +81,23 @@ static const struct action console_actions[] = {
   {"close", "q <Esc>", "close the console"},
 };
 
+static const struct action select_actions[] = {
+  {"left", "<Left> h", "a character left"},
+  {"right", "<Right> l", "a character right"},
+  {"up", "<Up> k", "up a line"},
+  {"down", "<Down> j", "down a line"},
+  {"word", "w", "the next word"},
+  {"back", "b", "the word before"},
+  {"start", "<Home> 0", "the start of the line"},
+  {"end", "<End> $", "the end of the line"},
+  {"top", "gg", "the top of the page"},
+  {"bottom", "G", "the end of the page"},
+  {"mark", "v", "begin selecting from here; again, let go of it"},
+  {"line", "V", "select the whole line"},
+  {"copy", "<CR> y", "copy what is selected (the line, when nothing is) and leave"},
+  {"leave", "q <Esc>", "leave without copying"},
+};
+
 static const struct {
   const char *name, *title;
   const struct action *actions;
@@ -91,6 +108,7 @@ static const struct {
   [KC_PICKER] = {"picker", "IN A PICKER (the line's editing keys work too)", picker_actions, (int)ARRAY_LEN(picker_actions)},
   [KC_PAGER] = {"pager", "IN AN OVERLAY SUCH AS THIS (any other key closes it)", pager_actions, (int)ARRAY_LEN(pager_actions)},
   [KC_CONSOLE] = {"console", "IN THE CONSOLE", console_actions, (int)ARRAY_LEN(console_actions)},
+  [KC_SELECT] = {"select", "SELECTING TEXT IN THE PREVIEW", select_actions, (int)ARRAY_LEN(select_actions)},
 };
 
 static struct cbind {
