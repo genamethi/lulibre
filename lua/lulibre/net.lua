@@ -506,6 +506,7 @@ local function scan_hypergraph(f, want, progress)
     -- a hypergraph has no first author: the names come in no order
     M.keep("arxiv", id, 200, json.encode { id = id, title = attrs.title, categories = classes, author_names = authors[id] or {}, unordered = true,
       abstract = type(attrs.abstract) == "string" and attrs.abstract or nil, update_date = attrs.date })
+    want[id] = nil
     found = found + 1
   end
   return found, n
@@ -518,14 +519,15 @@ local function file_time(path)
 end
 
 --- Where arXiv's records are looked for on this machine: the option
--- arxiv_snapshot, else a file named arxiv.json, arxiv-metadata-oai-snapshot.json
--- or arxiv.zip in lulibre's data folder (beside the index). nil when there
--- is none.
+-- arxiv_snapshot, else a file named arxiv-metadata-oai-snapshot.json,
+-- arxiv.json or arxiv.zip in lulibre's data folder (beside the index; a link
+-- to the file will do). nil when there is none.
 function M.arxiv_snapshot_path()
   local set = lulibre.o.arxiv_snapshot or ""
   if set ~= "" then return set end
   local dir = lulibre.settings.paths().data_dir
-  for _, name in ipairs { "arxiv.json", "arxiv-metadata-oai-snapshot.json", "arxiv.zip" } do
+  -- arXiv's own snapshot first: it says more than a hypergraph of it does
+  for _, name in ipairs { "arxiv-metadata-oai-snapshot.json", "arxiv.json", "arxiv.zip" } do
     local f = dir and io.open(dir .. "/" .. name, "r")
     if f then
       f:close()
@@ -549,19 +551,6 @@ end
 -- progress(text): called now and then with how far the reading is. Returns
 -- how many were found and how many papers were passed, or nil and why.
 function M.arxiv_snapshot(path, ids, progress)
-  local stamp = file_time(path)
-  local want, left = {}, 0
-  for _, raw in ipairs(ids) do
-    local id = M.arxiv_id(raw)
-    if id and not want[id] and not M.kept("arxiv", id) then
-      local missed = lulibre.sql("SELECT at FROM lookups WHERE service = 'arxiv-snapshot' AND key = ?", id)[1]
-      if not (missed and stamp > 0 and (missed.at or 0) >= stamp) then
-        want[id] = true
-        left = left + 1
-      end
-    end
-  end
-  if left == 0 then return 0, 0 end
   local zip = path:lower():match("%.zip$") ~= nil
   local function open()
     if zip then return io.popen("unzip -p '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null", "r") end
@@ -572,24 +561,44 @@ function M.arxiv_snapshot(path, ids, progress)
   local head = f:read(4096) or ""
   f:close()
   if head == "" then return nil, ("%s is empty"):format(path) end
+  local kind
+  if head:find('"network%-type"') or head:find('^%s*{%s*"metadata"') or head:find('"edges"%s*:%s*%[') then
+    kind = "hypergraph"
+  elseif head:find('^%s*{%s*"id"%s*:') or head:find('"authors_parsed"') or head:find('"versions"') then
+    kind = "lines"
+  else
+    return nil, ("%s is not a file of arXiv's records that lulibre knows how to read"):format(path)
+  end
+
+  local stamp = file_time(path)
+  local want, left = {}, 0
+  for _, raw in ipairs(ids) do
+    local id = M.arxiv_id(raw)
+    local kept = id and M.kept("arxiv", id)
+    -- A record that came from a hypergraph (no order of authors, no DOI, no
+    -- day) is looked for again in arXiv's own snapshot, which has them.
+    local poorer = kind == "lines" and type(kept) == "string" and kept:find('"unordered":true', 1, true) ~= nil
+    if id and not want[id] and (not kept or poorer) then
+      local missed = lulibre.sql("SELECT at FROM lookups WHERE service = 'arxiv-snapshot' AND key = ?", id)[1]
+      if not (missed and stamp > 0 and (missed.at or 0) >= stamp) then
+        want[id] = true
+        left = left + 1
+      end
+    end
+  end
+  if left == 0 then return 0, 0 end
   f = assert(open())
   local found, passed
-  if head:find('"network%-type"') or head:find('^%s*{%s*"metadata"') or head:find('"edges"%s*:%s*%[') then
+  if kind == "hypergraph" then
     found, passed = scan_hypergraph(f, want, progress)
-  elseif head:find('^%s*{%s*"id"%s*:') or head:find('"authors_parsed"') or head:find('"versions"') then
-    found, passed = scan_lines(f, want, left, progress)
   else
-    f:close()
-    return nil, ("%s is not a file of arXiv's records that lulibre knows how to read"):format(path)
+    found, passed = scan_lines(f, want, left, progress)
   end
   f:close()
   -- what the file does not hold is not looked for in it again
   for id in pairs(want) do
-    if M.kept("arxiv", id) then
-      lulibre.store("DELETE FROM lookups WHERE service = 'arxiv-snapshot' AND key = ?", id)
-    else
-      M.keep("arxiv-snapshot", id, 404)
-    end
+    -- (a record of the hypergraph's that this file did not better counts as not held, too)
+    M.keep("arxiv-snapshot", id, 404)
   end
   return found, passed
 end
