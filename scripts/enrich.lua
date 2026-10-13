@@ -91,6 +91,36 @@ if use.arxiv and snapshot then
   end
 end
 
+-- Open Library's dumps, if they are here, likewise: a book found in them by
+-- its ISBN costs no request
+local from_dump
+if use.openlibrary then
+  local isbns = {}
+  for _, b in ipairs(books) do
+    if b.known.isbn then isbns[#isbns + 1] = b.known.isbn end
+  end
+  if #isbns > 0 and require("lulibre.datasets").path("ol_dump_editions_latest.txt.gz") then
+    lulibre.progress(("looking for %d books in Open Library's dump (some minutes, once)"):format(#isbns))
+    local found, whole = net.openlibrary_dump(isbns)
+    if found then
+      from_dump = found
+      if whole == false then print("Open Library's dump is not whole (still being fetched?): what it holds so far was read") end
+    else
+      print(("Open Library's dump was not read: %s"):format(tostring(whole)))
+    end
+  end
+end
+
+-- zbMATH's table of links says which arXiv papers it has, and under what number
+local zb_numbers = {}
+if use.zbmath then
+  local numbers = {}
+  for _, b in ipairs(books) do
+    if b.known.arxiv then numbers[#numbers + 1] = b.known.arxiv end
+  end
+  if #numbers > 0 then zb_numbers = net.zbmath_links(numbers) end
+end
+
 -- --plan: what a run would ask, from what is known before anything is asked
 -- (a DOI that arXiv or an ISBN that CrossRef turns out to know adds to it)
 if plan then
@@ -119,6 +149,9 @@ if plan then
   local seconds = 0
   if from_snapshot then
     print(("%d paper%s read from arXiv's snapshot (%s)"):format(from_snapshot, from_snapshot == 1 and "" or "s", snapshot))
+  end
+  if from_dump then
+    print(("%d book%s read from Open Library's dump"):format(from_dump, from_dump == 1 and "" or "s"))
   end
   print(("%d book%s; nothing has been asked. A run now would ask:"):format(#books, #books == 1 and "" or "s"))
   for _, row in ipairs(rows) do
@@ -237,6 +270,11 @@ for n, b in ipairs(books) do
   if #records == 0 and by_title and use.crossref and b.book.title and #b.book.title >= 20 then
     ask("crossref", "title", net.crossref_search, b.book.title)
   end
+  -- the number zbMATH knows the paper by, from its table of links: no request, and not a record of its own
+  local zb = k.arxiv and not other.arxiv and zb_numbers[k.arxiv]
+  if zb then
+    records[#records + 1] = { service = "zbmath", authors = {}, subjects = {}, ids = { zbmath = zb }, source = "zbMATH's links to arXiv" }
+  end
 
   -- what the records say, as candidates, the surest first within a field
   if #records > 0 then
@@ -298,6 +336,9 @@ lulibre.progress(nil)
 local said = {}
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
   if by_service[name] then said[#said + 1] = ("%s %d"):format(name, by_service[name]) end
+end
+if from_dump and from_dump > 0 then
+  print(("%d book%s read from Open Library's dump, without asking Open Library"):format(from_dump, from_dump == 1 and "" or "s"))
 end
 if from_snapshot and from_snapshot > 0 then
   print(("%d paper%s read from arXiv's snapshot, without asking arXiv"):format(from_snapshot, from_snapshot == 1 and "" or "s"))

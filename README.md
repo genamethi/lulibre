@@ -25,7 +25,8 @@ At run time:
 | changing the library | calibre's `calibredb` |
 | the sync folder, orphans, onboarding | the `luv` rock: `luarocks install --local luv` |
 | OCR | `tesseract` |
-| arXiv / CrossRef lookups | `curl` |
+| looking books up (`:enrich`), fetching the databases below | `curl` |
+| arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
 
 `make help` lists every target; `./configure --help` every option.
 
@@ -47,6 +48,21 @@ o.password_file = "~/.config/calibre/password-file"
 ```
 
     lulibre index                 # first run: a few seconds per thousand files
+
+Optional, now or any time later: databases for looking books up without
+asking anybody.
+
+    lulibre datasets              # says what there is and asks which to fetch
+
+| Dataset | Useful if you have | Size |
+|---|---|---|
+| `arxiv` | arXiv preprints | 1.7 GB to fetch, 5.6 GB on disk |
+| `openlibrary` | books with an ISBN | 9.7 GB |
+| `zbmath` | arXiv preprints in mathematics | 37 MB |
+
+They go in `~/.local/share/lulibre`. Run it again to renew them: what is
+here and fresh is left alone. Files you fetched yourself are taken up with
+`lulibre datasets add FILE...`. More in [docs/workflows.md](docs/workflows.md).
 
 ## Use
 

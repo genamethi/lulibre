@@ -117,7 +117,17 @@ contains "a fetch that Kaggle refuses says why, and what to do" "put it in ~/.ka
 contains "arXiv's snapshot is fetched into the data folder" "arXiv's snapshot fetched" "$(run run arxiv-fetch --with "$t/fakekaggle" 2>&1)"
 expect   "where :enrich looks for it"  "$XDG_DATA_HOME/lulibre/arxiv-metadata-oai-snapshot.json" \
   "$(printf 'print(require("lulibre.net").arxiv_snapshot_path())\n' > "$t/sp.lua"; run run "$t/sp.lua" 2>&1)"
-contains "a fresh one is not fetched again"  "arXiv renews it about weekly" "$(run run arxiv-fetch --with "$t/nokaggle" 2>&1)"
+contains "a fresh one is not fetched again"  "nothing to fetch" "$(run run arxiv-fetch --with "$t/nokaggle" 2>&1)"
+
+# the databases for looking books up offline: what there is, and the question
+out=$(run datasets list 2>&1)
+contains "datasets says what there is"        "Useful if you have books with an ISBN" "$out"
+contains "and what is here already"           "arxiv        arXiv's records  [here:" "$out"
+contains "and what is not"                    "openlibrary  Open Library's editions and authors  [not here]" "$out"
+contains "asked which to fetch, nothing is"   "nothing fetched" "$(printf '\n' | run datasets 2>&1)"
+contains "an answer that is none of them"     "'9' is not one of them" "$(printf '9\n' | run datasets 2>&1)"
+contains "one that is here is left alone"     "nothing to fetch" "$(printf '1\n' | run datasets --with "$t/nokaggle" 2>&1)"
+contains "a name that is none"                "there is no dataset" "$(run datasets fetch nope 2>&1)"
 
 # a binary run from a source tree that has since become another version says so
 mkdir -p "$t/tree/build" "$t/tree/src"

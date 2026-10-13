@@ -184,6 +184,8 @@ lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page image
 lulibre.command("enrich", script("enrich"),
   "[--offline] [--titles] [filter]  look books up by their identifiers (arXiv, CrossRef, zbMATH, Open Library); proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
+lulibre.command("datasets", script("datasets"),
+  "[list | fetch NAME... | add FILE...]  databases for looking books up offline (arXiv, Open Library, zbMATH): pick one to fetch")
 lulibre.command("arxiv-fetch", script("arxiv-fetch"),
   "[--force]  fetch arXiv's snapshot of its records from Kaggle (through pixi), for :enrich to read instead of asking arXiv")
 lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")

@@ -361,11 +361,11 @@ days, then asked again.)
 lulibre is a guest of these services and asks as little as it can:
 
 - **One request at a time to a service, and a pause after each**: five
-  seconds for arXiv, three for zbMATH, two for Open Library, one for
-  CrossRef and OpenAlex. Each is well inside what the service allows callers
+  seconds for arXiv, two for zbMATH and Open Library, one for CrossRef and
+  OpenAlex. Each is well inside what the service allows callers
   who do not say who they are (arXiv: one every three seconds; Open
   Library: one a second; CrossRef: five a second, one at a time; OpenAlex:
-  ten a second). The time of the last request is kept in the index, so a
+  ten a second; zbMATH: "a reasonable rate"). The time of the last request is kept in the index, so a
   second lulibre, or the same command run again at once, keeps to the same
   pace.
 - **A slow answer is followed by a longer pause**: as long as the answer
@@ -391,45 +391,46 @@ lulibre is a guest of these services and asks as little as it can:
 `:enrich --plan` reads the identifiers and prints how many requests each
 service would get and about how long the run would take.
 
-### arXiv without asking arXiv
+### Databases kept here
 
-With a file of arXiv's records on this machine, `:enrich` reads a paper's
-record from the file and asks arXiv only about papers the file does not
-hold (those newer than it). Put the file in lulibre's data folder, beside
-the index, under one of the names it looks for:
+Some of what the services know can be had whole, and then nothing is asked
+of them:
 
-    ~/.local/share/lulibre/arxiv-metadata-oai-snapshot.json
-    ~/.local/share/lulibre/arxiv.json
-    ~/.local/share/lulibre/arxiv.zip
+    lulibre datasets                 says what there is, and asks which to fetch
+    lulibre datasets list            only says
+    lulibre datasets fetch NAME...   fetches these (or `all`); --force though they are fresh
+    lulibre datasets add FILE...     takes up files you fetched yourself (they are linked, not copied)
 
-(the first of them that is there; a link to the file will do) or say where
-it is: `lulibre.o.arxiv_snapshot = "/data/arxiv-metadata-oai-snapshot.json"`.
-Two kinds of file are read, told apart by how they begin:
+| Dataset | Useful if you have | What it is | Size | Renewed |
+|---|---|---|---|---|
+| `arxiv` | arXiv preprints | arXiv's own snapshot: title, authors, classes, DOI and the day of each version of every paper. From Kaggle (`Cornell-University/arxiv`), fetched with Kaggle's program run through [pixi](https://pixi.sh) (`pixi exec kaggle`: nothing is installed); Kaggle wants an account, and its token in `~/.kaggle/` | 1.7 GB to fetch, 5.6 GB on disk | weekly |
+| `openlibrary` | books with an ISBN | Open Library's monthly dumps of editions and authors: title, authors, publisher, year, series, shelf class | 9.7 GB | monthly |
+| `zbmath` | arXiv preprints in mathematics | zbMATH's table of links to full texts (Zenodo, doi:10.5281/zenodo.8021789): the zbMATH number of an arXiv paper. It has no titles and no subjects: those are still asked of zbMATH | 37 MB | of June 2023 |
 
-| File | Holds | Lacks |
-|---|---|---|
-| arXiv's own snapshot, [on Kaggle](https://www.kaggle.com/Cornell-University/arxiv) as `arxiv-metadata-oai-snapshot.json`: one paper to a line | title, authors in order, classes, DOI, the day of each version | |
-| a hypergraph of arXiv (papers as "edges", authors as "nodes", one JSON document over many lines) | title, authors, classes | the order of the authors, the DOI, the day of submission |
+In the interface, `:datasets` picks one to fetch and fetches it behind.
 
-arXiv's own snapshot is the one to have, and `:arxiv-fetch` fetches it:
+They are kept in lulibre's data folder (`~/.local/share/lulibre`), beside
+the index. A file there may be a link to one kept elsewhere, and fetching
+then renews the file it points to. A fetch that stops half way leaves what
+was there as it was, and running it again goes on from where it stopped.
+What is here and as new as its source is left alone, so the command can be
+run whenever.
 
-    :arxiv-fetch            if there is none here, or the one here is over a week old
-    :arxiv-fetch --force    whatever is here
+`:enrich` uses whatever is here before it asks anybody:
 
-It is the dataset `Cornell-University/arxiv` on Kaggle (1.7 GB to fetch,
-5.6 GB on disk, renewed about once a week), fetched with Kaggle's own
-program run through [pixi](https://pixi.sh) (`pixi exec kaggle`: nothing is
-installed), or with a `kaggle` on the PATH where there is no pixi. Kaggle
-wants an account, and its token in `~/.kaggle/`. The file lands in the data
-folder; where its name there is a link, the file the link points to is
-renewed. A fetch that stops half way leaves the file that was there as it
-was. A record that was read from a hypergraph is looked for again when
-the snapshot is there, and bettered from it.
+- **arXiv papers** are read from the snapshot (ten seconds for its three
+  million papers); arXiv is asked only about papers newer than the file.
+- **Books with an ISBN** are looked for in Open Library's dump (a few
+  minutes for its ten gigabytes, once: what the dump does not hold is not
+  looked for in it again until the file changes); Open Library is asked
+  only about the rest.
+- **An arXiv paper's zbMATH number** is proposed as an identifier
+  (`zbmath:5635019`).
 
-The file is read through once (ten seconds for the snapshot's three million
-papers, half a minute for a hypergraph), only for the papers wanted; each record found is kept like any other answer, and a
-paper the file does not hold is not looked for in it again until the file
-changes. A newer download replaces the old one; nothing else needs doing.
+A hypergraph of arXiv (papers as "edges", authors as "nodes"; one JSON
+document over many lines, named `arxiv.json` in the data folder) is read
+too, where there is no snapshot; it lacks the order of the authors, the DOI
+and the day of submission.
 
 From a hypergraph the authors come in no order, so they are put in the
 order the paper's own first page names them in; where the page does not

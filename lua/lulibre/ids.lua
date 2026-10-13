@@ -23,6 +23,29 @@ local function isbn10_ok(d)
   return sum % 11 == 0
 end
 
+--- An ISBN of ten figures as one of thirteen ("0387900403" is
+-- "9780387900407"), or nil if it is not one.
+function M.isbn13(isbn)
+  local d = tostring(isbn):gsub("[^%dXx]", ""):upper()
+  if #d == 13 then return isbn13_ok(d) and d or nil end
+  if #d ~= 10 or not isbn10_ok(d) then return nil end
+  local body, sum = "978" .. d:sub(1, 9), 0
+  for i = 1, 12 do sum = sum + (body:byte(i) - 48) * (i % 2 == 0 and 3 or 1) end
+  return body .. tostring((10 - sum % 10) % 10)
+end
+
+--- An ISBN of thirteen figures as one of ten, where there is one (those
+-- that begin 978), or nil.
+function M.isbn10(isbn)
+  local d = tostring(isbn):gsub("[^%dXx]", ""):upper()
+  if #d == 10 then return isbn10_ok(d) and d or nil end
+  if #d ~= 13 or d:sub(1, 3) ~= "978" or not isbn13_ok(d) then return nil end
+  local body, sum = d:sub(4, 12), 0
+  for i = 1, 9 do sum = sum + (body:byte(i) - 48) * (11 - i) end
+  local check = (11 - sum % 11) % 11
+  return body .. (check == 10 and "X" or tostring(check))
+end
+
 --- The first ISBN whose check digit is right. The Python version accepted
 -- any 13 digits starting 97, which let page ranges and phone numbers through.
 function M.isbn(text)
