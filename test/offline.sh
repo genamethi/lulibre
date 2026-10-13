@@ -105,6 +105,7 @@ expect   "the book is gone"               gone "$(field 2 title)"
 # and auto must find the server
 opts=
 echo secret > "$t/pw"
+chmod 600 "$t/pw" # as a password file should be: lulibre warns of one others can read
 calibre-server --userdb "$t/users.sqlite" --manage-users -- add tester secret >/dev/null 2>&1
 calibre-server --listen-on 127.0.0.1 --port 18099 --enable-auth --auth-mode basic \
   --userdb "$t/users.sqlite" "$lib" > "$t/server.log" 2>&1 &
@@ -124,6 +125,9 @@ if [ -z "${srv_failed:-}" ]; then
   expect   "auto finds the running server" server "$(lua 'print(require("lulibre.edit").route())')"
   contains "and writes through it"        "changed 1 book" "$(lua "$(printf "$change" 'Knots, Online')")"
   expect   "through the server"           "Knots, Online" "$(field 1 title)"
+  chmod 644 "$t/pw"
+  contains "a password file others can read is warned of" "can be read by other users" "$(lua "$(printf "$change" 'Knots, Again')")"
+  chmod 600 "$t/pw"
 fi
 
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -62,6 +62,7 @@ $cdb add "$t/src/old.pdf" --title "Commutative Algebra" --authors "The Authors" 
   --tags kept/tag >/dev/null 2>&1                                                                     # 6: will lose its file
 
 echo secret > "$t/pw"
+chmod 600 "$t/pw" # as a password file should be: lulibre warns of one others can read
 echo wrong > "$t/pw-wrong"
 calibre-server --userdb "$t/users.sqlite" --manage-users -- add tester secret >/dev/null 2>&1
 calibre-server --listen-on 127.0.0.1 --port 18099 --enable-auth --auth-mode basic \
