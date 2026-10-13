@@ -12,6 +12,9 @@
 --   zbMATH Open   by DOI or arXiv number: the subject, from the MSC codes it is classified under
 --   Open Library  by ISBN: title, authors, publisher, year, series, the subject its shelf class stands for
 --   OpenAlex      by DOI, when CrossRef has nothing
+-- With the option arxiv_snapshot set to arXiv's metadata snapshot (the file
+-- it publishes on Kaggle), papers are read from that file and arXiv is asked
+-- only about those newer than it.
 -- An identifier may be in calibre already or be found in the file. Every
 -- answer is kept, so each work is asked about once, and a run that is stopped
 -- loses nothing. Each service is asked one thing at a time and no faster
@@ -59,6 +62,26 @@ for n, id in ipairs(ids) do
   if n % 50 == 0 then lulibre.progress(("reading identifiers %d/%d"):format(n, #ids)) end
 end
 
+-- arXiv's own snapshot of its records, if there is one here, is read before
+-- arXiv is asked anything: what it holds costs no request
+local snapshot = lulibre.o.arxiv_snapshot or ""
+local from_snapshot
+if use.arxiv and snapshot ~= "" then
+  local numbers = {}
+  for _, b in ipairs(books) do
+    if b.known.arxiv then numbers[#numbers + 1] = b.known.arxiv end
+  end
+  lulibre.progress("reading arXiv's snapshot")
+  local found, lines = net.arxiv_snapshot(snapshot, numbers, function(n)
+    lulibre.progress(("reading arXiv's snapshot: %.1f million records"):format(n / 1e6))
+  end)
+  if found then
+    from_snapshot = found
+  else
+    print(("arXiv's snapshot was not read: %s"):format(lines))
+  end
+end
+
 -- --plan: what a run would ask, from what is known before anything is asked
 -- (a DOI that arXiv or an ISBN that CrossRef turns out to know adds to it)
 if plan then
@@ -85,6 +108,9 @@ if plan then
     { "openlibrary", isbns, math.ceil(isbns / net.OPENLIBRARY_BATCH) },
   }
   local seconds = 0
+  if from_snapshot then
+    print(("%d paper%s read from arXiv's snapshot (%s)"):format(from_snapshot, from_snapshot == 1 and "" or "s", snapshot))
+  end
   print(("%d book%s; nothing has been asked. A run now would ask:"):format(#books, #books == 1 and "" or "s"))
   for _, row in ipairs(rows) do
     local service, works, requests = row[1], row[2], row[3] or row[2]
@@ -212,6 +238,9 @@ lulibre.progress(nil)
 local said = {}
 for _, name in ipairs { "arxiv", "crossref", "zbmath", "openlibrary", "openalex" } do
   if by_service[name] then said[#said + 1] = ("%s %d"):format(name, by_service[name]) end
+end
+if from_snapshot and from_snapshot > 0 then
+  print(("%d paper%s read from arXiv's snapshot, without asking arXiv"):format(from_snapshot, from_snapshot == 1 and "" or "s"))
 end
 print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already kept; %d proposal%s%s; %s goes through them"):format(
   #books, #books == 1 and "" or "s", found, #said > 0 and table.concat(said, ", ") or "none",

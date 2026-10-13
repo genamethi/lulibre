@@ -218,7 +218,7 @@ its own documentation.
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
-| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
+| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `arxiv_snapshot(path, ids)` (read papers from arXiv's snapshot file instead), `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
 | `lulibre.json` | encode, decode |
 
 ## Example

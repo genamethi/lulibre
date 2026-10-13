@@ -1052,6 +1052,31 @@ do
   lulibre.store("INSERT INTO lookups(service, key, at, status) VALUES('arxiv', '0901.0002', ?, 404)", os.time() - 86400)
   eq("'no such record' is believed for a while, then asked again", { net.kept("arxiv", "0901.0001"), net.kept("arxiv", "0901.0002") }, { nil, false })
 
+  -- arXiv's snapshot: papers read from a file, nothing asked
+  fresh()
+  local snap = os.tmpname()
+  local sf = assert(io.open(snap, "w"))
+  sf:write([=[{"id":"0704.0001","submitter":"Pavel Nadolsky","authors":"C. Bal\\'azs, E. L. Berger, P. M. Nadolsky, C.-P. Yuan","title":"Calculation of prompt diphoton production cross sections at Tevatron and\n  LHC energies","comments":"37 pages","journal-ref":"Phys.Rev.D76:013009,2007","doi":"10.1103/PhysRevD.76.013009","report-no":"ANL-HEP-PR-07-12","categories":"hep-ph","license":null,"abstract":"  A fully differential calculation in perturbative quantum chromodynamics\n","versions":[{"version":"v1","created":"Mon, 2 Apr 2007 19:18:42 GMT"},{"version":"v2","created":"Tue, 24 Jul 2007 20:10:27 GMT"}],"update_date":"2008-11-26","authors_parsed":[["Balázs","C.",""],["Berger","E. L.",""],["Nadolsky","P. M.",""],["Yuan","C. -P.",""]]}]=], "\n")
+  sf:write([=[{"id":"0704.0002","authors":"Ileana Streinu and Louis Theran","title":"Sparsity-certifying Graph Decompositions","categories":"math.CO cs.CG","versions":[{"version":"v1","created":"Sat, 31 Mar 2007 02:26:18 GMT"}],"authors_parsed":[]}]=], "\n")
+  sf:write([=[{"id":"math/0601001","authors":"A. N. Other","title":"An Old Paper","categories":"math.AG","versions":[{"version":"v1","created":"Sun, 1 Jan 2006 10:00:00 GMT"}],"authors_parsed":[["Other","A. N.","Jr"]]}]=], "\n")
+  sf:close()
+  local found, lines = net.arxiv_snapshot(snap, { "0704.0001v2", "math.AG/0601001", "2501.00001", "0704.0002" })
+  eq("papers are read out of arXiv's snapshot", { found, lines, #calls }, { 3, 3, 0 })
+  net.offline = true
+  local s1, s2, s3 = net.arxiv("0704.0001"), net.arxiv("0704.0002"), net.arxiv("math/0601001")
+  eq("a record of the snapshot: title on one line, the first version's day, the class, the DOI",
+    { s1.title, s1.date, s1.class, s1.subjects[1] and s1.subjects[1].tag, s1.ids.doi, s1.source },
+    { "Calculation of prompt diphoton production cross sections at Tevatron and LHC energies", "2007-04-02", "hep-ph",
+      taxonomy.from_arxiv("hep-ph"), "10.1103/PhysRevD.76.013009", "arXiv 0704.0001" })
+  eq("authors given name first", { s1.authors, s2.authors, s3.authors },
+    { { "C. Balázs", "E. L. Berger", "P. M. Nadolsky", "C. -P. Yuan" }, { "Ileana Streinu", "Louis Theran" }, { "A. N. Other Jr" } })
+  eq("the first class is the paper's own", s2.class, "math.CO")
+  net.offline = false
+  eq("a paper newer than the file is left to be asked for", net.kept("arxiv", "2501.00001"), nil)
+  eq("a second reading has nothing left to look for but that", { net.arxiv_snapshot(snap, { "0704.0001", "0704.0002" }) }, { 0, 0 })
+  eq("a file that is not there says so", (select(2, net.arxiv_snapshot("/nonexistent/snapshot.json", { "0801.0001" }))):find("cannot read") ~= nil, true)
+  os.remove(snap)
+
   -- CrossRef and Open Library take many at a time too
   fresh()
   net.PACE.crossref, net.PACE.openlibrary = 0, 0

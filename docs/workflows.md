@@ -356,10 +356,23 @@ lulibre is a guest of these services and asks as little as it can:
   same hour, and a batch that fails is not broken up into single requests.
 
 `:enrich --plan` reads the identifiers and prints how many requests each
-service would get and about how long the run would take. To have all of
-arXiv's metadata without asking it anything, arXiv points to the
-[snapshot on Kaggle](https://www.kaggle.com/Cornell-University/arxiv);
-lulibre does not read that file yet.
+service would get and about how long the run would take.
+
+### arXiv without asking arXiv
+
+arXiv publishes all of its metadata as one file, the
+[snapshot on Kaggle](https://www.kaggle.com/Cornell-University/arxiv)
+(`arxiv-metadata-oai-snapshot.json`: every paper, one to a line, several
+gigabytes, renewed about once a week). Say where it is:
+
+```lua
+lulibre.o.arxiv_snapshot = "~/data/arxiv-metadata-oai-snapshot.json"   -- or the .zip as downloaded
+```
+
+and `:enrich` reads each paper's record from the file (once through it,
+some ten seconds) and keeps it like any other answer. arXiv is then asked
+only about papers the file does not hold, which are those newer than it.
+A newer download replaces the old one; nothing else needs doing.
 
 `contact_email`, if you set it, is sent with each request: CrossRef and
 OpenAlex give steadier service to callers they can reach. It is empty unless
