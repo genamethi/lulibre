@@ -64,6 +64,16 @@ function M.for_field(field, ids)
     end
   end
 
+  -- for a book with no author: who wrote the books that cite what it cites
+  if field == "authors" and #ids == 1 then
+    local book = lulibre.book(ids[1])
+    if book and edit.current(book, "authors") == "" then
+      for _, n in ipairs(require("lulibre.refs").neighbours(ids[1])) do
+        add(n.name, ("wrote book %d, which shares %d references"):format(n.book, n.shared), "related")
+      end
+    end
+  end
+
   -- what related books have, most common first
   if field == "authors" or field == "tags" or field == "publisher" or field == "series" then
     local counts, order = {}, {}

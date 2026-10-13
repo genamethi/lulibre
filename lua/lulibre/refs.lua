@@ -216,6 +216,35 @@ function M.subject(id)
   return best, math.min(0.75, 0.35 + 0.08 * books[best]) * (share >= 0.5 and 1 or 0.8), books[best]
 end
 
+--- How many entries of a book's bibliography have this person as their
+-- first author. People cite themselves: a name read off a title page that
+-- also heads several of the book's own references is less likely a
+-- misreading.
+function M.cites(id, name)
+  local surname = lulibre.fold((name or ""):match("([%a\128-\255'%-]+)%s*$") or ""):gsub("[^%a]", "")
+  if #surname < 3 then return 0 end
+  return lulibre.sql("SELECT count(*) AS n FROM refs WHERE book = ? AND key LIKE ?", id, surname .. ":%")[1].n
+end
+
+--- The authors of the books that share the most references with this one,
+-- for a book whose author is not known: { {name=, shared=, book=}, ... }.
+-- A hint, not a finding: who writes on the same things, not who wrote this.
+function M.neighbours(id, limit)
+  local out, seen = {}, {}
+  for _, c in ipairs(M.coupled(id, 12)) do
+    local other = c.shared >= 3 and lulibre.book(c.book)
+    for _, name in ipairs(other and other.authors or {}) do
+      local key = lulibre.fold(name)
+      if not seen[key] and name ~= "Unknown" then
+        seen[key] = true
+        out[#out + 1] = { name = name, shared = c.shared, book = c.book }
+        if #out == (limit or 5) then return out end
+      end
+    end
+  end
+  return out
+end
+
 --- The subject shared references point to, as a candidate, or nil.
 function M.candidate(id)
   if lulibre.o.subject_learned == "off" then return nil end
