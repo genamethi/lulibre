@@ -290,6 +290,42 @@ before catch-alls, however many books sit in the latter. The option
 `subject_catchall` names more of them than the built-in ones (`general`,
 `papers`, `books`, `handbook`, `misc`, `other`).
 
+## Looking books up: `:enrich`
+
+For books that have an identifier (in calibre already, or found in the
+file), `:enrich` asks what the record says and proposes it:
+
+| Service | Asked by | Gives |
+|---|---|---|
+| arXiv | arXiv number | title, authors, the day of submission, the subject its class stands for |
+| CrossRef | DOI | title, authors, year; publisher and ISBN of a book |
+| zbMATH Open | DOI or arXiv number | **the subject**, from the MSC codes each work is classified under by hand; the Zbl number |
+| Open Library | ISBN | title, authors, publisher, year, series; the subject from the class it is shelved under |
+| OpenAlex | DOI, when CrossRef has nothing | title, authors, date |
+
+None of them needs an account or a key; there is nothing to sign up for.
+
+    :enrich [filter]             the selection, or the books a filter matches
+    :enrich --offline [filter]   only from what was fetched before: nothing is asked
+    :enrich --titles [filter]    also search CrossRef by title for books with no identifier
+
+Every answer is kept in the index, "there is no such record" included, so a
+work is asked about once: a second run costs no requests, a run that was
+stopped loses nothing, and `--offline` proposes again from what is kept
+without touching the network. Each service is asked no faster than it
+wishes (arXiv: forty papers to a request, a request every three seconds), so
+a first run over many books takes a while and can be left to itself.
+
+`contact_email`, if you set it, is sent with each request: CrossRef and
+OpenAlex give steadier service to callers they can reach. It is empty unless
+you set it, and nothing else about you is sent. `enrich_services` says
+which services are asked.
+
+What the records say is proposed like anything else and decided in review.
+A title or author from a record is taken as surer than one read from a
+title page, so with `propose_over = "sure"` it is proposed over a value
+that differs.
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.

@@ -81,6 +81,25 @@ printf 'error("boom")\n' > "$t/bad.lua"
 run run "$t/bad.lua" >/dev/null 2>&1 && rc=0 || rc=$?
 expect   "failing script exits 1"         1 "$rc"
 
+# looking books up, from what was fetched before: nothing here touches the network
+cat > "$t/kept.lua" <<'LUA'
+local net = require "lulibre.net"
+net.keep("crossref", "10.1000/xyz", 200, [=[{"status":"ok","message":{"DOI":"10.1000/xyz","type":"book",
+  "title":["Notes on Additive Number Theory"],"author":[{"given":"Paul","family":"Erdős"}],"publisher":"Example Press",
+  "issued":{"date-parts":[[1996,5,1]]},"ISBN":["9780387900407"]}}]=])
+net.keep("zbmath", "doi:10.1000/xyz", 200, [=[{"result":[{"contributors":{"authors":[{"name":"Erdős, Paul"}]},
+  "identifier":"0001.00001","year":"1996","msc":[{"code":"11B13"}],"title":{"title":"Notes on additive number theory"}}]}]=])
+net.keep("openlibrary", "9780387900407", 404)
+LUA
+run run "$t/kept.lua" >/dev/null 2>&1
+out=$(run run enrich --offline id:2 2>&1)
+contains "enrich answers from what is kept"   "a record for 1 (crossref 1, zbmath 1); 0 requests made" "$out"
+contains "and proposes what the records say"  "proposals" "$out"
+expect   "the title, the publisher of a book, the Zbl number" \
+  "identifiers:zbl:0001.00001|publisher:Example Press|title:Notes on Additive Number Theory" \
+  "$(run query -f id id:2 >/dev/null 2>&1; printf 'for _, p in ipairs(lulibre.sql("SELECT field, value FROM proposals WHERE book = 2 AND status = \x27pending\x27 AND field IN (\x27title\x27, \x27publisher\x27) OR value LIKE \x27zbl:%%\x27 ORDER BY field")) do io.write(p.field, ":", p.value, "|") end\n' > "$t/p.lua"; run run "$t/p.lua" 2>&1 | sed 's/|$//')"
+contains "a book with no identifier is passed over" "a record for 0" "$(run run enrich --offline id:1 2>&1)"
+
 # a binary run from a source tree that has since become another version says so
 mkdir -p "$t/tree/build" "$t/tree/src"
 cp "$bin" "$t/tree/build/lulibre"

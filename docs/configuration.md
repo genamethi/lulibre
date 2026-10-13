@@ -30,6 +30,8 @@ o.library = "~/calibre-library"
 | `ocr_pages` `ocr_lang` | `3` `eng` | pages per file the OCR pass reads; tesseract language |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
+| `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
+| `contact_email` | | an address sent to those services with each request; nothing is sent while it is empty |
 | `refs_pages` | `14` | closing pages of a file read when looking for its bibliography |
 | `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a title of one word is a title (`check`: a plain capitalised word is) |
 | `good_titles` | | titles, separated by commas, that are titles whatever they look like |

@@ -36,7 +36,7 @@ must not count in a shared variable (`n = n + 1` can lose a count). Use
 | `lulibre.count(filter)` | number |
 | `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index |
-| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`, `refs`); returns rows, rows changed, last insert id |
+| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`, `refs`, `lookups`); returns rows, rows changed, last insert id |
 | `lulibre.reload()` | pick up changes calibre has made |
 | `lulibre.source([name])` | what the list shows, `"library"` or `"sync"`; sets it when given |
 
@@ -218,7 +218,7 @@ its own documentation.
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
-| `lulibre.net` | arXiv and CrossRef lookups |
+| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)`, `offline`, `kept(service, key)` |
 | `lulibre.json` | encode, decode |
 
 ## Example

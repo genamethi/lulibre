@@ -85,6 +85,13 @@ Added
   `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
 - In the edit form, subjects that say what a book is about come before
   catch-alls such as `math/general` (option `subject_catchall`).
+- `:enrich` asks five services, none of which needs an account: arXiv,
+  CrossRef, zbMATH Open (which gives a mathematics paper its subject from
+  the MSC codes), Open Library (books by ISBN, with the subject from the
+  shelf class) and OpenAlex. Every answer is kept, so a work is asked about
+  once and `--offline` proposes from what is kept; each service is asked at
+  its own pace, arXiv forty papers to a request. The options
+  `enrich_services` and `contact_email`.
 - `:refs` reads what each book cites from the bibliography on its last
   pages: the heading is found, the entries cut apart by numbering or hanging
   indent, and each given a key (DOI, arXiv number, or author, year and first
