@@ -299,6 +299,135 @@ M.add {
   confidence = 0.95,
 }
 
+-- ---- a series named in so many words ----
+--
+-- A book usually says which series it belongs to: a line that is the
+-- series' name ("Springer Undergraduate Mathematics Series", "IAS/Park City
+-- Mathematics Series, Volume 12"), a label ("Series: Lecture Notes in
+-- Physics"), or the line above "Series Editors". The word alone proves
+-- nothing ("Fourier Series", "a series of lectures given at ..."), so a line
+-- is taken for a series' name only when it is set like a name, is not a
+-- piece of mathematics (M.not_series), and something beside it bears it
+-- out: a volume number, the editors, an ISSN, or a publishing house's name.
+
+local function words(list)
+  local out = {}
+  for w in list:gmatch("%S+") do out[w] = true end
+  return out
+end
+
+-- what stands before "Series" when the series is a sum, not a set of books
+M.not_series = words [[fourier power dirichlet taylor laurent maclaurin random time eisenstein poincaré poincare hilbert
+  puiseux formal infinite trigonometric divergent convergent composition central derived hypergeometric asymptotic theta
+  farey singular geometric harmonic complementary discrete principal volterra neumann binomial orthogonal double multiple
+  lambert fibonacci numerical alternating telescoping generating zeta chief normal subnormal upper lower new second third
+  first fourth this the a each in of and]]
+
+-- houses and societies whose name opens the name of a series
+M.series_houses = words [[springer cambridge oxford princeton wiley mit chapman academic elsevier north-holland birkhäuser
+  birkhauser ams ias london gruyter world dover pearson mcgraw-hill addison-wesley prentice crc siam ems clay fields cbms nato
+  schaum's schaum university chicago harvard yale stanford american european society international carus pitman van
+  wadsworth brooks/cole benjamin interscience kluwer reidel plenum teubner vieweg hermann masson dunod]]
+
+local MINOR = words "in of the and on for to a an und der die das de des du et la le von zur für & - –"
+
+-- is the line set like a name: its words capitalised, but for the small ones
+local function titled(line)
+  local n = 0
+  for w in line:gmatch("%S+") do
+    n = n + 1
+    local bare = w:gsub("^[%p]+", ""):gsub("[%p]+$", "")
+    if bare ~= "" and not MINOR[lulibre.lower(bare)] and not bare:match("^[%u%d\128-\255]") then return false end
+  end
+  return n >= 2 and n <= 12
+end
+
+-- "Name, Volume 12" -> "Name", "12"
+local function with_number(line)
+  line = line:gsub("%s*ISSN%s*:?%s*[%dXx%-]+", ""):gsub("%s+$", "")
+  for _, pattern in ipairs { "^(.-)[,;:]?%s*[Vv][Oo][Ll]%a*%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]o%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]umber%s*(%d+)$",
+    "^(.-)%s*#%s*(%d+)$", "^(.-)[,;]?%s+(%d+)$" } do
+    local name, number = line:match(pattern)
+    if name and #name >= 6 and tonumber(number) < 3000 then return name:gsub("[,;:%s]+$", ""), number end
+  end
+  return line, nil
+end
+
+-- a line of a table of contents, a cataloguing entry, a sentence: not a name
+local function not_a_name(line)
+  return #line > 80 or line:find("^%d+[%.%d]*%s") or line:find("%.%s?%.%s?%.") or line:find("[Cc]hapter") or line:find("Title%.")
+    or line:find("[%.;:!?]$") or line:find("[Ee]ditor") or line:find("%(New Series%)") or line:find("^Source") or line:find("published")
+    or line:find("@") or line:find("http") or line:find("ISBN")
+end
+
+--- The series a page names, if it names one: its name, the volume's number
+-- (or nil), and what bears it out.
+function M.series_line(text)
+  local lines = {}
+  for raw in (text .. "\n"):gmatch("(.-)\n") do
+    local line = trim(raw):gsub("%s+", " ")
+    if line ~= "" then lines[#lines + 1] = line end
+  end
+  -- a number on the line below: "Volume 12"
+  local function below(i)
+    for k = i + 1, math.min(i + 2, #lines) do
+      local n = lines[k]:match("^[Vv][Oo][Ll]%a*%.?%s*(%d+)$") or lines[k]:match("^[Nn]umber%s*(%d+)$") or lines[k]:match("^[Nn]o%.%s*(%d+)$")
+      if n then return n end
+    end
+  end
+  local function near(i, pattern)
+    for k = math.max(1, i - 3), math.min(#lines, i + 3) do
+      if k ~= i and lines[k]:find(pattern) then return true end
+    end
+  end
+  for i, line in ipairs(lines) do
+    -- a label says it outright
+    local labelled = line:match("^Series%s*:%s*(.+)$") or line:match("^Series%s+[Tt]itle%s*:%s*(.+)$")
+    if labelled and not labelled:find("[Ee]ditor") then
+      local name, number = with_number(labelled)
+      if titled(name) then return name, number or below(i), "labelled" end
+    end
+    -- the line above the editors of the series
+    if line:find("^Series%s+[Ee]ditors?") or line:find("^SERIES%s+EDITORS?") or line:find("^Founding%s+[Ee]ditors?") then
+      for k = i - 1, math.max(1, i - 2), -1 do
+        local name, number = with_number(lines[k])
+        if not not_a_name(lines[k]) and titled(name) and not names.is_person(name) then
+          return name, number or below(k), "above the series' editors"
+        end
+      end
+    end
+    -- a line that is the name of one
+    if (line:find("%f[%a]Series%f[%A]") or line:find("%f[%a]SERIES%f[%A]")) and not not_a_name(line) then
+      local name, number = with_number(line)
+      local before = lulibre.lower(name:match("(%S+)%s+[Ss][Ee][Rr][Ii][Ee][Ss]%f[%A]") or "the")
+      local after = name:match("[Ss][Ee][Rr][Ii][Ee][Ss]%s+(%S+)")
+      before = before:gsub("^%p+", ""):gsub("%p+$", "")
+      if titled(name) and not M.not_series[before] and after ~= "of" and not name:find("^Series") then
+        number = number or below(i)
+        local house = M.series_houses[lulibre.lower(name:match("^[%a\128-\255/%-']+") or "")]
+        local why = number and "with its volume" or near(i, "[Ee]ditor") and "beside its editors" or near(i, "ISSN") and "beside its ISSN"
+          or house and "a house's series"
+        if why then return name, number, why end
+      end
+    end
+  end
+  return nil
+end
+
+M.add {
+  name = "series line",
+  find = function(doc)
+    for i = 1, math.min(6, #(doc.texts or {})) do
+      if M.series_line(doc.texts[i]) then return doc.texts[i] end
+    end
+  end,
+  read = function(text)
+    local name, number = M.series_line(text)
+    return { series = name, series_index = number }
+  end,
+  confidence = 0.75,
+}
+
 -- ---- dates ----
 
 local MONTHS = {
