@@ -129,22 +129,36 @@ local function person(entry)
   return names.clean(name) and name or nil
 end
 
--- series that are known by one spelling
-local KNOWN_SERIES = { "Graduate Texts in Mathematics", "Undergraduate Texts in Mathematics", "Lecture Notes in Mathematics",
-  "Lecture Notes in Computer Science", "Lecture Notes in Physics", "Universitext", "Springer Monographs in Mathematics",
-  "Grundlehren der mathematischen Wissenschaften", "Ergebnisse der Mathematik und ihrer Grenzgebiete",
-  "Springer Undergraduate Mathematics Series", "Progress in Mathematics", "Applied Mathematical Sciences",
-  "Texts in Applied Mathematics", "Graduate Texts in Physics", "Springer Series in Statistics",
-  "Cambridge Studies in Advanced Mathematics", "London Mathematical Society Lecture Note Series",
-  "Graduate Studies in Mathematics", "Mathematical Surveys and Monographs", "Annals of Mathematics Studies",
-  "Pure and Applied Mathematics", "Mathematical Sciences Research Institute Publications" }
+-- Series known by one spelling, and who publishes each (nil where more than
+-- one house has a series of the name).
+local AMS, CUP, PUP = "American Mathematical Society", "Cambridge University Press", "Princeton University Press"
+M.series = {
+  { "Graduate Texts in Mathematics", "Springer" }, { "Undergraduate Texts in Mathematics", "Springer" },
+  { "Lecture Notes in Mathematics", "Springer" }, { "Lecture Notes in Computer Science", "Springer" },
+  { "Lecture Notes in Physics", "Springer" }, { "Universitext", "Springer" },
+  { "Springer Monographs in Mathematics", "Springer" }, { "Grundlehren der mathematischen Wissenschaften", "Springer" },
+  { "Ergebnisse der Mathematik und ihrer Grenzgebiete", "Springer" },
+  { "Springer Undergraduate Mathematics Series", "Springer" }, { "Applied Mathematical Sciences", "Springer" },
+  { "Texts in Applied Mathematics", "Springer" }, { "Graduate Texts in Physics", "Springer" },
+  { "Springer Series in Statistics", "Springer" }, { "Progress in Mathematics", "Birkhäuser" },
+  { "Graduate Studies in Mathematics", AMS }, { "Mathematical Surveys and Monographs", AMS },
+  { "Memoirs of the American Mathematical Society", AMS }, { "Contemporary Mathematics", AMS },
+  { "Student Mathematical Library", AMS }, { "University Lecture Series", AMS },
+  { "Proceedings of Symposia in Pure Mathematics", AMS }, { "Translations of Mathematical Monographs", AMS },
+  { "Cambridge Studies in Advanced Mathematics", CUP }, { "London Mathematical Society Lecture Note Series", CUP },
+  { "London Mathematical Society Student Texts", CUP }, { "Cambridge Tracts in Mathematics", CUP },
+  { "Annals of Mathematics Studies", PUP }, { "Princeton Mathematical Series", PUP },
+  { "Oxford Graduate Texts in Mathematics", "Oxford University Press" },
+  { "North-Holland Mathematical Library", "North-Holland" }, { "Pure and Applied Mathematics" },
+  { "Mathematical Sciences Research Institute Publications" },
+}
 
 --- A series' name as the series writes it: a known one by its usual
 -- spelling, any other in title case.
 function M.series_name(s)
   local low = s:lower()
-  for _, known in ipairs(KNOWN_SERIES) do
-    if known:lower() == low then return known end
+  for _, known in ipairs(M.series) do
+    if known[1]:lower() == low then return known[1] end
   end
   return require("lulibre.titlecase").apply(s)
 end
@@ -234,40 +248,37 @@ M.add {
   confidence = 0.9,
 }
 
--- A Springer book's series page: the series' name with the volume's number
--- under or after it, and the year in the copyright line.
-local SPRINGER_SERIES = { "Graduate Texts in Mathematics", "Undergraduate Texts in Mathematics", "Lecture Notes in Mathematics",
-  "Lecture Notes in Computer Science", "Lecture Notes in Physics", "Universitext", "Springer Monographs in Mathematics",
-  "Grundlehren der mathematischen Wissenschaften", "Ergebnisse der Mathematik und ihrer Grenzgebiete",
-  "Springer Undergraduate Mathematics Series", "Progress in Mathematics", "Applied Mathematical Sciences",
-  "Texts in Applied Mathematics", "Graduate Texts in Physics", "Springer Series in Statistics" }
-
+-- A book's series page or title-page verso: the series' name with the
+-- volume's number after it, and the year in the copyright line. Any series
+-- in M.series is known (add to it for more: { name, publisher }).
 M.add {
-  name = "Springer series page",
+  name = "series page",
   find = function(doc)
     for _, text in ipairs(doc.texts or {}) do
       local low = text:lower()
-      if low:find("springer") or low:find("birkh") then
-        for _, s in ipairs(SPRINGER_SERIES) do
-          if low:find(s:lower(), 1, true) then return text end
-        end
+      for _, s in ipairs(M.series) do
+        if low:find(s[1]:lower(), 1, true) then return text end
       end
     end
   end,
   read = function(text)
-    local out, low = { publisher = "Springer" }, text:lower()
+    local out, low = {}, text:lower()
     -- the series the page is headed with: the one named first on it (others
     -- may be advertised further down)
     local first
-    for _, s in ipairs(SPRINGER_SERIES) do
-      local a, b = low:find(s:lower(), 1, true)
+    for _, s in ipairs(M.series) do
+      local a, b = low:find(s[1]:lower(), 1, true)
       if a and (not first or a < first) then
         first = a
-        out.series = s
-        out.series_index = text:sub(b + 1, b + 40):match("^[%s,]*[Vv]?o?l?u?m?e?%.?%s*(%d+)%f[%D]")
+        out.series, out.publisher = s[1], s[2]
+        local after = text:sub(b + 1, b + 48)
+        out.series_index = after:match("^[%s,;:]*[Vv]ol%a*%.?%s*(%d+)%f[%D]") or after:match("^[%s,;:]*[Nn]umber%s*(%d+)%f[%D]")
+          or after:match("^[%s,;:]*[Nn]o%.%s*(%d+)%f[%D]") or after:match("^[%s,;:]*(%d+)%f[%D]")
       end
     end
-    out.pubdate = text:match("©%s*(%d%d%d%d)") or text:match("[Cc]opyright%s*%(?[cC]?%)?%s*(%d%d%d%d)")
+    -- the year of the edition in hand: a reprint names the edition it reprints
+    out.pubdate = text:match("[Rr]eprint of the %a+ %d*%a* ?edition (%d%d%d%d)") or text:match("©%s*(%d%d%d%d)")
+      or text:match("[Cc]opyright%s*%(?[cC]?%)?%s*(%d%d%d%d)")
     return out
   end,
   confidence = 0.85,

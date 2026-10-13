@@ -204,7 +204,7 @@ are, with more confidence:
 | Layout | Read from it |
 |---|---|
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
-| Springer series page | the series and the volume's number, the year, the publisher |
+| series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | arXiv stamp | the day of submission |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
@@ -226,7 +226,9 @@ require("lulibre.layouts").add {
 ```
 
 `marks` are Lua patterns matched without regard to case; the page they are
-all found on is the text the fields are read from. `:run candidates` shows
+all found on is the text the fields are read from. A series the series-page
+layout does not know is one line:
+`table.insert(require("lulibre.layouts").series, { "Astérisque", "Société Mathématique de France" })`. `:run candidates` shows
 what every layout reads from the book under the cursor, which is the way to
 try one out. This is a first pass: three layouts come with lulibre, and
 books from one publisher and era are where more of them will pay.
@@ -349,6 +351,14 @@ that share references with it ("shares references with 3 books of that
 subject"), when at least two books each share at least two works with it.
 A work that half the library cites counts for little, one that two books
 cite for much. `lulibre.refs` gives scripts the lists and the coupling.
+
+References also say something of who wrote a book. People cite
+themselves, so a name read off a title page that also heads several
+entries of the book's own bibliography is proposed with more confidence
+("cited 4 times in its references"). And for a book with no author at all
+the edit form lists, among its suggestions, who wrote the books that share
+the most references with it: who writes on the same things, which is a
+place to look and not an answer.
 
 Finding the heading needs no more than the text: it is a short line that is
 one of a few words and nothing else. Type size and position are there for

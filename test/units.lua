@@ -784,6 +784,18 @@ QA9.AIL64 1991
     { publisher = "TS 0.7", series = "Memoirs of the Test Society 0.7", series_index = "412 0.7" })
   eq("it does not apply where its marks are not all on a page", #layouts.read { texts = { "memoirs of the", "test society" } }, 0)
   layouts.remove("test memoirs")
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "Algebraic Curves and Riemann Surfaces\nRick Miranda\nGraduate Studies in Mathematics\nVolume 5\nAmerican Mathematical Society\n© 1995 by the American Mathematical Society" } }) do
+    if c.source == "series page" then got[c.field] = c.value end
+  end
+  eq("a series page: the series, the volume, the house, the year",
+    got, { publisher = "American Mathematical Society", pubdate = "1995", series = "Graduate Studies in Mathematics", series_index = "5" })
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer\nalso available: Undergraduate Texts in Mathematics" } }) do
+    if c.source == "series page" then got[c.field] = c.value end
+  end
+  eq("the series named first on the page, and a reprint's own year",
+    { got.series, got.series_index, got.pubdate, got.publisher }, { "Graduate Texts in Mathematics", "52", "1977", "Springer" })
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 end
@@ -825,6 +837,11 @@ do
   eq("the books that cite what a book cites", { #c, c[1].book, c[1].shared }, { 1, 2, 2 })
   eq("one such book is not enough to name a subject", refs.subject(1), nil)
   eq("what a book cites", #refs.of(2), 3)
+  eq("how often a book's references are headed by a name", { refs.cites(2, "Jean-Pierre Serre"), refs.cites(2, "A. Wiles"), refs.cites(2, "N. Obody") },
+    { 1, 1, 0 })
+  lulibre.store("INSERT OR IGNORE INTO refs(book, key, raw) VALUES(1, 'lang:2002', '')")
+  local near = refs.neighbours(1)
+  eq("who wrote the books that share its references", { #near, near[1] and near[1].name, near[1] and near[1].shared }, { 1, "Paul Erdős", 3 })
   lulibre.store("DELETE FROM refs")
 end
 

@@ -54,6 +54,14 @@ function M.from_doc(doc)
       if #people > 0 and twice and source ~= "embedded" and source ~= "cover sheet" then
         source, confidence = source .. ", named twice", math.min(0.9, confidence + 0.15)
       end
+      -- and one who heads entries of the book's own bibliography (people
+      -- cite themselves), where the bibliography has been read (:refs)
+      if #people > 0 and doc.id and (source:find("title page", 1, true) or source:find("first line", 1, true)) then
+        local ok, n = pcall(function() return require("lulibre.refs").cites(doc.id, people[1]) end)
+        if ok and n >= 2 then
+          source, confidence = ("%s, cited %d times in its references"):format(source, n), math.min(0.9, confidence + 0.1)
+        end
+      end
     end
     if value and value ~= "" then
       out[#out + 1] = { field = field, value = value, source = source, confidence = confidence }
@@ -156,7 +164,7 @@ function M.candidates(id)
   local text, texts = lulibre.text(id), {}
   for page in ((text or "") .. "\f"):gmatch("(.-)\f") do texts[#texts + 1] = page end
   return M.from_doc {
-    path = file.path, title = file.title, author = file.author, pages = pages, text = text, texts = texts,
+    id = id, path = file.path, title = file.title, author = file.author, pages = pages, text = text, texts = texts,
   }
 end
 
