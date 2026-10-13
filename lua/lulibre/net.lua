@@ -30,6 +30,7 @@
 -- The option contact_email, when set, is sent with each request (in the
 -- User-Agent, and as CrossRef's and OpenAlex's `mailto`): they give steadier
 -- service to callers they can reach. It is empty unless you set it.
+local detex = require "lulibre.detex"
 local json = require "lulibre.json"
 local taxonomy = require "lulibre.taxonomy"
 
@@ -267,11 +268,13 @@ local function arxiv_record(entry)
   local title = entry:match("<title[^>]*>(.-)</title>")
   if not title or trim(title) == "Error" then return nil end
   local authors = {}
-  for name in entry:gmatch("<name>(.-)</name>") do authors[#authors + 1] = unescape(trim(name)) end
+  for name in entry:gmatch("<name>(.-)</name>") do authors[#authors + 1] = detex.plain(unescape(trim(name))) end
   local class = entry:match('primary_category[^>]-term="([^"]+)"')
   local date = entry:match("<published>(%d%d%d%d%-%d%d%-%d%d)")
+  -- titles are held as their authors typed them, TeX and all
+  local plain, clean = detex.plain(unescape(trim(title):gsub("%s+", " ")))
   local rec = {
-    title = unescape(trim(title):gsub("%s+", " ")), authors = authors, class = class,
+    title = plain, title_tex = not clean or nil, authors = authors, class = class,
     year = tonumber(date and date:sub(1, 4)), date = date, subjects = {}, ids = {}, type = "preprint",
     summary = unescape(trim(entry:match("<summary[^>]*>(.-)</summary>") or ""):gsub("%s+", " ")),
   }
@@ -291,7 +294,10 @@ local function snapshot_record(line)
   local ok, j = pcall(json.decode, line)
   if not ok or type(j) ~= "table" or type(j.title) ~= "string" then return nil end
   local authors = {}
-  for _, a in ipairs(type(j.authors_parsed) == "table" and j.authors_parsed or {}) do
+  for _, name in ipairs(type(j.author_names) == "table" and j.author_names or {}) do
+    if type(name) == "string" and trim(name) ~= "" then authors[#authors + 1] = trim(name) end
+  end
+  for _, a in ipairs(#authors == 0 and type(j.authors_parsed) == "table" and j.authors_parsed or {}) do
     if type(a) == "table" and type(a[1]) == "string" then
       -- { family, given, suffix }
       local name = trim(((type(a[2]) == "string" and a[2] or "") .. " " .. a[1] .. " " .. (type(a[3]) == "string" and a[3] or "")):gsub("%s+", " "))
@@ -306,11 +312,16 @@ local function snapshot_record(line)
   local day, month, year = (type(first) == "string" and first or ""):match("(%d%d?)%s+(%a%a%a)%s+(%d%d%d%d)")
   local date = WEEKDAY_MONTH[month or ""] and ("%s-%02d-%02d"):format(year, WEEKDAY_MONTH[month], tonumber(day)) or nil
   local class = type(j.categories) == "string" and j.categories:match("^%S+") or nil
+  for i, name in ipairs(authors) do authors[i] = detex.plain(name) end
+  local plain, clean = detex.plain(trim(j.title:gsub("%s+", " ")))
   local rec = {
-    title = trim(j.title:gsub("%s+", " ")), authors = authors, class = class, year = tonumber(date and date:sub(1, 4)),
+    -- with no day of submission, the number still says the year
+    title = plain, title_tex = not clean or nil, authors = authors, class = class,
+    year = tonumber(date and date:sub(1, 4)) or (type(j.id) == "string" and require("lulibre.ids").arxiv_year(j.id) or nil),
     date = date, subjects = {}, ids = {}, type = "preprint",
     summary = type(j.abstract) == "string" and trim(j.abstract:gsub("%s+", " ")) or "",
   }
+  if j.unordered and #authors > 1 then rec.authors_unordered = true end
   if type(j.doi) == "string" and j.doi ~= "" then rec.ids.doi = trim(j.doi) end
   local subject = class and taxonomy.from_arxiv(class)
   if subject then rec.subjects[1] = { tag = subject, confidence = 0.95, why = "arXiv class " .. class } end
@@ -407,32 +418,8 @@ function M.arxiv_prefetch(ids)
   return got
 end
 
---- Read papers' records out of arXiv's metadata snapshot instead of asking
--- arXiv: the file arXiv publishes for the purpose (on Kaggle, as
--- arxiv-metadata-oai-snapshot.json: every paper, one JSON object to a line,
--- several gigabytes). path: that file, or the .zip it comes in. ids: the
--- numbers wanted. The file is read through once, each record found is kept
--- as an answer from arXiv, and a number it does not hold is left to be
--- asked for (the paper may be newer than the file). progress(lines): called
--- now and then. Returns how many were found and how many lines were read,
--- or nil and why.
-function M.arxiv_snapshot(path, ids, progress)
-  local want, left = {}, 0
-  for _, raw in ipairs(ids) do
-    local id = M.arxiv_id(raw)
-    if id and not want[id] and not M.kept("arxiv", id) then
-      want[id] = true
-      left = left + 1
-    end
-  end
-  if left == 0 then return 0, 0 end
-  local f, err
-  if path:lower():match("%.zip$") then
-    f, err = io.popen("unzip -p '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null", "r")
-  else
-    f, err = io.open(path, "r")
-  end
-  if not f then return nil, ("cannot read %s: %s"):format(path, tostring(err)) end
+-- The file as arXiv's own snapshot: one paper to a line.
+local function scan_lines(f, want, left, progress)
   local found, lines = 0, 0
   for line in f:lines() do
     lines = lines + 1
@@ -445,11 +432,166 @@ function M.arxiv_snapshot(path, ids, progress)
       found, left = found + 1, left - 1
       if left == 0 then break end
     end
-    if progress and lines % 200000 == 0 then progress(lines) end
+    if progress and lines % 200000 == 0 then progress(("%.1f million papers"):format(lines / 1e6)) end
+  end
+  return found, lines
+end
+
+-- The file as a hypergraph of arXiv (the Hypergraph Interchange Format, one
+-- JSON document set out over many lines): each paper an "edge" with its
+-- title, classes and date of last change, then each author of each paper as
+-- an "incidence" of a "node" on that edge:
+--   "edges": [ { "attrs": { "title": ..., "categories": ["math.NT"], "date": "2020-08-28" }, "edge": "2002.08172" }, ... ],
+--   "incidences": [ { "edge": "2002.08172", "node": "A. N. Other" }, ... ]
+-- It is read in pieces of whole records, looking only for the numbers that
+-- are wanted; nothing of it is held in memory but those.
+local function scan_hypergraph(f, want, progress)
+  local papers, authors, n = {}, {}, 0
+  local carry, bytes, in_authors = "", 0, false
+  while true do
+    local chunk = f:read(1 << 23)
+    local buf = chunk and (carry .. chunk) or carry
+    local cut = #buf
+    if chunk then
+      -- up to where the last whole record ends; the rest waits for the next piece
+      local from, last = math.max(1, #buf - (1 << 18)), nil
+      while true do
+        local at = buf:find("\n    {\n", from, true)
+        if not at then break end
+        last, from = at, at + 1
+      end
+      cut = last or 0
+      bytes = bytes + #chunk
+    end
+    local part = buf:sub(1, cut)
+    carry = buf:sub(cut + 1)
+    local turns = part:find('\n  "incidences": [', 1, true)
+    if not in_authors then
+      -- a paper: everything from the brace that opens it to its number
+      local prev = 1
+      while true do
+        local a, e, raw = part:find('\n      "edge": "([^"\n]+)"\n', prev)
+        if not a then break end
+        n = n + 1
+        local id = want[raw] and raw or nil -- the file writes numbers as arXiv does
+        if id then
+          local slice = part:sub(prev, e - 1)
+          local open = slice:find("    {\n", 1, true)
+          local ok, obj = pcall(json.decode, open and (slice:sub(open) .. "}") or "")
+          if ok and type(obj) == "table" and type(obj.attrs) == "table" and type(obj.attrs.title) == "string" then papers[id] = obj.attrs end
+        end
+        prev = e
+      end
+    end
+    if in_authors or turns then
+      -- millions of these, a few of them wanted: the name is read only for those
+      for raw, at in part:gmatch('\n      "edge": "([^"\n]+)",()') do
+        if want[raw] then
+          local node = part:match('^\n      "node": "([^\n]*)"\n', at)
+          if node then
+            local ok, name = pcall(json.decode, '"' .. node .. '"')
+            authors[raw] = authors[raw] or {}
+            table.insert(authors[raw], ok and type(name) == "string" and name or node)
+          end
+        end
+      end
+    end
+    in_authors = in_authors or turns ~= nil
+    if progress then progress(("%.1f GB"):format(bytes / 1e9)) end
+    if not chunk then break end
+  end
+  local found = 0
+  for id, attrs in pairs(papers) do
+    local classes = type(attrs.categories) == "table" and table.concat(attrs.categories, " ") or attrs.categories
+    -- a hypergraph has no first author: the names come in no order
+    M.keep("arxiv", id, 200, json.encode { id = id, title = attrs.title, categories = classes, author_names = authors[id] or {}, unordered = true,
+      abstract = type(attrs.abstract) == "string" and attrs.abstract or nil, update_date = attrs.date })
+    found = found + 1
+  end
+  return found, n
+end
+
+local function file_time(path)
+  local ok, uv = pcall(require, "luv")
+  local st = ok and uv.fs_stat(path)
+  return st and st.mtime and st.mtime.sec or 0
+end
+
+--- Where arXiv's records are looked for on this machine: the option
+-- arxiv_snapshot, else a file named arxiv.json, arxiv-metadata-oai-snapshot.json
+-- or arxiv.zip in lulibre's data folder (beside the index). nil when there
+-- is none.
+function M.arxiv_snapshot_path()
+  local set = lulibre.o.arxiv_snapshot or ""
+  if set ~= "" then return set end
+  local dir = lulibre.settings.paths().data_dir
+  for _, name in ipairs { "arxiv.json", "arxiv-metadata-oai-snapshot.json", "arxiv.zip" } do
+    local f = dir and io.open(dir .. "/" .. name, "r")
+    if f then
+      f:close()
+      return dir .. "/" .. name
+    end
+  end
+  return nil
+end
+
+--- Read papers' records out of a file of arXiv's metadata instead of asking
+-- arXiv. Two kinds of file are read, told apart by how they begin:
+--   * arXiv's own snapshot (on Kaggle as arxiv-metadata-oai-snapshot.json):
+--     every paper, one JSON object to a line, with its DOI and the day of
+--     each version;
+--   * a hypergraph of arXiv (papers as edges, authors as nodes): title,
+--     authors and classes, but no DOI and no day of submission.
+-- path: the file, or the .zip it comes in. ids: the numbers wanted. The file
+-- is read through once, each record found is kept as an answer from arXiv,
+-- and a number it does not hold is left to be asked for (the paper may be
+-- newer than the file) and not looked for again until the file changes.
+-- progress(text): called now and then with how far the reading is. Returns
+-- how many were found and how many papers were passed, or nil and why.
+function M.arxiv_snapshot(path, ids, progress)
+  local stamp = file_time(path)
+  local want, left = {}, 0
+  for _, raw in ipairs(ids) do
+    local id = M.arxiv_id(raw)
+    if id and not want[id] and not M.kept("arxiv", id) then
+      local missed = lulibre.sql("SELECT at FROM lookups WHERE service = 'arxiv-snapshot' AND key = ?", id)[1]
+      if not (missed and stamp > 0 and (missed.at or 0) >= stamp) then
+        want[id] = true
+        left = left + 1
+      end
+    end
+  end
+  if left == 0 then return 0, 0 end
+  local zip = path:lower():match("%.zip$") ~= nil
+  local function open()
+    if zip then return io.popen("unzip -p '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null", "r") end
+    return io.open(path, "r")
+  end
+  local f, err = open()
+  if not f then return nil, ("cannot read %s: %s"):format(path, tostring(err)) end
+  local head = f:read(4096) or ""
+  f:close()
+  if head == "" then return nil, ("%s is empty"):format(path) end
+  f = assert(open())
+  local found, passed
+  if head:find('"network%-type"') or head:find('^%s*{%s*"metadata"') or head:find('"edges"%s*:%s*%[') then
+    found, passed = scan_hypergraph(f, want, progress)
+  elseif head:find('^%s*{%s*"id"%s*:') or head:find('"authors_parsed"') or head:find('"versions"') then
+    found, passed = scan_lines(f, want, left, progress)
+  else
+    f:close()
+    return nil, ("%s is not a file of arXiv's records that lulibre knows how to read"):format(path)
   end
   f:close()
-  if lines == 0 then return nil, ("%s is empty, or is not arXiv's snapshot"):format(path) end
-  return found, lines
+  -- what the file does not hold is not looked for in it again
+  for id in pairs(want) do
+    if M.kept("arxiv", id) then
+      lulibre.store("DELETE FROM lookups WHERE service = 'arxiv-snapshot' AND key = ?", id)
+    else
+      M.keep("arxiv-snapshot", id, 404)
+    end
+  end
+  return found, passed
 end
 
 --- arXiv's record for a number ("1012.6008", "hep-th/9711200"; a version is ignored).
@@ -473,6 +615,27 @@ function M.arxiv(raw)
   if not rec then return nil, "arXiv has no record of " .. id end
   rec.ids.arxiv, rec.source = id, "arXiv " .. id
   return rec
+end
+
+--- Put names that came in no order into the order a text has them in (a
+-- paper's first page names its authors in order): by where each family name
+-- first stands in the text. Returns the names, and whether every one of
+-- them was found (so that the order can be trusted).
+function M.in_order_of(authors, text)
+  local folded = lulibre.fold(text or "")
+  local at, all = {}, true
+  for i, name in ipairs(authors) do
+    local family = lulibre.fold(name:match("([^%s]+)%s*$") or name)
+    local pos = #family >= 2 and folded:find(family, 1, true) or nil
+    if not pos then all = false end
+    at[name] = { pos or math.huge, i }
+  end
+  local out = { table.unpack(authors) }
+  table.sort(out, function(a, b)
+    if at[a][1] ~= at[b][1] then return at[a][1] < at[b][1] end
+    return at[a][2] < at[b][2]
+  end)
+  return out, all
 end
 
 -- ---- CrossRef ----

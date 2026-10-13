@@ -34,23 +34,67 @@ M.SURE = 0.8
 
 -- a value reduced to what matters when asking "do these say the same?":
 -- case, accents, the shape of quotes and dashes, punctuation and spacing do not
+local SHAPES = { ["‘"] = "'", ["’"] = "'", ["´"] = "'", ["`"] = "'", ["“"] = '"', ["”"] = '"', ["„"] = '"',
+  ["–"] = "-", ["—"] = "-", ["‐"] = "-", ["‑"] = "-", ["−"] = "-" }
 local function plain(s)
-  s = (s or ""):gsub("[‘’`´]", "'"):gsub("[“”„]", '"'):gsub("[–—]", "-")
+  -- (one character at a time: these are sequences of bytes, which a set of
+  -- characters in a pattern would take apart)
+  s = (s or ""):gsub("[\194\226][\128-\191][\128-\191]?", SHAPES):gsub("`", "'")
   s = lulibre.fold(s):gsub("%p", " "):gsub("%s+", " ")
   return (s:gsub("^ ", ""):gsub(" $", ""))
 end
 
+-- One person written two ways: the same family name, and given names that
+-- agree as far as both go ("P. Selinger" and "Peter Selinger", "Sam" and
+-- "Samuel", "Jeffery M. Tucker" and "Jeffery Tucker").
+local function same_person(a, b)
+  local wa, wb = {}, {}
+  for w in a:gmatch("%S+") do wa[#wa + 1] = w end
+  for w in b:gmatch("%S+") do wb[#wb + 1] = w end
+  if #wa == 0 or #wb == 0 or table.remove(wa) ~= table.remove(wb) then return false end
+  for i = 1, math.min(#wa, #wb) do
+    local x, y = wa[i], wb[i]
+    if #x > #y then x, y = y, x end
+    if y:sub(1, #x) ~= x then return false end
+  end
+  return true
+end
+
+-- The same people, name for name? a, b: lists of plain names.
+local function same_people(a, b)
+  if #a ~= #b then return false end
+  local taken = {}
+  for _, x in ipairs(a) do
+    local hit
+    for j, y in ipairs(b) do
+      if not taken[j] and same_person(x, y) then
+        hit = j
+        break
+      end
+    end
+    if not hit then return false end
+    taken[hit] = true
+  end
+  return true
+end
+
 --- Do two values of a field say the same thing? Authors are compared as a
--- set of names; dates by year when either gives no more than a year.
+-- set of names; dates by year when either gives no more than a year. a is
+-- what the book has, b what is offered: the same people named less fully
+-- ("S. Joffily" for "Sérgio Joffily") say nothing new, named more fully
+-- they do.
 function M.same(field, a, b)
   if field == "authors" then
     local function names(s)
       local out = {}
       for _, n in ipairs(edit.split("authors", s)) do out[#out + 1] = plain(n) end
       table.sort(out)
-      return table.concat(out, "|")
+      return out
     end
-    return names(a) == names(b)
+    local na, nb = names(a), names(b)
+    local ta, tb = table.concat(na, "|"), table.concat(nb, "|")
+    if ta == tb then return true end
+    return same_people(na, nb) and #tb <= #ta
   end
   if field == "pubdate" then
     -- a is what the book has, b what is offered. A bare year (kept as the

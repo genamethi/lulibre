@@ -211,6 +211,7 @@ its own documentation.
 | `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)`, `date(text)` (the date a text opens with, as YYYY-MM-DD), `journal(text)` (a journal heading: `{journal=, volume=, year=, pages=}`) |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
+| `lulibre.detex` | `plain(s)`: TeX in a title or a name put into plain text (`Erd\H{o}s` is `Erdős`), and whether none is left; the tables `accents`, `letters` |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
@@ -218,7 +219,7 @@ its own documentation.
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
-| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `arxiv_snapshot(path, ids)` (read papers from arXiv's snapshot file instead), `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
+| `lulibre.net` | metadata services, each answer kept: `arxiv(id)`, `crossref(doi)`, `zbmath{doi=|arxiv=}`, `openlibrary(isbn)`, `openalex(doi)`, `arxiv_prefetch(ids)` / `crossref_prefetch(dois)` / `openlibrary_prefetch(isbns)` (many in one request), `arxiv_snapshot(path, ids)` (read papers from a file of arXiv's records instead; `arxiv_snapshot_path()` says which file), `in_order_of(names, text)`, `offline`, `kept(service, key)`; `request(service, url)` is one paced request, `PACE` and `HOLD` the seconds between requests and after a "too many requests", `held(service)` / `hold(service, seconds)` the pause a service is under |
 | `lulibre.json` | encode, decode |
 
 ## Example

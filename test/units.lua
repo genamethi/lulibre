@@ -506,6 +506,15 @@ do
   eq("same: quotes, case and punctuation do not matter",
     propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
   eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
+  eq("same: the same people named less fully say nothing new", { propose.same("authors", "Sérgio Joffily", "S. Joffily"),
+    propose.same("authors", "Todd K. Timberlake & Jeffery M. Tucker", "Todd Timberlake & Jeffery Tucker"),
+    propose.same("authors", "Adrian W. Dudek", "Adrian Dudek") }, { true, true, true })
+  eq("named more fully they do", { propose.same("authors", "P. Selinger", "Peter Selinger"),
+    propose.same("authors", "R. Taylor", "Richard Taylor") }, { false, false })
+  eq("another person is another person", { propose.same("authors", "P. Selinger", "Q. Selinger"),
+    propose.same("authors", "Peter Selinger", "Paul Selinger"), propose.same("authors", "A. One", "A. One & B. Two") }, { false, false, false })
+  eq("same: a hyphen is a hyphen however it is drawn", { propose.same("authors", "Eric Vanden‐Eijnden", "Eric Vanden-Eijnden"),
+    propose.same("title", "Erdős–Kac theorems", "Erdős-Kac Theorems"), propose.same("title", "Zipf’s Law", "Zipf's law") }, { true, true, true })
   eq("same: a bare year offered against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
   eq("but a full date offered against a bare year is news", propose.same("pubdate", "2010-01-01", "2010-12-29"), false)
   eq("not the same", { propose.same("authors", "Bernhard Riemann", "W. Dittrich"), propose.same("pubdate", "2017-08-03", "2016") },
@@ -1076,6 +1085,102 @@ do
   eq("a second reading has nothing left to look for but that", { net.arxiv_snapshot(snap, { "0704.0001", "0704.0002" }) }, { 0, 0 })
   eq("a file that is not there says so", (select(2, net.arxiv_snapshot("/nonexistent/snapshot.json", { "0801.0001" }))):find("cannot read") ~= nil, true)
   os.remove(snap)
+
+  -- the other file of arXiv's records: a hypergraph, set out over many lines
+  fresh()
+  local hif = os.tmpname()
+  sf = assert(io.open(hif, "w"))
+  sf:write([=[{
+  "metadata": {},
+  "network-type": "undirected",
+  "edges": [
+    {
+      "attrs": {
+        "submitter": "A. N. Other",
+        "title": "A proof of the Erd\\H{o}s primitive set\n  conjecture",
+        "comments": null,
+        "categories": [
+          "math.NT",
+          "math.CO"
+        ],
+        "abstract": "We prove \"it\".",
+        "date": "2023-08-28"
+      },
+      "edge": "2202.02384"
+    },
+    {
+      "attrs": {
+        "submitter": "S",
+        "title": "Not wanted",
+        "categories": [
+          "cs.LG"
+        ],
+        "date": "2025-05-28"
+      },
+      "edge": "2505.20698"
+    },
+    {
+      "attrs": {
+        "title": "On $p$-state $p$-adic Potts model",
+        "categories": [
+          "math-ph"
+        ],
+        "date": "2014-01-01"
+      },
+      "edge": "math/0601001"
+    }
+  ],
+  "incidences": [
+    {
+      "edge": "2202.02384",
+      "node": "Second Author"
+    },
+    {
+      "edge": "2505.20698",
+      "node": "Nobody Wanted"
+    },
+    {
+      "edge": "2202.02384",
+      "node": "Jared Duker Lichtman"
+    },
+    {
+      "edge": "math/0601001",
+      "node": "Cl\u00e9ment Dupont"
+    }
+  ]
+}
+]=])
+  sf:close()
+  found, lines = net.arxiv_snapshot(hif, { "2202.02384v3", "math.AG/0601001", "2609.00001" })
+  eq("a hypergraph of arXiv: the papers wanted are found among its edges", { found, lines, #calls }, { 2, 3, 0 })
+  net.offline = true
+  local h1, h2 = net.arxiv("2202.02384"), net.arxiv("math/0601001")
+  eq("its TeX put into plain text, its first class, the year its number says", { h1.title, h1.class, h1.year, h1.date, h1.title_tex },
+    { "A proof of the Erdős primitive set conjecture", "math.NT", 2022 })
+  eq("its authors, who come in no order", { h1.authors, h1.authors_unordered, h2.authors, h2.authors_unordered },
+    { { "Second Author", "Jared Duker Lichtman" }, true, { "Clément Dupont" } })
+  eq("simple mathematics needs no dollars", h2.title, "On p-state p-adic Potts model")
+  net.offline = false
+  eq("what the file does not hold is remembered, and not looked for in it again", { net.arxiv_snapshot(hif, { "2609.00001" }) }, { 0, 0 })
+  eq("the page says who comes first", { net.in_order_of({ "Second Author", "Jared Duker Lichtman" }, "A PROOF\nJared Duker Lichtman and Second Author\nAbstract") },
+    { { "Jared Duker Lichtman", "Second Author" }, true })
+  eq("and when it does not name them all, the order is not to be trusted",
+    select(2, net.in_order_of({ "Second Author", "Jared Duker Lichtman" }, "A PROOF\nJ. D. Lichtman\nAbstract")), false)
+  os.remove(hif)
+  local nf = assert(io.open(hif, "w"))
+  nf:write("just some text\n")
+  nf:close()
+  eq("a file that is neither says so", (select(2, net.arxiv_snapshot(hif, { "0801.0001" }))):find("knows how to read") ~= nil, true)
+  os.remove(hif)
+
+  -- TeX in titles and names
+  local detex = require "lulibre.detex"
+  eq("TeX accents and letters", { detex.plain("Erd\\H{o}s"), detex.plain("Bal\\'azs"), detex.plain("K\\\"ahler"), detex.plain("{\\v{C}}ech"),
+    detex.plain("Poincar\\'{e}"), detex.plain("M{\\o}ller"), detex.plain("Fa\\`a di Bruno"), detex.plain("\\L ojasiewicz"), detex.plain("Stra\\ss en"),
+    detex.plain("G\\\"{o}del"), (detex.plain("na\\\"\\i ve")) },
+    { "Erdős", "Balázs", "Kähler", "Čech", "Poincaré", "Møller", "Faà di Bruno", "Łojasiewicz", "Straßen", "Gödel", "naïve" })
+  eq("mathematics is left as it is, and said to be", { detex.plain("On $\\mathbb{Z}_p$-extensions") }, { "On $\\mathbb{Z}_p$-extensions", false })
+  eq("plain text is not touched", { detex.plain("Sums of Primes & Squares") }, { "Sums of Primes & Squares", true })
 
   -- CrossRef and Open Library take many at a time too
   fresh()
