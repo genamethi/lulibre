@@ -1624,5 +1624,66 @@ do
   lulibre.store("DELETE FROM kv WHERE key = 'runs'")
 end
 
+-- a record found by searching for a title: is it the work in hand?
+do
+  local net = require "lulibre.net"
+  local m = net.title_match
+  eq("two words in three are not the same title", m("An introduction to the ipaddress module", "An Introduction to Module Theory", {}, { "Ibrahim Assem" }), nil)
+  eq("nor is a title inside a longer one", m("Galois groups of cubics and quartics in all characteristics", "Galois Groups of Quadratics, Cubics, and Quartics"), nil)
+  eq("one word apart is another paper", m("Fully abstract models of typed lambda-calculi", "Fully abstract submodels of typed lambda calculi"), nil)
+  eq("the same words, four or more", m("A general Kummer theory for function fields", "A General Kummer Theory for Function Fields"), 0.8)
+  eq("the same words and an author in common", m("Compact Representations for Arrays in Lua", "Compact representations for arrays in Lua",
+    { "Roberto Ierusalimschy" }, { "R. Ierusalimschy", "Noemi Rodriguez" }), 0.9)
+  eq("a family name written first", m("Symmetry of algebras over a number field", "Symmetry of Algebras over a Number Field", { "Serre, Jean-Pierre" },
+    { "Jean-Pierre Serre" }), 0.9)
+  eq("a short title is many works'", m("The Galois Correspondence", "The Galois Correspondence"), nil)
+  eq("unless an author is in the record too", m("The Galois Correspondence", "The Galois Correspondence", { "Keith Conrad" }, { "K. Conrad" }), 0.9)
+  eq("authors on both sides with no name in common: another work", m("Introduction to the theory of algebraic stacks", "Introduction to the Theory of Algebraic Stacks",
+    { "Martin Olsson" }, { "Someone Else" }), nil)
+  eq("a title with something run on after it", m("Negative Knowledge from Positive Evidence Charles Yang", "Negative Knowledge from Positive Evidence"), 0.7)
+  eq("too short to run on", m("Algebraic spaces and stacks", "Algebraic spaces"), nil)
+  eq("nothing against nothing", m("", "Anything at all here now"), nil)
+end
+
+-- unmatch: what an earlier, looser search by title brought in is found again and put back
+do
+  local proposals = require "lulibre.proposals"
+  local edit = require "lulibre.edit"
+  local id = lulibre.ids("")[1]
+  local book = lulibre.book(id)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local answer = json.encode { message = { items = { { DOI = "10.1000/Wrong", title = { "An Introduction to Module Theory" },
+    author = { { given = "Ibrahim", family = "Assem" } } } } } }
+  lulibre.store("INSERT OR REPLACE INTO lookups(service, key, at, status, body) VALUES('crossref-title', 'an introduction to the ipaddress module', ?, 200, ?)",
+    os.time(), answer)
+  -- as the old rule left it: the title written over, a DOI still waiting
+  lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, status, created)
+    VALUES(?, 'title', 'set', ?, 'CrossRef title search', 0.95, 'applied', ?)]], id, book.title, os.time())
+  lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, status, created)
+    VALUES(?, 'identifiers', 'add', 'doi:10.1000/wrong', 'CrossRef title search', 0.95, 'pending', ?)]], id, os.time())
+  lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label, undone)
+    VALUES(9001, ?, 'title', 'An introduction to the ipaddress module', ?, 'applied', ?, 'review', 0)]], id, book.title, os.time())
+  local src = debug.getinfo(1, "S").source:gsub("^@", "")
+  local script = assert(loadfile((src:match("^(.*)/test/units%.lua$") or ".") .. "/scripts/unmatch.lua"))
+  local said, shown = {}, print
+  print = function(text) said[#said + 1] = tostring(text) end
+  local ok, err = pcall(script)
+  eq("looking changes nothing", { ok or err, proposals.count("pending"), said[1] and said[1]:find("0 hold under the rule as it is now, 1 do not", 1, true) ~= nil },
+    { true, 1, true })
+  ok, err = pcall(script, "--fix")
+  print = shown
+  local left = proposals.list("pending")
+  eq("--fix withdraws what waits and proposes what the book said before",
+    { ok or err, #left, left[1] and left[1].field, left[1] and left[1].value, left[1] and left[1].source },
+    { true, 1, "title", "An introduction to the ipaddress module", "before a wrong title match" })
+  eq("as a run of its own, so review shows it by itself", #require("lulibre.runs").list(), 1)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.store("DELETE FROM journal WHERE batch = 9001")
+  lulibre.store("DELETE FROM lookups WHERE service = 'crossref-title'")
+  lulibre.store("DELETE FROM kv WHERE key = 'runs'")
+  local _ = edit
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

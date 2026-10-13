@@ -519,6 +519,26 @@ stopped loses nothing, and `--offline` proposes again from what is kept
 without touching the network. ("No such record" is believed for thirty
 days, then asked again.)
 
+A search by title is the weakest of these, because a search always answers
+with something. The record is taken only when it is plainly the same work:
+
+| The titles | The authors | Offered at |
+|---|---|---|
+| the same telling words | one family name in common | 0.90 |
+| the same telling words, four or more | the book has none | 0.80 |
+| one is the other with something after it (a subtitle, the author's name run on), four words or more shared | in common · the book has none | 0.85 · 0.70 |
+| three telling words or fewer ("Algebraic Geometry") | the book has none | not taken |
+| anything | both have authors, no name in common | not taken |
+
+"Telling words" leaves out *the, of, and, to* and their like; "An
+introduction to the ipaddress module" and "An Introduction to Module
+Theory" share two of three and are not the same title. Until 0.2.0-alpha.1
+they counted as one, and such records were offered at 0.95. `:run unmatch`
+lists the matches made that way which no longer hold; `:run unmatch --fix`
+withdraws what still waits from them and proposes putting back what the
+books said before, as a run of its own in review ("wrong title matches").
+It asks no service anything: the answers were kept.
+
 ### How the services are asked
 
 lulibre is a guest of these services and asks as little as it can:
