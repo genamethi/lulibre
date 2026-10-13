@@ -44,6 +44,19 @@ shows by themselves.
   the run's proposals come up in the review that is open, if one is.
 - Fixed: a round stopped with `:cancel` left the options the dialog had set
   for it (`weigh_sources`, `subject_learned`) in place.
+- Fixed: looking a book up by its title (`:enrich --titles`, the dialog's
+  "CrossRef by title") took a record when two words in three of a short
+  title agreed, and offered it at 0.95: "An introduction to the ipaddress
+  module" became "An Introduction to Module Theory". The titles must now
+  say the same thing (the same telling words, or one the other with
+  something run on after it), a short title counts only with an author in
+  common, authors that disagree rule the record out, and the proposals
+  carry 0.7 to 0.9 according to how well it fits. Of the 79 such matches
+  in the library this was found in, 17 hold.
+- `:run unmatch` goes back over what the earlier rule brought in, from the
+  answers that were kept: it lists the matches that no longer hold, and
+  with `--fix` withdraws what still waits from them and proposes, for
+  review, putting back what the books said before.
 - For scripts: `lulibre.status(name, text, style)` keeps a badge in the
   status line; panels take `tabs` and `p:tabs(names, current)`, and
   `p:send(key)` wakes a panel from another task. The badge

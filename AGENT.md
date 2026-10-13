@@ -148,6 +148,16 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   outside X must come back exactly. Dropping a run first took 137
   proposals, 44 of them accepted, that had waited for its books from
   before; only the count showed it.
+- A matching rule is measured before it is believed, against every case
+  there is: the title search took "An Introduction to Module Theory" for
+  "An introduction to the ipaddress module", and of 79 matches it had made
+  in the user's library 62 were wrong, 29 of them already written. A search
+  always returns something; "two words in three" is not a test. List what
+  the rule accepts on a copy, read the list, and count.
+- A confidence says how sure *this* value is, not how good its source is in
+  general: a record reached through a guess (a title search) carries the
+  guess's confidence on every field, identifiers included, never the
+  service's 0.95.
 - Putting existing commands end to end makes a new thing out of them: read
   what each one says when it finishes. `:propose` closing with "gr goes
   through them" was right alone and wrong as step one of three, where it
