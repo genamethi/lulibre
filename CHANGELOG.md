@@ -21,6 +21,11 @@ written in `src/version.h`.
   `<Leader>c` makes one change to every selected book, `<Leader>d` shows
   the databases with boxes for which to fetch, `<Leader>s` adds, moves or
   drops the selected waiting files. `<Leader><Space>` unmarks every book.
+- The arXiv stamp on a paper's first page gives a date only when it is a
+  first version's: a later version's stamp is the day of that revision,
+  and half the stamped papers carry one. arXiv's own record of a paper now
+  outranks its stamp, and when a record gives the day the proposals read
+  off the stamp or the number are withdrawn instead of left beside it.
 - `lulibre.ui.form`: the dialog pane, for scripts.
 
 ## 0.2.0-alpha.0

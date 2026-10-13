@@ -328,6 +328,13 @@ for n, b in ipairs(books) do
         added = added + 1
         if w.over then replacing = replacing + 1 end
       end
+      -- A record's day of publication settles what the file could only read
+      -- off its arXiv number or stamp: those proposals are not left to be
+      -- chosen between.
+      if w.field == "pubdate" and #w.value > 4 then
+        lulibre.store([[DELETE FROM proposals WHERE book = ? AND field = 'pubdate' AND status = 'pending'
+          AND (source = 'arXiv id' OR source LIKE 'arXiv stamp%')]], b.id)
+      end
     end
   end
 end

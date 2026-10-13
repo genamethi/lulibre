@@ -858,7 +858,13 @@ QA9.AIL64 1991
   eq("the series named first on the page, and a reprint's own year",
     { got.series, got.series_index, got.pubdate, got.publisher }, { "Graduate Texts in Mathematics", "52", "1977", "Springer" })
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
-  eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
+  eq("the arXiv stamp of a first version gives the day of submission", { got[1].field, got[1].value, got[1].source, got[1].confidence },
+    { "pubdate", "2010-12-29", "arXiv stamp", 0.9 })
+  local later = {}
+  for _, c in ipairs(layouts.read { texts = { "arXiv:hep-th/9711200v3  22 Jan 1998\narXiv:1012.6008v3  [math.CO]  14 Mar 2012\nA Note on Sieves" } }) do
+    if c.source == "arXiv stamp" then later[#later + 1] = c.value end
+  end
+  eq("the stamp of a later version is the day of a revision: no date is taken from it", later, {})
 
   -- a series named in so many words
   local function series(text) return { layouts.series_line(text) } end
