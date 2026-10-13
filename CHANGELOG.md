@@ -99,9 +99,18 @@ Added
   or asked one by one instead; `:enrich --plan` says what a run would ask
   before anything is asked. Old-style arXiv numbers with a subject class
   (`math.AG/0601001`) are looked up as arXiv files them.
-- `arxiv_snapshot`: with arXiv's metadata snapshot on disk (the file it
-  publishes on Kaggle, or the `.zip`), `:enrich` reads papers from it and
-  asks arXiv only about those newer than the file.
+- arXiv from a file: with a file of arXiv's records in the data folder
+  (`~/.local/share/lulibre/arxiv.json`, or the option `arxiv_snapshot`),
+  `:enrich` reads papers from it and asks arXiv only about those newer
+  than the file. Both arXiv's own snapshot and a hypergraph of arXiv are
+  read; from the second, authors are put in the order of the paper's first
+  page.
+- `:enrich` leaves out the record of a work the file only cites (an
+  identifier found in the pages whose record has another title), puts TeX
+  in arXiv's titles and names into plain text (`lulibre.detex`), and does
+  not propose the same authors named less fully.
+- Fixed: a hyphen or dash written another way (`Vanden‐Eijnden`,
+  `Erdős–Kac`) made two values count as different.
 - Four layouts that read a date, for the books that have none: the day a
   journal received an article, a date on a line of its own on the first
   page, the year in a journal's heading, the year of a copyright line.
