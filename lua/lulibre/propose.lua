@@ -23,6 +23,7 @@
 local edit = require "lulibre.edit"
 local extract = require "lulibre.extract"
 local junk = require "lulibre.junk"
+local names = require "lulibre.names"
 local proposals = require "lulibre.proposals"
 
 local M = {}
@@ -59,9 +60,43 @@ function M.same(field, a, b)
   return plain(a) == plain(b)
 end
 
-local function is_gap(field, cur)
-  if field == "title" then return junk.title(cur) or not cur:find("%s") end
-  return cur == ""
+--- Is a field's value no value at all: empty, or something that is plainly
+-- not one? A title that is a file name, a number or a heading; an author
+-- that is the program that made the file, a web site, a rank. Such a value
+-- has no claim to stay, and whatever the file offers is proposed for it.
+function M.is_gap(field, cur)
+  if cur == "" then return true end
+  if field == "title" then
+    if junk.title(cur) or not cur:find("%s") then return true end
+    local digits, letters = select(2, cur:gsub("%d", "")), select(2, cur:gsub("[%a\128-\255]", ""))
+    return digits > 0 and digits * 3 >= letters -- mostly figures
+  end
+  if field == "authors" then
+    for _, a in ipairs(edit.split("authors", cur)) do
+      if not (junk.author(a) or names.never(a) or a:find("%.%a%a%a?$") or a:find("%d%d")) then return false end
+    end
+    return true -- every one of them is junk
+  end
+  return false
+end
+local is_gap = M.is_gap
+
+-- the letters and names a field goes by, for --only and for review's filter
+M.FIELD = { t = "title", title = "title", a = "authors", author = "authors", authors = "authors", s = "tags",
+  subject = "tags", tags = "tags", tag = "tags", i = "identifiers", id = "identifiers", ids = "identifiers",
+  identifiers = "identifiers", identifier = "identifiers", d = "pubdate", date = "pubdate", pubdate = "pubdate",
+  year = "pubdate", p = "publisher", publisher = "publisher" }
+
+--- "title,authors" or "t,a" as a set of field names; nil and the offending
+-- word when one is not a field.
+function M.fields(list)
+  local set = {}
+  for word in (list or ""):gmatch("[^,%s]+") do
+    local field = M.FIELD[word:lower()]
+    if not field then return nil, word end
+    set[field] = true
+  end
+  return set
 end
 
 local SINGLE = { title = true, authors = true, pubdate = true, publisher = true }
@@ -70,11 +105,30 @@ local SINGLE = { title = true, authors = true, pubdate = true, publisher = true 
 -- extract gives them) are worth proposing for a book. over: "gaps", "sure"
 -- or "any" (default: the option propose_over). Each result carries
 -- over = true when it would replace a value the book has.
+-- opts (in place of over, a table): over as above; only: a set of fields to
+-- keep to; fresh: propose as if the fields were empty, whatever they hold.
 function M.wanted(book, candidates, over)
-  over = over or lulibre.o.propose_over
+  local opts = type(over) == "table" and over or { over = over }
+  over = opts.over or lulibre.o.propose_over
   local out, settled = {}, {}
   for _, c in ipairs(candidates) do
     local cur = edit.current(book, c.field)
+    if opts.only and not opts.only[c.field] then goto continue end
+    if opts.fresh then
+      -- as if the field were empty: the strongest candidate for a single
+      -- value, every stated subject and identifier
+      local single = SINGLE[c.field]
+      if not (single and settled[c.field]) and (single or c.field ~= "tags" or (c.confidence or 0) >= 0.9 or not settled.tags) then
+        settled[c.field] = true
+        local replaces = cur ~= "" and not is_gap(c.field, cur)
+        if not (single and M.same(c.field, cur, c.value)) then
+          out[#out + 1] = { field = c.field, value = c.value, op = single and "set" or "add", source = c.source,
+            confidence = c.confidence, over = replaces }
+        end
+      end
+      goto continue
+    end
+    do
     local want, op, replaces = false, "set", false
     if SINGLE[c.field] then
       -- only the strongest candidate for the field is heard: if it agrees
@@ -101,12 +155,14 @@ function M.wanted(book, candidates, over)
       out[#out + 1] = { field = c.field, value = c.value, op = op, source = c.source, confidence = c.confidence,
         over = replaces }
     end
+    end
+    ::continue::
   end
   return out
 end
 
---- Propose for one book from its file. opts.over as for M.wanted;
--- opts.again proposes even what was rejected before. Returns how many
+--- Propose for one book from its file. opts.over, opts.only and opts.fresh
+-- as for M.wanted; opts.again proposes even what was rejected before. Returns how many
 -- proposals were added, and how many of them replace a value the book has.
 function M.book(id, opts)
   opts = opts or {}
@@ -118,7 +174,7 @@ function M.book(id, opts)
     -- after the file's own, so a stated subject (arXiv, MSC) is heard first
     candidates[#candidates + 1] = require("lulibre.learn").candidate(id)
   end
-  for _, w in ipairs(M.wanted(book, candidates, opts.over)) do
+  for _, w in ipairs(M.wanted(book, candidates, opts)) do
     if proposals.add(id, w.field, w.value, { op = w.op, source = w.source, confidence = w.confidence, again = opts.again }) then
       added = added + 1
       if w.over then replacing = replacing + 1 end

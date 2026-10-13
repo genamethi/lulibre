@@ -267,6 +267,8 @@ if command -v tmux >/dev/null; then
 lulibre.o.leader = ","
 lulibre.map("n", "<Leader>e", "echo the leader works")
 lulibre.map("browse", "o", "open")
+lulibre.map("n", "gz", "echo zed", "a key of my own, described")
+lulibre.map("n", "gy", "echo why", false)
 lulibre.map("line", "<C-g>", "cancel")
 lulibre.map("panel", "<C-x>", "close")
 LUA
@@ -278,6 +280,18 @@ LUA
   $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.notify("bound to " .. lulibre.key("echo the leader works"))'
   $T send-keys -t t Enter
   shown "and is named by the key it is on" "^bound to ,e *$"
+  $T send-keys -t t "?"
+  shown "? opens the help"                 "KEYS"
+  # page down to the end of the keys, where bindings made later are listed
+  found=no hidden=ok
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+    screen | grep -q "gz  *a key of my own, described" && found=yes
+    screen | grep -q "echo why" && hidden=shown
+    $T send-keys -t t Space; sleep 0.15
+  done
+  expect "a binding's own description is listed" yes "$found"
+  expect "a hidden binding stays out of the help" ok "$hidden"
+  $T send-keys -t t q
   $T send-keys -t t g t
   shown "the tree browser opens"           "browse  "
   $T send-keys -t t "?"

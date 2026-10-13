@@ -148,6 +148,11 @@ static int l_command_ui(lua_State *L) {
 }
 ON_UI(l_command)
 
+/* lulibre.map(modes, keys, target [, about])
+ * target: a command line, or a function (which runs as a task).
+ * about: what the help overlay (?) is to say the key does; without it the
+ * overlay shows the command line, or for a function "a Lua function".
+ * false keeps the key out of the overlay. */
 static int l_map_ui(lua_State *L) {
   static int anon;
   const char *modes = luaL_checkstring(L, 1);
@@ -158,18 +163,20 @@ static int l_map_ui(lua_State *L) {
     else if (*m == 'v') mask |= MODE_VISUAL;
     else return luaL_argerror(L, 1, "modes are \"n\" (normal), \"v\" (selecting) or \"nv\"");
   }
+  int hidden = lua_isboolean(L, 4) && !lua_toboolean(L, 4);
+  const char *about = lua_type(L, 4) == LUA_TSTRING ? lua_tostring(L, 4) : NULL;
   char name[32];
   const char *target;
   if (lua_isfunction(L, 3)) {
-    const char *help = luaL_optstring(L, 4, "(a Lua function)");
     snprintf(name, sizeof name, "lua.%d", ++anon);
     lua_pushvalue(L, 3);
-    command_register_lua(name, luaL_ref(L, LUA_REGISTRYINDEX), help);
+    command_register_lua(name, luaL_ref(L, LUA_REGISTRYINDEX), about ? about : "(a Lua function)");
     target = name;
+    if (!about) about = "a Lua function";
   } else {
     target = luaL_checkstring(L, 3);
   }
-  if (keymap_bind(&tui_keymap, mask, keys, target))
+  if (keymap_bind_as(&tui_keymap, mask, keys, target, about, hidden))
     return luaL_error(L, "cannot parse the key sequence '%s'", keys);
   return 0;
 }

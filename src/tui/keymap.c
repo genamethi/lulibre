@@ -98,6 +98,11 @@ void key_format(sbuf *out, const uint32_t *keys, int n) {
 }
 
 int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command) {
+  return keymap_bind_as(km, modes, spec, command, NULL, 0);
+}
+
+int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
+                   int hidden) {
   uint32_t keys[KEYSEQ_MAX];
   int n = key_parse(spec, keys);
   if (!n) return -1;
@@ -117,6 +122,8 @@ int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char 
   b->nkeys = n;
   memcpy(b->keys, keys, (size_t)n * sizeof *keys);
   b->command = xstrdup(command);
+  b->about = about && *about ? xstrdup(about) : NULL;
+  b->hidden = hidden;
   return 0;
 }
 
@@ -196,7 +203,10 @@ int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const ch
 }
 
 void keymap_free(struct keymap *km) {
-  for (int i = 0; i < km->n; i++) free(km->b[i].command);
+  for (int i = 0; i < km->n; i++) {
+    free(km->b[i].command);
+    free(km->b[i].about);
+  }
   free(km->b);
   memset(km, 0, sizeof *km);
 }

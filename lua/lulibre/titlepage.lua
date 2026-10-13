@@ -19,7 +19,11 @@ local PUBLISHER = {
   "proceedings of symposia",
 }
 local EDITORS = { "editorial board", "series editors?", "managing editor", "edited by", "^editors?%f[%A]" }
-local STOP = { "^abstract", "^contents", "^introduction", "^keywords", "^r[e\195]\169?sum" }
+-- where the front matter ends: a heading that stands alone ("Introduction",
+-- "1. Introduction", "Contents"), not a title that begins with the word
+-- ("Introduction to Commutative Algebra")
+local STOP = { "^abstract", "^contents%s*$", "^table of contents", "^introduction%s*$", "^%d+%.?%s+introduction%s*$",
+  "^keywords", "^r[e\195]\169?sum" }
 local JUNK = {}
 for w in ([[preface content contents index introduction bibliography references appendix
   abstract title chapter part note notes editorial copyright]]):gmatch("%S+") do JUNK[w] = true end
@@ -119,16 +123,53 @@ function M.classify(lines)
 
   local max = 0
   for _, l in ipairs(body) do max = math.max(max, l.size) end
-  local title, last = {}, 0
+  local title, first, last = {}, 0, 0
   for i, l in ipairs(body) do
     -- a by-line set as large as the title ends the title; it is not part of it
     if M.byline(l.text) then
       if #title > 0 then break end
     elseif l.size >= max - 0.5 then
       title[#title + 1] = trim(l.text)
+      if first == 0 then first = i end
       last = i
     elseif #title > 0 then
       break
+    end
+  end
+  -- A page set in one size throughout (typewritten notes, a paper run through
+  -- an old converter) does not set its title off by type, and the "largest"
+  -- run is the whole page. The title is then the lines at the top, as far
+  -- as the first that is somebody's name, a by-line, a numbered paragraph,
+  -- or, under a title in capitals, the first line that is not.
+  if #title > 3 or #table.concat(title, " ") > 200 then
+    local caps = title[1]:find("%u") ~= nil and title[1] == title[1]:upper()
+    local keep, ended = { title[1] }, false
+    for k = 2, math.min(#title, 5) do
+      local t = title[k]
+      -- under a title in capitals, a line in capitals goes on with it (and
+      -- is not a list of names, though "NEGATIVE AND IMAGINARY NUMBERS" has
+      -- the shape of one)
+      local goes_on = caps and t == t:upper() and not M.byline(t)
+      if not goes_on and ((names.looks_like_authors(t) and #names.validate { t } > 0) or M.byline(t)
+        or t:find("^%d+[.)]%s") or caps or #t > 70) then
+        ended = true
+        break
+      end
+      keep[#keep + 1] = t
+    end
+    -- with nothing to end it, there is no telling title from text
+    if ended or #title <= 5 then title, last = keep, first + #keep - 1 else title, last = {}, 0 end
+  elseif first > 1 and #title > 0 then
+    -- The line above a title's largest line is part of the title when it is
+    -- set nearly as large and leads into it: "Introduction to" above
+    -- "Commutative Algebra".
+    local above = body[first - 1]
+    local t = trim(above.text)
+    if above.size >= 0.6 * max and #t < 60 and not names.is_person(t) and not M.byline(t)
+      and (above.size >= 0.75 * max or t:lower():find(" to$")
+        or t:lower():find(" of$") or t:lower():find(" in$") or t:lower():find(" on$") or t:lower():find(" the$")
+        or t:lower():find(" and$") or t:lower():find(" for$")) then
+      table.insert(title, 1, t)
     end
   end
   local cand = table.concat(title, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")

@@ -62,6 +62,19 @@ nobody to ask, as in `lulibre run`) or `"never"`:
 | `carry_metadata` | `auto` | before a duplicate or orphan record is removed, keep what only it knew as proposals |
 | `sync_propose` | `ask` | propose metadata for files new to the sync folder |
 
+### The password file
+
+`password_file` names a file that holds the content server's password and
+nothing else. lulibre never reads it: `calibredb` is given the file's name
+and reads it itself. Keep it readable by you alone (`chmod 600`); lulibre
+warns in the console when others on the machine could read it.
+
+The password cannot be stored as a salted hash. A hash is for checking a
+password someone types, and cannot be turned back into it; `calibredb` needs
+the password itself to log in to the server. What protects it is the file's
+permissions, and keeping the file out of anything that is copied or
+committed.
+
 ## Colours
 
 ```lua
@@ -84,6 +97,14 @@ end)
 lulibre.command("unlabelled", function(args)
   lulibre.filter("author:unknown no:tags " .. args)
 end, "[filter]  books with neither an author nor a subject")
+```
+
+A fourth argument says what the help overlay (`?`) is to show for the key;
+`false` keeps the key out of it:
+
+```lua
+lulibre.map("n", "gB", "run bib", "write the selection as BibTeX")
+lulibre.map("n", "gH", function() ... end, false)
 ```
 
 `<Leader>` in a key sequence is the `leader` option's key, and a panel's

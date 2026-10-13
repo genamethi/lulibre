@@ -424,10 +424,10 @@ void command_help(struct tui *t) {
   sb_puts(&h, "KEYS\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
-    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL))) continue;
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_printf(&h, "  %-12s %s%s\n", k.s, b->command,
+    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command,
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }

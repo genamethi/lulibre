@@ -113,6 +113,22 @@ quotes and punctuation. The option `propose_over` moves the line:
 
     :propose --over [filter]     as `any` for this run, and proposing again what was rejected before
     :propose --gaps [filter]     as `gaps` for this run
+    :propose --only FIELDS ...   only those fields: title authors subject ids date publisher, or t a s i d p
+    :propose --fresh ...         as if the fields were empty: the file's best reading, whatever the book says
+
+A value that is plainly not one counts as empty: a title that is a file
+name, a number or a heading, an author that is a program, a web site or a
+rank. `:junk` marks and lists the books that have such a title or author.
+
+**When one field went wrong across many books** (titles from a bad download
+run, say): narrow the list to them, then
+
+    :propose --fresh --only title
+
+proposes the file's own title for each, whatever the record says, and review
+(`gr`, then `f` `t` to see only the titles, then `A`) accepts them in one go.
+`:clear FIELDS [filter]` blanks fields outright (`u` puts them back), and
+`:propose --fresh` without `--only` re-reads every field of the books.
 
 A proposal you rejected is not made again by a later run, unless `--over`
 asks. In review, `A` (accept everything above a confidence) asks before it
@@ -139,6 +155,7 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `c` | propose blanking the field |
 | `t` | put the value in title case, and accept that |
 | `s` | sort: surest first, or by id |
+| `f` then a letter | only one field's proposals: `t` title, `a` authors, `s` subject, `i` identifiers, `d` date, `p` publisher; `f` `f` shows all again. Accept-all and reject-rest then speak for that field alone |
 | `p` | more preview: shrink the panel, and again to bring it back |
 | `w` | write the accepted ones as one batch |
 

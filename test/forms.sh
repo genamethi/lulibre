@@ -151,6 +151,10 @@ if [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ]; then
 else
   echo "FAIL  the book with the surest proposal comes first (rows $first, $second)"; fails=$((fails + 1))
 fi
+k f t
+shown "f then t shows only the title proposals" "review  2 pending.*only title"
+k f f
+shown "f twice shows all again"               "review  3 pending"
 k s
 shown "s orders by id instead"                "by id"
 shown "on the first proposal"                 "Wrong Press"

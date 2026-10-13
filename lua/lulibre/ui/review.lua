@@ -38,13 +38,16 @@ function M.run(args)
     only = {}
     for _, id in ipairs(lulibre.ids(args)) do only[id] = true end
   end
+  -- one field's proposals only, when set (f then a letter); accept-all and
+  -- reject-rest then speak for that field alone
+  local field_only = type(args) == "table" and args.field or nil
   -- the proposals with a status (pending and accepted when nil) that this review covers
   local function listed(status)
     local all = proposals.list(status, scope)
-    if not only then return all end
+    if not only and not field_only then return all end
     local out = {}
     for _, pr in ipairs(all) do
-      if only[pr.book] then out[#out + 1] = pr end
+      if (not only or only[pr.book]) and (not field_only or pr.field == field_only) then out[#out + 1] = pr end
     end
     return out
   end
@@ -167,8 +170,9 @@ function M.run(args)
     rows = build()
   end
   local function title()
-    return ("review%s  %d pending, %d accepted   %s"):format(scope == "sync" and " (sync folder)" or "",
-      #listed("pending"), #listed("accepted"), sort == "confidence" and "surest first" or "by id")
+    return ("review%s  %d pending, %d accepted   %s%s"):format(scope == "sync" and " (sync folder)" or "",
+      #listed("pending"), #listed("accepted"), sort == "confidence" and "surest first" or "by id",
+      field_only and ("   only %s (%s%s shows all)"):format(field_only, keys:key("field") or "f", keys:key("field") or "f") or "")
   end
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
@@ -237,6 +241,22 @@ function M.run(args)
       peek()
     elseif act == "sort" then
       sort = sort == "confidence" and "id" or "confidence"
+      rank_books()
+    elseif act == "field" then
+      -- the next key says which field: a letter as in :propose --only, or f again for all
+      p:title(("show only: %s   (%s all)"):format("t title  a authors  s subject  i identifiers  d date  p publisher", key))
+      local second = p:wait()
+      if not second then return end
+      local propose = require "lulibre.propose"
+      if second == key then
+        field_only = nil
+      elseif propose.FIELD[second] and #second == 1 then
+        field_only = propose.FIELD[second]
+        if #listed() == 0 then
+          lulibre.notify(("no proposals for %s here"):format(field_only))
+          field_only = nil
+        end
+      end
       rank_books()
     elseif key == "<Reload>" then
       rank_books() -- the library changed under us: books may have gone, values may differ

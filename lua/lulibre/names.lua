@@ -21,7 +21,7 @@ local NOT_NAME = set([[university universität college institute institut cwi an
 -- ranks, roles and kinds of document: words that sit where an author's name
 -- would but are never one ("Professor Emeritus", "Lecture Notes")
 -- (not words that are also surnames or first names: Dean, Reader, Fellow, Chair)
-local ROLE = set([[professor emeritus emerita lecturer editor editors edited translator translated
+local ROLE = set([[emeritus emerita lecturer editor editors edited translator translated
   foreword preface thesis dissertation notes lecture lectures report preprint draft version
   reprint reprints archive blog talks seminar colloquium workshop conference proceedings
   memorial anniversary honors honours visiting assistant associate adjunct distinguished
@@ -46,7 +46,8 @@ local GIVEN = set([[aaron adam adrian alan albert alex alexander alexandre alfre
   robin roger roland ronald ruth ryan sam samuel sandra sarah scott sean sebastian serge sergei sergey sergio
   simon sophie stefan stephen steve steven stuart susan sylvain terence terry theodore thomas tim timothy tobias
   tom tony ulrich valentin vera victor vincent vladimir walter werner wilhelm william wolfgang yuri yves]])
-local DEGREE = set("ph.d phd dr prof mr ms mrs")
+-- what stands before or after a name and is taken off it: "Professor Karen E. Smith"
+local DEGREE = set("ph.d phd dr prof professor mr ms mrs frs sir")
 -- function words: a line containing one is prose or a title, not a name list
 local TITLE_WORDS = set([[of in the for to on with from into over under via an that which
   using toward towards between about as at by its their]])
@@ -81,9 +82,13 @@ end
 -- built-in ones, or a word or phrase from the option never_authors?
 function M.never(name)
   local flat = " " .. lulibre.fold(name or ""):gsub("[^%w]+", " "):gsub("^ ", ""):gsub(" $", "") .. " "
+  local words, titles = 0, 0
   for w in flat:gmatch("%S+") do
     if ROLE[w] then return true end
+    words = words + 1
+    if DEGREE[w] then titles = titles + 1 end
   end
+  if words > 0 and words - titles < 2 then return true end -- a title with at most one word to it: "Professor", "Dr Smith"
   for _, phrase in ipairs(never()) do
     if flat:find(phrase, 1, true) then return true end
   end
