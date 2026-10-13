@@ -1,6 +1,7 @@
 #include "db/query.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -56,6 +57,10 @@ static const struct { const char *name, *sql; } is_tests[] = {
                  " WHERE ba.book = b.id AND (a.name LIKE '%;%' OR a.name LIKE '% and %'))"},
   {"filetitle", "(instr(b.title, ' ') = 0 OR b.title LIKE '%.pdf' OR b.title LIKE '%.djvu'"
                 " OR b.title LIKE '%.dvi' OR b.title LIKE '%.tex' OR b.title LIKE '%.ps')"},
+  /* a title in capitals (as far as A to Z go): what :titlecase is for */
+  {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
+  /* confirmed as right by the user (:good) */
+  {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},
@@ -399,6 +404,34 @@ fail:
   sb_free(&sql);
   query_free(q);
   return -1;
+}
+
+void query_words(void (*fn)(const char *word, void *ud), void *ud) {
+  char buf[64];
+  for (size_t i = 0; i < ARRAY_LEN(fields); i++) {
+    if (strlen(fields[i].name) < 2) continue; /* one-letter aliases would only crowd the list */
+    snprintf(buf, sizeof buf, "%s:", fields[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(is_tests); i++) {
+    snprintf(buf, sizeof buf, "is:%s", is_tests[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(has_tests); i++) {
+    snprintf(buf, sizeof buf, "has:%s", has_tests[i].name);
+    fn(buf, ud);
+    snprintf(buf, sizeof buf, "no:%s", has_tests[i].name);
+    fn(buf, ud);
+  }
+  for (size_t i = 0; i < ARRAY_LEN(sort_keys); i++) {
+    snprintf(buf, sizeof buf, "sort:%s", sort_keys[i].name);
+    fn(buf, ud);
+    snprintf(buf, sizeof buf, "sort:-%s", sort_keys[i].name);
+    fn(buf, ud);
+  }
+  fn("in:library", ud);
+  fn("in:sync", ud);
+  fn("in:all", ud);
 }
 
 void query_free(struct query *q) {

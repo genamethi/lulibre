@@ -19,15 +19,18 @@ A form with one row per field for the selected book or books.
 | `Enter` | type a value; a popup ranks suggestions and `Tab` takes the highlighted one |
 | `Space` | step through what the file itself and related books suggest |
 | `a` | fill every empty field with the best suggestion from the file |
-| `x` | clear the pending value |
+| `c` | clear: blank the field |
+| `t` | title case |
+| `x` | revert: forget the change pending for the field |
 | `w` | write |
+| `?` | every key of the form |
 
 In a list field (authors, tags, identifiers) `+x, -y` adds and removes values
 and leaves the rest alone, which is how one tag is added to two hundred books.
 
-To blank a field, empty it (`<C-u>`, or backspace) and press `Enter`: the
-form shows `(blank)` where the value will be removed. The same works on a
-proposal in review.
+To blank a field press `c`, or empty it (`<C-u>`, or backspace) and press
+`Enter`: the form shows `(blank)` where the value will be removed. Both work
+in review too.
 
 ### Copying from the page
 
@@ -40,6 +43,36 @@ flattened to one line. This works while the field is open, and `<PageUp>` /
 Inside tmux the copy is a tmux paste buffer as well, so text copied in
 another pane pastes the same way.
 
+## Title case: `gT`
+
+A title set in CAPITALS is rewritten in title case, after the APA manual:
+the first word of the title and of a subtitle is capitalised, so is every
+major word and every word of four letters or more, and articles, short
+conjunctions and short prepositions stay small.
+
+    ON THE THEORY OF GROUPS: AN INTRODUCTION
+    On the Theory of Groups: An Introduction
+
+- `gT` (`:titlecase`) does it for the selection, leaving alone titles that
+  are not in capitals; `:titlecase all` applies the style to any title.
+  `&is:capstitle` lists the titles in capitals.
+- `t` in the edit form and in review does it for the value under the cursor.
+- Proposals do it by themselves: a title found in capitals on a title page,
+  in a file's own metadata or in a `.bib` file is proposed in title case.
+  `title_case = "never"` proposes titles as found.
+
+Capitals carry no case to go by, so some of it is guessed: Roman numerals,
+words with a digit, short words without a vowel (NMR) and a list of known
+spellings (PDE, LaTeX, USA) are kept. The rules are English; both lists can
+be added to in `init.lua`:
+
+```lua
+local tc = require "lulibre.titlecase"
+tc.minor["with"] = true      -- APA capitalises "With"; this keeps it small
+tc.minor["de"] = true        -- for French titles
+tc.keep["cw"] = "CW"
+```
+
 ## Proposals and review: `gr`
 
 Scripts do not change the library; they *propose*, and you review.
@@ -50,18 +83,101 @@ Scripts do not change the library; they *propose*, and you review.
     :run normalize-tags          one spelling for subjects that exist under two
     :run bib-import FILE         what a .bib file says about books it matches
 
+`propose` reads the first pages: an arXiv stamp, a cover sheet that labels
+its fields (JSTOR's "Author(s):"), a thesis cover (title above "by", author
+after it, institution, year), a by-line under the title ("By A. Name", or
+"by" on a line of its own above the names), a page that opens with its
+author's name alone on the first line and has its title further down, or
+failing those the largest type on the page.
+
+A name the leading pages give twice (again in an e-mail address or a running
+head) is proposed with more confidence, and says so ("named twice"). Ranks
+and roles are never proposed as authors ("Professor Emeritus", "Lecture
+Notes"); the option `never_authors` adds words and phrases of your own:
+
+    lulibre.o.never_authors = "visiting scholar, working group"
+Each proposal carries where it came from and how sure it is.
+
+A field that is empty always gets the file's best candidate. A field that
+already has a value is proposed for when the file is confident (0.8 or more)
+and says something different, so a slip made by hand is caught the next
+time `:propose` runs over the book; review shows the value and the proposal
+side by side. What counts as different ignores case, accents, the shape of
+quotes and punctuation. The option `propose_over` moves the line:
+
+| `propose_over` | a field that has a value |
+|---|---|
+| `gaps` | is left alone |
+| `sure` (default) | is proposed for when the file is confident and differs |
+| `any` | is proposed for whenever the file's best candidate differs |
+
+    :propose --over [filter]     as `any` for this run, and proposing again what was rejected before
+    :propose --gaps [filter]     as `gaps` for this run
+    :propose --only FIELDS ...   only those fields: title authors subject ids date publisher, or t a s i d p
+    :propose --fresh ...         as if the fields were empty: the file's best reading, whatever the book says
+
+A value that is plainly not one counts as empty: a title that is a file
+name, a number or a heading, an author that is a program, a web site or a
+rank. `:junk` marks and lists the books that have such a title or author.
+
+A title of one word is a title when it is a plain capitalised word
+("Algebra", "Topology") and junk when it is what a file name leaves behind
+("infinite", "E807en", "tensorprod"). The option `one_word_titles` changes
+that: `ok` takes any single word for a title, `junk` takes none. Two things
+protect a title whatever it looks like: listing it in `good_titles`
+(`lulibre.o.good_titles = "Set, 1984"`), and confirming its record as good
+(`gk`), after which nothing in that record is treated as junk.
+
+**When one field went wrong across many books** (titles from a bad download
+run, say): narrow the list to them, then
+
+    :propose --fresh --only title
+
+proposes the file's own title for each, whatever the record says, and review
+(`gr`, then `f` `t` to see only the titles, then `A`) accepts them in one go.
+`:clear FIELDS [filter]` blanks fields outright (`u` puts them back), and
+`:propose --fresh` without `--only` re-reads every field of the books.
+
+A proposal you rejected is not made again by a later run, unless `--over`
+asks. In review, `A` (accept everything above a confidence) asks before it
+includes proposals that replace a value.
+
 `gr` lists the proposals book by book, with the current value beside each;
-the list and preview follow the cursor, so the title page is in view.
+the list and preview follow the cursor, so the title page is in view. The
+book whose surest proposal is surest comes first, so what can be accepted at
+a glance is at the top and what needs thought is further down; each book's
+line says how many proposals wait and how sure the surest is. `s` switches
+to book id order (the option `review_sort` sets which it starts in).
+
+Review, duplicates and orphans bring themselves up to date when the library
+changes under them: a book removed with `:remove` leaves the panel.
 
 | Key | |
 |---|---|
-| `a` `r` | accept, reject |
+| `a` `r` | accept, reject; on a book's own line, all of that book's proposals |
 | `e` | correct the proposed value, then accept it |
 | `x` · `X` | show this book's other fields under its proposals · for every book |
 | `e` on a shown field | edit it in the same pass; it becomes an accepted proposal |
 | `A` | accept everything at or above a confidence |
 | `R` | reject everything still pending |
+| `c` | propose blanking the field |
+| `t` | put the value in title case, and accept that |
+| `s` | sort: surest first, or by id |
+| `f` then a letter | only one field's proposals: `t` title, `a` authors, `s` subject, `i` identifiers, `d` date, `p` publisher; `f` `f` shows all again. Accept-all and reject-rest then speak for that field alone |
+| `p` | more preview: shrink the panel, and again to bring it back |
 | `w` | write the accepted ones as one batch |
+
+`:review FILTER` keeps the review to the books a filter matches
+(`:review author:unknown`); `w` then writes only theirs.
+
+Copying from the page does not take the cursor out of review: drag over a
+name in the preview, or double click a word, and the next key is still
+review's, so `e` then `<C-v>` puts what was copied into the field. (A plain
+click in the preview, one that selects nothing, does move the cursor there.)
+
+While the cursor is in review, duplicates, orphans or capture, the preview's
+own keys still work: `P` for the page as an image, `]` `[` to turn pages,
+`J` `K` to scroll, as do the copying keys (`yy` ...). `?` lists them.
 
 Proposals are kept between sessions.
 
@@ -80,6 +196,128 @@ and the table shows what it finds in each selected book:
 | `m` | mark the books that matched |
 | `S` `L` | save the pattern as a named rule, load one |
 
+## Layouts: pages that say their facts in known places
+
+Some pages can be read by rule rather than by the size of their type, and
+are, with more confidence:
+
+| Layout | Read from it |
+|---|---|
+| cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
+| Springer series page | the series and the volume's number, the year, the publisher |
+| arXiv stamp | the day of submission |
+| a cover sheet with labelled fields; a thesis cover | as above, under proposals |
+
+What they read is proposed like anything else, marked with the layout's
+name. A layout of your own is a few lines in `init.lua`:
+
+```lua
+require("lulibre.layouts").add {
+  name = "ams memoirs",
+  marks = { "memoirs of the", "american mathematical society" },   -- all on one of the first pages
+  fields = {
+    series = "Memoirs of the American Mathematical Society",       -- a value as it stands
+    series_index = "Number%s+(%d+)",                                -- a pattern: its capture is the value
+    pubdate = "(%d%d%d%d)%s+%S*%s*Volume",
+    publisher = function(text, doc) return "AMS" end,               -- or a function
+  },
+  confidence = 0.85,
+}
+```
+
+`marks` are Lua patterns matched without regard to case; the page they are
+all found on is the text the fields are read from. `:run candidates` shows
+what every layout reads from the book under the cursor, which is the way to
+try one out. This is a first pass: three layouts come with lulibre, and
+books from one publisher and era are where more of them will pay.
+
+## Known good records: `gk`
+
+Every record has a score from 0 to 1 for how complete and clean it looks: a
+title that reads as a title, an author that is a name, a date, a subject
+that says what the book is about, identifiers. A file name for a title, a
+title in capitals or full of figures and odd characters, an author that is
+a list or a role, and a catch-all subject (`math/general`) pull it down.
+
+`gk` (`:good`) lists the records by score, best first, with what holds each
+down. The score only suggests; confirming is yours:
+
+| Key | |
+|---|---|
+| `Space` | confirm the record as right, or take that back |
+| `A` | confirm every record at or above a score (0.85 is a record with nothing visibly wrong) |
+| `v` | show the records still to confirm, the confirmed ones, or all |
+| `e` | edit the record |
+| `L` | learn from the confirmed records (below) |
+
+`:good add` and `:good remove` do the same for the selection, and
+`&is:good` lists the confirmed records. Confirmed records are what lulibre
+learns from, so that a mistake in an unchecked record is not taught back to
+the rest.
+
+## What marks a subject: `:learn` and `:terms`
+
+`:learn` reads the indexed pages of every book and finds, for each subject,
+the phrases of two and three words that its confirmed books use far more
+than books of other subjects do: "modular forms" and "class field theory"
+for number theory, "gradient descent" for computing. It takes a few seconds.
+A phrase counts only if several of the subject's books use it, by at least
+three different authors (so that one author's habits do not), and if it
+also stands in some book's title, which keeps out cities, companies and
+turns of speech. Text that many books share word for word (a publisher's
+imprint, a series list) is set aside first. A book teaches its subject and
+those above it; a catch-all subject teaches only the ones above it.
+
+`:terms` shows what was learned, subject by subject, strongest first:
+
+| Key | |
+|---|---|
+| `x` | drop the phrase: it will not be learned for that subject again |
+| `a` | add a phrase of your own |
+| `f` | narrow the list to the books whose pages hold the phrase |
+| `d` | show the dropped ones |
+| `L` | learn again |
+
+When a book's pages hold at least two of a subject's phrases, the edit form
+offers that subject for its tags, naming the phrases ("learned: modular
+forms, elliptic curves"), never as surer than 0.6. This is a judgement from
+a handful of phrases on a book's first pages and is often wrong; it is
+there to be looked at, not trusted. `subject_learned = "propose"` makes
+`:propose` use it too, `"off"` hides it.
+
+In the edit form, subjects that say what a book is about are now listed
+before catch-alls, however many books sit in the latter. The option
+`subject_catchall` names more of them than the built-in ones (`general`,
+`papers`, `books`, `handbook`, `misc`, `other`).
+
+## What books cite: `:refs`
+
+The index holds each file's first pages; a bibliography is on its last.
+`:refs` reads those (the option `refs_pages`, 14 by default), finds the
+heading the bibliography stands under ("References", "Bibliography", numbered
+or not), cuts what follows into entries, by their numbering or by the
+hanging indent, and gives each a key by which the same work is recognised in
+another book's list however each writes it: a DOI or arXiv number where the
+entry has one, else first author, year and first page.
+
+    :refs                the selection
+    :refs all            the whole library (a couple of thousand books take seconds)
+    :refs --force ...    again, for books already read
+
+Nothing is fetched: it is all read from the files, several at a time, and
+each book is remembered, so a run can be stopped and taken up again.
+
+Books that cite the same works are about the same thing. Once references
+are read, the edit form offers for a book's tags the subject of the books
+that share references with it ("shares references with 3 books of that
+subject"), when at least two books each share at least two works with it.
+A work that half the library cites counts for little, one that two books
+cite for much. `lulibre.refs` gives scripts the lists and the coupling.
+
+Finding the heading needs no more than the text: it is a short line that is
+one of a few words and nothing else. Type size and position are there for
+the asking (each line carries them) where a layout needs them.
+
 ## Duplicates: `gd`
 
 Books whose files are byte for byte the same. Only files that share a size
@@ -90,6 +328,15 @@ default), `s` skips a group, `m` marks the surplus, `f` filters the list to
 `is:dupe`, `D` removes the surplus. What a removed record knew that the kept
 one does not becomes proposals for the kept one.
 
+`e` opens the edit form for the book under the cursor and `r` the review of
+its proposals; the duplicates panel steps aside while they are open and
+comes back up to date. `p` gives the preview more room.
+
+`t` takes from the copy under the cursor: every field where its record says
+something the kept copy's does not is proposed for the kept copy, and review
+opens on those proposals, each marked with the book it came from. Accept
+what is wanted and `w` writes it; nothing is removed.
+
 ## Orphans: `go`
 
 | Found | Suggested |
@@ -99,7 +346,10 @@ one does not becomes proposals for the kept one.
 | a file in one of calibre's folders that calibre does not know | move it out, if a book already holds the same bytes |
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
-`Space` changes a row's action, `w` carries them out. `x` opens the row
+`Space` changes a row's action, `w` carries them out. `e` and `r` open the
+edit form and the review for the row's book, as in duplicates, and `t` on a
+record whose file is gone offers what it says to the book that is the same
+work and has the file. `x` opens the row
 under the cursor to show what its columns cut short (the verdict in full,
 the whole path, where a link points); `X` opens every row. Removed records go to
 calibre's recycle bin (`u` brings them back); stray files are moved to
@@ -109,8 +359,11 @@ are repaired after every such change.
 
 ## The sync folder: `gS`
 
-Set `lulibre.o.sync_dir` to a folder where files arrive. `gS` reads it and
-shows it as the list in place of the library; `gl` goes back.
+Set `lulibre.o.sync_dir` to a folder where files arrive. A tab line then
+appears along the top: `1 Library` and `2 Sync folder`, with how many each
+holds and which the list is showing. `2` (or `gS`, or a click on the tab)
+reads the folder and shows it in place of the library; `1` (or `gl`) goes
+back.
 
 A file there is *staged*: listed, filtered, searched and previewed like a
 book, and `e`, `gc`, `:run propose`, `gr` and undo all work on it. Those
@@ -120,6 +373,7 @@ edits are kept by lulibre; nothing reaches calibre until:
 |---|---|
 | `S` | add the selection to the library with its staged metadata; the files stay |
 | `X` | add, then delete each file from the folder once calibre holds the same bytes |
+| `D` | drop: take the selection out of the folder without adding it. The files are kept under `~/.local/share/lulibre/dropped/` and `u` puts them back |
 
 `=` marks a staged file the library already has. Adding it adds nothing;
 moving it only clears it out of the folder.

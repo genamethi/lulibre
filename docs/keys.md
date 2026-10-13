@@ -38,18 +38,27 @@
 | `<C-w>h` `j` `k` `l` | window in that direction |
 | `<C-w>v` `<C-w>s` | split with another preview, side by side or stacked |
 | `<C-w>c` `<C-w>o` | close this window · close the others |
-| `<C-w>>` `<C-w><` | resize |
+| `<M-Left>` `<M-Right>` `<M-Up>` `<M-Down>` | move the line beside the focused window that way (`:resize left` ...) |
+| `<Leader>` then an arrow | the same |
+| `<C-w>>` `<C-w><` | grow or shrink the focused window |
 | `` ` `` | the log console, without moving the focus |
 
 ## The mouse
 
 | | |
 |---|---|
-| click | select the row, focus the window |
+| click | select the row, focus the window (in the preview only a plain click does: one that starts a selection leaves the cursor where it was) |
 | wheel | scroll what it is over |
 | drag in the text preview | select text; it is copied when the button is released |
 | double click · triple click there | the word · the line |
+| drag anywhere else | select what is drawn there: a row of the list, a cell of review, the line being typed, the status line, a help or message overlay |
+| double click · triple click there | the word · the row; in a panel, the whole of the cell, including what its column cut off |
+| drag the line between two windows | resize them |
+| drag a window's bar up or down | resize it against the window above (the review panel against the list) |
 | middle or right click, while typing | paste |
+
+A selection stays within the window (or line) it began in. It is copied at
+once and stays highlighted until the next key or click.
 
 `lulibre.o.mouse = 0` hands the mouse back to the terminal. With it on, hold
 Shift to make the terminal's own selection.
@@ -61,15 +70,24 @@ In the command line, a filter, a search, or a field of the edit form:
 | Key | |
 |---|---|
 | `<C-v>` | paste what was last copied, as one line |
+| `<C-y>` | copy the line as it stands |
 | the terminal's own paste | the same: line breaks become spaces, nothing is submitted |
 | `<PageUp>` `<PageDown>` | scroll the preview without leaving the field |
-| `Tab` | take the highlighted suggestion |
+| `Tab` | take the highlighted suggestion or completion |
+| `<C-n>` `<C-p>` | move through the completions |
 | `<C-a>` `<C-e>` `<C-u>` `<C-k>` `<C-w>` | start, end, delete to start, to end, a word back |
-| `<Up>` `<Down>` | history, or the suggestion list |
+| `<Up>` `<Down>` | history: entries that start with what has been typed (in a field: the suggestion list) |
 | `Enter` · `Esc` | accept · cancel |
 
-The mouse still works in the preview while a field is open, so a title or a
-name can be dragged over on the page and pasted with `<C-v>`.
+The command line completes as you type: command names, then what each
+command takes (`:set` option names and their allowed values, `:run` script
+names, `:sort` keys); `&` and `/` complete the filter language (`au` →
+`author:`, `is:d` → `is:dupe`). History is kept between sessions, separately
+for commands, filters and searches.
+
+The mouse still selects while a field is open, in the preview and in the
+panels, so a title on the page or a value in another row can be dragged over
+and pasted with `<C-v>`.
 
 ## Changing things
 
@@ -78,12 +96,14 @@ name can be dragged over on the page and pasted with `<C-v>`.
 | `e` | `edit` | edit form for the selection |
 | `gc` | `capture` | fields from names by pattern |
 | `gr` | `review` | go through proposals |
+| `gT` | `titlecase` | titles in CAPITALS to title case |
+| `gk` | `good` | the records by score, to confirm the right ones |
 | `u` | `undo` | `:undo N` for a given batch; `:history` lists them |
 | `gd` | `dupes` | books with identical files |
 | `go` | `orphans` | records without files, files without records, broken links |
-| `gS` | `sync` | read the sync folder and show it |
-| `gl` | `source library` | back to the library |
-| `S` `X` | `sync add` / `sync move` | staged files into the library |
+| `2` `gS` | `sync` | read the sync folder and show it |
+| `1` `gl` | `source library` | back to the library |
+| `S` `X` `D` | `sync add` / `sync move` / `sync drop` | staged files into the library, or out of the folder |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |
 | | `remove` | remove the selection from calibre (to its recycle bin; `u` undoes) |
 | | `embed` | write calibre's metadata into the files themselves |
@@ -107,8 +127,66 @@ name can be dragged over on the page and pasted with `<C-v>`.
 
 The edit form, review, capture, duplicates, orphans and the tree browser are
 panels. `j` `k` `gg` `G` and paging move within one; `q` or `Esc` closes it;
-`Tab`, `:` and `<C-w>` keep their meaning. Its own keys are shown in its
-title bar.
+`Tab`, `:` and `<C-w>` keep their meaning. The title bar shows a panel's
+main keys, and `?` lists all of them with what each does.
+
+A panel's keys can be changed. Each has named actions (`?` lists them), and
+`lulibre.map` with the panel's name in place of the modes puts a key on one:
+
+```lua
+lulibre.map("review", "y", "accept")   -- y accepts, and is the key the hint shows
+lulibre.map("review", "a", "")         -- a no longer does anything in review
+```
+
+The panels are `edit`, `review`, `dupes`, `orphans`, `capture` and `browse`.
+
+## Keys that belong to a place
+
+Moving inside a panel, editing the line being typed, the picker, an overlay
+and the console each have keys of their own, with named actions, bound the
+same way:
+
+```lua
+lulibre.map("panel", "n", "down")        -- n moves down in every panel
+lulibre.map("line", "<C-g>", "cancel")   -- <C-g> leaves the line being typed
+lulibre.map("console", "x", "close")
+lulibre.map("line", "<C-k>", "")         -- unbind
+```
+
+| Place | Actions |
+|---|---|
+| `panel` | `down` `up` `top` `bottom` `half-down` `half-up` `page-down` `page-up` `close` |
+| `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` |
+| `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
+| `pager` | `down` `up` `page-down` `page-up` `top` (any other key closes it) |
+| `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
+
+A binding here is one key, or two in a row (`gg`). `?` lists every place
+with its actions and the keys they are on. In a panel, movement keys come
+before the panel's own: a key bound to both moves.
+
+## The leader key
+
+`<Leader>` in a binding stands for the key the option `leader` names, `\` by
+default. Changing the option moves every `<Leader>` binding at once.
+
+```lua
+lulibre.o.leader = ","
+lulibre.map("n", "<Leader>i", "index")     -- ,i
+```
+
+| Key | Command | |
+|---|---|---|
+| `<Leader>R` | `reload-cfg` | read `init.lua` again |
+
+`:reload-cfg` first puts every key back to the built-in ones, so a binding
+you took out of `init.lua` is gone, then runs the file. Options keep their
+values unless the file sets them, and what the command line set (`-L`, `-o`)
+is applied on top again. The library and index are chosen at start; changing
+them needs a restart.
+
+Hints on screen (the status line, the tab line, messages such as "u undoes")
+name the keys as they are bound now.
 
 ## Your own
 

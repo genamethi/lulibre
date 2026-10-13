@@ -8,7 +8,8 @@ local orphans = require "lulibre.orphans"
 
 local M = {}
 
-local HELP = "Space action   x details   X all   m mark   f filter   w do it   q close"
+local keys = require("lulibre.ui.keys").of("orphans")
+local panels = require "lulibre.ui.panels"
 local SIGN = { keep = "", remove = "×", reattach = "↩", move = "→", add = "+", relink = "↩", unlink = "×" }
 local WORD = { keep = "keep", remove = "remove record", reattach = "re-attach file", move = "move out", add = "add as book",
   relink = "repair link", unlink = "delete link" }
@@ -87,25 +88,65 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, follow = true, height = 0.5,
+    title = title(), help = keys:hint("action", "expand", "edit", "write"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.5)
+  -- after something may have changed the books: read the records again, and
+  -- let go of those whose book is no longer there
+  local function refresh()
+    for i = #found.records, 1, -1 do
+      local fresh = lulibre.book(found.records[i].book.id)
+      if fresh then found.records[i].book = fresh else table.remove(found.records, i) end
+    end
+  end
 
   while true do
     local key, row = p:wait()
     if not key then return end
     local item = at[row]
-    if item and (key == "<Space>" or key == "<CR>") then
+    -- the book the row stands for: the record's own, a stray file's twin, a link's target
+    local id = item and (type(item.book) == "table" and item.book.id or item.book or item.twin)
+    if type(id) == "table" then id = id.id end
+    local act = keys:action(key)
+    if key == "<Reload>" then
+      refresh() -- the library changed under us
+    elseif act == "help" then
+      keys:show("orphans", panels.also())
+    elseif act == "peek" then
+      peek()
+    elseif act == "take" then
+      -- a record whose file is gone, and another book that is the same work
+      -- and has it: what the record says is offered to that book
+      local from = item and type(item.book) == "table" and lulibre.book(item.book.id)
+      local to = from and item.twin and lulibre.book(item.twin.id)
+      if not to then
+        lulibre.notify("this works on a record with no file that has a copy in the library to give its values to")
+      elseif dupes.pull(from, to) == 0 then
+        lulibre.notify(("book %d says nothing that book %d does not"):format(from.id, to.id))
+      else
+        panels.over(p, require("lulibre.ui.review").run, { ids = { to.id } })
+        refresh()
+      end
+    elseif act == "edit" or act == "review" then
+      if not id or not lulibre.book(id) then
+        lulibre.notify("this row has no book in the library to " .. act)
+      else
+        panels.over(p, require(act == "edit" and "lulibre.ui.edit" or "lulibre.ui.review").run, { ids = { id } })
+        refresh()
+      end
+    elseif item and act == "action" then
       local i = 1
       for k, a in ipairs(item.actions) do
         if a == item.action then i = k end
       end
       item.action = item.actions[i % #item.actions + 1]
-    elseif item and key == "x" then
+    elseif item and act == "expand" then
       open[item] = not open[item] or nil
-    elseif key == "X" then
+    elseif act == "expand_all" then
       local any = next(open) ~= nil
       open = {}
       if not any then
@@ -113,7 +154,7 @@ function M.run()
           for _, it in ipairs(list) do open[it] = true end
         end
       end
-    elseif key == "m" then
+    elseif act == "mark" then
       local n = 0
       for _, r in ipairs(found.records) do
         if r.action == "remove" then
@@ -122,12 +163,12 @@ function M.run()
         end
       end
       lulibre.notify(("marked the %d records set to be removed"):format(n))
-    elseif key == "f" then
+    elseif act == "filter" then
       lulibre.filter("is:missing")
-    elseif key == "w" then
+    elseif act == "write" then
       local n = orphans.counts(found)
       if n.remove + n.reattach + n.move + n.add + n.relink + n.unlink == 0 then
-        lulibre.notify("every row is set to keep; Space changes a row's action")
+        lulibre.notify(("every row is set to keep; %s changes a row's action"):format(keys:key("action") or "action"))
       else
         local parts = {}
         if n.reattach > 0 then parts[#parts + 1] = ("give %d records their files back"):format(n.reattach) end
@@ -141,7 +182,8 @@ function M.run()
           local carried = dupes.propose(orphans.gather(found), "record with no file")
           local out = orphans.apply(found)
           lulibre.notify(orphans.summary(out) .. (carried > 0
-            and ("; %d things the removed records knew are proposals for their copies (gr)"):format(carried) or ""),
+            and ("; %d value%s only the removed records had %s proposed for the books that remain: %s reviews them"):format(
+              carried, carried == 1 and "" or "s", carried == 1 and "is" or "are", lulibre.hint("review")) or ""),
             #out.failed > 0 and "error" or nil)
           return
         end

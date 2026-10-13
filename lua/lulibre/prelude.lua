@@ -102,12 +102,34 @@ function lulibre.each(items, fn, opts)
   if errors[1] then error(errors[1], 0) end
 end
 
+--- For a message that names a key: the key a command line is bound to now,
+-- or ":command" when it has none.
+function lulibre.hint(command)
+  return lulibre.key(command) or (":" .. command)
+end
+
+-- Keys. lulibre.map binds a global key; given the name of a screen written
+-- in Lua instead of modes, it puts a key on one of that screen's actions:
+--   lulibre.map("nv", "gx", "run mine")       a command line or a function
+--   lulibre.map("review", "y", "accept")      see lulibre.ui.keys
+do
+  local map = lulibre.map
+  function lulibre.map(modes, key, target, help)
+    local screens = require "lulibre.ui.keys"
+    if type(modes) == "string" and screens.has(modes) then return screens.set(modes, key, target) end
+    -- or of a place with keys of its own: "panel", "line", "picker", "pager", "console"
+    if type(modes) == "string" and #modes > 2 and lulibre._place_map(modes, key, target or "") then return end
+    return map(modes, key, target, help)
+  end
+end
+
 -- Screens and commands written in Lua. Each is loaded the first time it runs.
 local function screen(module)
   return function(args) require(module).run(args) end
 end
 lulibre.command("edit", screen("lulibre.ui.edit"), "edit the selected books' fields, with suggestions")
-lulibre.command("review", screen("lulibre.ui.review"), "go through proposed changes and write the accepted ones")
+lulibre.command("review", screen("lulibre.ui.review"),
+  "[filter]  go through proposed changes and write the accepted ones; with a filter, only those books'")
 lulibre.command("capture", screen("lulibre.ui.capture"),
   "[pattern]  pull fields out of file names or titles: %author% - %title%")
 
@@ -121,8 +143,12 @@ lulibre.command("undo", function(args)
   local note = r.skipped > 0 and ("; %d left alone because they changed again since"):format(r.skipped) or ""
   if #r.failed > 0 then note = note .. "; " .. tostring(r.failed[1].error) end
   if r.restored and #r.restored > 0 then
-    note = note .. ("; %d removed book%s restored from calibre's recycle bin"):format(#r.restored, #r.restored == 1 and "" or "s")
-    for _, id in ipairs(r.restored) do pcall(lulibre.mark, id, true) end
+    local staged = r.restored[1] < 0
+    note = note .. (staged and "; %d dropped file%s back in the sync folder"
+      or "; %d removed book%s restored from calibre's recycle bin"):format(#r.restored, #r.restored == 1 and "" or "s")
+    if not staged then
+      for _, id in ipairs(r.restored) do pcall(lulibre.mark, id, true) end
+    end
   end
   lulibre.notify(("undid batch %d: %d book%s put back%s"):format(r.undid, r.applied, r.applied == 1 and "" or "s", note),
     #r.failed > 0 and "error" or nil)
@@ -157,14 +183,121 @@ lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTe
 lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page images with tesseract")
 lulibre.command("enrich", script("enrich"), "[filter]  look the selection up on arXiv and CrossRef; proposes")
 lulibre.command("onboard", script("onboard"), "DIR  add the ebook files under a directory to calibre, with metadata")
+lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")
 lulibre.command("sync", script("sync"),
-  "[add | move] [filter]  the sync folder: show it; add the selection to the library; add and delete")
+  "[add | move | drop] [filter]  the sync folder: show it; add the selection; add and delete; drop without adding")
+lulibre.command("good", function(args)
+  local quality = require "lulibre.quality"
+  if args == "add" or args == "remove" then
+    local ids = lulibre.selection()
+    quality.set_good(ids, args == "add")
+    lulibre.notify(("%s %d record%s %s known good"):format(args == "add" and "confirmed" or "took", #ids,
+      #ids == 1 and "" or "s", args == "add" and "as" or "out of the"))
+  else
+    require("lulibre.ui.good").run()
+  end
+end, "[add | remove]  the records by how complete they look, to confirm the right ones; add and remove act on the selection")
+lulibre.command("learn", function()
+  local st, why = require("lulibre.learn").run()
+  if not st then
+    lulibre.notify(why, "error")
+  else
+    lulibre.notify(("learned %d phrases for %d subjects from %d confirmed books (%d read) in %ds; :terms shows them"):format(
+      st.terms, st.subjects, st.books, st.read, st.seconds))
+  end
+end, "learn the phrases that mark each subject, from the records confirmed as good (:good)")
+lulibre.command("terms", function(args) require("lulibre.ui.terms").run(args) end,
+  "[subject]  the phrases that mark each subject, as learned: review them, drop some, add your own")
 lulibre.command("orphans", screen("lulibre.ui.orphans"),
   "records with no file and files with no record: check, then clean up")
 lulibre.command("browse", function(args) require("lulibre.ui.browse").run(args) end,
   "[author | subject | series | publisher | year | format | added]  the library as a tree")
+
+--- A title in title case (APA style); see lulibre.titlecase.
+function lulibre.titlecase(s)
+  return require("lulibre.titlecase").apply(s)
+end
+
+lulibre.command("titlecase", function(args)
+  local tc, edit = require "lulibre.titlecase", require "lulibre.edit"
+  local every = args == "all"
+  local changes, skipped = {}, 0
+  for _, id in ipairs(lulibre.selection()) do
+    local book = lulibre.book(id)
+    local title = book and book.title or ""
+    if every or tc.is_caps(title) then
+      local to = tc.apply(title)
+      if to ~= title then changes[#changes + 1] = { id = id, field = "title", value = to } end
+    elseif title ~= "" then
+      skipped = skipped + 1
+    end
+  end
+  if #changes == 0 then
+    lulibre.notify(skipped > 0
+      and ("%s not in capitals; :titlecase all applies the style to any title"):format(
+        skipped == 1 and "the title is" or skipped .. " titles are")
+      or "nothing to change: the titles are in title case already")
+    return
+  end
+  local r = edit.apply(changes, { label = "title case" })
+  lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+end, "[all]  put the selected books' titles in title case: those in CAPITALS, or with all, every one")
+
+lulibre.command("clear", function(args)
+  local propose, edit = require "lulibre.propose", require "lulibre.edit"
+  local words = {}
+  for w in args:gmatch("%S+") do words[#words + 1] = w end
+  local set, bad = propose.fields(words[1] or "")
+  if not set or not next(set) then
+    lulibre.notify(("clear which field? title authors subject ids date publisher (or t a s i d p)%s"):format(
+      bad and ", not '" .. bad .. "'" or ""), "error")
+    return
+  end
+  local filter = table.concat(words, " ", 2)
+  local ids = filter ~= "" and lulibre.ids(filter) or lulibre.selection()
+  local changes, names = {}, {}
+  for field in pairs(set) do names[#names + 1] = field end
+  table.sort(names)
+  for _, id in ipairs(ids) do
+    local book = lulibre.book(id)
+    for _, field in ipairs(names) do
+      if book and edit.current(book, field) ~= "" then changes[#changes + 1] = { id = id, field = field, value = "" } end
+    end
+  end
+  if #changes == 0 then
+    lulibre.notify("those fields are empty already")
+    return
+  end
+  if not lulibre.confirm(("blank %s in %d book%s? (%s puts it back)"):format(table.concat(names, " and "), #ids,
+      #ids == 1 and "" or "s", lulibre.hint("undo"))) then
+    return
+  end
+  local r = edit.apply(changes, { label = "clear " .. table.concat(names, ",") })
+  lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+end, "FIELDS [filter]  blank fields (title authors subject ids date publisher, or t a s i d p) in the selection or the books a filter matches")
+
+lulibre.command("junk", function(args)
+  local propose, edit = require "lulibre.propose", require "lulibre.edit"
+  local ids = args ~= "" and lulibre.ids(args) or lulibre.ids("in:library")
+  lulibre.exec("mark none")
+  local n = 0
+  for _, id in ipairs(ids) do
+    local book = lulibre.book(id)
+    if book and (propose.is_gap("title", edit.current(book, "title"), id)
+        or (edit.current(book, "authors") ~= "" and propose.is_gap("authors", edit.current(book, "authors"), id))) then
+      lulibre.mark(id, true)
+      n = n + 1
+    end
+  end
+  if n == 0 then
+    lulibre.notify("no title or author here looks like junk")
+  else
+    lulibre.filter("is:marked")
+    lulibre.notify(("marked %d books whose title or author is not one (a file name, a number, a program's name); :propose proposes for them"):format(n))
+  end
+end, "[filter]  mark and list the books whose title or author is plainly not one")
 
 lulibre.command("remove", function()
   local ids = lulibre.selection()
@@ -176,7 +309,7 @@ lulibre.command("remove", function()
   for _, id in ipairs(ids) do lulibre.mark(id, false) end
   lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or ("removed %d book%s"):format(n, n == 1 and "" or "s"),
     err and "error" or nil)
-end, "remove the selected books from calibre (to its recycle bin; u puts them back)")
+end, "remove the selected books from calibre (to its recycle bin; :undo puts them back)")
 
 lulibre.command("yank", function(what)
   local ids = lulibre.selection()

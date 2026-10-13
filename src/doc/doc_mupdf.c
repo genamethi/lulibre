@@ -132,8 +132,9 @@ void doc_mupdf_extract(const char *path, const struct doc_opts *o, struct doc_in
     int n = out->npages < o->pages ? out->npages : o->pages;
     if (n < 0) n = 0;
     out->pages = xcalloc((size_t)n, sizeof *out->pages);
+    int from = o->tail ? out->npages - n : 0;
     for (int i = 0; i < n; i++) {
-      extract_page(ctx, doc, i, &out->pages[i], i < o->layout_pages);
+      extract_page(ctx, doc, from + i, &out->pages[i], i < o->layout_pages);
       out->n = i + 1;
     }
   }

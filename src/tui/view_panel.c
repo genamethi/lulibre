@@ -21,7 +21,14 @@ struct panel {
   struct prow *rows;
   int nrows, cap;
   int cur, top, page;
-  int follow, moves, pending_g;
+  int follow, moves, reloads;
+  uint32_t pending; /* the first key of a two-key binding such as gg */
+  float size; /* its share of the screen, and the edge it is docked on */
+  char side;
+  int hidden; /* taken off the screen for a while (panel_hide), not closed */
+  uint32_t *own; /* keys the script handles itself; the rest may pass to global bindings */
+  int nown;
+  char *pass; /* first words of the global commands that may be reached from here */
   panel_event_fn *event;
   void *event_ud;
 };
@@ -50,6 +57,8 @@ void panel_unref(struct panel *p) {
   free_cols(p);
   free(p->title);
   free(p->help);
+  free(p->own);
+  free(p->pass);
   free(p);
 }
 
@@ -61,6 +70,8 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->title = xstrdup("");
   p->help = xstrdup("");
   p->page = 10;
+  p->size = size;
+  p->side = side;
   wm_dock(t, &view_panel, p, size, side);
   return p;
 }
@@ -69,19 +80,73 @@ int panel_is_open(const struct panel *p) {
   return p->open;
 }
 
-void panel_close(struct panel *p) {
-  if (!p->open) return;
-  wm_undock(p->t, p); /* frees the window, which calls destroy() below */
-}
-
-/* The window is going away, by panel_close, <C-w>c, or at exit. */
-static void destroy(struct tui *t, void *state) {
-  struct panel *p = state;
+/* The panel is closed for good: say so, and drop the window's reference. */
+static void gone(struct panel *p) {
   p->open = 0;
   panel_event_fn *fn = p->event;
   p->event = NULL;
   if (fn) fn(p, NULL, -1, p->event_ud);
   panel_unref(p);
+}
+
+void panel_close(struct panel *p) {
+  if (!p->open) return;
+  if (p->hidden) { /* it has no window to close */
+    p->hidden = 0;
+    gone(p);
+    return;
+  }
+  wm_undock(p->t, p); /* frees the window, which calls destroy() below */
+}
+
+/* The window is going away, by panel_close, panel_hide, <C-w>c, or at exit. */
+static void destroy(struct tui *t, void *state) {
+  struct panel *p = state;
+  t->peek = 0;
+  if (!p->hidden) gone(p);
+}
+
+void panel_hide(struct panel *p) {
+  if (!p->open || p->hidden) return;
+  p->hidden = 1;
+  wm_undock(p->t, p);
+}
+
+static void follow(struct panel *p);
+
+void panel_show(struct panel *p) {
+  if (!p->open || !p->hidden) return;
+  p->hidden = 0;
+  wm_dock(p->t, &view_panel, p, p->size, p->side);
+  follow(p);
+}
+
+void panel_set_size(struct panel *p, float size) {
+  p->size = size;
+  if (p->open && !p->hidden) wm_set_size(p->t, p, size);
+}
+
+void panel_set_pass(struct panel *p, const char *commands) {
+  free(p->pass);
+  p->pass = commands && *commands ? xstrdup(commands) : NULL;
+}
+
+void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
+  free(p->own);
+  p->own = n > 0 ? xmalloc((size_t)n * sizeof *keys) : NULL;
+  if (n > 0) memcpy(p->own, keys, (size_t)n * sizeof *keys);
+  p->nown = n > 0 ? n : 0;
+}
+
+/* Is this key one that goes past the panel to a global binding? Only for a
+ * panel that has said which keys are its own, only for a key that is not,
+ * and only when it starts a binding to one of the commands let through. */
+int panel_passes(const struct panel *p, uint32_t key) {
+  if (!p->open || !p->pass || !p->nown) return 0;
+  if (p->pending || ctx_bound(KC_PANEL, key)) return 0; /* the panel's movement, always its own */
+  for (int i = 0; i < p->nown; i++)
+    if (p->own[i] == key) return 0;
+  return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
 }
 
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud) {
@@ -142,9 +207,19 @@ int panel_cursor(const struct panel *p) {
 }
 
 static void follow(struct panel *p) {
-  if (!p->follow || !p->open || p->cur < 0 || p->cur >= p->nrows) return;
+  if (!p->follow || !p->open || p->hidden || p->cur < 0 || p->cur >= p->nrows) return;
+  struct tui *t = p->t;
   sqlite3_int64 id = p->rows[p->cur].id; /* negative for a file staged from the sync folder */
-  if (id != 0 && id != rows_current(p->t) && rows_goto_id(p->t, id)) preview_book_changed(p->t);
+  sqlite3_int64 was = t->peek;
+  t->peek = 0;
+  if (id != 0 && id != rows_current(t)) {
+    /* a book the list does not hold (the filter leaves it out) can still be
+     * looked at: the preview shows it without the list moving */
+    if (!rows_goto_id(t, id)) t->peek = id;
+    preview_book_changed(t);
+  } else if (was) {
+    preview_book_changed(t);
+  }
 }
 
 int panel_points_at(const struct panel *p, sqlite3_int64 *id) {
@@ -165,21 +240,31 @@ void panel_set_moves(struct panel *p, int moves) {
   p->moves = moves;
 }
 
-/* Returns 1 for a key that moves the cursor (and moves it), else 0. */
-static int motion(struct panel *p, uint32_t key, int was_g) {
-  switch (key) {
-    case 'j': case NCKEY_DOWN: panel_set_cursor(p, p->cur + 1); return 1;
-    case 'k': case NCKEY_UP: panel_set_cursor(p, p->cur - 1); return 1;
-    case 'G': case NCKEY_END: panel_set_cursor(p, p->nrows - 1); return 1;
-    case NCKEY_HOME: panel_set_cursor(p, 0); return 1;
-    case 'g':
-      if (was_g) panel_set_cursor(p, 0);
-      else p->pending_g = 1;
-      return 1;
-    case KEY_CTRL | 'd': panel_set_cursor(p, p->cur + p->page / 2 + 1); return 1;
-    case KEY_CTRL | 'u': panel_set_cursor(p, p->cur - p->page / 2 - 1); return 1;
-    case KEY_CTRL | 'f': case NCKEY_PGDOWN: panel_set_cursor(p, p->cur + p->page); return 1;
-    case KEY_CTRL | 'b': case NCKEY_PGUP: panel_set_cursor(p, p->cur - p->page); return 1;
+void panel_set_reloads(struct panel *p, int reloads) {
+  p->reloads = reloads;
+}
+
+void panels_reloaded(struct tui *t) {
+  struct node *all[32];
+  int n = wm_leaves(t, all, 32);
+  for (int i = 0; i < n; i++) {
+    if (all[i]->cls != &view_panel) continue;
+    struct panel *p = all[i]->state;
+    if (p->reloads && p->open && p->event) p->event(p, "<Reload>", p->nrows ? p->cur : -1, p->event_ud);
+  }
+}
+
+/* Returns 1 for an action that moves the cursor (and moves it), else 0. */
+static int motion(struct panel *p, int action) {
+  switch (action) {
+    case PA_DOWN: panel_set_cursor(p, p->cur + 1); return 1;
+    case PA_UP: panel_set_cursor(p, p->cur - 1); return 1;
+    case PA_BOTTOM: panel_set_cursor(p, p->nrows - 1); return 1;
+    case PA_TOP: panel_set_cursor(p, 0); return 1;
+    case PA_HALF_DOWN: panel_set_cursor(p, p->cur + p->page / 2 + 1); return 1;
+    case PA_HALF_UP: panel_set_cursor(p, p->cur - p->page / 2 - 1); return 1;
+    case PA_PAGE_DOWN: panel_set_cursor(p, p->cur + p->page); return 1;
+    case PA_PAGE_UP: panel_set_cursor(p, p->cur - p->page); return 1;
   }
   return 0;
 }
@@ -202,22 +287,30 @@ void panel_wheel(struct panel *p, int delta) {
 }
 
 int panel_key(struct tui *t, struct panel *p, uint32_t key) {
-  int was_g = p->pending_g, before = p->cur;
-  p->pending_g = 0;
-  if (motion(p, key, was_g)) {
+  int before = p->cur;
+  int action = ctx_feed(KC_PANEL, &p->pending, key);
+  if (action == CTX_PENDING) return 1; /* the first key of a pair such as gg */
+  if (motion(p, action)) {
     moved(p, before);
     return 1;
   }
+  if (action == PA_CLOSE) {
+    panel_close(p);
+    return 1;
+  }
   switch (key) {
-    case 'q':
-    case NCKEY_ESC:
-      panel_close(p);
-      return 1;
     /* these stay global, so the list and preview remain reachable */
     case NCKEY_TAB:
     case ':':
     case KEY_CTRL | 'w':
       return 0;
+  }
+  /* so do Alt with anything (resizing) and the leader key, unless the script
+   * has claimed the key */
+  if ((key & KEY_ALT) || (t->km->leader && key == t->km->leader)) {
+    int own = 0;
+    for (int i = 0; i < p->nown; i++) own = own || p->own[i] == key;
+    if (!own) return 0;
   }
   if (p->event) {
     sbuf k = SBUF_INIT;
@@ -239,6 +332,37 @@ static int style_color(int style) {
   }
 }
 
+/* Where the columns fall in a window: fixed widths first, the rest shared
+ * by weight. Returns how many there are (at most 32). */
+static int columns(const struct panel *p, struct rect r, int x[32], int w[32]) {
+  int nc = p->ncols < 32 ? p->ncols : 32;
+  int fixed = 0, weight = 0, avail = r.w - 2 - (nc - 1);
+  for (int c = 0; c < nc; c++) {
+    if (p->col_widths[c] > 0) fixed += p->col_widths[c];
+    else weight += p->col_widths[c] < 0 ? -p->col_widths[c] : 1;
+  }
+  int flex = avail - fixed > 0 ? avail - fixed : 0, pos = r.x + 1;
+  for (int c = 0; c < nc; c++) {
+    int cw = p->col_widths[c] > 0 ? p->col_widths[c]
+           : weight ? flex * (p->col_widths[c] < 0 ? -p->col_widths[c] : 1) / weight : 0;
+    x[c] = pos;
+    w[c] = cw;
+    pos += cw + 1;
+  }
+  return nc;
+}
+
+const char *panel_text_at(struct panel *p, struct rect r, int y, int x) {
+  int row = p->top + (y - r.y - 2); /* below the bar and the column titles */
+  if (y - r.y < 2 || row < 0 || row >= p->nrows) return NULL;
+  const struct prow *pr = &p->rows[row];
+  if (pr->style == PSTYLE_HEAD || pr->style == PSTYLE_NOTE) return pr->ncells ? pr->cells[0] : NULL;
+  int cx[32], cw[32], nc = columns(p, r, cx, cw);
+  for (int c = 0; c < nc && c < pr->ncells; c++)
+    if (x >= cx[c] && x < cx[c] + cw[c]) return pr->cells[c];
+  return NULL;
+}
+
 static void draw(struct tui *t, void *state, struct rect r, int focused) {
   struct panel *p = state;
   struct ncplane *n = t->std;
@@ -253,21 +377,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
   if (r.h < 3 || p->ncols == 0) return;
 
-  /* column positions: fixed widths first, the rest shared by weight */
-  int x[32], w[32], nc = p->ncols < 32 ? p->ncols : 32;
-  int fixed = 0, weight = 0, avail = r.w - 2 - (nc - 1);
-  for (int c = 0; c < nc; c++) {
-    if (p->col_widths[c] > 0) fixed += p->col_widths[c];
-    else weight += p->col_widths[c] < 0 ? -p->col_widths[c] : 1;
-  }
-  int flex = avail - fixed > 0 ? avail - fixed : 0, pos = r.x + 1;
-  for (int c = 0; c < nc; c++) {
-    int cw = p->col_widths[c] > 0 ? p->col_widths[c]
-           : weight ? flex * (p->col_widths[c] < 0 ? -p->col_widths[c] : 1) / weight : 0;
-    x[c] = pos;
-    w[c] = cw;
-    pos += cw + 1;
-  }
+  int x[32], w[32], nc = columns(p, r, x, w);
 
   dr_style(n, theme.dim, C_DEFAULT, A_BOLD);
   for (int c = 0; c < nc; c++) dr_text(n, r.y + 1, x[c], w[c], p->col_titles[c]);

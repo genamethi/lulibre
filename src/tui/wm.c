@@ -104,6 +104,16 @@ static void leaves(struct node *n, struct node **out, int *count) {
   leaves(n->b, out, count);
 }
 
+int wm_leaves(struct tui *t, struct node **out, int max) {
+  struct node *all[32];
+  int n = 0;
+  if (!t->root) return 0;
+  leaves(t->root, all, &n);
+  if (n > max) n = max;
+  memcpy(out, all, (size_t)n * sizeof *out);
+  return n;
+}
+
 struct node *wm_leaf_of(struct tui *t, void *state) {
   struct node *all[32];
   int n = 0;
@@ -255,6 +265,15 @@ void wm_undock(struct tui *t, void *state) {
   }
 }
 
+void wm_set_size(struct tui *t, void *state, float size) {
+  struct node *n = wm_leaf_of(t, state);
+  if (!n || !n->parent) return;
+  if (size < 0.1f) size = 0.1f;
+  if (size > 0.9f) size = 0.9f;
+  n->parent->ratio = n->parent->a == n ? size : 1.0f - size;
+  tui_dirty(t);
+}
+
 void wm_only(struct tui *t) {
   while (t->focus->parent) {
     /* close every other window: rotate focus to a sibling subtree and back */
@@ -311,6 +330,58 @@ void wm_focus_dir(struct tui *t, char dir) {
     }
   }
   if (best) t->focus = best;
+  tui_dirty(t);
+}
+
+/* ---- moving the line between two windows ----
+ * Nothing here hands out a node to be kept: closing a window frees nodes
+ * (see wm_close_leaf), so a divider being dragged is found again by where it
+ * is each time the pointer moves. */
+
+static struct node *divider_in(struct node *n, int y, int x) {
+  if (!n->split) return NULL;
+  struct node *hit = divider_in(n->a, y, x);
+  if (!hit) hit = divider_in(n->b, y, x);
+  if (hit) return hit; /* the innermost split owns the line */
+  if (n->split == 'v' && x == n->a->r.x + n->a->r.w && y >= n->r.y && y < n->r.y + n->r.h) return n;
+  if (n->split == 'h' && y == n->b->r.y && x >= n->r.x && x < n->r.x + n->r.w) return n;
+  return NULL;
+}
+
+char wm_divider_at(struct tui *t, int y, int x) {
+  struct node *n = t->root ? divider_in(t->root, y, x) : NULL;
+  return n ? n->split : 0;
+}
+
+static void set_ratio(struct node *n, float ratio) {
+  /* each side keeps room to be a window: a few columns, or a bar and a row */
+  float least = n->split == 'v' ? 8.0f / (float)(n->r.w > 16 ? n->r.w : 16) : 2.0f / (float)(n->r.h > 4 ? n->r.h : 4);
+  if (ratio < least) ratio = least;
+  if (ratio > 1.0f - least) ratio = 1.0f - least;
+  n->ratio = ratio;
+}
+
+int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x) {
+  struct node *n = t->root ? divider_in(t->root, *y, *x) : NULL;
+  if (!n) return 0;
+  /* half a cell past the pointer, so rounding down lands the line under it */
+  if (n->split == 'v') set_ratio(n, ((float)(to_x - n->r.x) + 0.5f) / (float)(n->r.w > 1 ? n->r.w - 1 : 1));
+  else set_ratio(n, ((float)(to_y - n->r.y) + 0.5f) / (float)(n->r.h > 0 ? n->r.h : 1));
+  layout(n, n->r); /* its windows take their new places now, not at the next frame */
+  if (n->split == 'v') *x = n->a->r.x + n->a->r.w;
+  else *y = n->b->r.y;
+  tui_dirty(t);
+  return 1;
+}
+
+void wm_resize_dir(struct tui *t, char dir, int cells) {
+  char want = dir == 'h' || dir == 'l' ? 'v' : 'h';
+  struct node *n = t->focus ? t->focus->parent : NULL;
+  while (n && n->split != want) n = n->parent;
+  if (!n) return;
+  float step = want == 'v' ? (float)cells / (float)(n->r.w > 1 ? n->r.w : 1)
+                           : (float)cells / (float)(n->r.h > 1 ? n->r.h : 1);
+  set_ratio(n, n->ratio + (dir == 'h' || dir == 'k' ? -step : step));
   tui_dirty(t);
 }
 

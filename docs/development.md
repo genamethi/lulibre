@@ -40,6 +40,31 @@ hands it to make. Editing the header makes the next `make` re-run configure
 as it was last run. To release: change the header, `make check e2e`, commit,
 tag `vX.Y.Z[-pre]`.
 
+## Builds
+
+While a version is in the making its builds are numbered: 001, 002, ... in
+the order they are made. `make` gives the binary the next number whenever it
+links it, which is whenever anything it is made of has changed, the Lua
+runtime and the bundled scripts included. The number is for telling one
+build from another when something is reported; it is not part of the
+version.
+
+    lulibre -V          lulibre 0.2.0-dev (debug build 007, Lua 5.5)
+    make builds         the log: number, time, version, commit, branch, checkout
+
+```
+007  2026-10-12 21:40  0.2.0-dev  3b3ddb3+  0.2.0-dev  /media/servd/staging/lulibre-0.2.0
+```
+
+The commit carries a `+` when the tree had changes not yet committed; those
+changes are saved beside the log as `007.diff`, so a build can be traced to
+exactly what it was made from: `git diff 3b3ddb3 <other commit>` between two
+builds, plus the `.diff` of each. The log is kept in the repository's own
+directory (`.git/lulibre-builds/VERSION/`), which every worktree shares, so
+builds made in different checkouts are numbered in one sequence; it is not
+committed. From Lua the number and commit are `lulibre.build.number` and
+`lulibre.build.commit`, and a crash log names them.
+
 ## Tests
 
 | | |
@@ -115,5 +140,10 @@ text. A few tables are lulibre's own and are never dropped: `proposals`,
 `journal`, `kv`, `hashes`, `staged`. Staged files are also given rows in the
 mirror tables under negative ids (`src/db/stage.c`), which is what lets the
 list, the filters and the API treat them as books.
+
+A few tables are lulibre's own and are never dropped: `proposals`,
+`journal`, `kv`, `hashes`, `staged`, `good` (records confirmed as right),
+`terms` (the phrases learned for each subject) and `refs` (what each book
+cites).
 
 lulibre reads `metadata.db` read-only. Every change goes through `calibredb`.

@@ -9,6 +9,10 @@
  *     height = 0.45,      -- share of the screen
  *     side = "left",      -- a column down the left instead (width = 0.28)
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
+ *     reloads = true,     -- and "<Reload>" when the library has been read again
+ *     keys = { "a", "r", "<CR>" },   -- the keys this script handles, and
+ *     pass = "preview yank",         -- the global commands its other keys may
+ *                                    -- still reach (P, ], yy ...); see below
  *   }
  *   while true do
  *     local key, row = p:wait()     -- nil once the panel is closed
@@ -18,10 +22,17 @@
  *   end
  *
  *   p:rows(rows)  p:title(s)  p:help(s)  p:cursor([row])  p:close()
+ *   p:hide()  p:show()     off the screen and back, without closing: around a
+ *                          panel opened on top of this one
+ *   p:height(share)        resize (a share of the screen, 0.1 to 0.9)
+ *   p:keys(list)           say again which keys are handled
  *
  * j k gg G and paging move within the panel; q and Esc close it; Tab, ':'
  * and <C-w> keep their usual meaning. Every other key is returned by wait()
- * in the notation key maps use ("a", "<CR>", "<Space>", "<C-x>").
+ * in the notation key maps use ("a", "<CR>", "<Space>", "<C-x>"), unless
+ * the panel was given `keys` and `pass`: then a key not among `keys` that
+ * begins a global binding to one of the `pass` commands runs that binding,
+ * so the preview can be paged or shown as an image from inside the panel.
  * A column is a title, or {title, width}: width in columns, or 0 or less
  * for a share of what is left. Row styles: dim accent ok warn error, and
  * head and note, whose first cell is shown across the whole width. */
@@ -98,9 +109,9 @@ static void deliver(struct app *app, void *arg) { /* Lua thread */
   if (!key) return;
   /* nobody is waiting (the script is busy): keep the key for the next wait().
    * A run of cursor movements is worth only its last position. */
-  if (lp->qn > 0 && !strcmp(key, "<Move>")) {
+  if (lp->qn > 0 && (!strcmp(key, "<Move>") || !strcmp(key, "<Reload>"))) {
     int last = (lp->qhead + lp->qn - 1) % QUEUE;
-    if (!strcmp(lp->q[last].key, "<Move>")) {
+    if (!strcmp(lp->q[last].key, key)) {
       lp->q[last].row = row;
       return;
     }
@@ -177,6 +188,22 @@ static void set_rows(lua_State *L, struct panel *p, int idx) {
   }
 }
 
+/* a list of key names at idx -> the keys the script calls its own */
+static void set_own(lua_State *L, struct panel *p, int idx) {
+  idx = lua_absindex(L, idx);
+  uint32_t keys[128];
+  int n = 0;
+  lua_Integer m = (lua_Integer)lua_rawlen(L, idx);
+  for (lua_Integer i = 1; i <= m && n < 128; i++) {
+    lua_rawgeti(L, idx, i);
+    uint32_t seq[KEYSEQ_MAX];
+    const char *spec = lua_tostring(L, -1);
+    if (spec && key_parse(spec, seq) == 1) keys[n++] = seq[0];
+    lua_pop(L, 1);
+  }
+  panel_set_own(p, n, keys);
+}
+
 static void set_columns(lua_State *L, struct panel *p, int idx) {
   idx = lua_absindex(L, idx);
   const char *titles[32];
@@ -228,7 +255,14 @@ static int l_panel_ui(lua_State *L) {
   panel_set_follow(lp->p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "moves");
   panel_set_moves(lp->p, lua_toboolean(L, -1));
-  lua_pop(L, 4);
+  lua_getfield(L, 1, "reloads");
+  panel_set_reloads(lp->p, lua_toboolean(L, -1));
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "pass");
+  if (lua_isstring(L, -1)) panel_set_pass(lp->p, lua_tostring(L, -1));
+  lua_getfield(L, 1, "keys");
+  if (lua_istable(L, -1)) set_own(L, lp->p, -1);
+  lua_pop(L, 6);
   lua_getfield(L, 1, "columns");
   if (lua_istable(L, -1)) set_columns(L, lp->p, -1);
   lua_pop(L, 1);
@@ -288,6 +322,35 @@ static int m_cursor_ui(lua_State *L) {
   return 1;
 }
 ON_UI(m_cursor)
+
+static int m_hide_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  if (lp->p && !lp->closed) panel_hide(lp->p);
+  return 0;
+}
+ON_UI(m_hide)
+
+static int m_show_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  if (lp->p && !lp->closed) panel_show(lp->p);
+  return 0;
+}
+ON_UI(m_show)
+
+static int m_height_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  if (lp->p && !lp->closed) panel_set_size(lp->p, (float)luaL_checknumber(L, 2));
+  return 0;
+}
+ON_UI(m_height)
+
+static int m_keys_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  if (lp->p && !lp->closed) set_own(L, lp->p, 2);
+  return 0;
+}
+ON_UI(m_keys)
 
 static void close_ui(void *arg) {
   struct panel *p = arg;
@@ -359,6 +422,7 @@ void l_panel_open(lua_State *L) {
   static const luaL_Reg methods[] = {
     {"rows", m_rows},     {"title", m_title}, {"help", m_help},   {"columns", m_columns},
     {"cursor", m_cursor}, {"wait", m_wait},   {"close", m_close}, {"is_open", m_is_open},
+    {"hide", m_hide},     {"show", m_show},   {"height", m_height}, {"keys", m_keys},
     {"__gc", m_gc},      {"__close", m_close}, {NULL, NULL},
   };
   luaL_newmetatable(L, MT);

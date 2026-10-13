@@ -264,7 +264,7 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
   ix->db = db;
   ix->o = *o;
   if (ix->o.inflight < 1) ix->o.inflight = 4;
-  ix->dopts = (struct doc_opts){o->pages, o->layout_pages};
+  ix->dopts = (struct doc_opts){o->pages, o->layout_pages, 0};
   ix->progress = progress;
   ix->done = done;
   ix->ud = ud;

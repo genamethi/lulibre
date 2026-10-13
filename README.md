@@ -61,10 +61,12 @@ o.password_file = "~/.config/calibre/password-file"
 | `Space` · `V` | mark · select a range |
 | `e` | edit the selection, with ranked suggestions; `w` writes |
 | `gc` | capture fields from file names or titles by pattern |
-| `gr` | review proposed changes; `x` shows a book's other fields |
+| `gr` | review proposed changes, surest first; `x` shows a book's other fields |
+| `gT` | titles in CAPITALS to title case |
+| `?` | every key: of the interface, or inside a panel, of that panel |
 | `u` | undo the last change |
 | `J` `K` `[` `]` · `P` | scroll and page the preview · text ⇄ page image |
-| mouse | click a row; wheel scrolls; drag over preview text to copy it, `<C-v>` pastes it into a field |
+| mouse | click a row; wheel scrolls; drag over text anywhere to copy it, `<C-v>` pastes it into a field; drag the line between windows to resize |
 | `gd` · `go` | duplicate files (MD5) · orphaned records, files and links |
 | `gS` `S` `X` · `gl` | the sync folder: show, add, add-and-remove · back to the library |
 | `yb` `yk` `yp` | copy BibTeX, cite keys, paths |

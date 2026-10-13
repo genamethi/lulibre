@@ -30,7 +30,9 @@ header=$(sed -n 's/^#define LULIBRE_VERSION_\(MAJOR\|MINOR\|PATCH\) \([0-9]*\).*
 pre=$(sed -n 's/^#define LULIBRE_VERSION_PRE "\(.*\)".*/\1/p' "$src/src/version.h")
 expect   "configure recorded the header's version" "$header$pre" "$want"
 expect   "lulibre -V reports it"            "$want" "$("$bin" -V | cut -d' ' -f2)"
-contains "-V names the kind of build"       " build, Lua " "$("$bin" -V)"
+contains "-V names the kind of build"       " build " "$("$bin" -V)"
+number=$("$bin" -V | sed -n 's/.* build \([0-9][0-9]*\), Lua.*/\1/p')
+expect   "and its number, as the build log has it" "$number" "$(sh "$src/tools/build-number.sh" "$want" --log | cut -d' ' -f1 | grep -x "$number" | head -1)"
 printf 'print(lulibre.version, lulibre.build.version, lulibre.build.major .. "." .. lulibre.build.minor .. "." .. lulibre.build.patch, lulibre.build.pre)\n' > "$t/v.lua"
 sh "$src/test/mklib.sh" "$t/lib"
 api=$("$bin" --clean -L "$t/lib" run "$t/v.lua" 2>&1)

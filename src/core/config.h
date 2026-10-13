@@ -19,6 +19,18 @@ struct config {
   char *preview;       /* what the preview shows first: text | image */
   int mouse;           /* 1: clicks and the wheel are ours; 0: left to the terminal */
   int review_open;     /* 1: the review screen starts with every book opened up */
+  char *leader;        /* the key <Leader> stands for in key bindings */
+  char *review_sort;   /* confidence | id: the order of books in review */
+  char *title_case;    /* auto | never: give titles proposed in capitals title case */
+  char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
+  char *one_word_titles; /* check | ok | junk: is a title of one word a title? */
+  char *good_titles;   /* titles, comma-separated, that are titles whatever they look like */
+  char *never_titles;  /* words and phrases that mark a title as not one */
+  char *never_authors; /* words and phrases, comma-separated, that are never an author */
+  int refs_pages;      /* closing pages of a file read when looking for its bibliography */
+  char *subject_learned; /* off | suggest | propose: what the learned phrases are used for */
+  int subject_terms;   /* marking phrases kept for each subject when learning */
+  char *subject_catchall; /* subjects (or their last part) that say where a book was put, not what it is about */
   char *server;        /* calibre content server URL, used for writes */
   char *user;
   char *password_file;

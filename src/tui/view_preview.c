@@ -433,7 +433,7 @@ static void hide(struct tui *t, void *state) {
 static void draw(struct tui *t, void *state, struct rect r, int focused) {
   struct pstate *ps = state;
   struct ncplane *n = t->std;
-  sqlite3_int64 cur = rows_current(t);
+  sqlite3_int64 cur = t->peek ? t->peek : rows_current(t);
   if (cur != ps->book || ps->rows_gen != t->rows.gen) {
     int same = cur == ps->book;
     int page = ps->page, scroll = ps->scroll;
@@ -527,18 +527,23 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     /* say why there is nothing to read, and what would show it */
     dr_style(n, theme.dim, C_DEFAULT, 0);
     if (ps->file && ps->fstatus == FILE_OK) {
-      const char *why, *then = "P shows the page as an image.";
-      char buf[160];
+      const char *why, *then;
+      char buf[160], image[96], past[160], scan[200];
+      snprintf(image, sizeof image, "%s shows the page as an image.", key_hint("preview graphic"));
+      snprintf(past, sizeof past, "(the option `pages`). %s", image);
+      snprintf(scan, sizeof scan, ":ocr reads the first pages with tesseract. %s", image);
+      then = image;
       if (ps->page > ps->indexed) {
         snprintf(buf, sizeof buf, "Page %d is past the first %d pages, which is all lulibre indexes",
                  ps->page, ps->indexed);
         why = buf;
-        then = "(the option `pages`). P shows the page as an image.";
+        then = past;
       } else if (!ps->first_text) {
         why = "This file has no text in its first pages: it is a scan without a text layer.";
-        then = ":ocr reads the first pages with tesseract. P shows the page as an image.";
+        then = scan;
       } else {
-        snprintf(buf, sizeof buf, "No text on this page. Page %d has some: ] and [ turn pages.", ps->first_text);
+        snprintf(buf, sizeof buf, "No text on this page. Page %d has some: %s and %s turn pages.", ps->first_text,
+                 key_hint("preview page +1"), key_hint("preview page -1"));
         why = buf;
       }
       int row = 0;
@@ -608,6 +613,17 @@ static void copy_selection(struct tui *t, struct pstate *ps) {
     tui_msg(t, 0, "copied %d character%s   (<C-v> pastes into a field)", chars, chars == 1 ? "" : "s");
   else
     tui_msg(t, 1, "selected, but the terminal did not take the copy; <C-v> still pastes it inside lulibre");
+}
+
+int preview_has_selection(void *state) {
+  struct pstate *ps = state;
+  return ps->sel_hi > ps->sel_lo;
+}
+
+int preview_owns(void *state, int y, int x) {
+  struct pstate *ps = state;
+  return !ps->graphic && ps->text && ps->nwl > 0 && ps->body.h > 0 && y >= ps->body.y &&
+         y < ps->body.y + ps->body.h && x >= ps->body.x && x < ps->body.x + ps->body.w;
 }
 
 int preview_mouse(struct tui *t, void *state, int y, int x, int what) {

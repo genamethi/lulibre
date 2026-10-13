@@ -6,7 +6,11 @@ local edit = require "lulibre.edit"
 local M = {}
 
 --- Propose a change. opts: op ("set", "add", "remove"), source, confidence,
--- note. Returns true and the proposal's id, or false if the book already
+-- note. A title that arrives in capitals is proposed in title case, as the
+-- option title_case allows, unless it was typed (source "typed") or
+-- opts.as_is is set. A value that was proposed for this book and field and
+-- rejected is not proposed again (a decision made in review holds), unless
+-- it is typed or opts.again is set. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
 function M.add(id, field, value, opts)
@@ -14,11 +18,19 @@ function M.add(id, field, value, opts)
   local op = opts.op or "set"
   local book = lulibre.book(id)
   if not book then return false end
+  if field == "title" and op == "set" and opts.source ~= "typed" and not opts.as_is then
+    value = require("lulibre.titlecase").proposed(value)
+  end
   local ok, new = pcall(edit.resolve, book, field, op, value)
   if not ok then error(new, 2) end
   if new == edit.current(book, field) then return false end
   local dup = lulibre.store([[SELECT id, confidence, source FROM proposals WHERE book = ? AND field = ? AND op = ?
     AND value = ? AND status IN ('pending', 'accepted')]], id, field, op, value)[1]
+  if not dup and not opts.again and opts.source ~= "typed" then
+    local said_no = lulibre.store([[SELECT 1 AS x FROM proposals WHERE book = ? AND field = ? AND op = ?
+      AND value = ? AND status = 'rejected' LIMIT 1]], id, field, op, value)[1]
+    if said_no then return false end
+  end
   if dup then
     -- the same value from a surer source: the proposal takes that source's word
     if opts.confidence and opts.confidence > (dup.confidence or 0) then
@@ -35,8 +47,10 @@ end
 
 -- Library books have positive ids and files staged from the sync folder
 -- negative ones; scope ("library", "sync" or nil for both) picks a side.
+-- Proposals for a book that is no longer there (removed since) are not listed.
 local function side(scope)
-  return scope == "library" and " AND book > 0" or scope == "sync" and " AND book < 0" or ""
+  return (scope == "library" and " AND book > 0" or scope == "sync" and " AND book < 0" or "")
+    .. " AND EXISTS (SELECT 1 FROM books b WHERE b.id = proposals.book)"
 end
 
 --- Proposals with the given status ("pending" and "accepted" when omitted),
@@ -76,8 +90,16 @@ end
 
 --- Apply every accepted proposal as one batch. Waits. Returns edit.apply's
 -- result; applied proposals are marked so, failed ones go back to pending.
-function M.apply_accepted(scope)
+-- only: a set of book ids ({ [id] = true }) to keep to; the rest stay accepted.
+function M.apply_accepted(scope, only)
   local accepted = M.list("accepted", scope)
+  if only then
+    local kept = {}
+    for _, p in ipairs(accepted) do
+      if only[p.book] then kept[#kept + 1] = p end
+    end
+    accepted = kept
+  end
   local changes = {}
   for i, p in ipairs(accepted) do
     changes[i] = { id = p.book, field = p.field, value = p.value, op = p.op }
@@ -96,6 +118,16 @@ function M.apply_accepted(scope)
     end
   end
   return r
+end
+
+--- Would this proposal replace a value the book has (rather than fill an
+-- empty field, or add to a list)?
+function M.replaces(p)
+  if p.op ~= "set" then return false end
+  local book = lulibre.book(p.book)
+  if not book then return false end
+  -- a value that is plainly not one (a file name for a title) has no claim to stay
+  return not require("lulibre.propose").is_gap(p.field, edit.current(book, p.field), p.book)
 end
 
 --- Drop proposals: by status, or everything not yet applied.

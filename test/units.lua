@@ -430,5 +430,460 @@ do
     { "Herbert S. Wilf", true, "1982" })
 end
 
+-- thesis cover pages, by rule (works on OCR text: no font sizes needed)
+do
+  local th = titlepage.thesis {
+    "ON THE STRUCTURE OF", "FINITE WIDGETS", "by", "Jane Q. Roe",
+    "B.S., Some State University (1961)", "Submitted in partial fulfillment of the requirements",
+    "for the degree of", "Doctor of Philosophy in Mathematics", "at the",
+    "MASSACHUSETTS INSTITUTE OF TECHNOLOGY", "June, 1968", "Certified by", "Arthur B. Guide", "Thesis Supervisor",
+  }
+  eq("thesis: title and author either side of by", { th.title, th.authors }, { "ON THE STRUCTURE OF FINITE WIDGETS", { "Jane Q. Roe" } })
+  eq("thesis: degree, program, year", { th.degree, th.program, th.year }, { "Doctor of Philosophy", "Mathematics", "1968" })
+  eq("thesis: institution, advisor", { th.institution, th.advisor }, { "MASSACHUSETTS INSTITUTE OF TECHNOLOGY", "Arthur B. Guide" })
+  local vt = titlepage.thesis {
+    "Soil Moisture and Yield", "by John Smith", "Dissertation submitted to the Faculty of the",
+    "Virginia Polytechnic Institute and State University", "in partial fulfillment of the requirements for the degree of",
+    "MASTER OF SCIENCE", "in", "Agronomy", "APPROVED:", "R. T. Chair, Chairman", "August 1974", "Blacksburg, Virginia",
+  }
+  eq("thesis: by on the author's line", { vt.title, vt.authors, vt.year }, { "Soil Moisture and Yield", { "John Smith" }, "1974" })
+  eq("thesis: faculty of the", vt.institution, "Virginia Polytechnic Institute and State University")
+  eq("an article is not a thesis", titlepage.thesis { "A Note on Sieves", "by", "P. Erdos", "Received May 1950" }, nil)
+end
+
+-- indexing from a script
+do
+  local r = lulibre.index()
+  eq("index returns what it did", { type(r.files), type(r.ok), type(r.seconds), r.failed }, { "number", "number", "number", 0 })
+  local again = lulibre.index { force = true }
+  eq("force reads every file again", again.ok, again.files - again.missing)
+  local one = lulibre.index { filter = "id:1", force = true }
+  eq("a filter limits the run", one.files, #lulibre.files(1))
+  eq("a bad filter is an error, not a hang", (pcall(lulibre.index, { filter = "nosuch:field" })), false)
+end
+
+-- title case (APA) and case beyond ASCII
+do
+  local tc = require "lulibre.titlecase"
+  eq("minor words stay small, subtitles start again", tc.apply("ON THE THEORY OF GROUPS: AN INTRODUCTION"),
+    "On the Theory of Groups: An Introduction")
+  eq("four letters or more are capitalised", tc.apply("ALGEBRA WITH GALOIS THEORY FROM THE START"),
+    "Algebra With Galois Theory From the Start")
+  eq("hyphens: major words, and after a prefix", tc.apply("SELF-REPORT MEASURES IN MID-YEAR ANTI-HERO STUDIES"),
+    "Self-Report Measures in Mid-year Anti-hero Studies")
+  eq("numerals, initialisms and known spellings survive capitals", tc.apply("PDE AND NMR METHODS, VOL. II, 3D CASE"),
+    "PDE and NMR Methods, Vol. II, 3D Case")
+  eq("accented letters", tc.apply("ÉTUDE SUR LES ÉQUATIONS"), "Étude Sur Les Équations")
+  eq("possessives and O'", tc.apply("HILBERT'S PROBLEMS AND O'NEIL"), "Hilbert's Problems and O'Neil")
+  eq("capitals put there on purpose are kept", tc.apply("an introduction to LaTeX and McKean's PDE"),
+    "An Introduction to LaTeX and McKean's PDE")
+  eq("a capitalised minor word is lowered", tc.apply("What Is An Answer?"), "What Is an Answer?")
+  eq("is_caps", { tc.is_caps("SIEVE METHODS"), tc.is_caps("Sieve Methods"), tc.is_caps("A"), tc.is_caps("1234") },
+    { true, false, false, false })
+  tc.minor["with"] = true
+  eq("the minor words can be added to", tc.apply("ALGEBRA WITH GALOIS THEORY"), "Algebra with Galois Theory")
+  tc.minor["with"] = nil
+  eq("lulibre.titlecase", lulibre.titlecase("A NOTE ON SIEVES"), "A Note on Sieves")
+  eq("lower and upper know more than ASCII", { lulibre.lower("ÉCOLE ΑΒΓ ЖЗ"), lulibre.upper("école αβγ жз") },
+    { "école αβγ жз", "ÉCOLE ΑΒΓ ЖЗ" })
+  eq("proposed: only what came in capitals", { tc.proposed("A NOTE ON SIEVES"), tc.proposed("A note on sieves") },
+    { "A Note on Sieves", "A note on sieves" })
+  lulibre.o.title_case = "never"
+  eq("and not when the option says never", tc.proposed("A NOTE ON SIEVES"), "A NOTE ON SIEVES")
+  lulibre.o.title_case = "auto"
+  local ex = require "lulibre.extract"
+  local got
+  for _, c in ipairs(ex.from_doc { title = "LECTURES ON RIEMANN SURFACES", pages = {} }) do
+    if c.field == "title" then got = c.value end
+  end
+  eq("a title found in capitals is suggested in title case", got, "Lectures on Riemann Surfaces")
+end
+
+-- proposing for a field that already has a value
+do
+  local propose = require "lulibre.propose"
+  local proposals = require "lulibre.proposals"
+  eq("same: quotes, case and punctuation do not matter",
+    propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
+  eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
+  eq("same: a bare year offered against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
+  eq("but a full date offered against a bare year is news", propose.same("pubdate", "2010-01-01", "2010-12-29"), false)
+  eq("not the same", { propose.same("authors", "Bernhard Riemann", "W. Dittrich"), propose.same("pubdate", "2017-08-03", "2016") },
+    { false, false })
+  local book = lulibre.book(2) -- Notes, by Paul Erdős, 1996
+  local cands = {
+    { field = "authors", value = "P. Turan", source = "title page", confidence = 0.85 },
+    { field = "authors", value = "Somebody Else", source = "embedded", confidence = 0.6 },
+    { field = "publisher", value = "Acme", source = "title page", confidence = 0.55 },
+    { field = "title", value = "notes", source = "embedded", confidence = 0.6 },
+  }
+  local function fields(mode)
+    local out = {}
+    for _, w in ipairs(propose.wanted(book, cands, mode)) do out[#out + 1] = w.field .. (w.over and "!" or "") end
+    return table.concat(out, " ")
+  end
+  eq("gaps: only what is empty", fields("gaps"), "publisher")
+  eq("sure: also a confident candidate that differs, the strongest only", fields("sure"), "authors! publisher")
+  eq("any: the same here, since the title agrees", fields("any"), "authors! publisher")
+  cands[1].confidence = 0.6
+  eq("sure: a weak candidate does not go over a value", fields("sure"), "publisher")
+  eq("any: it does", fields("any"), "authors! publisher")
+  -- one field at a time, and as if the fields were empty
+  eq("--only takes names or letters", { propose.fields("title,ids"), propose.fields("t a d"), (propose.fields("t,nosuch")) },
+    { { identifiers = true, title = true }, { authors = true, pubdate = true, title = true } })
+  cands[1].confidence = 0.6
+  local function fresh(o)
+    local out = {}
+    for _, w in ipairs(propose.wanted(book, cands, o)) do out[#out + 1] = w.field .. (w.over and "!" or "") end
+    return table.concat(out, " ")
+  end
+  eq("fresh: the file's reading of every field, whatever the book says", fresh { fresh = true }, "authors! publisher")
+  eq("only: kept to the fields named", { fresh { fresh = true, only = { publisher = true } }, fresh { only = { authors = true }, over = "any" } },
+    { "publisher", "authors!" })
+  -- one word may be a title: a plain capitalised word is, what is left of a file name is not
+  eq("Algebra and Topology are titles; infinite and E807en are not", { junk.unlikely_title("Algebra"), junk.unlikely_title("Topology"),
+    junk.unlikely_title("ALGEBRA"), junk.unlikely_title("Élasticité"), junk.unlikely_title("infinite"), junk.unlikely_title("E807en"),
+    junk.unlikely_title("wilf.dvi"), junk.unlikely_title("tensorprod"), junk.unlikely_title("Dune"), junk.unlikely_title("Set"),
+    junk.unlikely_title("Lambda-Rings") }, { false, false, false, false, true, true, true, true, false, true, false })
+  lulibre.o.one_word_titles = "junk"
+  eq("one_word_titles = junk: none of them is", { junk.unlikely_title("Algebra"), junk.unlikely_title("A Course in Arithmetic") }, { true, false })
+  lulibre.o.one_word_titles = "ok"
+  eq("one_word_titles = ok: any single word is, a file name still is not", { junk.unlikely_title("infinite"), junk.unlikely_title("wilf.dvi"),
+    junk.unlikely_title("417675") }, { false, true, true })
+  lulibre.o.one_word_titles = "check"
+  lulibre.o.good_titles = "Set, 1984, infinite"
+  eq("good_titles vouches for a title whatever it looks like", { junk.unlikely_title("Set"), junk.unlikely_title("1984"),
+    junk.unlikely_title("Infinite"), junk.title("1984"), junk.unlikely_title("1985") }, { false, false, false, false, true })
+  lulibre.o.good_titles = ""
+  do
+    local quality = require "lulibre.quality"
+    eq("a title that looks like junk is a gap", propose.is_gap("title", "infinite", 2), true)
+    quality.set_good({ 2 }, true)
+    eq("but not in a record confirmed as good", { propose.is_gap("title", "infinite", 2), propose.is_gap("authors", "libgen.li", 2),
+      propose.is_gap("title", "", 2) }, { false, false, true })
+    quality.set_good({ 2 }, false)
+  end
+  eq("what is plainly no value is a gap", { propose.is_gap("title", "417675"), propose.is_gap("title", "annals-v163-n3-p05"),
+    propose.is_gap("title", "2019 44 31 x"), propose.is_gap("title", "A Course in Arithmetic"), propose.is_gap("authors", "libgen.li"),
+    propose.is_gap("authors", "Professor Emeritus"), propose.is_gap("authors", "Jean-Pierre Serre"), propose.is_gap("authors", "") },
+    { true, true, true, false, true, true, false, true })
+  -- a rejection is remembered
+  local ok, pid = proposals.add(2, "publisher", "Rejected House", { source = "test", confidence = 0.9 })
+  eq("a proposal is added", ok, true)
+  proposals.set_status(pid, "rejected")
+  eq("what was rejected is not proposed again", proposals.add(2, "publisher", "Rejected House", { source = "test" }), false)
+  eq("unless asked to", (proposals.add(2, "publisher", "Rejected House", { source = "test", again = true })), true)
+  eq("replaces: a value over a value", { proposals.replaces { book = 2, field = "authors", op = "set" },
+    proposals.replaces { book = 2, field = "publisher", op = "set" }, proposals.replaces { book = 2, field = "tags", op = "add" } },
+    { true, false, false })
+  lulibre.store("DELETE FROM proposals WHERE book = 2 AND field = 'publisher'")
+end
+
+-- by-lines
+do
+  eq("by A. Name", titlepage.byline("By David Foster Wallace"), "David Foster Wallace")
+  eq("capitals, a footnote mark", titlepage.byline("By ANDREW WILES*"), "ANDREW WILES")
+  eq("surname first", { titlepage.byline("by RIBET, K. A."), titlepage.byline("by Deligne, Pierre; Ribet, Kenneth A.") },
+    { "K. A. RIBET", "Pierre Deligne; Kenneth A. Ribet" })
+  eq("what trails the name is dropped", { titlepage.byline("by Ursula K LeGuin - from The Wind's Twelve Quarters"),
+    titlepage.byline("by Torbjorn Granlund and the GMP development team"), titlepage.byline("by Emil Artin:") },
+    { "Ursula K LeGuin", "Torbjorn Granlund", "Emil Artin" })
+  eq("by alone: the names are on the next line", titlepage.byline("  BY "), "")
+  eq("a sentence that begins with by is not a by-line", { titlepage.byline("by Gauss in 1801 in his book Disquisitiones"),
+    titlepage.byline("by I.R. Shafarevich [130]. This proof is"), titlepage.byline("by University of Arizona Library user"),
+    titlepage.byline("By General Stream of Consciousness we mean"), titlepage.byline("Bylaws of the Society") }, {})
+  local function line(text, size) return { text = text, size = size } end
+  local got = titlepage.classify { line("THE DEPRESSED PERSON", 20), line("By David Foster Wallace", 12), line("The depressed person was in terrible pain.", 10) }
+  eq("a by-line under the title names the author", { got.title, got.authors, got.byline },
+    { "THE DEPRESSED PERSON", { "David Foster Wallace" }, true })
+  got = titlepage.classify { line("AN INTRODUCTION TO SOMETHING", 18), line("by", 18), line("Jane Q. Public", 14), line("Abstract", 10) }
+  eq("by on a line of its own, as large as the title", { got.title, got.authors, got.byline },
+    { "AN INTRODUCTION TO SOMETHING", { "Jane Q. Public" }, true })
+  local authors
+  for _, c in ipairs(require("lulibre.extract").from_doc { lines = { line("HARMONIC ANALYSIS", 18), line("BY GEORGE W. MACKEY", 11) } }) do
+    if c.field == "authors" then authors = c end
+  end
+  eq("and is proposed with the page's word for it", { authors.value, authors.source, authors.confidence },
+    { "George W. Mackey", "by-line", 0.85 })
+end
+
+-- who is not an author, and a page that opens with its author's name
+do
+  eq("ranks and roles are never authors", { names.never("Professor Emeritus"), names.never("Lecture Notes"),
+    names.never("David Mumford"), names.never("John Dean") }, { true, true, false, false })
+  eq("so they are not names", { names.clean("Professor Emeritus"), names.clean("David Mumford") }, { nil, "David Mumford" })
+  -- words that are a rank in one place and a name in another stay names
+  eq("Dean, Senior, Reader, Fellow and Chair are people's names", { names.never("Dean Koontz"), names.never("Mary Senior"),
+    names.never("John Reader"), names.never("Anne Fellow"), names.clean("W. Reader"), names.clean("Dean Rickles") },
+    { false, false, false, false, "W. Reader", "Dean Rickles" })
+  lulibre.o.never_authors = "visiting scholar, Brown and Harvard"
+  eq("the option adds to them", { names.never("Brown and Harvard Universities"), names.never("Harvard Brown") }, { true, false })
+  lulibre.o.never_authors = ""
+  eq("a person on more than shape: an initial, a given name, an e-mail", { names.is_person("Sidney A. Morris"),
+    names.is_person("David Mumford"), names.is_person("Xu Zhang", "write to x.zhang@example.org"), names.is_person("Hopf Algebras"),
+    names.is_person("Delta Lake") }, { true, true, true, false, false })
+  local function line(text, size) return { text = text, size = size } end
+  local page = {
+    line("David Mumford", 23.8), line("Archive for Reprints,", 16.8), line("Notes, Talks, and Blog", 16.8),
+    line("Professor Emeritus", 12.5), line("Brown and Harvard Universities", 12.5), line("David_Mumford@brown.edu", 12.6),
+    line("Finding the Rhythms of the Primes", 20), line("October 30, 2014", 11.7),
+    line("Barry Mazur and William Stein are writing an excellent book entitled", 13.2),
+    line("What is Riemann's Hypothesis? The book leads up to Riemann's", 13.2),
+    line("explicit formula which, in von Mangoldt's form, is the formula for the", 13.2),
+  }
+  local got = titlepage.classify(page)
+  eq("the name on the first line is the author, the next largest line the title",
+    { got.authors, got.title, got.name_first }, { { "David Mumford" }, "Finding the Rhythms of the Primes", true })
+  local text = {}
+  for i, l in ipairs(page) do text[i] = l.text end
+  local authors
+  for _, c in ipairs(require("lulibre.extract").from_doc { lines = page, text = table.concat(text, "\n") }) do
+    if c.field == "authors" then authors = authors or c end
+  end
+  eq("proposed as such, surer for being on the page twice", { authors.value, authors.source, authors.confidence },
+    { "David Mumford", "first line, named twice", 0.85 })
+  got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
+  eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
+  got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),
+    line("UNIVERSITY OF OXFORD", 7.6) }
+  eq("a title may begin with Introduction, and with a smaller line that leads into it", { got.title, got.authors },
+    { "Introduction to Commutative Algebra", { "M. F. ATIYAH" } })
+  got = titlepage.classify { line("ON THE LOGARITHMS OF", 10), line("NEGATIVE AND IMAGINARY NUMBERS", 10), line("Leonhard Euler", 10),
+    line("1. In the exchange of letters between Messrs. Leibnitz and Jean Bernoulli, we find", 10),
+    line("a great controversy over the logarithms of negative and imaginary numbers.", 10), line("more text here", 10) }
+  eq("a page in one size: the capitals at the top are the title, the name under them the author", { got.title, got.authors },
+    { "ON THE LOGARITHMS OF NEGATIVE AND IMAGINARY NUMBERS", { "Leonhard Euler" } })
+  eq("a title before a name is taken off it", { names.clean("Professor Karen E. Smith"), names.never("Professor Karen E. Smith"),
+    names.never("Professor Emeritus"), names.never("Professor") }, { "Karen E. Smith", false, true, true })
+end
+
+-- how far a record can be trusted, and the ones confirmed
+do
+  local quality = require "lulibre.quality"
+  local full = { title = "A Course in Arithmetic", author = "Jean-Pierre Serre", authors = { "Jean-Pierre Serre" },
+    tags = { "math/number-theory" }, year = 1973, idents = { isbn = "9780387900407" }, publisher = "Springer" }
+  eq("a complete record scores 1", (quality.score(full)), 1)
+  local s, why = quality.score { title = "S0025-5718-1975-0376583-0", author = "Unknown", authors = {}, tags = {}, idents = {} }
+  eq("a file name for a title and nothing else scores 0", { s, why[1] }, { 0, "the title looks like a file name or a heading" })
+  s, why = quality.score { title = "Notes on Sieves", author = "P. Erdos", authors = { "P. Erdos" }, tags = { "math/general" },
+    year = 1950, idents = {} }
+  eq("a catch-all subject counts for little", { s < 0.85, table.concat(why, "; "):find("catch%-all") ~= nil }, { true, true })
+  eq("which subjects are catch-alls", { quality.catchall("math/general"), quality.catchall("linguistics/papers"),
+    quality.catchall("math/number-theory") }, { true, true, false })
+  lulibre.o.subject_catchall = "to-read"
+  eq("the option adds to them", quality.catchall("math/to-read"), true)
+  lulibre.o.subject_catchall = ""
+  eq("odd characters and figures pull a title down",
+    (quality.score { title = "x__[3]==|| 2019 44 31", author = "A. Name", authors = { "A. Name" }, tags = {}, idents = {} }) < 0.3, true)
+  quality.set_good({ 2 }, true)
+  eq("a record can be confirmed", { quality.is_good(2), quality.is_good(1), quality.good_ids(), lulibre.count("is:good") }, { true, false, { 2 }, 1 })
+  local ranked = quality.ranked { good = true }
+  eq("ranked lists them with their scores", { #ranked, ranked[1].book.id, ranked[1].good }, { 1, 2, true })
+  quality.set_good({ 2 }, false)
+  eq("and unconfirmed", quality.is_good(2), false)
+end
+
+-- phrases, and what is learned from them
+do
+  local t = "The ring of integers of a number field is a Dedekind domain. Class field theory (of the\nring of inte-\ngers); x2 breaks it. Modular forms and elliptic curves."
+  eq("the phrases of a text: within a clause, no function word at either end, a broken word joined",
+    lulibre.phrases(t), { "ring of integers", "number field", "dedekind domain", "class field", "class field theory",
+      "field theory", "modular forms", "forms and elliptic", "elliptic curves" })
+  eq("words of the trade make no phrases, words that only look like them do",
+    lulibre.phrases("All rights reserved. Copyright Springer Verlag. Power series over a number field."),
+    { "power series", "number field" })
+  eq("symbols and other scripts end a clause", lulibre.phrases("zeta · function ∞ random matrix"), { "random matrix" })
+  local c = lulibre.counter()
+  c:add(t)
+  c:add("Elliptic curves over a number field. Modular forms again, modular forms.")
+  c:add("nothing of note here")
+  eq("a counter counts texts, not mentions", { c:texts(), c:count("modular forms"), c:count("ring of integers"), c:count("no such") },
+    { 3, 2, 1, 0 })
+  eq("prune forgets the rare", { c:prune(2), c:of("On modular forms and the ring of integers of a number field") },
+    { 3, { "modular forms", "number field" } })
+  local lines = lulibre.counter()
+  for i = 1, 3 do
+    lines:add_lines("No part of this publication may be reproduced in any form\nwithout permission.\nBook " .. i .. " is about something of its own entirely")
+  end
+  lines:add_lines("No part of this publication may be reproduced in any form\nanother copy", true)
+  eq("lines many texts share are found (a copy of the last text is not another text)",
+    lines:count("no part of this publication may be reproduced in any form"), 3)
+  eq("and can be taken out", lines:strip("Sieve methods\nNo part of this Publication may be reproduced in any form\nby A. Name", 3),
+    "Sieve methods\n.\nby A. Name\n")
+
+  local learn = require "lulibre.learn"
+  eq("a subject and those above it", learn.lineage("math/number-theory/algebraic"), { "math/number-theory/algebraic", "math/number-theory", "math" })
+  local st, why = learn.run()
+  eq("nothing is learned until records are confirmed", { st, why:find("confirmed as good") ~= nil }, { nil, true })
+  for _, term in ipairs { "modular forms", "elliptic curves", "class field theory" } do learn.set("math/number-theory", term, "kept") end
+  for _, term in ipairs { "class field theory", "ideal class group" } do learn.set("math/number-theory/algebraic", term, "kept") end
+  for _, term in ipairs { "neural networks", "gradient descent" } do learn.set("cs", term, "kept") end
+  eq("a subject's phrases", #learn.terms("math/number-theory"), 3)
+  local got = learn.classify("We study modular forms and elliptic curves over the rationals.")
+  eq("classify finds the subjects whose phrases a text holds", { got[1].subject, #got[1].matched, #got }, { "math/number-theory", 2, 1 })
+  local subject, confidence, phrases = learn.suggest("Modular forms, elliptic curves and class field theory.")
+  eq("suggest names the subject and the phrases", { subject, confidence > 0.5, #phrases }, { "math/number-theory", true, 3 })
+  subject = learn.suggest("Class field theory and the ideal class group of a number field.")
+  eq("the more particular subject, when it fits", subject, "math/number-theory/algebraic")
+  eq("one phrase is not enough", learn.suggest("A note on neural networks."), nil)
+  learn.set("cs", "gradient descent", "dropped")
+  eq("a dropped phrase no longer counts", { #learn.terms("cs"), #learn.terms("cs", true) }, { 1, 2 })
+  lulibre.store("DELETE FROM terms")
+  learn.loaded = nil
+  eq("with nothing learned there is nothing to suggest", { learn.ready(), learn.candidate(1) }, { false })
+end
+
+-- layouts: pages that say their facts in known places
+do
+  local layouts = require "lulibre.layouts"
+  local cip = layouts.cip [[Mathematics Subject Classification: 22E46
+
+Library of Congress Cataloging in Publication Data
+Lang, Serge
+SL2(R).
+(Graduate texts in mathematics; 105)
+Originally published: Reading, Mass.:
+Addison-Wesley, 1975.
+Bibliography: p.
+Includes index.
+I. Lie groups.
+2. Representations of groups.
+I. Title.
+II. Series.
+QA387.L35
+1985
+512'.55
+85-14802
+ISBN 978-1-4612-9581-5]]
+  eq("a cataloguing block: who, what, the series and its number", { cip.authors, cip.title, cip.series, cip.series_index },
+    { "Serge Lang", "SL2(R)", "Graduate Texts in Mathematics", "105" })
+  eq("and the subject its class stands for", { cip.tags, cip.identifiers }, { "math/analysis", "isbn:9781461295815" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Logic from computer science: proceedings of a workshop held November
+13-17, 1989/Yiannis Moschovakis, editor.
+p. cm. - (Mathematical Sciences Research Institute
+publications; 27)
+1. Logic, Symbolic and mathematical-Congresses.
+QA9.AIL64 1991
+511.3-dc20]]
+  eq("a title filed under itself, with its editor after the stroke", { cip.title:sub(1, 27), cip.authors, cip.tags, cip.pubdate },
+    { "Logic from computer science", "Yiannis Moschovakis", "math/logic", "1991" })
+  eq("classes to subjects", { taxonomy.from_lcc("QA247 .S47"), taxonomy.from_lcc("QA564.H25"), taxonomy.from_lcc("QA76.9"),
+    taxonomy.from_lcc("P291"), taxonomy.from_lcc("ZZ1"), taxonomy.from_dewey("512'.7"), taxonomy.from_dewey("516.3/5"), taxonomy.from_dewey("x") },
+    { "math/number-theory", "math/algebraic-geometry", "cs", "linguistics", nil, "math/number-theory", "math/algebraic-geometry" })
+  layouts.add {
+    name = "test memoirs", marks = { "memoirs of the", "test society" },
+    fields = { series = "Memoirs of the Test Society", series_index = "Number%s+(%d+)", publisher = function() return "TS" end },
+    confidence = 0.7,
+  }
+  local got = {}
+  for _, c in ipairs(layouts.read { texts = { "nothing here", "MEMOIRS OF THE\nTest Society\nNumber 412\nMay 1989" } }) do
+    if c.source == "test memoirs" then got[c.field] = c.value .. " " .. c.confidence end
+  end
+  eq("a layout of one's own: a constant, a pattern, a function", got,
+    { publisher = "TS 0.7", series = "Memoirs of the Test Society 0.7", series_index = "412 0.7" })
+  eq("it does not apply where its marks are not all on a page", #layouts.read { texts = { "memoirs of the", "test society" } }, 0)
+  layouts.remove("test memoirs")
+  got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
+  eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
+end
+
+-- references: the bibliography at the end of a file
+do
+  local refs = require "lulibre.refs"
+  eq("the heading of a bibliography", { refs.is_heading("References"), refs.is_heading("  BIBLIOGRAPHY "), refs.is_heading("7. References"),
+    refs.is_heading("References 213"), refs.is_heading("References to the literature are given below") }, { true, true, true, false, false })
+  local function l(text, x0) return { text = text, x0 = x0, size = 9 } end
+  local pages = {
+    { no = 18, lines = { l("so the theorem follows.", 70), l("References", 270), l("[1] F. V. Atkinson, Some aspects of Baxter's functional", 75),
+      l("equation, J. Math. Anal. Appl. 7 (1963), 1–30.", 88), l("[2] G. Baxter, An analytic problem, Pacific J. Math. 10", 75) } },
+    { no = 19, lines = { l("(1960), 731–742.", 88), l("19", 300), l("[3] see the remark above", 75) } },
+  }
+  local lines, page = refs.find(pages)
+  eq("the lines under it, over the page break, without the page number", { #lines, page }, { 5, 18 })
+  local entries = refs.entries(lines)
+  eq("numbered entries, their continuation lines joined", { #entries, entries[2] },
+    { 3, "[2] G. Baxter, An analytic problem, Pacific J. Math. 10 (1960), 731–742." })
+  entries = refs.entries { l("Abdulali, S. 1994. Algebraic cycles in families of abelian", 108), l("varieties. Canad. J. Math. 46, 1121–1134.", 122),
+    l("André, Y. 2004. Une introduction aux motifs. Panoramas et", 108), l("Synthèses, 17. Société Mathématique de France.", 123) }
+  eq("entries told apart by their hanging indent", { #entries, entries[2]:sub(1, 16) }, { 2, "André, Y. 2004." })
+  eq("a key by which a work is known, however a list writes it", {
+    refs.key("[1] F. V. Atkinson, Some aspects of Baxter's functional equation, J. Math. Anal. Appl. 7 (1963), 1–30."),
+    refs.key("Abdulali, S. 1994. Algebraic cycles in families of abelian varieties. Canad. J. Math. 46 (1994), 1121–1134."),
+    refs.key("[DG67] Jean Dieudonné and Alexander Grothendieck, Éléments de géométrie algébrique, Publ. Math. IHES (1967)."),
+    refs.key("J.-P. Serre. A course in arithmetic. Springer, 1973."),
+    refs.key("Serre, J.-P.: A course in arithmetic. Springer (1973)"),
+    refs.key("Wiles, A. (1995). Modular elliptic curves. Annals of Mathematics 141, 443-551. doi:10.2307/2118559"),
+    refs.key("H. Cohen, Number theory, arXiv:1012.6008v2, 2010."),
+    refs.key("see the remark above") },
+    { "atkinson:1963:1", "abdulali:1994:1121", "dieudonne:1967", "serre:1973", "serre:1973", "doi:10.2307/2118559", "arxiv:1012.6008" })
+  -- coupling: books 1 and 2 cite the same two works
+  for _, row in ipairs { { 1, "serre:1973" }, { 1, "wiles:1995:443" }, { 2, "serre:1973" }, { 2, "wiles:1995:443" }, { 2, "lang:2002" } } do
+    lulibre.store("INSERT OR IGNORE INTO refs(book, key, raw) VALUES(?, ?, '')", row[1], row[2])
+  end
+  local c = refs.coupled(1)
+  eq("the books that cite what a book cites", { #c, c[1].book, c[1].shared }, { 1, 2, 2 })
+  eq("one such book is not enough to name a subject", refs.subject(1), nil)
+  eq("what a book cites", #refs.of(2), 3)
+  lulibre.store("DELETE FROM refs")
+end
+
+-- one record's values offered to another
+do
+  local dupes = require "lulibre.dupes"
+  local from, to = lulibre.book(2), lulibre.book(1) -- Notes, by Paul Erdős, 1996, with a subject; paper, by nobody
+  local n = dupes.pull(from, to)
+  local got = {}
+  for _, p in ipairs(lulibre.sql("SELECT field, op, value, source FROM proposals WHERE book = 1 AND source = 'book 2' ORDER BY field")) do
+    got[#got + 1] = p.field .. ":" .. p.op
+  end
+  eq("pull proposes what the other record has", { n >= 3, table.concat(got, " "):find("authors:set") ~= nil,
+    table.concat(got, " "):find("tags:add") ~= nil }, { true, true, true })
+  eq("and nothing the second time", dupes.pull(from, to), 0)
+  lulibre.store("DELETE FROM proposals WHERE source = 'book 2'")
+end
+
+-- which build this is
+eq("the build has a number and a commit", { lulibre.build.number:match("^%d%d%d+$") ~= nil, #lulibre.build.commit > 0 }, { true, true })
+
+-- keys: the screens' tables, and the global keymap as scripts see it
+do
+  local screens = require "lulibre.ui.keys"
+  local review = screens.of("review")
+  eq("a screen's key means an action", { review:action("a"), review:action("<CR>"), review:action("z") }, { "accept", "edit" })
+  eq("its hint names the keys in force", review:hint("accept", "write"), "a accept   w write   ? keys")
+  lulibre.map("review", "y", "accept")
+  eq("lulibre.map puts a key on a screen's action", { review:action("y"), review:action("a") }, { "accept", "accept" })
+  eq("and the hint shows the new key", review:hint("accept"), "y accept   ? keys")
+  lulibre.map("review", "a", "")
+  eq("an empty action frees a key", review:action("a"), nil)
+  eq("an unknown action is refused", (pcall(lulibre.map, "review", "y", "nosuch")), false)
+  screens.reset()
+  eq("reset puts the keys back", { review:action("a"), review:action("y") }, { "accept" })
+  eq("Enter is spelled out", screens.of("edit"):hint("edit"), "Enter edit   ? keys")
+  eq("the global key for a command", { lulibre.key("undo"), lulibre.key("preview graphic"), lulibre.key("no such") }, { "u", "P" })
+  eq("or the command, for a hint", { lulibre.hint("undo"), lulibre.hint("index") }, { "u", ":index" })
+  lulibre.map("n", "gU", "undo")
+  eq("a later binding is the one named", lulibre.key("undo"), "gU")
+  -- places with keys of their own: a panel's movement, the line being typed ...
+  lulibre.map("panel", "n", "down")
+  eq("a place's key can be added", lulibre.place_keys("panel"):find("j  <Down>  n +down a row") ~= nil, true)
+  lulibre.map("panel", "n", "")
+  eq("and taken away", lulibre.place_keys("panel"):find("j  <Down> +down a row") ~= nil, true)
+  lulibre.map("console", "gt", "top")
+  eq("two keys in a row are allowed", lulibre.place_keys("console"):find("gg  gt +the oldest entry") ~= nil, true)
+  eq("an unknown action of a place is refused", (pcall(lulibre.map, "line", "<C-g>", "nosuch")), false)
+  eq("no such place", lulibre.place_keys("nowhere"), nil)
+  lulibre.map("n", "gB", "run bib", "write the selection as BibTeX")
+  lulibre.map("n", "gH", function() end, false)
+  eq("a key can say what it does, or stay out of the help", { lulibre.key("run bib") }, { "gB" })
+  lulibre.map("n", "<Leader>z", "echo led")
+  local found
+  for _, m in ipairs(lulibre.maps()) do
+    if m.command == "echo led" then found = m end
+  end
+  eq("lulibre.maps lists bindings", found and found.modes, "n")
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

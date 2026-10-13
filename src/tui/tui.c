@@ -84,9 +84,12 @@ static size_t segment_start(const struct tui *t) {
     sbuf core = SBUF_INIT;
     for (const char *c = t->sugg_sep; *c; c++)
       if (*c != ' ') sb_putc(&core, *c);
-    if (core.len)
+    if (core.len) {
       for (const char *q = text; (q = strstr(q, core.s)); q += core.len)
         start = (size_t)(q - text) + core.len;
+    } else if (strrchr(text, ' ')) { /* separated by spaces alone: the last word */
+      start = (size_t)(strrchr(text, ' ') - text) + 1;
+    }
     sb_free(&core);
   }
   while (text[start] == ' ') start++;
@@ -109,12 +112,18 @@ static void suggest_rematch(struct tui *t) {
   double *scores = xcalloc((size_t)t->nsugg, sizeof *scores);
   int empty = q.len == 0;
   for (int i = 0; i < t->nsugg; i++) {
+    if (t->sugg_prefix) { /* completion: by prefix, in the order given, and not before a letter is typed */
+      if ((empty && t->sugg_prefix != 2) || strncmp(t->sugg[i].folded, q.s, q.len) || !t->sugg[i].folded[q.len])
+        continue;
+      t->sugg_order[t->nsugg_match++] = i;
+      continue;
+    }
     scores[i] = empty ? 0 : fuzzy_score(q.s, t->sugg[i].folded);
     if (scores[i] <= FUZZY_NONE / 2) continue;
     if (!empty && !strcmp(q.s, t->sugg[i].folded) && t->nsugg > 1) continue; /* already typed */
     t->sugg_order[t->nsugg_match++] = i;
   }
-  if (!empty) {
+  if (!empty && !t->sugg_prefix) {
     sugg_scores = scores;
     qsort(t->sugg_order, (size_t)t->nsugg_match, sizeof *t->sugg_order, by_sugg_score);
   }
@@ -171,6 +180,7 @@ static void draw_suggestions(struct tui *t, int bottom_y, int x) {
     if (cw > w) w = cw;
   }
   w += 2;
+  if (w < 14) w = 14;
   if (w > t->cols_n - x) w = t->cols_n - x;
   if (w < 12) return;
   for (int i = 0; i < rows; i++) {
@@ -195,11 +205,94 @@ void tui_input(struct tui *t, const char *label, const char *initial, input_fn *
   if (t->prompt == PROMPT_INPUT) tui_input_cancel(t); /* one question at a time */
   tui_prompt(t, PROMPT_INPUT, initial);
   suggest_clear(t);
+  t->sugg_prefix = 0;
   t->input_change = NULL;
   free(t->input_label);
   t->input_label = xstrdup(label && *label ? label : "> ");
   t->input_cb = cb;
   t->input_ud = ud;
+}
+
+/* ---- history: one per kind of line, kept between sessions ---- */
+
+static const char *const hist_key[3] = {"history:command", "history:filter", "history:search"};
+
+static int hist_of(enum prompt_kind kind) {
+  return kind == PROMPT_COMMAND ? 0 : kind == PROMPT_FILTER ? 1 : kind == PROMPT_SEARCH ? 2 : -1;
+}
+
+static void history_save(struct tui *t, int k) {
+  sbuf all = SBUF_INIT;
+  for (int i = 0; i < t->hist[k].n; i++) sb_printf(&all, "%s\n", t->hist[k].v[i]);
+  sqlite3_stmt *st;
+  if (sqlite3_prepare_v2(t->app->db.h, "INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", -1, &st, NULL) ==
+      SQLITE_OK) {
+    sqlite3_bind_text(st, 1, hist_key[k], -1, SQLITE_STATIC);
+    sqlite3_bind_text(st, 2, all.s ? all.s : "", -1, SQLITE_STATIC);
+    sqlite3_step(st);
+    sqlite3_finalize(st);
+  }
+  sb_free(&all);
+}
+
+static void history_load(struct tui *t) {
+  sqlite3_stmt *st;
+  for (int k = 0; k < 3; k++) {
+    if (sqlite3_prepare_v2(t->app->db.h, "SELECT value FROM kv WHERE key = ?", -1, &st, NULL) != SQLITE_OK) return;
+    sqlite3_bind_text(st, 1, hist_key[k], -1, SQLITE_STATIC);
+    const char *all = sqlite3_step(st) == SQLITE_ROW ? (const char *)sqlite3_column_text(st, 0) : NULL;
+    for (const char *p = all; p && *p;) {
+      size_t len = strcspn(p, "\n");
+      if (len) {
+        t->hist[k].v = xrealloc(t->hist[k].v, ((size_t)t->hist[k].n + 1) * sizeof(char *));
+        t->hist[k].v[t->hist[k].n++] = xstrndup(p, len);
+      }
+      p += len + (p[len] == '\n');
+    }
+    sqlite3_finalize(st);
+  }
+}
+
+static void history_add(struct tui *t, enum prompt_kind kind, const char *line) {
+  int k = hist_of(kind);
+  if (k < 0 || !*line || strchr(line, '\n')) return;
+  /* an entry used again moves to the end instead of appearing twice */
+  for (int i = 0; i < t->hist[k].n; i++)
+    if (!strcmp(t->hist[k].v[i], line)) {
+      free(t->hist[k].v[i]);
+      memmove(&t->hist[k].v[i], &t->hist[k].v[i + 1], (size_t)(t->hist[k].n - i - 1) * sizeof(char *));
+      t->hist[k].n--;
+      break;
+    }
+  if (t->hist[k].n >= 300) {
+    free(t->hist[k].v[0]);
+    memmove(&t->hist[k].v[0], &t->hist[k].v[1], (size_t)(t->hist[k].n - 1) * sizeof(char *));
+    t->hist[k].n--;
+  }
+  t->hist[k].v = xrealloc(t->hist[k].v, ((size_t)t->hist[k].n + 1) * sizeof(char *));
+  t->hist[k].v[t->hist[k].n++] = xstrdup(line);
+  history_save(t, k);
+}
+
+/* Up and Down: the nearest entry, older or newer, that starts with what was
+ * typed before the first of them was pressed. */
+static void history_step(struct tui *t, int dir) {
+  int k = hist_of(t->prompt);
+  if (k < 0 || !t->hist[k].n) return;
+  if (!t->hist_prefix) t->hist_prefix = xstrdup(t->line.text.s ? t->line.text.s : "");
+  size_t plen = strlen(t->hist_prefix);
+  for (int i = t->hist_pos + dir; i >= 0 && i <= t->hist[k].n; i += dir) {
+    if (i == t->hist[k].n) { /* past the newest: back to what was typed */
+      t->hist_pos = i;
+      le_set(&t->line, t->hist_prefix);
+      return;
+    }
+    if (!strncmp(t->hist[k].v[i], t->hist_prefix, plen)) {
+      t->hist_pos = i;
+      le_set(&t->line, t->hist[k].v[i]);
+      return;
+    }
+  }
 }
 
 void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial) {
@@ -211,7 +304,13 @@ void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial) {
   le_set(&t->line, initial ? initial : "");
   free(t->prompt_saved);
   t->prompt_saved = kind == PROMPT_FILTER ? xstrdup(t->rows.filter ? t->rows.filter : "") : NULL;
-  t->hist_pos = t->nhistory;
+  suggest_clear(t);
+  free(t->comp_ctx);
+  t->comp_ctx = NULL;
+  free(t->hist_prefix);
+  t->hist_prefix = NULL;
+  t->hist_pos = hist_of(kind) >= 0 ? t->hist[hist_of(kind)].n : 0;
+  complete_refresh(t);
   free(t->msg);
   t->msg = NULL;
   if (kind == PROMPT_SEARCH) rows_search_begin(t);
@@ -248,13 +347,6 @@ void tui_prompt_cancel(struct tui *t) {
   else prompt_close(t);
 }
 
-static void history_add(struct tui *t, const char *line) {
-  if (!*line) return;
-  if (t->nhistory && !strcmp(t->history[t->nhistory - 1], line)) return;
-  t->history = xrealloc(t->history, ((size_t)t->nhistory + 1) * sizeof *t->history);
-  t->history[t->nhistory++] = xstrdup(line);
-}
-
 static void filter_timer_cb(uv_timer_t *h) {
   struct tui *t = h->data;
   const char *text = t->line.text.s ? t->line.text.s : "";
@@ -267,8 +359,9 @@ static void prompt_paste(struct tui *t);
 
 static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
   const char *text = t->line.text.s ? t->line.text.s : "";
-  switch (key) {
-    case NCKEY_ENTER: {
+  int action = ctx_feed(KC_LINE, NULL, key);
+  switch (action) {
+    case LA_ACCEPT: {
       char *line = xstrdup(text);
       enum prompt_kind kind = t->prompt;
       if (kind == PROMPT_INPUT) {
@@ -277,8 +370,8 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
         return;
       }
       prompt_close(t);
+      history_add(t, kind, line);
       if (kind == PROMPT_COMMAND) {
-        history_add(t, line);
         tui_exec(t, line);
       } else if (kind == PROMPT_SEARCH) {
         rows_search_end(t, line, *line != '\0');
@@ -288,49 +381,49 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
       free(line);
       return;
     }
-    case KEY_CTRL | 'v': /* paste what was last copied, as one line */
+    case LA_PASTE: /* what was last copied, as one line */
       prompt_paste(t);
       return;
-    case NCKEY_PGUP: /* the preview stays readable while a field is typed */
+    case LA_COPY: /* the line as it stands */
+      if (*text && clip_copy(text, strlen(text))) tui_show_msg(t, 0, "copied the line");
+      return;
+    case LA_PREVIEW_UP: /* the preview stays readable while a field is typed */
       preview_scroll(t, -8);
       return;
-    case NCKEY_PGDOWN:
+    case LA_PREVIEW_DOWN:
       preview_scroll(t, 8);
       return;
-    case NCKEY_ESC:
-    case KEY_CTRL | 'c':
+    case LA_CANCEL:
       tui_prompt_cancel(t);
       return;
-    case NCKEY_TAB:
-      if (t->prompt == PROMPT_INPUT && t->nsugg_match) {
+    case LA_COMPLETE:
+      if (t->nsugg_match) {
         suggest_accept(t);
-        if (t->input_change) t->input_change(t, t->line.text.s ? t->line.text.s : "", t->input_ud);
-        tui_dirty(t);
+        prompt_changed(t);
       }
       return;
-    case KEY_CTRL | 'n':
-    case KEY_CTRL | 'p':
-    case NCKEY_UP:
-    case NCKEY_DOWN:
-      if (t->prompt == PROMPT_INPUT && t->nsugg_match) {
-        int down = key == NCKEY_DOWN || key == (KEY_CTRL | 'n');
+    case LA_NEXT:
+    case LA_PREV:
+    case LA_UP:
+    case LA_DOWN: {
+      /* in a field up and down walk the suggestions; at a command line they
+       * walk the history, and next and prev the completions */
+      int stepping = action == LA_NEXT || action == LA_PREV;
+      if (t->nsugg_match && (t->prompt == PROMPT_INPUT || stepping)) {
+        int down = action == LA_DOWN || action == LA_NEXT;
         t->sugg_sel = (t->sugg_sel + (down ? 1 : t->nsugg_match - 1)) % t->nsugg_match;
         tui_dirty(t);
         return;
       }
-      if (t->prompt == PROMPT_COMMAND && t->nhistory) {
-        t->hist_pos += key == NCKEY_UP || key == (KEY_CTRL | 'p') ? -1 : 1;
-        if (t->hist_pos < 0) t->hist_pos = 0;
-        if (t->hist_pos >= t->nhistory) {
-          t->hist_pos = t->nhistory;
-          le_set(&t->line, "");
-        } else {
-          le_set(&t->line, t->history[t->hist_pos]);
-        }
+      if (!stepping) {
+        history_step(t, action == LA_UP ? -1 : 1);
+        complete_refresh(t);
+        suggest_rematch(t);
         tui_dirty(t);
       }
       return;
-    case NCKEY_BACKSPACE:
+    }
+    case LA_BACKSPACE:
       if (t->line.text.len == 0) {
         /* A field that has been emptied stays open: Enter then answers with
          * nothing, which is how a value is blanked. The other prompts are
@@ -348,8 +441,14 @@ static void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
 
 /* the text being typed changed: filters and suggestions follow it */
 static void prompt_changed(struct tui *t) {
+  free(t->hist_prefix); /* typing ends a walk through the history */
+  t->hist_prefix = NULL;
   if (t->prompt == PROMPT_FILTER || t->prompt == PROMPT_SEARCH)
     uv_timer_start(&t->ftimer, filter_timer_cb, 40, 0);
+  if (t->prompt != PROMPT_INPUT) {
+    complete_refresh(t);
+    suggest_rematch(t);
+  }
   if (t->prompt == PROMPT_INPUT) {
     suggest_rematch(t);
     if (t->input_change) t->input_change(t, t->line.text.s ? t->line.text.s : "", t->input_ud);
@@ -360,12 +459,12 @@ static void prompt_changed(struct tui *t) {
 /* ----------------------------------------------------------------- input */
 
 static void help_key(struct tui *t, uint32_t key) {
-  switch (key) {
-    case 'j': case NCKEY_DOWN: t->help_scroll++; break;
-    case 'k': case NCKEY_UP: t->help_scroll--; break;
-    case KEY_CTRL | 'd': case NCKEY_PGDOWN: case ' ': t->help_scroll += 10; break;
-    case KEY_CTRL | 'u': case NCKEY_PGUP: t->help_scroll -= 10; break;
-    case 'g': t->help_scroll = 0; break;
+  switch (ctx_feed(KC_PAGER, NULL, key)) {
+    case GA_DOWN: t->help_scroll++; break;
+    case GA_UP: t->help_scroll--; break;
+    case GA_PAGE_DOWN: t->help_scroll += 10; break;
+    case GA_PAGE_UP: t->help_scroll -= 10; break;
+    case GA_TOP: t->help_scroll = 0; break;
     default:
       free(t->help);
       t->help = NULL;
@@ -408,8 +507,26 @@ static void prompt_paste(struct tui *t) {
  * and copies. While a field is being typed the list and panels are left
  * alone, but the preview can still be scrolled and selected from, and the
  * middle or right button pastes. Overlays ignore the mouse. */
+/* The line of the screen a position is on, as a rectangle: what a selection
+ * begun outside any window (the status line, the line being typed) keeps to. */
+static struct rect line_at(const struct tui *t, int y) {
+  return (struct rect){y, 0, 1, t->cols_n};
+}
+
+/* The button has come up after a press in a preview: if nothing was
+ * selected it was a plain click, and the cursor's window moves there. */
+static void preview_click_done(struct tui *t) {
+  void *pv = t->pv.state;
+  t->pv.state = NULL;
+  struct node *nd = pv ? wm_leaf_of(t, pv) : NULL;
+  if (!nd || nd->cls != &view_preview || nd == t->focus) return;
+  if (preview_has_selection(pv) || t->sel.shown) return;
+  t->pv.back = t->focus->state;
+  t->focus = nd;
+  tui_dirty(t);
+}
+
 static void on_mouse(struct tui *t, const struct ncinput *ni) {
-  if (t->help || t->mode == MODE_PICKER) return;
   int release = ni->evtype == NCTYPE_RELEASE;
   int wheel = ni->id == NCKEY_SCROLL_UP ? -3 : ni->id == NCKEY_SCROLL_DOWN ? 3 : 0;
   int left = ni->id == NCKEY_BUTTON1;
@@ -419,20 +536,79 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     struct node *in = wm_leaf_of(t, t->drag);
     if (!in || in->cls != &view_preview || !preview_mouse(t, in->state, ni->y, ni->x, release ? 2 : 1))
       t->drag = NULL;
+    if (release) preview_click_done(t);
     return;
   }
+  /* a line between windows follows the pointer */
+  if (t->rs.on && (left || ni->id == NCKEY_MOTION)) {
+    if (!wm_divider_drag(t, &t->rs.y, &t->rs.x, ni->y, ni->x)) t->rs.on = 0; /* its windows are gone */
+    if (release) t->rs.on = 0;
+    return;
+  }
+  /* a press on a window's bar becomes a resize if the pointer then goes up
+   * or down, and stays a selection if it goes sideways */
+  if (t->rs.armed && (left || ni->id == NCKEY_MOTION)) {
+    if (!release && ni->y != t->rs.y) {
+      sel_clear(t);
+      t->rs.armed = 0;
+      t->rs.on = 1;
+      on_mouse(t, ni);
+      return;
+    }
+    if (release || ni->x != t->rs.x) t->rs.armed = 0;
+  }
+  /* and so does one selecting what is on the screen */
+  if (t->sel.on && (left || ni->id == NCKEY_MOTION)) {
+    if (release) {
+      sel_release(t, ni->y, ni->x);
+      preview_click_done(t);
+    } else {
+      sel_move(t, ni->y, ni->x);
+    }
+    return;
+  }
+  if (release && left) preview_click_done(t);
   if (release || ni->id == NCKEY_MOTION) return;
+  sel_clear(t);
 
+  /* over an overlay the mouse only selects */
+  if (t->help || t->mode == MODE_PICKER) {
+    if (left) sel_press(t, ni->y, ni->x, (struct rect){0, 0, t->rows_n, t->cols_n}, NULL);
+    return;
+  }
   struct node *nd = wm_at(t, ni->y, ni->x);
+  struct rect clip = nd ? nd->r : line_at(t, ni->y);
+  if (left) {
+    char split = wm_divider_at(t, ni->y, ni->x);
+    t->rs.split = split;
+    t->rs.y = ni->y;
+    t->rs.x = ni->x;
+    t->rs.on = split == 'v'; /* the rule between windows is nothing but a handle */
+    t->rs.armed = split == 'h';
+    if (t->rs.on) return;
+  }
   if (t->mode == MODE_PROMPT) {
     if (ni->id == NCKEY_BUTTON2 || ni->id == NCKEY_BUTTON3) prompt_paste(t);
     else if (nd && nd->cls == &view_preview && wheel) preview_scroll(t, wheel);
-    else if (nd && nd->cls == &view_preview && left && preview_mouse(t, nd->state, ni->y, ni->x, 0))
-      t->drag = nd->state;
+    else if (nd && nd->cls == &view_preview && left && preview_owns(nd->state, ni->y, ni->x)) {
+      if (preview_mouse(t, nd->state, ni->y, ni->x, 0)) t->drag = nd->state;
+    } else if (left) {
+      sel_press(t, ni->y, ni->x, clip, nd); /* from a panel's row, say, into the field */
+    }
     return;
   }
   if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
-  if (!nd || (!wheel && !left)) return;
+  if (left && ni->y == 0 && t->app->cfg.sync_dir[0]) { /* a click on a source tab */
+    if (ni->x >= t->tab_x[0] && ni->x < t->tab_x[1]) tui_exec(t, "source library");
+    else if (ni->x >= t->tab_x[1] && ni->x < t->tab_x[2]) tui_exec(t, "sync");
+    return;
+  }
+  if (!nd) { /* the status line, the message line */
+    if (left) sel_press(t, ni->y, ni->x, clip, NULL);
+    return;
+  }
+  if (!wheel && !left) return;
+  int in_text = 0;
   if (nd->cls == &view_list) {
     int row = wheel ? t->rows.cur + wheel : t->rows.top + ni->y - nd->r.y - 1;
     if (wheel || (ni->y > nd->r.y && row < t->rows.n)) {
@@ -445,11 +621,28 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     else panel_click(nd->state, ni->y - nd->r.y);
   } else if (nd->cls == &view_preview) {
     if (wheel) preview_scroll(t, wheel);
-    else if (preview_mouse(t, nd->state, ni->y, ni->x, 0)) t->drag = nd->state;
+    else if ((in_text = preview_owns(nd->state, ni->y, ni->x)) && preview_mouse(t, nd->state, ni->y, ni->x, 0))
+      t->drag = nd->state;
   } else if (nd->cls == &view_console && wheel) {
     console_wheel(nd->state, wheel);
   }
-  if (!wheel) t->focus = nd;
+  if (!wheel) {
+    if (nd->cls != &view_preview) {
+      t->focus = nd;
+    } else {
+      /* in a preview the click may be the start of a copy: see t->pv */
+      double now = now_s();
+      int again = now - t->pv.at < 0.4;
+      t->pv.at = now;
+      t->pv.state = again ? NULL : nd->state;
+      if (again) { /* a double click: put the cursor back where the first click took it from */
+        struct node *back = t->pv.back ? wm_leaf_of(t, t->pv.back) : NULL;
+        if (back) t->focus = back;
+        t->pv.back = NULL;
+      }
+    }
+    if (!in_text) sel_press(t, ni->y, ni->x, clip, nd);
+  }
   tui_dirty(t);
 }
 
@@ -460,6 +653,7 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (ni->evtype == NCTYPE_RELEASE) return;
+  sel_clear(t); /* a selection is shown until the next key */
   if (ni->id == NCKEY_RESIZE) {
     unsigned y, x;
     notcurses_refresh(t->nc, &y, &x);
@@ -509,9 +703,10 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   if (t->mode == MODE_NORMAL && t->focus->cls == &view_console && t->km->npending == 0 &&
       console_key(t, t->focus->state, key))
     return;
-  /* a focused panel takes keys first, unless a global sequence is under way */
+  /* a focused panel takes keys first, unless a global sequence is under way
+   * or the key is one it lets through to a global binding */
   if (t->mode == MODE_NORMAL && t->focus->cls == &view_panel && t->km->npending == 0 &&
-      panel_key(t, t->focus->state, key))
+      !panel_passes(t->focus->state, key) && panel_key(t, t->focus->state, key))
     return;
   const char *cmd = keymap_feed(t->km, t->mode, key);
   if (cmd) {
@@ -635,7 +830,8 @@ static void draw_status(struct tui *t, int y) {
                                     sched_live(t->app) == 1 ? "" : "s");
   if (t->progress) sb_printf(&right, "%s   ", t->progress);
   uint64_t unseen = log_errors() - t->errors_seen;
-  if (unseen) sb_printf(&right, "%llu error%s (`)   ", (unsigned long long)unseen, unseen == 1 ? "" : "s");
+  if (unseen) sb_printf(&right, "%llu error%s (%s)   ", (unsigned long long)unseen, unseen == 1 ? "" : "s",
+                        key_hint("console"));
   if (t->ix) sb_printf(&right, "indexing %d/%d   ", t->ix_done, t->ix_total);
   if (r->search) sb_printf(&right, "/%s: %d   ", r->search, r->nhits);
   if (r->nmarks) sb_printf(&right, "%d marked   ", r->nmarks);
@@ -664,7 +860,7 @@ static void draw_status(struct tui *t, int y) {
     fx += dr_text(n, y, fx, end - fx, "filter ");
     dr_style(n, C_DEFAULT, theme.bar_bg, A_BOLD);
     fx += dr_text(n, y, fx, end - fx, r->filter);
-    char *hint = xasprintf("   %d of %d   <BS> shows all", r->n, r->total);
+    char *hint = xasprintf("   %d of %d   %s shows all", r->n, r->total, key_hint("filter"));
     if (!r->running && fx + dr_width(hint, strlen(hint)) <= end) {
       dr_style(n, theme.dim, theme.bar_bg, 0);
       dr_text(n, y, fx, end - fx, hint);
@@ -692,7 +888,7 @@ static void draw_bottom(struct tui *t, int y) {
     while (cur - dr_width(text, skip) > W - lw - 2 && skip < t->line.cur) skip++;
     while (skip < t->line.text.len && ((unsigned char)text[skip] & 0xc0) == 0x80) skip++;
     dr_text(n, y, lw, W - lw, text + skip);
-    if (t->prompt == PROMPT_INPUT && t->nsugg_match) draw_suggestions(t, y, lw);
+    if (t->nsugg_match) draw_suggestions(t, y, lw);
     notcurses_cursor_enable(t->nc, y, lw + cur - dr_width(text, skip));
     return;
   }
@@ -742,6 +938,55 @@ static void draw_help(struct tui *t) {
   }
 }
 
+/* ---- the source tabs: which of the library and the sync folder the list
+ * is showing, and how to get to the other. Shown once a sync folder is set. */
+
+static int count_books(struct tui *t, const char *where) {
+  sqlite3_stmt *st;
+  int n = 0;
+  char sql[96];
+  snprintf(sql, sizeof sql, "SELECT count(*) FROM books WHERE %s", where);
+  if (sqlite3_prepare_v2(t->app->db.h, sql, -1, &st, NULL) != SQLITE_OK) return 0;
+  if (sqlite3_step(st) == SQLITE_ROW) n = sqlite3_column_int(st, 0);
+  sqlite3_finalize(st);
+  return n;
+}
+
+static int tabs_shown(const struct tui *t) {
+  return t->app->cfg.sync_dir[0] != '\0';
+}
+
+static void draw_tabs(struct tui *t) {
+  struct ncplane *n = t->std;
+  dr_style(n, theme.dim, theme.bar_bg, 0);
+  dr_fill(n, 0, 0, t->cols_n);
+  char label[2][96];
+  snprintf(label[0], sizeof label[0], " 1  Library  %d ", count_books(t, "id > 0"));
+  snprintf(label[1], sizeof label[1], " 2  Sync folder  %d ", count_books(t, "id < 0"));
+  int x = 0;
+  for (int i = 0; i < 2; i++) {
+    int on = t->rows.source == i;
+    dr_style(n, on ? theme.on_accent : theme.bar_fg, on ? (i ? theme.ok : theme.accent) : theme.bar_bg,
+             on ? A_BOLD : 0);
+    t->tab_x[i] = x;
+    x += dr_text(n, 0, x, t->cols_n - x, label[i]);
+    t->tab_x[i + 1] = x;
+    dr_style(n, theme.border, theme.bar_bg, 0);
+    if (i == 0) x += dr_text(n, 0, x, t->cols_n - x, "│");
+  }
+  char hint[200];
+  if (t->rows.source)
+    snprintf(hint, sizeof hint, "%s add   %s add and remove   %s drop   %s library", key_hint("sync add"),
+             key_hint("sync move"), key_hint("sync drop"), key_hint("source library"));
+  else
+    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("sync"));
+  int hw = dr_width(hint, strlen(hint));
+  if (x + hw + 3 < t->cols_n) {
+    dr_style(n, theme.dim, theme.bar_bg, 0);
+    dr_text(n, 0, t->cols_n - hw - 1, hw, hint);
+  }
+}
+
 static void render(struct tui *t) {
   unsigned rows, cols;
   ncplane_dim_yx(t->std, &rows, &cols);
@@ -749,13 +994,21 @@ static void render(struct tui *t) {
   t->cols_n = (int)cols;
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
+  keymap_set_leader(t->km, t->app->cfg.leader);
+  if (t->peek && t->focus->cls != &view_panel) { /* the panel that was looking has lost the cursor */
+    t->peek = 0;
+    preview_book_changed(t);
+  }
   if (t->rows_n >= 4 && t->cols_n >= 20) {
-    wm_layout(t, (struct rect){0, 0, t->rows_n - 2, t->cols_n});
+    int top = tabs_shown(t) ? 1 : 0;
+    wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});
     wm_draw(t);
+    if (top) draw_tabs(t);
     draw_status(t, t->rows_n - 2);
     draw_bottom(t, t->rows_n - 1);
     if (t->help) draw_help(t);
     if (t->picker) picker_draw(t);
+    sel_draw(t);
   }
   dr_style(t->std, C_DEFAULT, C_DEFAULT, 0);
   notcurses_render(t->nc);
@@ -784,6 +1037,10 @@ static void ix_done(struct indexer *ix, const struct index_stats *st, void *ud) 
   struct index_stats s = *st; /* st lives inside the indexer being freed */
   indexer_free(t->ix);
   t->ix = NULL;
+  /* tell whoever was waiting, even when leaving: their memory is theirs to free */
+  int nhook = t->nix_hook;
+  t->nix_hook = 0;
+  for (int i = 0; i < nhook; i++) t->ix_hook[i](&s, t->ix_hook_ud[i]);
   if (t->quit) return;
   if (s.queued)
     tui_msg(t, 0, "indexed %d files in %.1fs (%d could not be read)", s.ok, s.elapsed, s.failed);
@@ -814,6 +1071,23 @@ void tui_start_index(struct tui *t, int force) {
   tui_dirty(t);
 }
 
+int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
+              void *ud, char **err) {
+  if (t->nix_hook == 8) {
+    *err = xstrdup("too many scripts are waiting for the indexer");
+    return -1;
+  }
+  if (!t->ix) {
+    t->ix_done = t->ix_total = t->ix_failed = 0;
+    t->ix = indexer_start(t->app->loop, &t->app->db, o, ix_progress, ix_done, t, err);
+    if (!t->ix) return -1;
+    tui_dirty(t);
+  }
+  t->ix_hook[t->nix_hook] = done;
+  t->ix_hook_ud[t->nix_hook++] = ud;
+  return 0;
+}
+
 /* Calibre changed underneath us (the content server, calibredb, another
  * lulibre): pick it up without being asked. */
 static void tick_cb(uv_timer_t *h) {
@@ -837,11 +1111,13 @@ void tui_setup(void) {
   done = 1;
   commands_builtin();
   keymap_defaults(&tui_keymap);
+  ctx_defaults();
 }
 
 void tui_teardown(void) {
   commands_free();
   keymap_free(&tui_keymap);
+  ctx_free();
 }
 
 static void closed(uv_handle_t *h) {
@@ -891,6 +1167,7 @@ int tui_run(struct app *app) {
   uv_timer_start(&t->tick, tick_cb, 2000, 2000);
 
   rows_set_filter(t, "");
+  history_load(t);
   /* first run, or books added since the last one: index in the background */
   sqlite3_stmt *st;
   if (sqlite3_prepare_v2(app->db.h, "SELECT count(*) FROM files WHERE status = 0", -1, &st, NULL) ==
@@ -936,8 +1213,12 @@ int tui_run(struct app *app) {
   clip_free();
   app->tui = NULL;
   le_free(&t->line);
-  for (int i = 0; i < t->nhistory; i++) free(t->history[i]);
-  free(t->history);
+  for (int k = 0; k < 3; k++) {
+    for (int i = 0; i < t->hist[k].n; i++) free(t->hist[k].v[i]);
+    free(t->hist[k].v);
+  }
+  free(t->hist_prefix);
+  free(t->comp_ctx);
   free(t->prompt_saved);
   free(t->input_label);
   free(t->progress);

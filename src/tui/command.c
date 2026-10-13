@@ -88,6 +88,12 @@ void tui_exec(struct tui *t, const char *line) {
   else lapi_spawn_ref(t->app, c->lua_ref, c->name, e);
 }
 
+const char *command_at(int i, const char **help) {
+  if (i < 0 || i >= ncmds) return NULL;
+  if (help) *help = cmds[i].help;
+  return cmds[i].name;
+}
+
 /* ---- helpers ---- */
 
 static int arg_is(const char *args, const char *word) {
@@ -212,7 +218,18 @@ static void c_split(struct tui *t, const char *args) {
 
 static void c_close(struct tui *t, const char *args) { wm_close(t); }
 static void c_only(struct tui *t, const char *args) { wm_only(t); }
-static void c_resize(struct tui *t, const char *args) { wm_resize(t, atoi(args)); }
+static void c_resize(struct tui *t, const char *args) {
+  static const struct { const char *word; char dir; int cells; } dirs[] = {
+    {"left", 'h', 2}, {"right", 'l', 2}, {"up", 'k', 1}, {"down", 'j', 1},
+  };
+  for (size_t i = 0; i < ARRAY_LEN(dirs); i++)
+    if (arg_is(args, dirs[i].word)) {
+      int n = atoi(arg_rest(args));
+      wm_resize_dir(t, dirs[i].dir, n > 0 ? n : dirs[i].cells);
+      return;
+    }
+  wm_resize(t, atoi(args));
+}
 
 static void c_preview(struct tui *t, const char *args) {
   if (arg_is(args, "scroll")) preview_scroll(t, atoi(arg_rest(args)));
@@ -388,7 +405,8 @@ void commands_builtin(void) {
   command_register("split", c_split, "[v|h] [list|preview]  open another window");
   command_register("close", c_close, "close the focused window");
   command_register("only", c_only, "close every window but the focused one");
-  command_register("resize", c_resize, "+N | -N  grow or shrink the focused window");
+  command_register("resize", c_resize,
+                   "left | right | up | down [N]  move the line beside the focused window;  +N | -N  grow or shrink it");
   command_register("preview", c_preview,
                    "scroll N | page N | graphic | zoom +1|-1|0 | pan N  (zoom and pan: image only)");
   command_register("pick", c_pick, "books | authors | subjects | filters  fuzzy finder");
@@ -406,12 +424,16 @@ void command_help(struct tui *t) {
   sb_puts(&h, "KEYS\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
-    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL))) continue;
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_printf(&h, "  %-12s %s%s\n", k.s, b->command,
+    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command,
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
+  }
+  for (int c = 0; c < KC_N; c++) {
+    sb_putc(&h, '\n');
+    ctx_describe(c, &h, 1);
   }
   sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n");
   for (int i = 0; i < ncmds; i++) sb_printf(&h, "  %-10s %s\n", cmds[i].name, cmds[i].help);
@@ -426,7 +448,8 @@ void command_help(struct tui *t) {
           "  -term negates;  or  starts an alternative;  sort:-added orders\n"
           "\nA command acts on the range being selected, else on the marked books in\n"
           "the list, else on the book under the cursor.\n"
-          "\nj/k scroll this help; q or Esc closes it.\n");
+          "\nEvery key here can be changed in init.lua with lulibre.map: a command line for\n"
+          "the keys at the top, an action name for the places listed after them.\n");
   tui_pager(t, "help", h.s);
   sb_free(&h);
 }

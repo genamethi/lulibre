@@ -3,6 +3,151 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## 0.2.0 (in development: branch `0.2.0-dev`, merged into `main` as it goes)
+
+Added
+- Thesis and dissertation cover pages are read by rule (title above "by",
+  author after it, degree, program, institution, year, advisor), following
+  Choudhury et al., JCDL 2020. It needs no font information, so it also works
+  on pages read by OCR.
+- `D` (`:sync drop`) takes staged files out of the sync folder without adding
+  them; they are kept aside and `u` puts them back.
+- With a sync folder set, a tab line shows `1 Library` and `2 Sync folder`
+  with their counts and which one the list is showing; `1`, `2` or a click
+  switch, and the keys that act on staged files are shown beside it.
+- The command line completes: command names, option names and their values
+  for `:set`, scripts for `:run`, the arguments of other commands, and the
+  filter language at `&` and `/`. `Tab` takes the highlighted completion,
+  `<C-n>` `<C-p>` move through them.
+- History for the command, filter and search lines, kept between sessions.
+  `Up` and `Down` recall entries that start with what has been typed.
+- `lulibre.index{filter=, force=}` runs the indexer from a script and waits
+  for it.
+- Every panel's keys can be changed: `lulibre.map("review", "y", "accept")`.
+  The title bar shows a panel's main keys and `?` lists them all, both
+  written from the keys in force.
+- The remaining fixed keys can be changed too: moving inside a panel and
+  closing it, editing the line being typed, the picker, overlays and the
+  console each have named actions, bound with `lulibre.map("panel", "n",
+  "down")`. `?` lists them all with their keys.
+- `c` clears a field in the edit form and in review. In the edit form `x`,
+  which dropped the pending change, is now called revert.
+- `<Leader>` in key bindings, set by the option `leader` (default `\`).
+- `:reload-cfg` (`<Leader>R`) reads `init.lua` again.
+- Hints and messages name keys as they are bound now, not as they were
+  shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
+  same.
+
+- Title case, after the APA manual. `gT` (`:titlecase`) rewrites the
+  selected titles that are in CAPITALS; `t` does it for a field in the edit
+  form and in review; titles proposed from files and `.bib` records arrive
+  in title case when they were found in capitals (option `title_case`).
+  `is:capstitle` filters for titles in capitals. For scripts:
+  `lulibre.titlecase`, and `lulibre.lower` / `lulibre.upper`, which know
+  accented, Greek and Cyrillic letters.
+- The mouse selects text everywhere, not only in the preview: a drag in the
+  list, a panel, the line being typed, the status line or an overlay copies
+  what it covers; a double click the word; a triple click the row, or in a
+  panel the whole cell including what its column cut off. `<C-y>` copies
+  the line being typed.
+- Windows are resized with the mouse, by dragging the line between two of
+  them or a window's bar up or down, and from the keyboard with Alt and an
+  arrow, or `<Leader>` and an arrow (`:resize left|right|up|down`). These
+  keys, like any Alt combination and the leader, work from inside panels.
+- `:propose` no longer stops at fields that have a value. When the file is
+  confident and says something different from what the book holds, that is
+  proposed too, so a value mistyped by hand gets corrected by the next run.
+  The option `propose_over` (`gaps`, `sure`, `any`) sets how far the file is
+  believed; `:propose --over` and `--gaps` do so for one run. A proposal
+  that was rejected is not made again unless `--over` asks, and accepting
+  everything above a confidence asks before replacing existing values.
+- In review, `a` on a book's own line accepts all of that book's proposals
+  (again: takes them back), and `r` there rejects those still pending.
+- A by-line under the title ("By A. Name", "BY A. NAME*", "by NAME, A. B.",
+  or "by" alone above the names) is read as the authors and proposed with
+  confidence 0.85, as the page's own word rather than a guess from layout.
+- Selecting text in the preview to copy it (a drag, a double click) no
+  longer moves the cursor out of the window it was in, so in review the next
+  key is still review's.
+- Authors from title pages: ranks and roles ("Professor Emeritus") are
+  never proposed, and the option `never_authors` adds terms of your own; a
+  page that opens with its author's name alone on the first line is read
+  that way (author 0.7, title from the next largest line); a name the
+  leading pages give twice is proposed with 0.15 more confidence.
+- Known good records. Every record has a score for how complete and clean
+  it looks; `gk` (`:good`) lists them by it, and the ones you confirm are
+  marked (`is:good`). `lulibre.quality` for scripts.
+- `:learn` finds, from the confirmed records, the two- and three-word
+  phrases that mark each subject, and `:terms` shows them for review: drop
+  what does not belong, add your own. The edit form offers the subject a
+  book's phrases point to, naming them, at no more than 0.6 confidence;
+  the option `subject_learned` turns that into proposals, or off.
+  `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
+- In the edit form, subjects that say what a book is about come before
+  catch-alls such as `math/general` (option `subject_catchall`).
+- `:refs` reads what each book cites from the bibliography on its last
+  pages: the heading is found, the entries cut apart by numbering or hanging
+  indent, and each given a key (DOI, arXiv number, or author, year and first
+  page) by which the same work is known in another book's list. Books that
+  share references suggest each other's subject in the edit form.
+  `lulibre.extract` takes `tail = true` for a file's last pages.
+- Fuller records teach more when `:learn` runs: a confirmed record counts by
+  its score. The option `never_titles` adds to what marks a title as junk.
+- Layouts: pages that say their facts in known places are read by rule. A
+  book's cataloguing block gives author, title, series and number, year and,
+  from its class number, the subject; a Springer series page the series and
+  volume; the arXiv stamp the day of submission. Your own are a few lines
+  (`require("lulibre.layouts").add{...}`): marks that identify the page and,
+  for each field, a constant, a pattern or a function. Series and series
+  number can now be proposed.
+- One field at a time. `:propose --only title,ids` keeps to the fields
+  named; `--fresh` proposes the file's reading whatever the record says, for
+  when a field went wrong across many books; in review `f` and a letter
+  shows only that field's proposals, and accept-all then speaks for it
+  alone. `:clear FIELDS` blanks fields outright.
+- A title of one word is no longer junk for being one word: "Algebra" and
+  "Topology" are titles; "infinite" and "E807en" are still what a file name
+  leaves behind. The option `one_word_titles` (`check`, `ok`, `junk`) sets
+  the rule, `good_titles` lists titles to leave alone, and nothing in a
+  record confirmed as good is treated as junk. (Every one-word title used
+  to count as empty, so a bulk accept could replace it unasked, the edit
+  form's "fill gaps" could overwrite it, and it scored as junk.)
+- A value that is plainly not one is treated as empty when proposing: a
+  title that is a number, a file name or a heading, an author that is a
+  program, a site or a rank. `:junk` marks and lists such records.
+- Title pages: a title that begins with "Introduction" is no longer taken
+  for the heading that ends the front matter (no title was read from such
+  pages at all); a smaller line that leads into the largest is part of the
+  title ("Introduction to" above "Commutative Algebra"); a page set in one
+  size has its title read from its first lines; "Professor A. Name" is A.
+  Name.
+- `lulibre.map` takes a description for the help overlay, or `false` to stay
+  out of it.
+- A warning when the password file can be read by other users.
+- Review lists the books surest first: the one whose best proposal has the
+  highest confidence at the top, with how many proposals wait for each. `s`
+  switches to id order; the option `review_sort` sets the default.
+- Review, duplicates and orphans refresh when the library changes under
+  them (`reloads = true` gives a script's panel the same, as `"<Reload>"`).
+  Proposals for a book that has been removed are no longer listed or counted.
+- From duplicates and orphans, `e` opens the edit form for the row's book
+  and `r` the review of its proposals; the panel steps aside meanwhile and
+  comes back up to date. `:review FILTER` reviews only the matching books.
+- `t` in duplicates and orphans takes from the row under the cursor: what
+  its record says and the kept copy's (or the book that has the file) does
+  not is proposed for that one, and review opens on those proposals.
+- With the cursor in review, duplicates, orphans or capture, the preview's
+  keys work (`P`, `]`, `[`, `J`, `K`), as do the copying keys and the
+  console's. `p` shrinks the panel to give the preview room.
+- A following panel shows its row's book in the preview even when the
+  list's filter leaves that book out.
+- Panels for scripts: `keys` and `pass`, `p:hide()`, `p:show()`,
+  `p:height()`; `lulibre.ui.edit` and `lulibre.ui.review` take `{ ids = }`.
+
+Changed
+- After duplicates or orphan records are removed, the message says plainly
+  what was kept from them and where it went.
+
 ## 0.1.0
 
 The first release: what 0.1.0-beta.2 was, with nothing changed but the

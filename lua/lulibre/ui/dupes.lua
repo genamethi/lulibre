@@ -5,7 +5,8 @@ local edit = require "lulibre.edit"
 
 local M = {}
 
-local HELP = "Space keep this copy   s skip group   m mark the rest   f filter   D remove the rest   q close"
+local keys = require("lulibre.ui.keys").of("dupes")
+local panels = require "lulibre.ui.panels"
 
 function M.run()
   local groups, stats = dupes.scan()
@@ -44,27 +45,70 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, follow = true, height = 0.5,
+    title = title(), help = keys:hint("keep", "edit", "peek", "remove"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.5)
+  -- after something may have changed the books: read them again, and let go
+  -- of copies that are no longer there and of groups left with one
+  local function refresh()
+    for i = #groups, 1, -1 do
+      local g = groups[i]
+      panels.refresh_books(g.books)
+      local kept = false
+      for _, b in ipairs(g.books) do kept = kept or b.id == g.keep end
+      if #g.books < 2 then table.remove(groups, i)
+      elseif not kept then g.keep = g.books[1].id end
+    end
+  end
 
   while true do
     local key, row = p:wait()
     if not key then return end
     local g, b = at[row] and at[row][1], at[row] and at[row][2]
-    if g and b and (key == "<Space>" or key == "<CR>") then
+    local id = b and b.id or g and g.keep -- the book the row stands for
+    local act = keys:action(key)
+    if key == "<Reload>" then
+      refresh() -- the library changed under us
+    elseif act == "help" then
+      keys:show("duplicates", panels.also())
+    elseif act == "peek" then
+      peek()
+    elseif g and act == "take" then
+      -- what this copy's record says, offered to the copy being kept
+      if not b or b.id == g.keep then
+        lulibre.notify(("this is the copy being kept: put the cursor on the copy to take from (%s chooses which is kept)"):format(
+          keys:key("keep") or "keep"))
+      else
+        local from, to = lulibre.book(b.id), lulibre.book(g.keep)
+        local n = from and to and dupes.pull(from, to) or 0
+        if n == 0 then
+          lulibre.notify(("book %d says nothing that book %d does not"):format(b.id, g.keep))
+        else
+          panels.over(p, require("lulibre.ui.review").run, { ids = { g.keep } })
+          refresh()
+        end
+      end
+    elseif id and act == "edit" then
+      panels.over(p, require("lulibre.ui.edit").run, { ids = { id } })
+      refresh()
+    elseif id and act == "review" then
+      panels.over(p, require("lulibre.ui.review").run, { ids = { id } })
+      refresh()
+    elseif g and b and act == "keep" then
       g.keep, g.skip = b.id, nil
-    elseif g and key == "s" then
+    elseif g and act == "skip" then
       g.skip = not g.skip or nil
-    elseif key == "m" then
+    elseif act == "mark" then
       local ids = dupes.surplus(groups)
       for _, id in ipairs(ids) do lulibre.mark(id, true) end
       lulibre.notify(("marked %d surplus books; they are now the selection"):format(#ids))
-    elseif key == "f" then
+    elseif act == "filter" then
       lulibre.filter("is:dupe")
-    elseif key == "D" then
+    elseif act == "remove" then
       local ids = dupes.surplus(groups)
       if #ids == 0 then
         lulibre.notify("nothing to remove")
@@ -76,10 +120,18 @@ function M.run()
         local carried = dupes.propose(dupes.gather(groups), "duplicate")
         local n, err = edit.remove(ids, { label = "duplicates" })
         local msg = ("removed %d duplicate book%s"):format(n, n == 1 and "" or "s")
-        if carried > 0 then msg = msg .. ("; %d things they knew are proposals for the kept copies (gr)"):format(carried) end
+        if carried > 0 then
+          -- say what was saved from the removed records, and where it went
+          msg = msg .. ("; %d value%s only they had (tags, dates and the like) %s proposed for the copies kept: %s reviews them"):format(
+            carried, carried == 1 and "" or "s", carried == 1 and "is" or "are", lulibre.hint("review"))
+        end
         lulibre.notify(err and ("removed %d, then: %s"):format(n, err) or msg, err and "error" or nil)
         return
       end
+    end
+    if #groups == 0 then
+      lulibre.notify("no duplicates are left")
+      return
     end
     p:rows(build())
     p:title(title())

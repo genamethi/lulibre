@@ -14,6 +14,7 @@
  *   l_doc.c    text lines files extract           indexed text, extraction
  *   l_proc.c   system                             subprocesses
  *   l_hash.c   md5                                content hashes, cached
+ *   l_index.c  index                              run the indexer, and wait
  *   l_theme.c  theme                              colours
  *   l_match.c  fold fuzzy                         matching
  *   l_ui.c     notify command map exec current selection mark filter
@@ -65,8 +66,10 @@ void l_db_open(struct lua_State *L);
 void l_doc_open(struct lua_State *L);
 void l_proc_open(struct lua_State *L);
 void l_hash_open(struct lua_State *L);
+void l_index_open(struct lua_State *L);
 void l_theme_open(struct lua_State *L);
 void l_match_open(struct lua_State *L);
+void l_learn_open(struct lua_State *L);
 void l_ui_open(struct lua_State *L);
 void l_uv_open(struct lua_State *L);
 void l_uv_preload(struct lua_State *L); /* after the lulibre table exists */

@@ -28,6 +28,7 @@ help:
 	@echo "  make                 build build/lulibre, then say what was built and how it"
 	@echo "                       compares with the lulibre on PATH (version and md5)"
 	@echo "  make status          only that comparison"
+	@echo "  make builds          the log of builds: number, time, commit, branch, checkout"
 	@echo
 	@echo "  make check           unit tests and the quick end-to-end test (no calibre needed)"
 	@echo "  make unit            unit tests: C (build/test/unit) and Lua (test/units.lua)"
@@ -55,8 +56,21 @@ config.mk: configure src/version.h
 	 else echo "run ./configure"; exit 1; fi
 endif
 
-$(BIN): $(OBJ)
-	$(CC) -o $@ $(OBJ) $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
+# Every build has a number (tools/build-number.sh): given here, when the
+# binary is linked, which is whenever anything it is made of has changed.
+# The Lua runtime and the bundled scripts count as part of it, so a change
+# to them is a new build too, though the C is the same.
+$(BIN): $(OBJ) $(LUA) tools/build-number.sh
+	@mkdir -p build
+	@set -e; b=$$(sh tools/build-number.sh $(VERSION)); \
+	  printf 'const char lulibre_build_number[] = "%s";\nconst char lulibre_build_commit[] = "%s";\n' $${b%% *} $${b#* } > build/buildno.c; \
+	  echo "build $${b%% *} of $(VERSION), from commit $${b#* }"
+	$(CC) $(ALL_CFLAGS) -c -o build/buildno.o build/buildno.c
+	$(CC) -o $@ $(OBJ) build/buildno.o $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
+
+# the log of builds: number, time, version, commit, branch, checkout
+builds:
+	@sh tools/build-number.sh $(VERSION) --log
 
 build/%.o: %.c config.h
 	@mkdir -p $(dir $@)
@@ -122,4 +136,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status unit check check-offline check-write check-forms e2e install uninstall clean distclean
+.PHONY: all help status builds unit check check-offline check-write check-forms e2e install uninstall clean distclean

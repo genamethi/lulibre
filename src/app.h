@@ -25,7 +25,20 @@ struct app {
   struct sched *sched;  /* Lua tasks (lua/sched.h) */
   struct tui *tui;      /* NULL when running headless */
   atomic_int source;    /* what the list shows (tui.h rows.source); Lua filters default to it */
+  /* what the command line set (-L, -o name=value): applied on top of
+   * init.lua, at start and again whenever init.lua is read again */
+  const char *cli_library;
+  const char *cli_sets[32];
+  int ncli_sets;
 };
+
+/* This build's number among the builds of its version ("007"), and the
+ * commit it was made from ("3b3ddb3", with + when the tree had changes);
+ * both "" in a binary that was not linked by the Makefile's rule. */
+extern const char lulibre_build_number[], lulibre_build_commit[];
+
+/* Apply the command line's options. Returns 0, or -1 with *err set. */
+int app_apply_cli(struct app *app, char **err);
 
 /* Resolve the library, open the index and refresh the calibre mirror.
  * Dies with a message on failure: every command needs this to proceed. */

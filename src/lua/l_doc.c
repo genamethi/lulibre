@@ -195,9 +195,11 @@ static void x_after(uv_work_t *req, int status) {
       lua_createtable(L, d->n, 0);
       for (int i = 0; i < d->n; i++) {
         struct doc_page *pg = &d->pages[i];
-        lua_createtable(L, 0, 2);
+        lua_createtable(L, 0, 3);
         lua_pushstring(L, pg->text ? pg->text : "");
         lua_setfield(L, -2, "text");
+        lua_pushinteger(L, pg->no);
+        lua_setfield(L, -2, "no");
         lua_createtable(L, pg->nlines, 0);
         for (int k = 0; k < pg->nlines; k++) {
           struct doc_line *l = &pg->lines[k];
@@ -222,13 +224,15 @@ static int l_extract(lua_State *L) {
   struct app *app = lapi_app(L);
   sched_require_task(L); /* raises outside a task, before anything is allocated */
   struct xjob *j = xcalloc(1, sizeof *j);
-  j->opts = (struct doc_opts){app->cfg.pages, app->cfg.layout_pages};
+  j->opts = (struct doc_opts){app->cfg.pages, app->cfg.layout_pages, 0};
   if (lua_istable(L, 2)) {
     lua_getfield(L, 2, "pages");
     if (!lua_isnil(L, -1)) j->opts.pages = (int)lua_tointeger(L, -1);
     lua_getfield(L, 2, "layout_pages");
     if (!lua_isnil(L, -1)) j->opts.layout_pages = (int)lua_tointeger(L, -1);
-    lua_pop(L, 2);
+    lua_getfield(L, 2, "tail");
+    j->opts.tail = lua_toboolean(L, -1);
+    lua_pop(L, 3);
   }
   j->path = xstrdup(path);
   j->format = xstrdup(path_ext(path));

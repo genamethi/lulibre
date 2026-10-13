@@ -131,12 +131,11 @@ static void move(struct picker *p, int delta) {
 
 void picker_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
   struct picker *p = t->picker;
-  switch (key) {
-    case NCKEY_ESC:
-    case KEY_CTRL | 'c':
+  switch (ctx_feed(KC_PICKER, NULL, key)) {
+    case KA_CANCEL:
       picker_close(t);
       return;
-    case NCKEY_ENTER:
+    case KA_ACCEPT:
       if (p->nmatch > 0) {
         struct pitem *it = &p->items[p->order[p->sel]];
         sqlite3_int64 id = it->id;
@@ -149,24 +148,10 @@ void picker_key(struct tui *t, uint32_t key, const struct ncinput *ni) {
         free(text);
       }
       return;
-    case NCKEY_DOWN:
-    case KEY_CTRL | 'n':
-    case KEY_CTRL | 'j':
-      move(p, 1);
-      break;
-    case NCKEY_UP:
-    case KEY_CTRL | 'p':
-    case KEY_CTRL | 'k':
-      move(p, -1);
-      break;
-    case NCKEY_PGDOWN:
-    case KEY_CTRL | 'd':
-      move(p, p->page);
-      break;
-    case NCKEY_PGUP:
-    case KEY_CTRL | 'u':
-      move(p, -p->page);
-      break;
+    case KA_DOWN: move(p, 1); break;
+    case KA_UP: move(p, -1); break;
+    case KA_PAGE_DOWN: move(p, p->page); break;
+    case KA_PAGE_UP: move(p, -p->page); break;
     default:
       if (le_key(&p->query, key, ni)) rematch(p);
   }

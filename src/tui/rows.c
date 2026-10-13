@@ -300,6 +300,7 @@ void rows_reload(struct tui *t) {
   char *f = xstrdup(t->rows.filter ? t->rows.filter : "");
   rows_set_filter(t, f);
   free(f);
+  panels_reloaded(t); /* screens showing books may be showing old news */
   if (t->rows.search) {
     char *q = xstrdup(t->rows.search);
     rows_search(t, q);

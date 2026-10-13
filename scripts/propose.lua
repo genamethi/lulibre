@@ -1,48 +1,56 @@
--- Propose metadata for books that lack it, from what their files say.
+-- Propose metadata for books from what their files say.
 -- Changes nothing by itself: go through the proposals with :review.
 --   :run propose                  the selection
 --   :run propose author:unknown   every book matching a filter
+--   :run propose --only title,ids author:conrad
+--                                 only those fields: title authors subject ids date publisher,
+--                                 or their letters t a s i d p
+--   :run propose --fresh FILTER   as if the fields were empty: the file's best reading of each,
+--                                 whatever the book says now, and even if it was rejected before.
+--                                 With --only, for when one field went wrong across many books.
+--   :run propose --over           also where the file disagrees with a value the book has,
+--                                 however weak the evidence
+--   :run propose --gaps           only fields that are empty or hold junk
 --   lulibre run propose 'tag:none fmt:pdf'
-local edit = require "lulibre.edit"
-local extract = require "lulibre.extract"
-local junk = require "lulibre.junk"
-local proposals = require "lulibre.proposals"
+-- Without a flag the option propose_over decides ("sure": a filled field is
+-- proposed for only when the file is confident and differs).
+local propose = require "lulibre.propose"
 
-local filter = table.concat({ ... }, " ")
+local words, opts = {}, {}
+local args = { ... }
+local i = 1
+while i <= #args do
+  local a = args[i]
+  if a == "--over" then opts.over, opts.again = "any", true
+  elseif a == "--gaps" then opts.over = "gaps"
+  elseif a == "--fresh" then opts.fresh, opts.again = true, true
+  elseif a == "--only" or a:match("^%-%-only=") then
+    local list = a:match("^%-%-only=(.*)$")
+    if not list then
+      i = i + 1
+      list = args[i] or ""
+    end
+    local set, bad = propose.fields(list)
+    if not set or not next(set) then
+      error(("--only wants fields (title authors subject ids date publisher, or t a s i d p), not '%s'"):format(bad or list), 0)
+    end
+    opts.only = set
+  else
+    words[#words + 1] = a
+  end
+  i = i + 1
+end
+local filter = table.concat(words, " ")
 local ids = (lulibre.headless or filter ~= "") and lulibre.ids(filter) or lulibre.selection()
 
-local added, books = 0, 0
+local added, replacing, books = 0, 0, 0
 for n, id in ipairs(ids) do
-  local book = lulibre.book(id)
-  local before = added
-  local best = {} -- one value per single-valued field: candidates come strongest first
-  for _, c in ipairs(extract.candidates(id)) do
-    local cur = edit.current(book, c.field)
-    local op, want = "set", false
-    if c.field == "authors" then
-      want = cur == "" and not best.authors
-    elseif c.field == "title" then
-      want = (junk.title(cur) or not cur:find("%s")) and not best.title
-    elseif c.field == "pubdate" then
-      want = cur == "" and not best.pubdate
-    elseif c.field == "publisher" then
-      want = cur == "" and not best.publisher
-    elseif c.field == "tags" then
-      -- a stated subject (arXiv class, MSC) is worth adding; vocabulary only fills a gap
-      want = cur == "" and (c.confidence >= 0.9 or not best.tags)
-      op = "add"
-    elseif c.field == "identifiers" then
-      want, op = true, "add"
-    end
-    if want then
-      best[c.field] = true
-      if proposals.add(id, c.field, c.value, { op = op, source = c.source, confidence = c.confidence }) then
-        added = added + 1
-      end
-    end
-  end
-  if added > before then books = books + 1 end
+  local a, r = propose.book(id, opts)
+  added, replacing = added + a, replacing + r
+  if a > 0 then books = books + 1 end
   if n % 25 == 0 then lulibre.progress(("proposing %d/%d"):format(n, #ids)) end
 end
 lulibre.progress(nil)
-print(("%d proposals for %d of %d books; :review goes through them"):format(added, books, #ids))
+print(("%d proposal%s for %d of %d book%s%s; %s goes through them"):format(added, added == 1 and "" or "s", books, #ids,
+  #ids == 1 and "" or "s",
+  replacing > 0 and (", %d of them for a field that has a value"):format(replacing) or "", lulibre.hint("review")))

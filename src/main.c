@@ -105,7 +105,8 @@ int main(int argc, char **argv) {
     }
     else if (!strcmp(a, "-V") || !strcmp(a, "--version")) {
       /* the second word is the version, alone: scripts read it */
-      printf("lulibre %s (%s build, Lua %s)\n", LULIBRE_VERSION, LULIBRE_BUILD, LULIBRE_LUA_VER);
+      printf("lulibre %s (%s build%s%s, Lua %s)\n", LULIBRE_VERSION, LULIBRE_BUILD, lulibre_build_number[0] ? " " : "",
+             lulibre_build_number, LULIBRE_LUA_VER);
       config_free(&app.cfg);
       return 0;
     }
@@ -122,19 +123,15 @@ int main(int argc, char **argv) {
   lstate_new(&app);
   if (lstate_tree_mismatch()) warnf("%s", lstate_tree_mismatch());
   if (!clean) lstate_run_init(&app);
-  if (library && config_set(&app.cfg, "library", library, &err)) die("%s", err);
-  for (int k = 0; k < nsets; k++) {
-    const char *eq = strchr(sets[k], '=');
-    if (!eq) die("-o wants name=value, got '%s'", sets[k]);
-    char *name = xstrndup(sets[k], (size_t)(eq - sets[k]));
-    if (config_set(&app.cfg, name, eq + 1, &err)) die("%s", err);
-    free(name);
-  }
+  app.cli_library = library;
+  for (int k = 0; k < nsets && k < (int)ARRAY_LEN(app.cli_sets); k++) app.cli_sets[app.ncli_sets++] = sets[k];
+  if (app_apply_cli(&app, &err)) die("%s", err);
   {
     const char *env = getenv("LULIBRE_LOG");
     const char *file = env && env[0] ? env : app.cfg.log_file;
     if (file[0] && log_to_file(file)) warnf("cannot write the log file %s", file);
-    log_debug("lulibre %s (%s build, Lua %s) starting", LULIBRE_VERSION, LULIBRE_BUILD, LULIBRE_LUA_VER);
+    log_debug("lulibre %s (%s build %s from %s, Lua %s) starting", LULIBRE_VERSION, LULIBRE_BUILD, lulibre_build_number,
+              lulibre_build_commit, LULIBRE_LUA_VER);
   }
   if (want_optlist) {
     list_options(&app.cfg);

@@ -21,7 +21,7 @@ struct cstate {
   int level;       /* show entries up to this level */
   int back;        /* lines scrolled up from the newest; 0 follows */
   int page, lines; /* as last drawn */
-  int pending_g;
+  uint32_t pending; /* the first key of a two-key binding such as gg */
 };
 
 struct cline {
@@ -88,15 +88,19 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   t->errors_seen = log_errors(); /* whatever went wrong has now been shown */
 
   dr_bar(n, r, focused);
-  char title[160];
+  char title[200], scrolled[64];
+  snprintf(scrolled, sizeof scrolled, "   (scrolled; %s follows)", ctx_hint(KC_CONSOLE, CA_FOLLOW));
   snprintf(title, sizeof title, "console  %s%s%s", cs->level == LOG_ERROR ? "errors"
            : cs->level == LOG_WARN ? "errors and warnings" : cs->level == LOG_INFO ? "errors, warnings, notices"
            : "everything",
-           cs->back ? "   (scrolled; G follows)" : "",
+           cs->back ? scrolled : "",
            LULIBRE_DEBUG ? "" : cs->level == LOG_DEBUG ? "   (no trace in a release build)" : "");
   int used = dr_text(n, r.y, r.x + 1, r.w - 2, title);
-  static const char keys[] = "e w i d level   c clear   q close";
-  int kw = (int)strlen(keys);
+  char keys[160];
+  snprintf(keys, sizeof keys, "%s %s %s %s level   %s clear   %s close", ctx_hint(KC_CONSOLE, CA_ERRORS),
+           ctx_hint(KC_CONSOLE, CA_WARNINGS), ctx_hint(KC_CONSOLE, CA_NOTICES), ctx_hint(KC_CONSOLE, CA_EVERYTHING),
+           ctx_hint(KC_CONSOLE, CA_CLEAR), ctx_hint(KC_CONSOLE, CA_CLOSE));
+  int kw = dr_width(keys, strlen(keys));
   if (used + kw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
     dr_text(n, r.y, r.x + r.w - kw - 1, kw, keys);
@@ -125,24 +129,20 @@ const struct view_class view_console = {"console", create, destroy, draw, NULL};
 
 int console_key(struct tui *t, void *state, uint32_t key) {
   struct cstate *cs = state;
-  int was_g = cs->pending_g;
-  cs->pending_g = 0;
-  switch (key) {
-    case 'k': case NCKEY_UP: cs->back++; break;
-    case 'j': case NCKEY_DOWN: cs->back--; break;
-    case KEY_CTRL | 'u': case NCKEY_PGUP: cs->back += cs->page / 2 + 1; break;
-    case KEY_CTRL | 'd': case NCKEY_PGDOWN: cs->back -= cs->page / 2 + 1; break;
-    case 'G': case NCKEY_END: cs->back = 0; break;
-    case 'g':
-      if (was_g) cs->back = cs->lines;
-      else cs->pending_g = 1;
-      break;
-    case 'e': cs->level = LOG_ERROR; break;
-    case 'w': cs->level = LOG_WARN; break;
-    case 'i': cs->level = LOG_INFO; break;
-    case 'd': cs->level = LOG_DEBUG; break;
-    case 'c': log_clear(); cs->back = 0; break;
-    case 'q': case NCKEY_ESC:
+  switch (ctx_feed(KC_CONSOLE, &cs->pending, key)) {
+    case CTX_PENDING: return 1;
+    case CA_UP: cs->back++; break;
+    case CA_DOWN: cs->back--; break;
+    case CA_HALF_UP: cs->back += cs->page / 2 + 1; break;
+    case CA_HALF_DOWN: cs->back -= cs->page / 2 + 1; break;
+    case CA_FOLLOW: cs->back = 0; break;
+    case CA_TOP: cs->back = cs->lines; break;
+    case CA_ERRORS: cs->level = LOG_ERROR; break;
+    case CA_WARNINGS: cs->level = LOG_WARN; break;
+    case CA_NOTICES: cs->level = LOG_INFO; break;
+    case CA_EVERYTHING: cs->level = LOG_DEBUG; break;
+    case CA_CLEAR: log_clear(); cs->back = 0; break;
+    case CA_CLOSE:
       wm_close(t); /* frees cs */
       tui_dirty(t);
       return 1;

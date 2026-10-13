@@ -62,6 +62,7 @@ $cdb add "$t/src/old.pdf" --title "Commutative Algebra" --authors "The Authors" 
   --tags kept/tag >/dev/null 2>&1                                                                     # 6: will lose its file
 
 echo secret > "$t/pw"
+chmod 600 "$t/pw" # as a password file should be: lulibre warns of one others can read
 echo wrong > "$t/pw-wrong"
 calibre-server --userdb "$t/users.sqlite" --manage-users -- add tester secret >/dev/null 2>&1
 calibre-server --listen-on 127.0.0.1 --port 18099 --enable-auth --auth-mode basic \
@@ -267,6 +268,21 @@ contains "undo works on staged files"     "fresh paper" "$(slua "require('lulibr
 slua "local e = require 'lulibre.edit' e.apply { { id = $fresh, field = 'title', value = 'On Fresh Things' },
   { id = $fresh, field = 'authors', value = 'Nora New' }, { id = $fresh, field = 'pubdate', value = '2020' } }" >/dev/null
 expect   "nothing reached calibre yet"    0 "$(srun query -c 'author:"nora new"' 2>&1)"
+# a staged file can be dropped without adding it, and brought back
+pdf "$t/sync/unwanted.pdf" "Not Wanted" "Nobody"
+srun sync >/dev/null 2>&1
+unwanted=$(slua 'print(lulibre.ids([[in:sync title:unwanted]])[1])')
+slua "require('lulibre.edit').apply { { id = $unwanted, field = 'authors', value = 'Kept With It' } }" >/dev/null
+contains "sync drop"                      "dropped 1 file" "$(srun sync drop title:unwanted 2>&1)"
+test -e "$t/sync/unwanted.pdf" && r=yes || r=no
+expect   "the file left the sync folder"  no "$r"
+expect   "and is no longer staged"        3 "$(srun query -c in:sync 2>&1)"
+expect   "but was kept, not deleted"      1 "$(find "$XDG_DATA_HOME/lulibre/dropped" -name unwanted.pdf | wc -l)"
+contains "undo puts it back"              "1" "$(slua 'local r = require("lulibre.edit").undo() print(#r.restored)')"
+test -e "$t/sync/unwanted.pdf" && r=yes || r=no
+expect   "the file is back"               yes "$r"
+expect   "with what was staged for it"    "Kept With It" "$(slua 'local b = lulibre.books([[in:sync title:unwanted]])[1] print(b and b.author)')"
+srun sync drop title:unwanted >/dev/null 2>&1
 contains "sync add"                       "added 2 to the library, 1 already there" "$(srun sync add all 2>&1)"
 expect   "added with the staged metadata" "On Fresh Things|Nora New|2020-01-01" "$(slua '
   local b, e = lulibre.books([[in:library author:"nora new"]])[1], require "lulibre.edit"

@@ -69,6 +69,9 @@ size_t dr_wrap(const char *s, size_t len, int maxw);
 /* A key is a code point or NCKEY_* value, plus modifier bits. */
 #define KEY_CTRL (1u << 30)
 #define KEY_ALT (1u << 29)
+/* <Leader> in a binding: whichever key the `leader` option names when the
+ * key arrives, so changing the option moves every such binding at once */
+#define KEY_LEADER (1u << 28)
 
 enum mode {
   MODE_NORMAL = 1,
@@ -84,11 +87,14 @@ struct binding {
   uint32_t keys[KEYSEQ_MAX];
   int nkeys;
   char *command;
+  char *about; /* what the help overlay says the key does, when given; else the command */
+  int hidden;  /* left out of the help overlay */
 };
 
 struct keymap {
   struct binding *b;
   int n, cap;
+  uint32_t leader; /* the key KEY_LEADER matches; 0 for none */
   uint32_t pending[KEYSEQ_MAX];
   int npending;
 };
@@ -99,13 +105,58 @@ int key_parse(const char *spec, uint32_t out[KEYSEQ_MAX]);
 void key_format(sbuf *out, const uint32_t *keys, int n);
 /* Add or replace a binding. modes is a bitmask of enum mode. */
 int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command);
+/* The same, with what the help overlay is to say of it (NULL: the command
+ * itself), or hidden from it. */
+int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
+                   int hidden);
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
 const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
+/* Does a binding in this mode begin with key and run one of these commands
+ * (first words, separated by spaces)? */
+int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands);
 void keymap_free(struct keymap *km);
+/* For a hint on screen: the keys the global keymap has for a command line
+ * in normal mode, or ":command" when it has none. The text is good until
+ * four more calls. */
+const char *key_hint(const char *command);
+/* Set what <Leader> stands for, from the option's text. */
+void keymap_set_leader(struct keymap *km, const char *spec);
+/* The keys a command line is bound to in this mode, written as a person
+ * would type them into `out`; 0 when it has no binding. */
+int keymap_key_of(const struct keymap *km, unsigned mode, const char *command, sbuf *out);
 void keymap_defaults(struct keymap *km);
 extern struct keymap tui_keymap;
 /* Register the built-in commands and keys; safe to call more than once. */
 void tui_setup(void);
+
+/* -------------------------------------------------------------- ctxkeys.c */
+
+/* Keys that belong to a place: each place has named actions, and its code
+ * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_N };
+enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE };
+enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PREV, LA_UP, LA_DOWN,
+       LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
+       LA_KILL_START, LA_KILL_END, LA_KILL_WORD };
+enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
+enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP };
+enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
+       CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
+#define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
+
+void ctx_defaults(void);
+void ctx_free(void);
+int ctx_named(const char *name); /* a place's number, or -1 */
+/* Put a key (one, or two in a row) on an action; an empty action unbinds. */
+int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
+/* The action a key means: 0 for none, CTX_PENDING while a pair is open.
+ * pending holds the first key of a pair between calls; NULL where pairs are
+ * not wanted. */
+int ctx_feed(int ctx, uint32_t *pending, uint32_t key);
+int ctx_bound(int ctx, uint32_t key); /* does any binding there begin with it? */
+int ctx_key_of(int ctx, int action, sbuf *out);
+const char *ctx_hint(int ctx, int action); /* for a hint: "" when unbound; good for eight calls */
+void ctx_describe(int ctx, sbuf *out, int names);
 
 /* -------------------------------------------------------------- cmdline.c */
 
@@ -212,9 +263,28 @@ void wm_only(struct tui *t);
 void wm_focus_next(struct tui *t, int delta);
 void wm_focus_dir(struct tui *t, char dir); /* h j k l */
 void wm_resize(struct tui *t, int delta);
+/* Move the line between the focused window and its neighbour: dir is h j k l
+ * (left, down, up, right), cells how far. */
+void wm_resize_dir(struct tui *t, char dir, int cells);
+/* The line between two windows at a screen position: 'v' for the rule
+ * between windows side by side, 'h' for the bar of a window with another
+ * above it, 0 for neither. wm_divider_drag moves the one at (*y, *x) towards
+ * the pointer, sets them to where it now is, and returns 0 when there is no
+ * line there any more. */
+char wm_divider_at(struct tui *t, int y, int x);
+int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 void wm_undock(struct tui *t, void *state);
+/* Give the docked window showing this state that share of the screen. */
+void wm_set_size(struct tui *t, void *state, float size);
+/* Start an indexing run with these options and call done when it ends; if
+ * one is already under way, done is called when that one ends instead.
+ * Returns 0, or -1 with *err set. Interface thread. */
+int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
+              void *ud, char **err);
+/* Every window, left to right and top to bottom; returns how many. */
+int wm_leaves(struct tui *t, struct node **out, int max);
 /* The window showing this state, or NULL. */
 struct node *wm_leaf_of(struct tui *t, void *state);
 /* The window at a screen position, or NULL. */
@@ -234,6 +304,19 @@ void preview_toggle_graphic(struct tui *t);
  * triple click a line; what was selected is copied. Returns 1 while a drag
  * is under way. */
 int preview_mouse(struct tui *t, void *state, int y, int x, int what);
+
+int preview_has_selection(void *state);
+/* Is this cell in a preview's page text, where the preview does the selecting? */
+int preview_owns(void *state, int y, int x);
+
+/* select.c: selecting what is drawn on the screen, outside a preview's text.
+ * clip is the window (or line) the selection stays within; nd the window
+ * pressed in, when there is one. */
+void sel_press(struct tui *t, int y, int x, struct rect clip, struct node *nd);
+void sel_move(struct tui *t, int y, int x);
+void sel_release(struct tui *t, int y, int x);
+void sel_clear(struct tui *t);
+void sel_draw(struct tui *t); /* over the finished frame */
 
 /* clip.c: copy to, and paste from, the clipboard (tmux's inside tmux) */
 int clip_copy(const char *s, size_t n);
@@ -260,6 +343,17 @@ typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud)
  * left (a share of the width). */
 struct panel *panel_open(struct tui *t, float size, char side);
 void panel_close(struct panel *p);  /* safe to call twice */
+/* Take the panel off the screen without closing it, and put it back. A
+ * script does this around a panel it opens on top of its own. */
+void panel_hide(struct panel *p);
+void panel_show(struct panel *p);
+void panel_set_size(struct panel *p, float size);
+/* Keys the script handles (panel_set_own) and the global commands, by first
+ * word and separated by spaces, that its other keys may reach
+ * (panel_set_pass): "preview yank" lets P and yy through. */
+void panel_set_own(struct panel *p, int n, const uint32_t *keys);
+void panel_set_pass(struct panel *p, const char *commands);
+int panel_passes(const struct panel *p, uint32_t key);
 void panel_unref(struct panel *p);  /* the opener's reference */
 int panel_is_open(const struct panel *p);
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud);
@@ -271,6 +365,11 @@ void panel_set_follow(struct panel *p, int follow);
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
+/* Report to the event function, as the key "<Reload>", that the library has
+ * been read again (something changed it), so the rows can be brought up to
+ * date. panels_reloaded tells every panel on screen that asked. */
+void panel_set_reloads(struct panel *p, int reloads);
+void panels_reloaded(struct tui *t);
 /* width > 0: that many columns; width <= 0: a share of what is left */
 void panel_set_columns(struct panel *p, int n, const char *const *titles, const int *widths);
 void panel_clear_rows(struct panel *p);
@@ -282,6 +381,9 @@ void panel_set_cursor(struct panel *p, int row);
 int panel_key(struct tui *t, struct panel *p, uint32_t key);
 /* The mouse: a click on the panel's line `line` (0 is its bar), the wheel. */
 void panel_click(struct panel *p, int line);
+/* The whole text of the cell drawn at a screen position (r is the panel's
+ * window), or NULL where there is none. */
+const char *panel_text_at(struct panel *p, struct rect r, int y, int x);
 void panel_wheel(struct panel *p, int delta);
 
 /* ---------------------------------------------------------------- picker.c */
@@ -342,8 +444,16 @@ struct tui {
   enum prompt_kind prompt;
   struct lineedit line;
   char *prompt_saved; /* filter to restore if the '/' prompt is cancelled */
-  char **history;
-  int nhistory, hist_pos;
+  /* what was entered at the ':', '&' and '/' prompts, oldest first; kept
+   * between sessions in the index's kv table */
+  struct {
+    char **v;
+    int n;
+  } hist[3];
+  int hist_pos;
+  char *hist_prefix; /* what was typed before Up was pressed; Up and Down look for it */
+  char *comp_ctx;    /* what the completion candidates were built for (complete.c) */
+  int sugg_prefix;   /* 0: fuzzy; 1: by prefix, once something is typed; 2: by prefix, all when nothing is */
 
   input_fn *input_cb; /* PROMPT_INPUT: who gets the answer */
   input_fn *input_change; /* optional: called after every edit of the line */
@@ -362,6 +472,36 @@ struct tui {
   int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
+  /* A click in a preview moves the cursor's window there only if it turns
+   * out to be a plain click: selecting text to copy (a drag, a double click)
+   * leaves the cursor where the copy is wanted, in review say. */
+  struct {
+    void *state; /* the preview pressed in, until the button comes up */
+    void *back;  /* the window the cursor left for it, should a second click make it a double */
+    double at;   /* when it was pressed */
+  } pv;
+  struct {              /* a line between windows being dragged */
+    int on;             /* it is moving */
+    int armed;          /* the press was on a window's bar: resize if the pointer goes up or down */
+    char split;         /* 'v' or 'h' */
+    int y, x;           /* where the line is now */
+  } rs;
+  struct {              /* text being selected on the screen (select.c) */
+    int on;             /* the button is down */
+    int active;         /* and the pointer has left the cell it went down on */
+    int shown;          /* a finished selection, highlighted until the next key or click */
+    int y0, x0, y1, x1; /* where it began, where it is now */
+    struct rect clip;
+    int clicks, click_y, click_x;
+    double click_at;
+  } sel;
+  sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
+                         * following panel is on when the list does not hold it */
+  /* whoever asked to be told when the indexing run ends (tui_index) */
+  void (*ix_hook[8])(const struct index_stats *st, void *ud);
+  void *ix_hook_ud[8];
+  int nix_hook;
+  int tab_x[3];         /* where the source tabs were drawn: columns of their edges */
   /* a terminal paste in progress (tui.c): keys held while they might be one
    * of its markers, and the text between the markers */
   struct ncinput held[6];
@@ -393,6 +533,9 @@ struct suggestion {
 void tui_input_suggest(struct tui *t, int n, const char *const *texts,
                        const char *const *details, const char *sep);
 void tui_input_on_change(struct tui *t, input_fn *fn);
+/* complete.c: offer completions for the ':', '&' or '/' line as it stands */
+void complete_refresh(struct tui *t);
+const char *command_at(int i, const char **help); /* the i-th command's name; NULL past the last */
 void tui_progress(struct tui *t, const char *text); /* NULL clears */
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);

@@ -11,7 +11,8 @@ local suggest = require "lulibre.suggest"
 
 local M = {}
 
-local HELP = "a accept   r reject   e edit   x other fields   X all   A accept all above…   R reject rest   w write   q close"
+local keys = require("lulibre.ui.keys").of("review")
+local panels = require "lulibre.ui.panels"
 
 -- the fields a book opens up to, in the order they are shown
 M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "identifiers" }
@@ -23,12 +24,61 @@ local function key_of(item)
   return "p" .. item.id
 end
 
-function M.run()
+--- Open review. args: a filter (as :review FILTER gives it) or { ids = {...} }
+-- keeps it to those books' proposals; otherwise it shows every proposal for
+-- what the list is showing.
+function M.run(args)
   -- proposals for what the list is showing: the library, or the sync folder
   local scope = lulibre.source()
+  local only -- book id -> true, when review is kept to some books
+  if type(args) == "table" and args.ids then
+    only = {}
+    for _, id in ipairs(args.ids) do only[id] = true end
+  elseif type(args) == "string" and args ~= "" then
+    only = {}
+    for _, id in ipairs(lulibre.ids(args)) do only[id] = true end
+  end
+  -- one field's proposals only, when set (f then a letter); accept-all and
+  -- reject-rest then speak for that field alone
+  local field_only = type(args) == "table" and args.field or nil
+  -- the proposals with a status (pending and accepted when nil) that this review covers
+  local function listed(status)
+    local all = proposals.list(status, scope)
+    if not only and not field_only then return all end
+    local out = {}
+    for _, pr in ipairs(all) do
+      if (not only or only[pr.book]) and (not field_only or pr.field == field_only) then out[#out + 1] = pr end
+    end
+    return out
+  end
   local items       -- row index -> a proposal, { plain=, book=, field= } or { heading=, book= }
   local open = {}   -- book id -> its other fields are shown
   local options = {} -- "book field" -> suggestions, read once
+
+  -- The order of the books. With "confidence" the book whose surest proposal
+  -- is surest comes first, so what can be accepted at a glance is at the top
+  -- and what needs thought is further down. It is worked out when review
+  -- opens, on s and when the library changes, not after every key: a book
+  -- does not jump away because one of its proposals was rejected.
+  local sort = lulibre.o.review_sort
+  local rank
+  local function rank_books()
+    local best, ids = {}, {}
+    for _, pr in ipairs(listed()) do
+      if not best[pr.book] then
+        best[pr.book] = -1
+        ids[#ids + 1] = pr.book
+      end
+      best[pr.book] = math.max(best[pr.book], pr.confidence or 0)
+    end
+    table.sort(ids, function(a, b)
+      if sort == "confidence" and best[a] ~= best[b] then return best[a] > best[b] end
+      return math.abs(a) < math.abs(b)
+    end)
+    rank = {}
+    for i, id in ipairs(ids) do rank[id] = i end
+  end
+  rank_books()
 
   local function proposal_row(book, pr)
     local shown = pr.value == "" and edit.BLANK or pr.value
@@ -44,19 +94,33 @@ function M.run()
     local rows = {}
     items = {}
     local by_book, order = {}, {}
-    for _, pr in ipairs(proposals.list(nil, scope)) do
+    for _, pr in ipairs(listed()) do
       if not by_book[pr.book] then
         by_book[pr.book] = {}
         order[#order + 1] = pr.book
       end
       table.insert(by_book[pr.book], pr)
     end
+    -- books ranked when review opened keep their place; any that came since follow
+    table.sort(order, function(a, b)
+      if rank[a] and rank[b] then return rank[a] < rank[b] end
+      if rank[a] or rank[b] then return rank[a] ~= nil end
+      return math.abs(a) < math.abs(b)
+    end)
     for _, id in ipairs(order) do
       local book = lulibre.book(id)
       if book then
         local who = edit.current(book, "authors")
-        rows[#rows + 1] = { ("%s %d  %s%s%s"):format(open[id] and "▾" or "▸", id, book.title or "",
-          who ~= "" and ("  —  " .. who) or "", book.year and ("  (%d)"):format(book.year) or ""),
+        local best, waiting = 0, 0
+        for _, pr in ipairs(by_book[id]) do
+          if pr.status == "pending" then
+            waiting = waiting + 1
+            best = math.max(best, pr.confidence or 0)
+          end
+        end
+        rows[#rows + 1] = { ("%s %d  %s%s%s%s"):format(open[id] and "▾" or "▸", id, book.title or "",
+          who ~= "" and ("  —  " .. who) or "", book.year and ("  (%d)"):format(book.year) or "",
+          waiting > 0 and ("     %d to decide, surest %.2f"):format(waiting, best) or "     all decided"),
           id = id, style = "head" }
         items[#rows] = { heading = true, book = id }
         local function put(pr)
@@ -94,7 +158,8 @@ function M.run()
 
   local rows = build()
   if #rows == 0 then
-    lulibre.notify(scope == "sync" and "no proposals for the sync folder (:run propose in:sync makes them)"
+    lulibre.notify(only and "no proposals are waiting for that"
+      or scope == "sync" and "no proposals for the sync folder (:run propose in:sync makes them)"
       or "no proposals to review (scripts such as :run propose make them)")
     return
   end
@@ -105,15 +170,18 @@ function M.run()
     rows = build()
   end
   local function title()
-    return ("review%s  %d pending, %d accepted"):format(scope == "sync" and " (sync folder)" or "",
-      proposals.count("pending", scope), proposals.count("accepted", scope))
+    return ("review%s  %d pending, %d accepted   %s%s"):format(scope == "sync" and " (sync folder)" or "",
+      #listed("pending"), #listed("accepted"), sort == "confidence" and "surest first" or "by id",
+      field_only and ("   only %s (%s%s shows all)"):format(field_only, keys:key("field") or "f", keys:key("field") or "f") or "")
   end
   local p <close> = lulibre.panel {
-    title = title(), help = HELP, follow = true, height = 0.42,
+    title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
+    keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows,
   }
   p:cursor(2)
+  local peek = panels.peeker(p, 0.42)
 
   -- Ask for a field's value, with what the file and the library suggest.
   local function ask(book_id, field, default)
@@ -134,36 +202,12 @@ function M.run()
     local item = items[row]
     local pr = item and not item.heading and not item.plain and item or nil
     local keep = key_of(item) -- where the cursor should be after the rows change
-    if key == "w" then
-      if proposals.count("accepted", scope) == 0 then
-        lulibre.notify("nothing accepted yet: a accepts the proposal under the cursor")
-      else
-        p:close()
-        local r = proposals.apply_accepted(scope)
-        lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
-        return
-      end
-    elseif item and key == "x" then
-      open[item.book] = not open[item.book] or nil
-    elseif key == "X" then
-      local any = next(open) ~= nil
-      open = {}
-      if not any then
-        for _, it in ipairs(items) do
-          if it.heading then open[it.book] = true end
-        end
-      end
-    elseif pr and key == "a" then
-      if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
-      keep = key_of(items[row + 1]) or keep
-    elseif pr and key == "r" then
-      proposals.set_status(pr.id, "rejected")
-      -- an opened book shows the field as it stands in the proposal's place
-      keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
-    elseif pr and (key == "e" or key == "<CR>") then
-      local v = ask(pr.book, pr.field, pr.value)
-      local book = v and lulibre.book(pr.book)
-      if book then
+    local act = keys:action(key)
+    -- what a field is to become: v is what was typed, "" to blank it
+    local function answer(v)
+      if pr then
+        local book = lulibre.book(pr.book)
+        if not book then return end
         -- an empty answer blanks the field, which only "set" can mean
         local op = v == "" and "set" or pr.op
         local ok, to = pcall(edit.resolve, book, pr.field, op, v)
@@ -178,12 +222,8 @@ function M.run()
           pr.value, pr.op = v, op
           proposals.accept(pr)
         end
-      end
-    elseif item and item.plain and (key == "e" or key == "<CR>" or key == "a") then
-      -- a field nothing was proposed for: what is typed becomes an accepted proposal
-      local book = lulibre.book(item.book)
-      local v = book and ask(item.book, item.field, edit.current(book, item.field))
-      if v then
+      else
+        -- a field nothing was proposed for: the answer becomes an accepted proposal
         for _, c in ipairs(edit.typed(item.book, item.field, v)) do
           local ok, added, pid = pcall(proposals.add, c.id, c.field, c.value, { op = c.op, source = "typed", confidence = 1 })
           if not ok then
@@ -194,29 +234,142 @@ function M.run()
           end
         end
       end
-    elseif key == "A" then
+    end
+    if act == "help" then
+      keys:show("review", panels.also())
+    elseif act == "peek" then
+      peek()
+    elseif act == "sort" then
+      sort = sort == "confidence" and "id" or "confidence"
+      rank_books()
+    elseif act == "field" then
+      -- the next key says which field: a letter as in :propose --only, or f again for all
+      p:title(("show only: %s   (%s all)"):format("t title  a authors  s subject  i identifiers  d date  p publisher  e series", key))
+      local second = p:wait()
+      if not second then return end
+      local propose = require "lulibre.propose"
+      if second == key then
+        field_only = nil
+      elseif propose.FIELD[second] and #second == 1 then
+        field_only = propose.FIELD[second]
+        if #listed() == 0 then
+          lulibre.notify(("no proposals for %s here"):format(field_only))
+          field_only = nil
+        end
+      end
+      rank_books()
+    elseif key == "<Reload>" then
+      rank_books() -- the library changed under us: books may have gone, values may differ
+    elseif act == "write" then
+      if #listed("accepted") == 0 then
+        lulibre.notify(("nothing accepted yet: %s accepts the proposal under the cursor"):format(keys:key("accept") or "accept"))
+      else
+        p:close()
+        local r = proposals.apply_accepted(scope, only)
+        lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
+        return
+      end
+    elseif item and act == "expand" then
+      open[item.book] = not open[item.book] or nil
+    elseif act == "expand_all" then
+      local any = next(open) ~= nil
+      open = {}
+      if not any then
+        for _, it in ipairs(items) do
+          if it.heading then open[it.book] = true end
+        end
+      end
+    elseif item and item.heading and (act == "accept" or act == "reject") then
+      -- on a book's own line the key speaks for all of its proposals
+      local mine = {}
+      for _, q in ipairs(listed()) do
+        if q.book == item.book then mine[#mine + 1] = q end
+      end
+      local pending = 0
+      for _, q in ipairs(mine) do
+        if q.status == "pending" then pending = pending + 1 end
+      end
+      if act == "reject" then
+        for _, q in ipairs(mine) do
+          if q.status == "pending" then proposals.set_status(q.id, "rejected") end
+        end
+        lulibre.notify(("rejected the %d still pending for book %d"):format(pending, item.book))
+      elseif pending == 0 then
+        -- all decided already: a second press takes the acceptances back
+        for _, q in ipairs(mine) do proposals.set_status(q.id, "pending") end
+      else
+        -- one value per single-valued field: the surest wins (the list is ordered so)
+        local taken, n = {}, 0
+        for _, q in ipairs(mine) do
+          if q.status == "accepted" and q.op == "set" then taken[q.field] = true end
+        end
+        for _, q in ipairs(mine) do
+          if q.status == "pending" and not (q.op == "set" and taken[q.field]) then
+            proposals.accept(q)
+            if q.op == "set" then taken[q.field] = true end
+            n = n + 1
+          end
+        end
+        lulibre.notify(("accepted %d for book %d; %s writes them"):format(n, item.book, keys:key("write") or "write"))
+      end
+    elseif pr and act == "accept" then
+      if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
+      keep = key_of(items[row + 1]) or keep
+    elseif pr and act == "reject" then
+      proposals.set_status(pr.id, "rejected")
+      -- an opened book shows the field as it stands in the proposal's place
+      keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
+    elseif pr and act == "edit" then
+      local v = ask(pr.book, pr.field, pr.value)
+      if v then answer(v) end
+    elseif item and item.plain and (act == "edit" or act == "accept") then
+      local book = lulibre.book(item.book)
+      local v = book and ask(item.book, item.field, edit.current(book, item.field))
+      if v then answer(v) end
+    elseif item and not item.heading and act == "clear" then
+      answer("")
+    elseif item and not item.heading and act == "titlecase" then
+      local book = lulibre.book(item.book)
+      local was = pr and pr.value or book and edit.current(book, item.field) or ""
+      local to = require("lulibre.titlecase").apply(was)
+      if was == "" or to == was then lulibre.notify((pr and pr.field or item.field) .. " is in title case already")
+      else answer(to) end
+    elseif act == "accept_above" then
       local v = lulibre.input { prompt = "accept every pending proposal with confidence at least: ", default = "0.8" }
       local floor = tonumber(v or "")
+      -- a blanket accept fills gaps without asking; replacing values a book
+      -- already has is asked about, since those may well be the right ones
+      local over, replacing = true, 0
+      if floor then
+        for _, q in ipairs(listed("pending")) do
+          if (q.confidence or 0) >= floor and proposals.replaces(q) then replacing = replacing + 1 end
+        end
+        if replacing > 0 then
+          over = lulibre.confirm(("%d of these would replace a value the book already has; accept those too?"):format(replacing))
+        end
+      end
       if floor then
         local n, taken = 0, {}
-        for _, q in ipairs(proposals.list("accepted", scope)) do
+        for _, q in ipairs(listed("accepted")) do
           if q.op == "set" then taken[q.book .. "\0" .. q.field] = true end
         end
-        for _, q in ipairs(proposals.list("pending", scope)) do
+        for _, q in ipairs(listed("pending")) do
           -- one value per single-valued field: the strongest wins (the list is ordered so)
           local slot = q.book .. "\0" .. q.field
-          if (q.confidence or 0) >= floor and not (q.op == "set" and taken[slot]) then
+          if (q.confidence or 0) >= floor and not (q.op == "set" and taken[slot])
+            and (over or not proposals.replaces(q)) then
             proposals.accept(q)
             taken[slot] = true
             n = n + 1
           end
         end
-        lulibre.notify(("accepted %d; w writes them"):format(n))
+        lulibre.notify(("accepted %d%s; %s writes them"):format(n,
+          (replacing > 0 and not over) and (", left %d that replace a value"):format(replacing) or "",
+          keys:key("write") or "write"))
       end
-    elseif key == "R" then
+    elseif act == "reject_rest" then
       if lulibre.confirm("reject every proposal still pending?") then
-        lulibre.store("UPDATE proposals SET status = 'rejected' WHERE status = 'pending' AND " ..
-          (scope == "sync" and "book < 0" or "book > 0"))
+        for _, q in ipairs(listed("pending")) do proposals.set_status(q.id, "rejected") end
       end
     end
     rows = build()

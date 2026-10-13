@@ -20,6 +20,9 @@
 #include "core/util.h"
 #include "version.h"
 
+/* which build this is (app.c, build/buildno.c) */
+extern const char lulibre_build_number[], lulibre_build_commit[];
+
 static const int fatal[] = {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT};
 static struct sigaction before[sizeof fatal / sizeof fatal[0]];
 static char path[1024];
@@ -42,7 +45,11 @@ static void on_fatal(int sig) {
   /* only what may be called from a signal handler */
   int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
   if (fd >= 0) {
-    put(fd, "\nlulibre " LULIBRE_VERSION " (" LULIBRE_BUILD " build, Lua " LULIBRE_LUA_VER "): signal ");
+    put(fd, "\nlulibre " LULIBRE_VERSION " (" LULIBRE_BUILD " build ");
+    put(fd, lulibre_build_number);
+    put(fd, " from ");
+    put(fd, lulibre_build_commit);
+    put(fd, ", Lua " LULIBRE_LUA_VER "): signal ");
     put_num(fd, sig);
     put(fd, " at unix time ");
     put_num(fd, (long)time(NULL));

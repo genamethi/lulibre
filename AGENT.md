@@ -7,23 +7,32 @@ code.
 
 ## Branches and versions
 
-- **The tree at `/media/servd/staging/lulibre` stays on `main`, always.**
-  The user runs `./build/lulibre` from it, and a binary run from its tree
-  reads its Lua files from the tree as it needs them: checking out another
-  branch there, even for a minute, breaks the program they have open (it did:
-  "unknown option 'propose_over'" from a beta binary reading 0.2.0's files).
-  All branch work, fixes for `main` included, happens in the second checkout,
-  `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). A fix reaches
-  `main` by `git merge --no-ff` run in the main tree, followed by `make`
-  there; nothing else changes that tree.
+- **The user's tree, `/media/servd/staging/lulibre`, is theirs.** They run
+  `./build/lulibre` from it, and a binary run from its tree reads its Lua
+  files from the tree as it needs them: changing the files under it, by a
+  checkout or a merge, breaks the program they have open (it did: "unknown
+  option 'propose_over'" from a beta binary reading 0.2.0's files). All
+  branch work happens in the second checkout,
+  `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). Their tree
+  changes only by `git merge --no-ff` into the branch it is on, followed by
+  `make` there, and only when they have said they are not running it or
+  have asked for the update. Before any merge:
+  `git -C /media/servd/staging/lulibre branch --show-current`, and
+  `pgrep -a lulibre`. They do switch that tree themselves.
 
-- `main` is the released line. Bug fixes go to it through `fix-<name>`
-  branches, merged with `--no-ff`.
-- `0.2.0` is the next minor. Each feature is a branch `0.2.0-<name>` merged
-  into `0.2.0` with `--no-ff`. After fixes land on `main`, merge `main` into
-  `0.2.0` so it stays current; `src/version.h` conflicts there, keep 0.2.0's.
+- `v0.1.0` is the first release; the branch `0.1` is kept at it for patches.
+- `main` is the 0.2.0 line, what the user runs. `0.2.0-dev` is where it is
+  put together, in the second checkout: each feature is a branch
+  `0.2.0-<name>` merged into `0.2.0-dev` with `--no-ff`, and `0.2.0-dev` is
+  merged into `main` when a batch is whole and passes.
+- Run `make check` and `make e2e` and read the result **before** the merge
+  command, not in the same pipeline: a merge chained after a filtered test
+  run went through with three failures in it.
 - The version is written in `src/version.h` and nowhere else. Bump the
-  pre-release tag there (`-alpha.2`, `-beta`, `-rc.1`, `""`).
+  pre-release tag there (`-alpha`, `-beta`, `-rc.1`, `""`).
+- Builds of a version are numbered by `make` (docs/development.md, Builds).
+  Tell the user the number of the build they are given: `lulibre -V`, or
+  the last line of `make builds`.
 - Commit only when asked. A fix goes with a test that fails without it.
 - Record user-visible changes in `CHANGELOG.md`.
 
@@ -68,6 +77,17 @@ code.
 - luv belongs to the main Lua state. It is loaded once at startup; never
   arrange for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
+- A screen written in Lua never compares a key with a letter. It asks its
+  key table (`lua/lulibre/ui/keys.lua`) which action the key means, and its
+  hint and `?` help are written from that table. A new action goes into the
+  table with a label and a description.
+- C code for a place with keys of its own (a panel's movement, the line
+  editor, picker, pager, console) never compares a key with a constant
+  either: it asks `ctx_feed(KC_..., &pending, key)` for the action
+  (`src/tui/ctxkeys.c`; the enums in `tui.h` follow the tables there).
+- Nothing shown to the user names a key literally: C uses `key_hint("the
+  command")` or `ctx_hint(place, action)`, Lua `lulibre.hint("the command")`, a screen `keys:key(action)`.
+  The user rebinds keys and expects what is on screen to say so.
 - A command acts on what the *focused* cursor shows. With a panel that
   follows the list focused, that is the panel row's book, not the list's
   cursor: once the two can differ (the book was removed, or filtered out)
@@ -87,9 +107,27 @@ code.
 
 ## Verifying
 
+- Anything that writes lulibre's own tables in bulk (`:learn`, confirming
+  records) is tried on a **copy** of the user's index, never the index
+  itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
+  `-o index=scratch.db`. The library is still read, nothing of the user's
+  is written.
+- A learned or statistical feature is reported with a held-out number, and
+  the number goes in the report as measured. The first phrase learner looked
+  finished and was teaching "delaware corporation" as a mark of computing.
+- A word list that removes "noise" removes signal too: the first trade-word
+  list dropped "number", "series", "law" and "distribution", and with them
+  number field, power series, reciprocity law. Test such a list against the
+  phrases that must survive it.
+
 - `make check` always; `make e2e` before a merge that touches writing.
   A change to a form (edit, review, duplicates, orphans) gets a keystroke
   check in `test/forms.sh`.
+- A tmux session made with `-y 30` has 29 rows for the program (tmux keeps
+  one for its status line): find a row by what is on it, never by number.
+- A message left on the message line by an earlier step satisfies a later
+  `shown "changed 1 book"`. Clear it (`Escape`) before a step that waits for
+  the same words, or the check passes before the work is done.
 - A long tmux socket path fails ("File name too long"): name the private
   server with `-L`, do not move its socket directory under a deep `mktemp`.
 - Thread or memory work: `./configure --sanitize=address,undefined` and
@@ -100,5 +138,8 @@ code.
 - The shell here is zsh: unquoted variables do not split into words, and a
   here-document ends at the first line equal to its delimiter, even inside
   a quoted block of another language.
+- A test that starts a tmux server stops it in its EXIT trap, with
+  `|| true`. Failed runs of the smoke test left six lulibre processes
+  running for two days.
 - Test scripts do not `rm` paths built from variables; plant and remove
   files from Lua with exact paths.

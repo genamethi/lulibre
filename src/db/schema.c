@@ -42,6 +42,21 @@ const char db_schema[] =
   " label TEXT, undone INTEGER NOT NULL DEFAULT 0);"
   "CREATE INDEX IF NOT EXISTS journal_batch ON journal(batch);"
   "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);"
+  /* records the user has confirmed as right: what is learned about subjects
+   * is learned from these (lua/lulibre/quality.lua, learn.lua) */
+  "CREATE TABLE IF NOT EXISTS good(book INTEGER PRIMARY KEY, ts INTEGER);"
+  /* the phrases that tell one subject from the others, learned from the good
+   * records; state is 'learned', 'kept' (the user's own, or pinned) or
+   * 'dropped' (never to come back) */
+  /* what each book cites, one key for each entry of its bibliography
+   * (lua/lulibre/refs.lua): books that cite the same things are about the
+   * same thing */
+  "CREATE TABLE IF NOT EXISTS refs("
+  " book INTEGER NOT NULL, key TEXT NOT NULL, raw TEXT, PRIMARY KEY(book, key)) WITHOUT ROWID;"
+  "CREATE INDEX IF NOT EXISTS refs_key ON refs(key);"
+  "CREATE TABLE IF NOT EXISTS terms("
+  " subject TEXT NOT NULL, term TEXT NOT NULL, score REAL, books INTEGER, state TEXT NOT NULL DEFAULT 'learned',"
+  " PRIMARY KEY(subject, term)) WITHOUT ROWID;"
   /* content hashes, filled on demand by lulibre.md5(); a row is good while
    * the file's size and mtime still match */
   "CREATE TABLE IF NOT EXISTS hashes("

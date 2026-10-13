@@ -124,6 +124,33 @@ if command -v tmux >/dev/null; then
   shown "tui picker sets a filter"   'author:="Unknown"'
   $T send-keys -t t Escape : ; $T send-keys -t t -l 'lua lulibre.count("")' ; $T send-keys -t t Enter
   shown "tui :lua"                   "^2 *$"
+  # the command line: completion and history
+  $T send-keys -t t : ; $T send-keys -t t -l "so"
+  shown "commands complete by prefix"    "source "
+  $T send-keys -t t Tab ; $T send-keys -t t -l " -y"
+  shown "and so do their arguments"      " [-]year "
+  $T send-keys -t t Tab
+  shown "Tab takes the completion"       "^:sort -year"
+  $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t -l "set oc" ; $T send-keys -t t Tab ; $T send-keys -t t -l "a" ; $T send-keys -t t Tab
+  shown "options and their values complete" "^:set ocr=auto"
+  $T send-keys -t t Escape
+  sleep 0.2
+  $T send-keys -t t '&' ; $T send-keys -t t C-u ; $T send-keys -t t -l "is:mar" ; $T send-keys -t t Tab
+  shown "the filter language completes"  "^&is:marked"
+  $T send-keys -t t Escape
+  sleep 0.2
+  $T send-keys -t t : ; $T send-keys -t t -l "echo first one" ; $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t -l "echo second" ; $T send-keys -t t Enter
+  $T send-keys -t t : ; $T send-keys -t t Up
+  shown "Up recalls the last command"    "^:echo second"
+  $T send-keys -t t Up
+  shown "and the one before"             "^:echo first one"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "so" ; $T send-keys -t t Up
+  shown "Up finds what starts as typed"  "^:sort -year"
+  $T send-keys -t t Escape
+  sleep 0.2
+
   # the mouse: select text in the preview, paste it into a field
   mouse() { $T send-keys -t t -l "$(printf "$@")"; sleep 0.3; }
   row=$($T capture-pane -p -t t | grep -n 'A Note on Sieve' | head -1 | cut -d: -f1)
@@ -146,6 +173,30 @@ if command -v tmux >/dev/null; then
   i=0; while [ "$($T show-buffer 2>/dev/null)" = "Sieve Methods" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i + 1)); done
   expect "yy copies the title"           "paper" "$($T show-buffer 2>/dev/null)"
 
+  # outside the preview's text a drag selects what is drawn: the list, a line being typed
+  row=$($T capture-pane -p -t t | grep -n '^ *— *paper' | head -1 | cut -d: -f1)
+  before=$($T capture-pane -p -t t | sed -n "${row}p" | sed 's/paper.*//')
+  col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
+  mouse '\033[<0;%d;%dM' "$col" "$row"
+  mouse '\033[<32;%d;%dM' "$((col + 2))" "$row"
+  mouse '\033[<0;%d;%dm' "$((col + 2))" "$row"
+  expect "a drag in the list copies what it covers" "pap" "$($T show-buffer 2>/dev/null)"
+  sleep 0.6
+  $T send-keys -t t : ; $T send-keys -t t -l "echo hello world"
+  wait_for "^:echo hello world"; row=$($T capture-pane -p -t t | grep -n '^:echo hello world' | head -1 | cut -d: -f1)
+  mouse '\033[<0;7;%dM' "$row"
+  mouse '\033[<32;11;%dM' "$row"
+  mouse '\033[<0;11;%dm' "$row"
+  expect "and in the line being typed"       "hello" "$($T show-buffer 2>/dev/null)"
+  $T send-keys -t t C-u ; $T send-keys -t t -l "echo " ; $T send-keys -t t C-v
+  shown "which can be pasted back into it"   "^:echo hello *$"
+  $T send-keys -t t Escape
+  sleep 0.6
+  row=$($T capture-pane -p -t t | grep -n 'NORMAL' | head -1 | cut -d: -f1)
+  mouse '\033[<0;4;%dM\033[<0;4;%dm\033[<0;4;%dM\033[<0;4;%dm' "$row" "$row" "$row" "$row"
+  expect "a double click takes the word under it" "NORMAL" "$($T show-buffer 2>/dev/null)"
+  sleep 0.6
+
   # a paste from the terminal is text, whatever is in it
   $T set-buffer "$(printf 'echo two\nlines ZZ')"
   $T send-keys -t t : ; $T paste-buffer -p -t t
@@ -159,6 +210,30 @@ if command -v tmux >/dev/null; then
   sleep 0.2
   $T send-keys -t t : ; $T send-keys -t t -l "echo after escape" ; $T send-keys -t t Enter
   shown "Escape still cancels"           "^after escape *$"
+
+  # windows are resized by dragging the line between them, or from the keyboard
+  dcol() { screen | sed -n 5p | sed 's/│.*//' | LC_ALL=C.UTF-8 wc -m; }
+  was=$(dcol)
+  mouse '\033[<0;%d;5M' "$was"
+  mouse '\033[<32;%d;5M' "$((was - 10))"
+  mouse '\033[<0;%d;5m' "$((was - 10))"
+  expect "dragging the line between windows moves it" "$((was - 10))" "$(dcol)"
+  $T send-keys -t t M-Right
+  sleep 0.3
+  expect "Alt+Right moves it two columns right"  "$((was - 8))" "$(dcol)"
+  $T send-keys -t t -l '\' ; $T send-keys -t t Left
+  sleep 0.3
+  expect "<Leader> and an arrow do the same"     "$((was - 10))" "$(dcol)"
+  $T send-keys -t t '`'
+  shown "the console opens"                      "console  "
+  brow() { screen | grep -n '^ *console  ' | head -1 | cut -d: -f1; }
+  was=$(brow)
+  mouse '\033[<0;60;%dM' "$was"
+  mouse '\033[<32;60;%dM' "$((was - 4))"
+  mouse '\033[<0;60;%dm' "$((was - 4))"
+  expect "dragging a window's bar up makes it taller" "$((was - 4))" "$(brow)"
+  $T send-keys -t t '`'
+  sleep 0.6
 
   # closing a window must leave nothing pointing at it (a sanitizer build
   # stops here if something does)
@@ -185,6 +260,85 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t q
   i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
+
+  # keys from init.lua: a leader, a screen's own keys, and reading the file again
+  mkdir -p "$t/conf3"
+  cat > "$t/conf3/init.lua" <<'LUA'
+lulibre.o.leader = ","
+lulibre.map("n", "<Leader>e", "echo the leader works")
+lulibre.map("browse", "o", "open")
+lulibre.map("n", "gz", "echo zed", "a key of my own, described")
+lulibre.map("n", "gy", "echo why", false)
+lulibre.map("line", "<C-g>", "cancel")
+lulibre.map("panel", "<C-x>", "close")
+LUA
+  $T new-session -d -s t -x 120 -y 30 \
+    "XDG_DATA_HOME='$t/data' '$bin' -C '$t/conf3' -L '$lib'; echo \$? > '$t/rc3'"
+  shown "tui starts with a configuration"  "NORMAL"
+  $T send-keys -t t , e
+  shown "a <Leader> binding runs"          "^the leader works *$"
+  $T send-keys -t t : ; $T send-keys -t t -l 'lua lulibre.notify("bound to " .. lulibre.key("echo the leader works"))'
+  $T send-keys -t t Enter
+  shown "and is named by the key it is on" "^bound to ,e *$"
+  $T send-keys -t t "?"
+  shown "? opens the help"                 "KEYS"
+  # page down to the end of the keys, where bindings made later are listed
+  found=no hidden=ok
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+    screen | grep -q "gz  *a key of my own, described" && found=yes
+    screen | grep -q "echo why" && hidden=shown
+    $T send-keys -t t Space; sleep 0.15
+  done
+  expect "a binding's own description is listed" yes "$found"
+  expect "a hidden binding stays out of the help" ok "$hidden"
+  $T send-keys -t t q
+  $T send-keys -t t g t
+  shown "the tree browser opens"           "browse  "
+  $T send-keys -t t "?"
+  shown "? lists the screen's keys"        "KEYS HERE"
+  shown "a remapped key first, with what it does" "o  l  .*open the branch"
+  $T send-keys -t t q C-x
+  i=0; while screen | grep -q "browse  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "a key put on the panels' close closes one" "" "$(screen | grep -o 'browse  ' | head -1)"
+  $T send-keys -t t : ; $T send-keys -t t -l "echo not this" ; $T send-keys -t t C-g
+  sleep 0.3
+  $T send-keys -t t : ; $T send-keys -t t -l "echo but this" ; $T send-keys -t t Enter
+  shown "a key put on the line's cancel cancels" "^but this *$"
+  printf 'lulibre.map("n", "<Leader>e", "echo read again")\n' > "$t/conf3/init.lua"
+  $T send-keys -t t , R
+  shown "<Leader>R reads init.lua again"   "read .*init.lua again"
+  $T send-keys -t t , e
+  shown "and its bindings are the ones in force" "^read again *$"
+  $T send-keys -t t q
+  i=0; while [ ! -s "$t/rc3" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "and exits cleanly" 0 "$(cat "$t/rc3" 2>/dev/null)"
+
+  # with a sync folder set, a tab line says which of the two the list shows
+  if "$bin" --clean -L "$lib" run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1; then
+    mkdir -p "$t/incoming"
+    printf 'A text file waiting to be added\n' > "$t/incoming/note.txt"
+    $T new-session -d -s t -x 120 -y 30 \
+      "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
+    shown "source tabs appear"           " 1  Library  2 "
+    $T send-keys -t t : ; $T send-keys -t t Up
+    shown "history is kept between sessions" "^:echo but this"
+    $T send-keys -t t Escape
+    sleep 0.2
+    shown "and name the sync folder"     " 2  Sync folder  0 "
+    $T send-keys -t t 2
+    shown "2 shows the sync folder"      " SYNC "
+    shown "which now holds the file"     " 2  Sync folder  1 "
+    shown "and lists it"                 "note"
+    $T send-keys -t t 1
+    shown "1 goes back to the library"   "all books"
+    $T send-keys -t t -l "$(printf '\033[<0;24;1M\033[<0;24;1m')"
+    shown "a click on the tab switches too" " SYNC "
+    $T send-keys -t t q
+    i=0; while [ ! -s "$t/rc2" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+    expect "and exits cleanly" 0 "$(cat "$t/rc2" 2>/dev/null)"
+  else
+    echo "skip  sync folder tabs (luv is not installed for this Lua version)"
+  fi
   $T kill-server 2>/dev/null || true
 else
   echo "skip  tui tests (tmux not found)"

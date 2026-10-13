@@ -36,7 +36,7 @@ must not count in a shared variable (`n = n + 1` can lose a count). Use
 | `lulibre.count(filter)` | number |
 | `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index |
-| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`); returns rows, rows changed, last insert id |
+| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`, `refs`); returns rows, rows changed, last insert id |
 | `lulibre.reload()` | pick up changes calibre has made |
 | `lulibre.source([name])` | what the list shows, `"library"` or `"sync"`; sets it when given |
 
@@ -60,10 +60,11 @@ Library books have positive ids; files staged from the sync folder negative ones
 | `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds |
 | `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=}, ... }` |
 | `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }` |
-| `lulibre.extract(path [, {pages=, layout_pages=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
+| `lulibre.extract(path [, {pages=, layout_pages=, tail=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
 | `lulibre.render(path, page [, width])` | *waits.* The page as a greyscale PGM string |
 | `lulibre.page_put(id, page, {text=, lines=, src=})` | replace a page's indexed text, as OCR does |
 | `lulibre.md5(path)` | *waits* the first time. Content hash, remembered in the index |
+| `lulibre.index([{filter=, force=, retry=}])` | *waits.* Extract text from new or changed files (all of them with `force`, only matching books with `filter`): `{ files=, queued=, ok=, failed=, missing=, seconds= }` |
 
 ## Changing the library
 
@@ -92,7 +93,11 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.jump(id)` | move the cursor to a book |
 | `lulibre.exec(line)` | run a command line |
 | `lulibre.command(name, fn [, help])` | define a `:` command; `fn(args)` runs as a task |
-| `lulibre.map(modes, keys, target)` | bind keys to a command line or a function |
+| `lulibre.map(modes, keys, target [, about])` | bind keys to a command line or a function; `about` is what `?` shows for the key, `false` keeps it out. With a panel's name for `modes` (`"review"`), or a place's (`"panel"`, `"line"`, `"picker"`, `"pager"`, `"console"`), put a key on one of its actions |
+| `lulibre.key(command [, mode])` | the keys bound to a command line (`"gr"`), or nil |
+| `lulibre.hint(command)` | the same for a message: the keys, or `":command"` when there are none |
+| `lulibre.maps()` | every global binding: `{ {modes=, keys=, command=}, ... }` |
+| `lulibre.place_keys(place)` | the keys of `"panel"`, `"line"`, `"picker"`, `"pager"` or `"console"`, as lines of text |
 | `lulibre.input{prompt=, default=, suggestions=, separator=, on_change=}` | *waits.* A line of text, or nil |
 | `lulibre.confirm(question)` | *waits.* true for y or yes |
 | `lulibre.pick(items [, {title=}])` | *waits.* Fuzzy-pick one: item, index |
@@ -113,6 +118,8 @@ local p <close> = lulibre.panel {
   rows = { { 12, "A title", 1996, id = 12, style = "ok" } },
   follow = true,        -- moving through rows moves the list to row.id
   height = 0.4,         -- or side = "left", width = 0.3
+  keys = { "<CR>" },    -- the keys this script handles, and
+  pass = "preview yank" -- the global commands its other keys may still reach
 }
 while true do
   local key, row = p:wait()        -- nil once the panel is closed
@@ -122,10 +129,25 @@ end
 ```
 
 Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
-`p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`. Row styles: `dim
+`p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`, `p:hide()` and
+`p:show()` (off the screen and back, around a panel opened on top of it),
+`p:height(share)`, `p:keys(list)`. Row styles: `dim
 accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
-`"<Move>"` when the cursor moves.
+`"<Move>"` when the cursor moves, and with `reloads = true` it returns
+`"<Reload>"` when the library has been read again, so the rows can be
+brought up to date.
+
+A panel normally takes every key. Given `keys` and `pass`, a key that is not
+among `keys` and begins a global binding to one of the `pass` commands (named
+by their first word) runs that binding instead: this is how `P` and `]`
+reach the preview from inside review. When a following panel's row is a book
+the list does not hold, the preview shows that book anyway.
+
+The edit form and review can be opened for given books from a script:
+`require("lulibre.ui.edit").run { ids = { 12 } }`, and the same for
+`lulibre.ui.review`. `require("lulibre.ui.panels").over(p, fn, ...)` runs
+`fn` with panel `p` out of the way.
 
 ## Tasks, processes, helpers
 
@@ -138,6 +160,10 @@ across the whole width (a heading; text too long for a column). With `moves = tr
 | `lulibre.tasks()` `lulibre.cancel(id)` `lulibre.task_id()` | |
 | `lulibre.system({"prog", "arg"} [, {stdin=, cwd=, timeout=}])` | *waits.* `{ code=, signal=, stdout=, stderr=, timed_out= }`, or nil, message |
 | `lulibre.fold(s)` | search key: lower case, accents stripped |
+| `lulibre.lower(s)` `lulibre.upper(s)` | case for more than ASCII: accented Latin, Greek, Cyrillic |
+| `lulibre.titlecase(s)` | the title in title case (APA) |
+| `lulibre.phrases(text)` | the distinct two- and three-word phrases of a text |
+| `lulibre.counter()` | counts phrases, or whole lines, over many texts: `c:add(text)`, `c:prune(min [, max])`, `c:of(text)`, `c:count(phrase)`, `c:add_lines(text [, same])`, `c:strip(text, min)` |
 | `lulibre.fuzzy(query, candidate)` | score, or nil |
 | `lulibre.inspect(value)` | a readable rendering of any value |
 | `lulibre.uv`, `require "luv"` | libuv, on the loop Lua runs on |
@@ -154,8 +180,8 @@ across the whole width (a heading; text too long for a column). With `moves = tr
 | `lulibre.settings.info(name)` | `{ name=, value=, default=, type=, choices=, help= }` |
 | `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library= }` |
 | `lulibre.theme.name = "#rrggbb"` | colours; `lulibre.theme()` lists them |
-| `lulibre.version` | `"0.1.0"` |
-| `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua= }` |
+| `lulibre.version` | `"0.2.0-dev"` |
+| `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua=, number=, commit= }`; `number` is this build's number among the builds of its version (`"007"`) |
 
 The configuration directory is the option `config_dir`:
 
@@ -177,14 +203,21 @@ its own documentation.
 |---|---|
 | `lulibre.edit` | apply, undo, history, remove; a field's current value; the write route |
 | `lulibre.proposals` | add, list, accept, apply |
+| `lulibre.quality` | a record's score, and the confirmed ones: `score(book)`, `ranked(opts)`, `set_good(ids, on)`, `is_good(id)`, `good_ids()`, `catchall(subject)` |
+| `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text)`, `suggest(text)`, `candidate(id)` |
+| `lulibre.propose` | what to propose for a book from its file: `book(id, {over=, only=, fresh=, again=})`, `wanted(book, candidates, opts)`, `same(field, a, b)`, `is_gap(field, value)`, `fields("t,a")` |
 | `lulibre.extract` | ranked metadata candidates from a file's pages |
+| `lulibre.refs` | what a book cites: `index_book(id)`, `of(id)`, `coupled(id)`, `subject(id)`, `key(entry)`, `entries(lines)`, `find(pages)` |
+| `lulibre.layouts` | pages read by rule: `add{name=, marks=, fields=, confidence=}`, `remove(name)`, `read(doc)`, `cip(text)` |
 | `lulibre.titlepage` `names` `ids` `subjects` `junk` `taxonomy` | the heuristics extract is built from: title pages, author names, DOI/ISBN/arXiv/MSC, subject vocabulary |
 | `lulibre.suggest` | ranked values for a field |
+| `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
-| `lulibre.dupes` | identical files |
+| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another |
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
+| `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
 | `lulibre.net` | arXiv and CrossRef lookups |
 | `lulibre.json` | encode, decode |
 

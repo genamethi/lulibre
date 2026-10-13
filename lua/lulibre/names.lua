@@ -18,7 +18,36 @@ local NOT_NAME = set([[university universität college institute institut cwi an
   pattern factors geometry introduction cov cover design homology singular remarks
   abstract contents theorem lemma proof dedicated capital inc ltd labs research
   corporation google microsoft journal received revised communicated]])
-local DEGREE = set("ph.d phd dr prof mr ms mrs")
+-- ranks, roles and kinds of document: words that sit where an author's name
+-- would but are never one ("Professor Emeritus", "Lecture Notes")
+-- (not words that are also surnames or first names: Dean, Reader, Fellow, Chair)
+local ROLE = set([[emeritus emerita lecturer editor editors edited translator translated
+  foreword preface thesis dissertation notes lecture lectures report preprint draft version
+  reprint reprints archive blog talks seminar colloquium workshop conference proceedings
+  memorial anniversary honors honours visiting assistant associate adjunct distinguished
+  invited keynote supervisor advisor adviser examiner committee unknown]])
+-- given names common among the authors of books and papers: enough to tell
+-- "David Mumford" from "Hopf Algebras" where nothing else on the page does
+local GIVEN = set([[aaron adam adrian alan albert alex alexander alexandre alfred alice allen amy anatoly andre
+  andrea andreas andrei andrew andrzej angela anna anne anthony antoine anton antonio arthur barbara barry ben
+  benjamin bernard bernhard bertrand bill boris brian bruce bruno carl carlos carol caroline catherine charles
+  chris christian christine christoph christopher claire claude claudia colin craig dan daniel daniela david
+  dennis diana dmitri dmitry donald douglas edward elena elias elizabeth emil emily emmanuel emmy eric erik ernst
+  eugene eva evan felix frances francis francois frank fred frederick friedrich gabriel gary george georges
+  gerald gerard gerd gilles giovanni gordon graham greg gregory guido gunter gustav hans harold harry heinrich
+  helen helmut henri henry herbert hermann howard hugo ian igor ilya irene isaac ivan jack jacob jacques james
+  jan jane jason jean jeffrey jennifer jeremy jerome jesse jim joachim joan joe joel johan johann johannes john
+  jon jonathan jorge jose josef joseph joshua juan judith julia julian julie julius jurgen karen karl kate
+  katherine keith ken kenneth kevin klaus kurt lars laura laurent lawrence lee leo leon leonard leonhard linda
+  lisa louis luca lucas ludwig luis marc marcel marco marcus margaret maria marie mario mark martin mary
+  matthew matthias maurice max maxim michael michel michele miguel mikhail mike nancy nathan neil nicholas
+  nicolas nikolai nina noam norman oleg oliver olivier oscar otto pablo pascal patricia patrick paul pavel
+  pedro peter philip philipp philippe pierre rachel ralph raymond rebecca reinhard rene richard robert roberto
+  robin roger roland ronald ruth ryan sam samuel sandra sarah scott sean sebastian serge sergei sergey sergio
+  simon sophie stefan stephen steve steven stuart susan sylvain terence terry theodore thomas tim timothy tobias
+  tom tony ulrich valentin vera victor vincent vladimir walter werner wilhelm william wolfgang yuri yves]])
+-- what stands before or after a name and is taken off it: "Professor Karen E. Smith"
+local DEGREE = set("ph.d phd dr prof professor mr ms mrs frs sir")
 -- function words: a line containing one is prose or a title, not a name list
 local TITLE_WORDS = set([[of in the for to on with from into over under via an that which
   using toward towards between about as at by its their]])
@@ -34,6 +63,37 @@ local function is_affiliation(low)
     or low:find("acknowledg")
 end
 M.is_affiliation = function(s) return is_affiliation(s:lower()) ~= nil end
+
+-- the user's own additions, from the option never_authors; read when it changes
+local never_text, never_list
+local function never()
+  local text = lulibre.o.never_authors or ""
+  if text ~= never_text then
+    never_text, never_list = text, {}
+    for item in text:gmatch("[^,]+") do
+      local phrase = lulibre.fold(trim(item)):gsub("%s+", " ")
+      if phrase ~= "" then never_list[#never_list + 1] = " " .. phrase .. " " end
+    end
+  end
+  return never_list
+end
+
+--- Is this something that is never an author: a rank or role among the
+-- built-in ones, or a word or phrase from the option never_authors?
+function M.never(name)
+  local flat = " " .. lulibre.fold(name or ""):gsub("[^%w]+", " "):gsub("^ ", ""):gsub(" $", "") .. " "
+  local words, titles = 0, 0
+  for w in flat:gmatch("%S+") do
+    if ROLE[w] then return true end
+    words = words + 1
+    if DEGREE[w] then titles = titles + 1 end
+  end
+  if words > 0 and words - titles < 2 then return true end -- a title with at most one word to it: "Professor", "Dr Smith"
+  for _, phrase in ipairs(never()) do
+    if flat:find(phrase, 1, true) then return true end
+  end
+  return false
+end
 
 --- One person's name, cleaned, or nil if this does not read as a name:
 -- two to four capitalised words or initials, particles allowed, no digits.
@@ -51,6 +111,7 @@ function M.clean(p)
   toks = {}
   for t in p:gmatch("%S+") do toks[#toks + 1] = t end
   if #toks < 2 or #toks > 4 then return nil end
+  if M.never(p) then return nil end
   local solid = false
   for _, t in ipairs(toks) do
     local low = t:lower():gsub("%.$", "")
@@ -63,6 +124,29 @@ function M.clean(p)
     end
   end
   return solid and p or nil
+end
+
+--- Does the line read as one person's name on evidence beyond its shape?
+-- Two capitalised words are as often a title ("Hopf Algebras") as a name, so
+-- one of these must hold as well: an initial among the words ("Sidney A.
+-- Morris"), a first word that is a common given name, or an e-mail address
+-- in `text` (the page) that spells the surname.
+function M.is_person(line, text)
+  local name = M.clean(line)
+  if not name or name:find("[,;&]") then return false end
+  local toks = {}
+  for t in name:gmatch("%S+") do toks[#toks + 1] = t end
+  for i = 1, #toks - 1 do
+    if toks[i]:match("^%u%.$") then return true end
+  end
+  if GIVEN[lulibre.fold(toks[1])] then return true end
+  local surname = lulibre.fold(toks[#toks])
+  if #surname >= 4 then
+    for address in (text or ""):gmatch("[%w._%-]+@[%w.%-]+") do
+      if lulibre.fold(address:match("^[^@]+")):find(surname, 1, true) then return true end
+    end
+  end
+  return false
 end
 
 --- Split "A. Author; B. Author and C. Author" into names. Commas separate

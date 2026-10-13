@@ -213,6 +213,23 @@ function M.write_jobs()
 end
 
 --- The start of every calibredb command for this library.
+-- A file that holds a secret should be readable by its owner alone. lulibre
+-- never reads the password itself (calibredb is handed the file's name), but
+-- it can tell when others on the machine could: said once, as a warning.
+local warned = {}
+function M.check_secret(path)
+  if warned[path] then return end
+  local ok, uv = pcall(require, "luv")
+  local st = ok and uv.fs_stat(path)
+  if st and st.mode and st.mode % 64 ~= 0 then -- any permission for group or others
+    warned[path] = true
+    lulibre.log(("%s can be read by other users of this machine (mode %o): chmod 600 %s"):format(path, st.mode % 512, path),
+      "warn")
+    return false
+  end
+  return true
+end
+
 function M.calibredb()
   local o, a = lulibre.o, { "calibredb" }
   if M.route() == "server" then
@@ -229,6 +246,7 @@ function M.calibredb()
         error(("the password file %s does not exist (lulibre.o.password_file)"):format(o.password_file), 0)
       end
       f:close()
+      M.check_secret(o.password_file)
       a[#a + 1] = "--password"
       a[#a + 1] = "<f:" .. o.password_file .. ">"
     end
@@ -535,7 +553,7 @@ function M.summary(r)
   if #r.failed > 0 then
     s = s .. (", %d failed: %s"):format(#r.failed, r.failed[1].error or "?")
   end
-  return r.applied > 0 and s .. "  (u undoes)" or s
+  return r.applied > 0 and s .. ("  (%s undoes)"):format(lulibre.hint("undo")) or s
 end
 
 --- Recent batches, newest first:
@@ -559,7 +577,7 @@ function M.undo(batch)
   local rows = lulibre.store("SELECT id, book, field, old, new FROM journal WHERE batch = ? AND status = 'applied' AND undone = 0", batch)
   if #rows == 0 then return nil, "batch " .. batch .. " has nothing left to undo" end
   local changes, skipped = {}, 0
-  local restored, lost = {}, {}
+  local restored, lost, staged_back = {}, {}, false
   for _, row in ipairs(rows) do
     if row.field == REMOVED then
       -- a removed book comes back out of calibre's recycle bin
@@ -569,6 +587,17 @@ function M.undo(batch)
         restored[#restored + 1] = new
         lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
         if why then lost[#lost + 1] = { id = row.book, error = why } end
+      else
+        lost[#lost + 1] = { id = row.book, error = why }
+      end
+      goto next_row
+    elseif row.field == "(dropped)" then
+      -- a file dropped from the sync folder goes back, with its staged metadata
+      local back, why = require("lulibre.sync").undrop(require("lulibre.json").decode(row.old))
+      if back then
+        restored[#restored + 1] = row.book
+        lulibre.store("UPDATE journal SET undone = 1, new = 'put back' WHERE id = ?", row.id)
+        staged_back = true
       else
         lost[#lost + 1] = { id = row.book, error = why }
       end
@@ -583,9 +612,10 @@ function M.undo(batch)
     ::next_row::
   end
   lulibre.progress(nil)
+  if staged_back then lulibre.stage_refresh() end
   if #restored + #lost > 0 then lulibre.reload() end
   local r = M.apply(changes, { label = "undo of " .. batch })
-  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field <> ?", batch, REMOVED)
+  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field NOT IN (?, '(dropped)')", batch, REMOVED)
   r.skipped, r.undid, r.restored = skipped, batch, restored
   r.applied = r.applied + #restored
   for _, l in ipairs(lost) do table.insert(r.failed, l) end

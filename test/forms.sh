@@ -52,7 +52,8 @@ $cdb add "$t/src/knots.pdf" --title "Knots" --authors "Ann Lee" --tags "math, to
 $cdb add "$t/src/sieve.pdf" --title "Sieve" --authors "Jane Roe" >/dev/null 2>&1
 $cdb add "$t/src/rings.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
 $cdb add --duplicates "$t/src/rings2.pdf" --title "Rings" --authors "Sam Poe" >/dev/null 2>&1
-$cdb set_metadata 1 --field publisher:Acme >/dev/null 2>&1
+$cdb add --duplicates "$t/src/knots.pdf" --title "KNOTS, A SECOND COPY" --authors Unknown >/dev/null 2>&1
+$cdb set_metadata 1 --field publisher:Acme --field series:Lectures >/dev/null 2>&1
 
 run() { "$bin" --clean -L "$lib" "$@"; }
 lua() { printf '%s\n' "$1" > "$t/s.lua"; run run "$t/s.lua" 2>&1; }
@@ -77,27 +78,42 @@ shown() { # description, pattern
   fi
 }
 k() { for key; do $T send-keys -t t "$key"; done; }
+mouse() { $T send-keys -t t -l "$(printf "$@")"; sleep 0.3; }
 lit() { $T send-keys -t t -l "$1"; }
 
 run index >/dev/null 2>&1
 lua 'lulibre.propose(1, "publisher", "Wrong Press", { source = "test", confidence = 0.9 })
 lulibre.propose(2, "title", "Sieve Notes", { source = "test", confidence = 0.9 })
-lulibre.propose(3, "title", "Rings and Things", { source = "test", confidence = 0.9 })' >/dev/null
+lulibre.propose(3, "title", "Rings and Things", { source = "test", confidence = 0.99 })' >/dev/null
 
 $T new-session -d -s t -x 140 -y 40 "'$bin' --clean -L '$lib' 2>'$t/err'; echo \$? > '$t/rc'"
-shown "the interface starts"                  "1/4"
+shown "the interface starts"                  "1/5"
 
 # ---- a narrowed list says that it is, and how to undo it
 k "&"; lit "id:2"; k Enter
 shown "an active filter is labelled"          "filter id:2"
-shown "with how much of the library it shows" "1 of 4"
+shown "with how much of the library it shows" "1 of 5"
 shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
 
+# ---- a title in capitals, put in title case
+expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2>/dev/null)"
+k "&"; lit "is:capstitle"; k Enter
+wait_for "1 of 5"
+k g T
+shown "gT rewrites it"                        "changed 1 book"
+expect "in title case, minor words small"     "Knots, a Second Copy" "$(field 5 title)"
+k g T
+shown "and has nothing more to do"            "0 of 5"
+k BSpace
+wait_for "all books"
+k Escape
+sleep 0.2
+
 # ---- the edit form: a field emptied and entered is blanked
 k "&"; lit "id:1"; k Enter
-wait_for "1 of 4"
+wait_for "1 of 5"
 k e
 shown "the edit form opens"                   "edit  1  Knots"
 k j j Enter
@@ -109,14 +125,40 @@ shown "the form shows the blank to be written" "(blank)"
 k w
 shown "the change is written"                 "changed 1 book"
 expect "the tags are gone"                    "" "$(field 1 tags)"
+k Escape # clears the message line, so the next "changed" is the next write's
+sleep 0.2
+k e
+shown "the edit form opens again"             "edit  1  Knots"
+shown "its hint names the keys"               "c clear"
+k j j j c
+shown "c blanks the field under the cursor"   "cleared"
+k "?"
+shown "? lists the form's keys"               "blank the field"
+k q w
+shown "and the blank is written"              "changed 1 book"
+expect "the series is gone"                   "" "$(field 1 series)"
 k BSpace
 wait_for "all books"
 
 # ---- review: a proposal edited to nothing blanks the field
 k g r
 shown "review opens"                          "review  3 pending"
+shown "with what waits for each book"         "1 to decide, surest 0.99"
+first=$(screen | grep -n "▸ 3  Rings" | head -1 | cut -d: -f1)
+second=$(screen | grep -n "▸ 1  Knots" | head -1 | cut -d: -f1)
+if [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ]; then
+  echo "ok    the book with the surest proposal comes first"
+else
+  echo "FAIL  the book with the surest proposal comes first (rows $first, $second)"; fails=$((fails + 1))
+fi
+k f t
+shown "f then t shows only the title proposals" "review  2 pending.*only title"
+k f f
+shown "f twice shows all again"               "review  3 pending"
+k s
+shown "s orders by id instead"                "by id"
 shown "on the first proposal"                 "Wrong Press"
-k e
+k g g j e
 shown "the proposal can be edited"            "publisher: Wrong Press"
 k C-u Enter
 shown "emptied, it proposes a blank"          "(blank)"
@@ -129,14 +171,52 @@ expect "the publisher is gone"                "" "$(field 1 publisher)"
 # neighbour the list has fallen back to
 k g r
 shown "review again"                          "review  2 pending"
-shown "its cursor is on book 2"               "Sieve Notes"
+k s
+shown "by id, book 2 comes first"             "by id"
+k g g j
+sleep 0.3
+shown "its cursor is on book 2"               "│ Sieve"
+# copying from the page leaves the cursor in review: the next key is review's
+row=$(screen | grep -n '│ Jane Roe' | tail -1 | cut -d: -f1)
+before=$(screen | sed -n "${row}p" | sed 's/Jane Roe.*//')
+col=$(($(printf '%s' "$before" | LC_ALL=C.UTF-8 wc -m) + 1))
+mouse '\033[<0;%d;%dM' "$col" "$row"
+mouse '\033[<32;%d;%dM' "$((col + 7))" "$row"
+mouse '\033[<0;%d;%dm' "$((col + 7))" "$row"
+shown "a drag in the preview copies"          "copied 8 characters"
+k e
+shown "and e still edits the proposal in review" "^title: Sieve Notes"
+k Escape
+sleep 0.5
+# both clicks in one write: two that arrive a moment apart are not a double click
+mouse '\033[<0;%d;%dM\033[<0;%d;%dm\033[<0;%d;%dM\033[<0;%d;%dm' "$col" "$row" "$col" "$row" "$col" "$row" "$col" "$row"
+shown "a double click copies a word"          "copied 4 characters"
+k e
+shown "and leaves the cursor in review too"   "^title: Sieve Notes"
+k Escape
+sleep 0.5
+k a
+shown "on a proposal, a accepts it"           "review  1 pending, 1 accepted"
+k a
+shown "on a book's line, a accepts all of the book's" "accepted 1 for book 3"
+shown "so that nothing is left pending"       "review  0 pending, 2 accepted"
+k a
+shown "and again takes them back"             "review  1 pending, 1 accepted"
+k g g j a
+shown "as it does on a single proposal"       "review  2 pending, 0 accepted"
+k g g j
+sleep 0.3
 k :; lit "remove"; k Enter
 shown "remove names the book review is on"    "remove book 2, Sieve"
 lit "y"; k Enter
 shown "it is removed"                         "removed 1 book"
-k :; lit "remove"; k Enter
-shown "a second remove on the stale row is refused" "book 2 is not in the list any more"
-expect "and no other book was taken"          3 "$(run query -c 2>/dev/null)"
+shown "review lets go of the removed book"    "review  1 pending"
+if screen | grep -q "Sieve Notes"; then
+  echo "FAIL  its proposals are no longer shown"; fails=$((fails + 1))
+else
+  echo "ok    its proposals are no longer shown"
+fi
+expect "and no other book was taken"          4 "$(run query -c 2>/dev/null)"
 k q
 
 # ---- orphans: what does not fit a column is one key away
@@ -159,6 +239,50 @@ fi
 k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
 k q
+
+# ---- from duplicates: the edit form for a row's book, and the preview's keys
+k g d
+shown "duplicates opens"                      "duplicates  1 groups"
+shown "its hint offers the edit form"         "e edit"
+k e
+shown "e opens the edit form for the row's book" "edit  1  Knots"
+if screen | grep -q "duplicates  1 groups"; then
+  echo "FAIL  the duplicates panel steps aside meanwhile"; fails=$((fails + 1))
+else
+  echo "ok    the duplicates panel steps aside meanwhile"
+fi
+k Enter
+shown "the title can be typed"                "^title: Knots"
+k C-u; lit "Knot Theory"; k Enter w
+shown "the change is written from there"      "changed 1 book"
+shown "and duplicates comes back, up to date" "✓ *1 *Knot Theory"
+k P
+shown "P still turns the preview to an image" "── image"
+k P
+shown "and back to text"                      "── text"
+k "?"
+shown "? says which of the list's keys work"  "ALSO HERE"
+k q
+k j t
+shown "t offers the other copy's values to the kept one" "review  [0-9]* pending"
+shown "saying where each comes from"          "book 5"
+k q
+shown "and comes back to duplicates"          "duplicates  1 groups"
+k q
+
+# ---- known good: the records by score, confirmed one at a time or in bulk
+k g k
+shown "known good opens, best records first"  "known good  0 confirmed of"
+k Space
+shown "Space confirms a record"               "known good  1 confirmed of"
+k v
+shown "v shows the confirmed ones"            "showing: confirmed"
+k q
+expect "is:good finds it"                     1 "$(run query -c is:good 2>/dev/null)"
+k :; lit "learn"; k Enter
+shown "learn reads the library"               "confirmed books"
+k :; lit "terms"; k Enter
+shown "with too few confirmed books, nothing is learned" "nothing has been learned"
 
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
