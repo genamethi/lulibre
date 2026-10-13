@@ -326,7 +326,7 @@ are, with more confidence:
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
 | series line (a series named in so many words: "Springer Undergraduate Mathematics Series", the line above "Series Editors", "Series: Lecture Notes in Physics") | the series and, where it is given, the volume's number |
-| arXiv stamp | the day of submission |
+| arXiv stamp | the day of submission, from a first version's stamp only: a later version's stamp gives the day of that revision, and is not taken for a date |
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
 | journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year; the journal, as the publisher |
