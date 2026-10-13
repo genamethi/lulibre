@@ -105,11 +105,14 @@ function M.read(doc)
           fields[field] = value
         end
       end
+      -- a layout that is surer of one field than of another says so: confidence = { field = n }
+      local sure = type(fields.confidence) == "table" and fields.confidence or {}
+      fields.confidence = nil
       for field, value in pairs(fields) do
         if type(value) == "table" then value = table.concat(value, field == "authors" and " & " or ", ") end
         value = value ~= nil and trim(tostring(value)):gsub("%s+", " ") or ""
         if value ~= "" then
-          out[#out + 1] = { field = field, value = value, source = layout.name, confidence = layout.confidence or 0.8 }
+          out[#out + 1] = { field = field, value = value, source = layout.name, confidence = sure[field] or layout.confidence or 0.8 }
         end
       end
     end
@@ -299,6 +302,198 @@ M.add {
   confidence = 0.95,
 }
 
+-- ---- a series named in so many words ----
+--
+-- A book usually says which series it belongs to: a line that is the
+-- series' name ("Springer Undergraduate Mathematics Series", "IAS/Park City
+-- Mathematics Series, Volume 12"), a label ("Series: Lecture Notes in
+-- Physics"), or the line above "Series Editors". The word alone proves
+-- nothing ("Fourier Series", "a series of lectures given at ..."), so a line
+-- is taken for a series' name only when it is set like a name, is not a
+-- piece of mathematics (M.not_series), and something beside it bears it
+-- out: a volume number, the editors, an ISSN, or a publishing house's name.
+
+local function words(list)
+  local out = {}
+  for w in list:gmatch("%S+") do out[w] = true end
+  return out
+end
+
+-- what stands before "Series" when the series is a sum, not a set of books
+M.not_series = words [[fourier power dirichlet taylor laurent maclaurin random time eisenstein poincaré poincare hilbert
+  puiseux formal infinite trigonometric divergent convergent composition central derived hypergeometric asymptotic theta
+  farey singular geometric harmonic complementary discrete principal volterra neumann binomial orthogonal double multiple
+  lambert fibonacci numerical alternating telescoping generating zeta chief normal subnormal upper lower new second third
+  first fourth this the a each in of and]]
+
+-- houses and societies whose name opens the name of a series
+M.series_houses = words [[springer cambridge oxford princeton wiley mit chapman academic elsevier north-holland birkhäuser
+  birkhauser ams ias london gruyter world dover pearson mcgraw-hill addison-wesley prentice crc siam ems clay fields cbms nato
+  schaum's schaum university chicago harvard yale stanford american european society international carus pitman van
+  wadsworth brooks/cole benjamin interscience kluwer reidel plenum teubner vieweg hermann masson dunod]]
+
+local MINOR = words "in of the and on for to a an und der die das de des du et la le von zur für per il e y & - – /"
+
+local function minor(word)
+  return MINOR[lulibre.lower((word or ""):gsub("^%p+", ""):gsub("[%p]+$", ""))] ~= nil
+end
+
+-- is the line set like a name: its words capitalised, but for the small ones
+local function titled(line)
+  local n = 0
+  for w in line:gmatch("%S+") do
+    n = n + 1
+    local bare = w:gsub("^[%p]+", ""):gsub("[%p]+$", "")
+    if bare ~= "" and not MINOR[lulibre.lower(bare)] and not bare:match("^[%u%d\128-\255]") then return false end
+  end
+  return n >= 2 and n <= 14
+end
+
+-- "Name, Volume 12" -> "Name", "12"
+local function with_number(line)
+  line = line:gsub("%s*ISSN%s*:?%s*[%dXx%-]+", ""):gsub("[%s|,;:]+$", "")
+  for _, pattern in ipairs { "^(.-)[,;:]?%s*[Vv][Oo][Ll]%a*%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]o%.?%s*(%d+)$", "^(.-)[,;:]?%s*[Nn]umber%s*(%d+)$",
+    "^(.-)%s*#%s*(%d+)$", "^(.-)[,;]?%s+(%d+)$" } do
+    local name, number = line:match(pattern)
+    if name and #name >= 6 and tonumber(number) < 3000 then return name:gsub("[|,;:%s]+$", ""), number end
+  end
+  return line, nil
+end
+
+-- a line of a table of contents, a cataloguing entry, a sentence, a credit: not a name
+local function not_a_name(line)
+  return #line > 80 or line:find("^%d+[%.%d]*%s") or line:find("%.%s?%.%s?%.") or line:find("[Cc][Hh][Aa][Pp][Tt][Ee][Rr]") or line:find("Title%.")
+    or line:find("[%.;:!?]$") or line:find("[Ee]ditor") or line:find("EDITOR") or line:find("%(New Series%)") or line:find("^Source")
+    or line:find("published") or line:find("@") or line:find("http") or line:find("ISBN") or line:find("^A Series of")
+    or line:find("[Ii]mage") or line:find("[Cc]over") or line:find("©") or line:find("[Pp]hoto") or line:find("[Dd]esign")
+    or line:find("[Pp]ublication") or line:find("Commenced")
+end
+
+-- the heading of a list of a series' editors, or of its board
+local function editors_heading(line)
+  return #line <= 40 and not line:find(",") and (line:find("^[%a%-%s]*[Ee]ditors?[%a%-%s]*:?$") or line:find("^[%a%-%s]*EDITORS?[%a%-%s]*:?$")
+    or line:find("^[%a%s]*Board:?$")) ~= nil
+end
+
+local function volume_line(line)
+  return line:match("^[Vv][Oo][Ll]%a*%.?%s*(%d+)$") or line:match("^[Nn]umber%s*(%d+)$") or line:match("^[Nn]o%.%s*(%d+)$")
+end
+
+-- a name as it is proposed: one found in capitals in title case, without "Subseries of"
+local function dressed(name)
+  name = name:gsub("^[%p%s]+", ""):gsub("^Subseries of%s+", ""):gsub("[|,;:%s]+$", "")
+  local lower, letters = 0, 0
+  for w in name:gmatch("%S+") do
+    if not minor(w) then
+      for c in w:gmatch("%a") do
+        letters = letters + 1
+        if c:match("%l") then lower = lower + 1 end
+      end
+    end
+  end
+  if letters > 0 and lower == 0 then name = require("lulibre.titlecase").apply(lulibre.upper(name)) end
+  return name
+end
+
+--- The series a page names, if it names one: its name, the volume's number
+-- (or nil), and what bears it out.
+function M.series_line(text)
+  local lines = {}
+  for raw in (text .. "\n"):gmatch("(.-)\n") do
+    local line = trim(raw):gsub("%s+", " ")
+    if line ~= "" then lines[#lines + 1] = line end
+  end
+  -- a number on the line below: "Volume 12"
+  local function below(i)
+    for k = i + 1, math.min(i + 2, #lines) do
+      local n = volume_line(lines[k])
+      if n then return n end
+    end
+  end
+  local function near(i, pattern)
+    for k = math.max(1, i - 3), math.min(#lines, i + 3) do
+      if k ~= i and lines[k]:find(pattern) then return true end
+    end
+  end
+  -- A name set over two lines: the second begins, or the first ends, with a
+  -- small word or a hyphen ("Studies in Neuroscience, Psychology / and
+  -- Behavioral Economics", "CAMBRIDGE TEXTS IN THE / HISTORY OF ..."). k: the
+  -- line found; returns the whole name and the line it begins on.
+  local function whole(k)
+    local name, first = lines[k], k
+    local prev = lines[k - 1]
+    if prev and not not_a_name(prev) and not editors_heading(prev) and not volume_line(prev)
+      and (minor(name:match("^%S+")) or minor(prev:match("%S+$")) or prev:find("%-$")) and titled(prev .. " X") then
+      name, first = (prev:find("%a%-$") and prev:sub(1, -2) .. name or prev .. " " .. name), k - 1
+    end
+    local nxt = lines[k + 1]
+    if nxt and not not_a_name(nxt) and not editors_heading(nxt) and not volume_line(nxt)
+      and (minor(nxt:match("^%S+")) or minor(name:match("%S+$")) or name:find("%a%-$")) and titled("X " .. nxt) then
+      name = name:find("%a%-$") and name:sub(1, -2) .. nxt or name .. " " .. nxt
+    end
+    return name, first
+  end
+  local has_series_editors = text:find("[Ss]eries%s+[Ee]ditors?") or text:find("SERIES%s+EDITORS?")
+  for i, line in ipairs(lines) do
+    -- a label says it outright
+    local labelled = line:match("^Series%s*:%s*(.+)$") or line:match("^Series%s+[Tt]itle%s*:%s*(.+)$")
+    if labelled and not labelled:find("[Ee]ditor") then
+      local name, number = with_number(labelled)
+      if titled(name) then return dressed(name), number or below(i), "labelled" end
+    end
+    -- The first heading of the series' editors: the name stands above it,
+    -- with the volume's number perhaps between ("UNITEXT ... / Volume 109 /
+    -- Editor-in-chief / ... / Series editors").
+    if has_series_editors and editors_heading(line) then
+      local k, number = i - 1, nil
+      if lines[k] and volume_line(lines[k]) then number, k = volume_line(lines[k]), k - 1 end
+      -- a line about the series may stand between: "Commenced Publication in 1973"
+      if lines[k] and lines[k - 1] and (lines[k]:find("[Pp]ublication") or lines[k]:find("ISSN")) then k = k - 1 end
+      if lines[k] and not not_a_name(lines[k]) and not editors_heading(lines[k]) then
+        local full = whole(k)
+        local name, n = with_number(full)
+        local before = name:match("(%S+)%s+[Ss][Ee][Rr][Ii][Ee][Ss]%f[%A]")
+        local sum = before and M.not_series[lulibre.lower(before:gsub("^%p+", ""):gsub("%p+$", ""))]
+        if titled(name) and not sum and not names.is_person(name) and not name:find("^Series") then
+          return dressed(name), number or n, "above the series' editors"
+        end
+      end
+      has_series_editors = nil -- only the first heading on the page has the name above it
+    end
+    -- a line that is the name of one
+    if (line:find("%f[%a]Series%f[%A]") or line:find("%f[%a]SERIES%f[%A]")) and not not_a_name(line) then
+      local full, first = whole(i)
+      local name, number = with_number(full)
+      local before = lulibre.lower(name:match("(%S+)%s+[Ss][Ee][Rr][Ii][Ee][Ss]%f[%A]") or "the")
+      local after = name:match("[Ss][Ee][Rr][Ii][Ee][Ss]%s+(%S+)")
+      before = before:gsub("^%p+", ""):gsub("%p+$", "")
+      if titled(name) and not M.not_series[before] and after ~= "of" and not name:find("^Series") then
+        number = number or below(i)
+        local house = M.series_houses[lulibre.lower(name:match("^[%a\128-\255/%-']+") or "")]
+          or M.series_houses[lulibre.lower(name:match("^[Tt][Hh][Ee]%s+([%a\128-\255/%-']+)") or "")]
+        local why = number and "with its volume" or (near(i, "[Ee]ditor") or near(first, "[Ee]ditor") or near(i, "EDITOR")) and "beside its editors"
+          or near(i, "ISSN") and "beside its ISSN" or house and "a house's series"
+        if why then return dressed(name), number, why end
+      end
+    end
+  end
+  return nil
+end
+
+M.add {
+  name = "series line",
+  find = function(doc)
+    for i = 1, math.min(6, #(doc.texts or {})) do
+      if M.series_line(doc.texts[i]) then return doc.texts[i] end
+    end
+  end,
+  read = function(text)
+    local name, number = M.series_line(text)
+    return { series = name, series_index = number }
+  end,
+  confidence = 0.75,
+}
+
 -- ---- dates ----
 
 local MONTHS = {
@@ -457,7 +652,7 @@ M.add {
 local function copyright_year(text)
   -- the years after the sign: "1965, 1984", "1994–2023"
   local YEARS = "([%d,%s%-\226\128\147\148]+)"
-  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*©?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*©?%s*" .. YEARS,
+  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS,
     "%(c%)%s*" .. YEARS } do
     for run in text:gmatch(pattern) do
       local best
@@ -471,15 +666,83 @@ local function copyright_year(text)
   return nil
 end
 
+-- Whose copyright it is: on a book or a journal's article, the publisher.
+-- Houses are known by a word of their name and written one way (M.houses:
+-- { pattern, name }, the pattern matched against the holder in lower case);
+-- add to it for more.
+M.houses = {
+  { "springer", "Springer" }, { "birkh.-user", "Birkhäuser" }, { "elsevier", "Elsevier" }, { "north%-holland", "North-Holland" },
+  { "academic press", "Academic Press" }, { "cambridge university press", "Cambridge University Press" },
+  { "oxford university press", "Oxford University Press" }, { "princeton university press", "Princeton University Press" },
+  { "university of chicago", "University of Chicago Press" }, { "harvard university press", "Harvard University Press" },
+  { "yale university press", "Yale University Press" }, { "massachusetts institute of technology", "MIT Press" },
+  { "mit press", "MIT Press" }, { "american mathematical society", "American Mathematical Society" },
+  { "mathematical association of america", "Mathematical Association of America" },
+  { "society for industrial and applied", "SIAM" }, { "european mathematical society", "European Mathematical Society" },
+  { "london mathematical society", "London Mathematical Society" }, { "american physical society", "American Physical Society" },
+  { "institute of physics", "IOP Publishing" }, { "iop publishing", "IOP Publishing" }, { "ieee", "IEEE" },
+  { "association for computing machinery", "ACM" }, { "%f[%a]acm%f[%A]", "ACM" }, { "mcgraw%-hill", "McGraw-Hill" },
+  { "wiley", "Wiley" }, { "addison%-wesley", "Addison-Wesley" }, { "pearson", "Pearson" }, { "prentice", "Prentice Hall" },
+  { "crc press", "CRC Press" }, { "chapman", "Chapman & Hall" }, { "taylor & francis", "Taylor & Francis" },
+  { "routledge", "Routledge" }, { "de gruyter", "De Gruyter" }, { "kluwer", "Kluwer" }, { "world scientific", "World Scientific" },
+  { "dover publications", "Dover" }, { "o'reilly", "O'Reilly" }, { "no starch", "No Starch Press" }, { "manning", "Manning" },
+  { "apress", "Apress" }, { "packt", "Packt" }, { "nature publishing", "Nature Publishing Group" }, { "annual reviews", "Annual Reviews" },
+  { "hindawi", "Hindawi" }, { "john benjamins", "John Benjamins" }, { "sage publications", "SAGE" }, { "w%. ?h%. ?freeman", "W. H. Freeman" },
+  { "benjamin", "W. A. Benjamin" }, { "van nostrand", "Van Nostrand" }, { "hermann", "Hermann" }, { "interscience", "Interscience" },
+}
+
+-- what else a holder that is a publisher, not a person, is called
+local ORG = { "press", "publish", "verlag", "society", "university", "books", "media", "institute", "association", "& sons",
+  "company", "%f[%a]inc%f[%A]", "%f[%a]ltd%f[%A]", "%f[%a]llc%f[%A]", "gmbh", "éditions", "editions", "foundation", "académie", "academy" }
+
+-- (the sign is two bytes: "©?" in a pattern would ask for the first of them)
+local SIGNS = { "©%s*", "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*", "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*", "%(c%)%s*" }
+local YEARS = "[%d,%s%-\226\128\147\148]*%d%d%d%d"
+
+--- The holder a copyright line names, if it is a publisher: its name (as
+-- M.houses writes it, or as the line does), and whether the house is known.
+function M.copyright_holder(text)
+  for raw in text:gmatch("[^\n]+") do
+    local line = trim(raw)
+    if #line <= 140 then
+      for _, sign in ipairs(SIGNS) do
+        -- "© 2008 by Elsevier Inc. All rights reserved"  or  "© Springer-Verlag Berlin Heidelberg 1999"
+        local holder = line:match(sign .. YEARS .. "%s*,?%s*[Bb]?[Yy]?%s+(.+)$") or line:match(sign .. "(%u.-)%s*,?%s*" .. YEARS)
+        if holder then
+          holder = holder:gsub("^[Bb]y%s+", ""):gsub("^[Tt]he%s+", ""):gsub("%s*[.,]?%s*[Aa]ll [Rr]ights.*$", ""):gsub("%s*[.,]?%s*Printed in.*$", "")
+            :gsub(",%s*part of.*$", ""):gsub(",%s*corrected.*$", ""):gsub("[%s.,;:]+$", ""):gsub("%.?%s+All$", "")
+          local low = lulibre.lower(holder)
+          local org = false
+          for _, word in ipairs(ORG) do
+            if low:find(word) then org = true end
+          end
+          -- a house's name may be a person's too (Hermann, Benjamin, Wiley): a
+          -- holder who reads as a person is one
+          local person = not org and names.is_person(holder)
+          for _, house in ipairs(M.houses) do
+            if low:find(house[1]) and not person then return house[2], true end
+          end
+          if org and #holder >= 4 and #holder <= 60 and not low:find("author") and not low:find("owner") and not names.is_person(holder) then
+            return holder, false
+          end
+        end
+      end
+    end
+  end
+  return nil
+end
+
 M.add {
   name = "copyright line",
   find = function(doc)
     for i = 1, math.min(5, #(doc.texts or {})) do
-      if copyright_year(doc.texts[i]) then return doc.texts[i] end
+      if copyright_year(doc.texts[i]) or M.copyright_holder(doc.texts[i]) then return doc.texts[i] end
     end
   end,
   read = function(text)
-    return { pubdate = tostring(copyright_year(text)) }
+    local year = copyright_year(text)
+    local holder, known = M.copyright_holder(text)
+    return { pubdate = year and tostring(year) or nil, publisher = holder, confidence = { publisher = known and 0.8 or 0.65 } }
   end,
   confidence = 0.75,
 }

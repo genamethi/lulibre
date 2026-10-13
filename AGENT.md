@@ -119,6 +119,18 @@ code.
   list dropped "number", "series", "law" and "distribution", and with them
   number field, power series, reciprocity law. Test such a list against the
   phrases that must survive it.
+- Lua patterns work on bytes. A character outside ASCII is several of them,
+  so `©?` asks for the first byte and makes the second optional, and a set
+  like `[çc]` or `[‘’–]` matches single bytes of those characters. This went
+  wrong three times in one day (a copyright sign, "Reçu", the quotes and
+  dashes in `propose.same`). Write the bytes (`\194?\169?`), list the
+  spellings separately, or replace whole sequences through a table; and give
+  every such pattern a test with and without the character.
+- A file somebody else made is opened before code is written for it. The
+  reader for "arXiv's snapshot" was written from the format of the dataset
+  I expected; the file that arrived was another dataset (a hypergraph, no
+  author order, no DOI). Saying "not verified against the real file" was
+  what kept that from being a surprise.
 - Code that talks to somebody else's service is written from that service's
   own terms, read first and linked in a comment, not from memory of what is
   usual. The first arXiv code kept to a pace but retried after "rate

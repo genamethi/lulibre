@@ -205,15 +205,35 @@ are, with more confidence:
 |---|---|
 | cataloguing data (the Library of Congress block on the back of a title page) | author, title, series and number, year, ISBN, and the subject its class number stands for (`QA247` is number theory) |
 | series page (some thirty series of Springer, the AMS, Cambridge, Princeton and others) | the series and the volume's number, the publisher, the year (of the edition a reprint reprints) |
+| series line (a series named in so many words: "Springer Undergraduate Mathematics Series", the line above "Series Editors", "Series: Lecture Notes in Physics") | the series and, where it is given, the volume's number |
 | arXiv stamp | the day of submission |
 | received date ("Received 8 February 1972", "Received by the editors May 3, 1999") | the day a journal received the article |
 | dated page (a date on a line of its own on the first page: "March 12, 2015", "Date: October 2009.") | that date |
 | journal header ("Journal of Algebra 320 (2008) 1234–1256") | the year |
-| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984") | the year, the latest where several stand together |
+| copyright line ("© 2008 Elsevier Inc.", "Copyright © 1965, 1984 by McGraw-Hill") | the year, the latest where several stand together; the publisher, when the holder is one and not the author |
 | a cover sheet with labelled fields; a thesis cover | as above, under proposals |
 
 What they read is proposed like anything else, marked with the layout's
 name.
+
+The word "series" proves nothing by itself ("Fourier Series", "a series of
+lectures given at ..."), so a line is taken for a series' name only when it
+is set like a name, is not a piece of mathematics, and something beside it
+bears it out: a volume number, the series' editors, an ISSN, or a
+publishing house's name. Two tables say what counts, and take more:
+
+```lua
+local layouts = require "lulibre.layouts"
+layouts.not_series["bertrand"] = true      -- "Bertrand Series" is a sum, not a set of books
+layouts.series_houses["polity"] = true     -- "Polity Series in ..." needs nothing else to bear it out
+```
+
+A publisher on a copyright line is written one way whatever the line says
+("Springer-Verlag Berlin Heidelberg", "Springer Nature Switzerland AG" and
+"Springer Science+Business Media" are all Springer): `layouts.houses` is the
+list, `{ pattern, name }`, and takes more. A holder that is not on it but
+reads as a house ("Chelsea Publishing Company") is proposed as written, less
+surely; an author's own copyright names no publisher.
 
 The four that read a date are there for the books with none. All but the
 journal header are below the confidence at which a proposal replaces a value
@@ -360,19 +380,45 @@ service would get and about how long the run would take.
 
 ### arXiv without asking arXiv
 
-arXiv publishes all of its metadata as one file, the
-[snapshot on Kaggle](https://www.kaggle.com/Cornell-University/arxiv)
-(`arxiv-metadata-oai-snapshot.json`: every paper, one to a line, several
-gigabytes, renewed about once a week). Say where it is:
+With a file of arXiv's records on this machine, `:enrich` reads a paper's
+record from the file and asks arXiv only about papers the file does not
+hold (those newer than it). Put the file in lulibre's data folder, beside
+the index, under one of the names it looks for:
 
-```lua
-lulibre.o.arxiv_snapshot = "~/data/arxiv-metadata-oai-snapshot.json"   -- or the .zip as downloaded
-```
+    ~/.local/share/lulibre/arxiv.json
+    ~/.local/share/lulibre/arxiv-metadata-oai-snapshot.json
+    ~/.local/share/lulibre/arxiv.zip
 
-and `:enrich` reads each paper's record from the file (once through it,
-some ten seconds) and keeps it like any other answer. arXiv is then asked
-only about papers the file does not hold, which are those newer than it.
-A newer download replaces the old one; nothing else needs doing.
+or say where it is: `lulibre.o.arxiv_snapshot = "/data/arxiv.json"`. Two
+kinds of file are read, told apart by how they begin:
+
+| File | Holds | Lacks |
+|---|---|---|
+| arXiv's own snapshot, [on Kaggle](https://www.kaggle.com/Cornell-University/arxiv) as `arxiv-metadata-oai-snapshot.json`: one paper to a line | title, authors in order, classes, DOI, the day of each version | |
+| a hypergraph of arXiv (papers as "edges", authors as "nodes", one JSON document over many lines) | title, authors, classes | the order of the authors, the DOI, the day of submission |
+
+The file is read through once (half a minute for five gigabytes), only for
+the papers wanted; each record found is kept like any other answer, and a
+paper the file does not hold is not looked for in it again until the file
+changes. A newer download replaces the old one; nothing else needs doing.
+
+From a hypergraph the authors come in no order, so they are put in the
+order the paper's own first page names them in; where the page does not
+name them all, the proposal says so and is not put over authors a book
+already has. The day of submission is still read from the stamp arXiv
+prints on the page.
+
+What a record says is checked before it is believed:
+
+- An arXiv number or DOI that calibre holds is taken at its word. One that
+  was read from the file's pages may belong to a work the file cites: its
+  record is left out unless the record's title is the book's title, or the
+  title the file itself shows.
+- Titles and names are held by arXiv as typed, TeX and all
+  (`Erd\H{o}s`): they are put into plain text. A title with mathematics
+  left in it fills a gap but is not put over a title that reads well.
+- The same people named less fully ("S. Joffily" for "Sérgio Joffily") are
+  not proposed; named more fully, they are.
 
 `contact_email`, if you set it, is sent with each request: CrossRef and
 OpenAlex give steadier service to callers they can reach. It is empty unless

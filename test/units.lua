@@ -506,6 +506,15 @@ do
   eq("same: quotes, case and punctuation do not matter",
     propose.same("title", 'On Riemann\'s Paper, "On the Number"', "On Riemann’s paper, “on the number”"), true)
   eq("same: authors as a set", propose.same("authors", "A. One & B. Two", "B. Two & A. One"), true)
+  eq("same: the same people named less fully say nothing new", { propose.same("authors", "Sérgio Joffily", "S. Joffily"),
+    propose.same("authors", "Todd K. Timberlake & Jeffery M. Tucker", "Todd Timberlake & Jeffery Tucker"),
+    propose.same("authors", "Adrian W. Dudek", "Adrian Dudek") }, { true, true, true })
+  eq("named more fully they do", { propose.same("authors", "P. Selinger", "Peter Selinger"),
+    propose.same("authors", "R. Taylor", "Richard Taylor") }, { false, false })
+  eq("another person is another person", { propose.same("authors", "P. Selinger", "Q. Selinger"),
+    propose.same("authors", "Peter Selinger", "Paul Selinger"), propose.same("authors", "A. One", "A. One & B. Two") }, { false, false, false })
+  eq("same: a hyphen is a hyphen however it is drawn", { propose.same("authors", "Eric Vanden‐Eijnden", "Eric Vanden-Eijnden"),
+    propose.same("title", "Erdős–Kac theorems", "Erdős-Kac Theorems"), propose.same("title", "Zipf’s Law", "Zipf's law") }, { true, true, true })
   eq("same: a bare year offered against a date in that year", propose.same("pubdate", "1996-05-01", "1996"), true)
   eq("but a full date offered against a bare year is news", propose.same("pubdate", "2010-01-01", "2010-12-29"), false)
   eq("not the same", { propose.same("authors", "Bernhard Riemann", "W. Dittrich"), propose.same("pubdate", "2017-08-03", "2016") },
@@ -799,6 +808,38 @@ QA9.AIL64 1991
   got = layouts.read { texts = { "arXiv:1012.6008v1  [math.CO]  29 Dec 2010\nA Note on Sieves" } }
   eq("the arXiv stamp gives the day", { got[1].field, got[1].value, got[1].source }, { "pubdate", "2010-12-29", "arXiv stamp" })
 
+  -- a series named in so many words
+  local function series(text) return { layouts.series_line(text) } end
+  eq("a house's series", series("Elementary Number Theory\nSpringer Undergraduate Mathematics Series\nGareth A. Jones"),
+    { "Springer Undergraduate Mathematics Series", nil, "a house's series" })
+  eq("with its volume on the line, or below", { series("IAS/Park City Mathematics Series, Volume 12")[1], series("IAS/Park City Mathematics Series, Volume 12")[2],
+    series("Potsdam Cognitive Science Series | 7")[2], series("Association for Women in Mathematics Series\nVolume 3")[2] },
+    { "IAS/Park City Mathematics Series", "12", "7", "3" })
+  eq("a series of mathematics is not one of books", { series("Fourier Series\nSeries Editors\nA. N. Other")[1], series("1.2 The Taylor Series 179")[1],
+    series("Dirichlet Series in Number Theory, Volume 41")[1], series("CHAPTER 5 SERIES AND PRODUCT DEVELOPMENTS 175")[1],
+    series("a series of lectures given at Princeton University")[1], series("1. Algebra. I. Title. II. Series.")[1] }, {})
+  eq("the line above the editors of the series", series("Graduate Texts in Mathematics\nSeries Editors\nSheldon Axler\nKenneth Ribet"),
+    { "Graduate Texts in Mathematics", nil, "above the series' editors" })
+  eq("above the first list of editors, past the volume", series("UNITEXT - La Matematica per il 3+2\nVolume 109\nEditor-in-chief\nAlfio Quarteroni\nSeries editors\nL. Ambrosio"),
+    { "UNITEXT - La Matematica per il 3+2", "109", "above the series' editors" })
+  eq("not an editor, who stands above 'Series editors' too", series("Springer Monographs in Mathematics\nEditors-in-chief\nIsabelle Gallagher, Paris, France\nMinhyong Kim, Oxford, UK\nSeries editors\nSheldon Axler")[1],
+    "Springer Monographs in Mathematics")
+  eq("nor the credit for a cover", series("Cover image: shuoshu / DigitalVision\nVectors / Getty Images\nSeries Editor\nRobert Freidin")[1], nil)
+  eq("a name set over two lines", { series("Studies in Neuroscience, Psychology\nand Behavioral Economics\nSeries editors\nMartin Reuter, Bonn, Germany")[1],
+    series("CAMBRIDGE TEXTS IN THE\nHISTORY OF POLITICAL THOUGHT\nSeries editors\nRAYMOND GEUSS")[1],
+    series("SPRINGER SERIES IN COMPUTATIONAL NEURO-\nSCIENCE\nVolume 4")[1] },
+    { "Studies in Neuroscience, Psychology and Behavioral Economics", "Cambridge Texts in the History of Political Thought",
+      "Springer Series in Computational Neuroscience" })
+  eq("a line about the series may stand between it and its editors",
+    series("Lecture Notes in Computer Science\nCommenced Publication in 1973\nFounding and Former Series Editors:\nGerhard Goos")[1], "Lecture Notes in Computer Science")
+  eq("a label says it outright", series("Series: Lecture Notes in Physics, Vol. 870"), { "Lecture Notes in Physics", "870", "labelled" })
+  eq("a name alone, with nothing to bear it out, is not taken", series("Some Mathematics Series\nA. N. Other")[1], nil)
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "x", "Mathematics of Planet Earth\nVolume 4\nSeries editors\nKen Golden" } }) do
+    if c.source == "series line" then got[c.field] = c.value end
+  end
+  eq("read as a layout", got, { series = "Mathematics of Planet Earth", series_index = "4" })
+
   -- dates
   eq("a date, however it is written", { layouts.date("8 February 1972"), layouts.date("Feb. 8, 1972"), layouts.date("March 2004"),
     layouts.date("SEPTEMBER 2002"), layouts.date("2004-03-12"), layouts.date("July, 2012"), layouts.date("12 mars 1985"),
@@ -834,9 +875,30 @@ QA9.AIL64 1991
   eq("or a series before the volume", { j.journal, j.volume, j.year }, { "Ann. of Math.", 141, 1995 })
   eq("a line of prose with a year is not one", layouts.journal("We follow Serre 12 (1973) and others in this"), nil)
   eq("the year of the heading", reads("journal header", "Journal of Algebra 320 (2008) 1234–1256\nOn groups"), "2008")
-  eq("the year of a copyright line", { reads("copyright line", "© 2008 Elsevier Inc. All rights reserved."),
-    reads("copyright line", "Copyright (c) 1965, 1984, 2002 by A. N. Other"), reads("copyright line", "Copyright © 1994–2023 Lua.org, PUC-Rio."),
-    reads("copyright line", "no sign here, only 1999") }, { "2008", "2002", "2023" })
+  local function year_of(text)
+    for _, c in ipairs(layouts.read { texts = { text } }) do
+      if c.source == "copyright line" and c.field == "pubdate" then return c.value end
+    end
+  end
+  eq("the year of a copyright line", { year_of("© 2008 Elsevier Inc. All rights reserved."),
+    year_of("Copyright (c) 1965, 1984, 2002 by A. N. Other"), year_of("Copyright © 1994–2023 Lua.org, PUC-Rio."),
+    year_of("Copyright 1996, American Mathematical Society"), year_of("no sign here, only 1999") }, { "2008", "2002", "2023", "1996" })
+  eq("whose copyright it is, when it is a publisher's", { layouts.copyright_holder("© Springer-Verlag Berlin Heidelberg 1999"),
+    layouts.copyright_holder("© 2008 Elsevier Inc. All rights reserved."), layouts.copyright_holder("Copyright © 1984 by McGraw-Hill, Inc. All rights reserved. Printed in the"),
+    layouts.copyright_holder("© Springer International Publishing AG, part of Springer Nature 2018, 2020"),
+    layouts.copyright_holder("Copyright 1996, American Mathematical Society"),
+    (layouts.copyright_holder("Copyright 1996 by the American Mathematical Society")) },
+    { "Springer", "Elsevier", "McGraw-Hill", "Springer", "American Mathematical Society", "American Mathematical Society" })
+  eq("and whether the house is a known one", select(2, layouts.copyright_holder("© 2008 Elsevier Inc.")), true)
+  eq("a house that is not listed, as the line writes it", { layouts.copyright_holder("Copyright © 1971 by Chelsea Publishing Company.") },
+    { "Chelsea Publishing Company", false })
+  eq("an author's copyright names no publisher", { layouts.copyright_holder("© The Author(s) 2021"), layouts.copyright_holder("© 2019 Benjamin A. Smith"),
+    layouts.copyright_holder("Copyright (c) 2010 by Jane Hermann"), layouts.copyright_holder("© 2023 Copyright held by the owner/author(s).") }, {})
+  got = {}
+  for _, c in ipairs(layouts.read { texts = { "© 2008 Elsevier Inc. All rights reserved." } }) do
+    if c.source == "copyright line" then got[c.field] = { c.value, c.confidence } end
+  end
+  eq("the line gives the year and the house, each as sure as it is", got, { pubdate = { "2008", 0.75 }, publisher = { "Elsevier", 0.8 } })
   -- a reprint's series page knows better than its copyright line, and says so more surely
   local best
   for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer" } }) do
@@ -1076,6 +1138,102 @@ do
   eq("a second reading has nothing left to look for but that", { net.arxiv_snapshot(snap, { "0704.0001", "0704.0002" }) }, { 0, 0 })
   eq("a file that is not there says so", (select(2, net.arxiv_snapshot("/nonexistent/snapshot.json", { "0801.0001" }))):find("cannot read") ~= nil, true)
   os.remove(snap)
+
+  -- the other file of arXiv's records: a hypergraph, set out over many lines
+  fresh()
+  local hif = os.tmpname()
+  sf = assert(io.open(hif, "w"))
+  sf:write([=[{
+  "metadata": {},
+  "network-type": "undirected",
+  "edges": [
+    {
+      "attrs": {
+        "submitter": "A. N. Other",
+        "title": "A proof of the Erd\\H{o}s primitive set\n  conjecture",
+        "comments": null,
+        "categories": [
+          "math.NT",
+          "math.CO"
+        ],
+        "abstract": "We prove \"it\".",
+        "date": "2023-08-28"
+      },
+      "edge": "2202.02384"
+    },
+    {
+      "attrs": {
+        "submitter": "S",
+        "title": "Not wanted",
+        "categories": [
+          "cs.LG"
+        ],
+        "date": "2025-05-28"
+      },
+      "edge": "2505.20698"
+    },
+    {
+      "attrs": {
+        "title": "On $p$-state $p$-adic Potts model",
+        "categories": [
+          "math-ph"
+        ],
+        "date": "2014-01-01"
+      },
+      "edge": "math/0601001"
+    }
+  ],
+  "incidences": [
+    {
+      "edge": "2202.02384",
+      "node": "Second Author"
+    },
+    {
+      "edge": "2505.20698",
+      "node": "Nobody Wanted"
+    },
+    {
+      "edge": "2202.02384",
+      "node": "Jared Duker Lichtman"
+    },
+    {
+      "edge": "math/0601001",
+      "node": "Cl\u00e9ment Dupont"
+    }
+  ]
+}
+]=])
+  sf:close()
+  found, lines = net.arxiv_snapshot(hif, { "2202.02384v3", "math.AG/0601001", "2609.00001" })
+  eq("a hypergraph of arXiv: the papers wanted are found among its edges", { found, lines, #calls }, { 2, 3, 0 })
+  net.offline = true
+  local h1, h2 = net.arxiv("2202.02384"), net.arxiv("math/0601001")
+  eq("its TeX put into plain text, its first class, the year its number says", { h1.title, h1.class, h1.year, h1.date, h1.title_tex },
+    { "A proof of the Erdős primitive set conjecture", "math.NT", 2022 })
+  eq("its authors, who come in no order", { h1.authors, h1.authors_unordered, h2.authors, h2.authors_unordered },
+    { { "Second Author", "Jared Duker Lichtman" }, true, { "Clément Dupont" } })
+  eq("simple mathematics needs no dollars", h2.title, "On p-state p-adic Potts model")
+  net.offline = false
+  eq("what the file does not hold is remembered, and not looked for in it again", { net.arxiv_snapshot(hif, { "2609.00001" }) }, { 0, 0 })
+  eq("the page says who comes first", { net.in_order_of({ "Second Author", "Jared Duker Lichtman" }, "A PROOF\nJared Duker Lichtman and Second Author\nAbstract") },
+    { { "Jared Duker Lichtman", "Second Author" }, true })
+  eq("and when it does not name them all, the order is not to be trusted",
+    select(2, net.in_order_of({ "Second Author", "Jared Duker Lichtman" }, "A PROOF\nJ. D. Lichtman\nAbstract")), false)
+  os.remove(hif)
+  local nf = assert(io.open(hif, "w"))
+  nf:write("just some text\n")
+  nf:close()
+  eq("a file that is neither says so", (select(2, net.arxiv_snapshot(hif, { "0801.0001" }))):find("knows how to read") ~= nil, true)
+  os.remove(hif)
+
+  -- TeX in titles and names
+  local detex = require "lulibre.detex"
+  eq("TeX accents and letters", { detex.plain("Erd\\H{o}s"), detex.plain("Bal\\'azs"), detex.plain("K\\\"ahler"), detex.plain("{\\v{C}}ech"),
+    detex.plain("Poincar\\'{e}"), detex.plain("M{\\o}ller"), detex.plain("Fa\\`a di Bruno"), detex.plain("\\L ojasiewicz"), detex.plain("Stra\\ss en"),
+    detex.plain("G\\\"{o}del"), (detex.plain("na\\\"\\i ve")) },
+    { "Erdős", "Balázs", "Kähler", "Čech", "Poincaré", "Møller", "Faà di Bruno", "Łojasiewicz", "Straßen", "Gödel", "naïve" })
+  eq("mathematics is left as it is, and said to be", { detex.plain("On $\\mathbb{Z}_p$-extensions") }, { "On $\\mathbb{Z}_p$-extensions", false })
+  eq("plain text is not touched", { detex.plain("Sums of Primes & Squares") }, { "Sums of Primes & Squares", true })
 
   -- CrossRef and Open Library take many at a time too
   fresh()
