@@ -3,7 +3,11 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.0)
+## 0.2.0-alpha.1
+
+The second alpha: dialogs over what lulibre already does, how far sources
+agree and how much each is believed, and runs of proposing that review
+shows by themselves.
 
 - `<Leader>pr` (`:propose-review`): a dialog for a whole round: which
   books, what is asked (files, kept records, services, bibliographies,
