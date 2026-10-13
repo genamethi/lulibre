@@ -135,8 +135,10 @@ function M.from_doc(doc)
     local year = ids.arxiv_year(arxiv)
     if year then add("pubdate", tostring(year), "arXiv id", 0.9) end
   end
-  local doi = ids.doi(text)
-  if doi then add("identifiers", "doi:" .. doi, "page text", 0.8) end
+  -- a DOI further down that follows other words on its line, or stands among
+  -- the references, is as likely a cited work's: offered, but not vouched for
+  local doi, own = ids.doi_in(text)
+  if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.8 or 0.5) end
   local isbn = ids.isbn(text)
   if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
 

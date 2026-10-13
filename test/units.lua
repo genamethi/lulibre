@@ -1645,6 +1645,48 @@ do
   eq("nothing against nothing", m("", "Anything at all here now"), nil)
 end
 
+-- a record an identifier led to: is it this book's?
+do
+  local net = require "lulibre.net"
+  local function fits(rec, titles, authors, head) return { net.fits(rec, titles, authors, head) } end
+  eq("the same title is the book's record, whoever is named", fits({ title = "Small groups up to isomorphism", authors = { "A. Nother" } },
+    { "Small Groups Up to Isomorphism" }, { "Keith Conrad" }), { true })
+  eq("another title by other people is another work, plainly", fits({ title = "A millennium project: constructing small groups",
+    authors = { "Hans Ulrich Besche", "Bettina Eick" } }, { "Small Groups Up to Isomorphism" }, { "Keith Conrad" }), { false, true })
+  eq("a review is told from the book by who wrote it", fits({ title = "Reinforcement Learning: An Introduction, by Sutton, R.S. and Barto, A.G.",
+    authors = { "P.Read Montague" } }, { "Reinforcement Learning: An Introduction" }, { "Richard S. Sutton", "Andrew G. Barto" }), { false, false })
+  eq("a title cut short counts while nothing speaks against it", fits({ title = "Noncommutative Geometry, Quantum Fields and Motives", authors = {} },
+    { "Noncommutative Geometry, Quantum Fields" }, {}), { true, false })
+  eq("another form of the title by the same people", fits({ title = "Sur quelques points d'algèbre homologique", authors = { "Alexander Grothendieck" } },
+    { "Some aspects of homological algebra" }, { "A. Grothendieck" }), { true, false, "people" })
+  eq("a chapter's record is not the book's", fits({ title = "Preface", authors = {} }, { "Stochastic Analysis of Sums" }, { "Aurel Spataru" }), { false, false })
+  eq("the title in the opening of the file settles it", fits({ title = "Beyond the arcuate fasciculus: consensus and controversy", authors = { "A. S. Dick" } },
+    { "Anthony Steven Dick and Pascale Tremblay" }, {}, "BRAIN\nBeyond the arcuate fasciculus:  consensus\nand controversy in the connectional anatomy"), { true })
+  eq("the book's title with a subtitle after it, whoever is named", fits({ title = "Elliptic Curves, Modular Forms and Iwasawa Theory: In Honour of John H. Coates",
+    authors = { "David Loeffler" } }, { "Elliptic Curves, Modular Forms and Iwasawa Theory" }, { "Some Chapter Author" }), { true })
+  eq("known by its people alone: the whole this is a part of, perhaps", fits({ title = "Analysis and Probability", authors = { "Aurel Spataru" } },
+    { "Measure Spaces" }, { "Aurel Spătaru" }), { true, false, "people" })
+  eq("a name spelled a little differently is the same name", { net.other_people({ "Peter Schloze" }, { "Peter Scholze" }), net.other_people({ "A. I. Bugrii" }, { "A. I. Bugrij" }),
+    net.other_people({ "Keith Conrad" }, { "Alfred Bray Kempe" }), net.other_people({}, { "Anyone" }) }, { false, false, true, false })
+  eq("some of the book's people and nobody else", { net.fewer_people({ "Irene Heim", "Angelika Kratzer" }, { "Irene Heim" }),
+    net.fewer_people({ "Irene Heim" }, { "Irene Heim", "Angelika Kratzer" }), net.fewer_people({ "Irene Heim", "Angelika Kratzer" }, { "Noam Chomsky" }) },
+    { true, false, false })
+  eq("a title with words left out", { net.shorter_title("Extending and Embedding Python", "Extending Python"),
+    net.shorter_title("Galois Theory", "Galois Theory: Lectures"), net.shorter_title("The Point of Pointless Topology", "Pointless Topology"),
+    net.shorter_title("Algebra", "Geometry") }, { true, false, true, false })
+  eq("with nothing to tell by, the identifier is taken at its word", fits({ title = "Anything", authors = { "A. Body" } }, {}, {}), { true })
+  -- a file's own DOI, and one it cites
+  local pad = ("word "):rep(900)
+  eq("a DOI near the top is the file's own", { ids.doi_in("Entropy 2019, 21, 881; doi:10.3390/e21090881\n" .. pad) }, { "10.3390/e21090881", true })
+  eq("further down, on a line of its own with its label", { ids.doi_in(pad .. "\nDOI 10.1007/978-1-4612-0000-1\nmore") }, { "10.1007/978-1-4612-0000-1", true })
+  eq("or as an address and nothing else", { ids.doi_in(pad .. "\nhttps://doi.org/10.1073/pnas.123\n") }, { "10.1073/pnas.123", true })
+  eq("after other words on its line it is a citation", { ids.doi_in(pad .. "\nA Monotonic Superclass Linearization for Dylan: https://doi.org/10.1145/236337.236343\n") },
+    { "10.1145/236337.236343", false })
+  eq("and so is one among the references", { ids.doi_in(pad .. "\nReferences\n[1] H. Besche, A millennium project.\nhttps://doi.org/10.1142/S0218196702001115\n") },
+    { "10.1142/S0218196702001115", false })
+  eq("none", ids.doi_in("no such thing"), nil)
+end
+
 -- unmatch: what an earlier, looser search by title brought in is found again and put back
 do
   local proposals = require "lulibre.proposals"

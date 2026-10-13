@@ -3,6 +3,33 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## In development (since 0.2.0-alpha.1)
+
+- Fixed: a record was believed whenever the library held the identifier
+  that led to it. But a DOI or ISBN in the library can be a cited work's
+  (read off a reference list and accepted), a chapter's, a review's, or
+  the ISBN of the whole book a chapter is from; the record then offered
+  somebody else's title and authors at 0.95. Every record is now checked
+  against the book (`net.fits`): the same title, or the record's title in
+  the opening of the file, or the book's title with a subtitle; a looser
+  likeness only when the authors do not differ. A record that fails is
+  left out and named (`:messages`, or the terminal), what was proposed
+  from it before is withdrawn, and when both its title and its authors
+  are another work's, taking the identifier off the book is proposed.
+- A record no longer presses a worse value on a good one. Offered at 0.6
+  or less, so only where the field is empty or `--over` asks: a title
+  that is the book's with words left out, authors with none of the
+  book's names, authors that are some of the book's and nobody else (a
+  catalogue's first author alone), and the title of a record known for
+  the book's by its authors alone (the volume a chapter is from).
+- A name spelled a little differently is the same name when authors are
+  compared ("Bugrii" and "Bugrij"), and Open Library's "Cohen, Henri." is
+  read as Henri Cohen.
+- A DOI on a file's pages is taken for the file's own only near the top,
+  or on a line of its own with its label; one that follows other words
+  further down, or stands among the references, is offered at 0.5 as
+  "perhaps a work it cites".
+
 ## 0.2.0-alpha.1
 
 The second alpha: dialogs over what lulibre already does, how far sources
