@@ -45,6 +45,10 @@ const char db_schema[] =
   /* records the user has confirmed as right: what is learned about subjects
    * is learned from these (lua/lulibre/quality.lua, learn.lua) */
   "CREATE TABLE IF NOT EXISTS good(book INTEGER PRIMARY KEY, ts INTEGER);"
+  /* works no catalogue has a record of (a handout, course notes): they have
+   * no DOI or ISBN of their own and are not looked up by one
+   * (lua/lulibre/noncatalog.lua) */
+  "CREATE TABLE IF NOT EXISTS noncatalog(book INTEGER PRIMARY KEY, ts INTEGER);"
   /* the phrases that tell one subject from the others, learned from the good
    * records; state is 'learned', 'kept' (the user's own, or pinned) or
    * 'dropped' (never to come back) */

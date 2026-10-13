@@ -245,6 +245,24 @@ lulibre.command("good", function(args)
     require("lulibre.ui.good").run()
   end
 end, "[add | remove]  the records by how complete they look, to confirm the right ones; add and remove act on the selection")
+lulibre.command("noncatalog", function(args)
+  local noncatalog = require "lulibre.noncatalog"
+  if args == "add" or args == "remove" then
+    local ids = lulibre.selection()
+    local did = noncatalog.set(ids, args == "add")
+    local more = {}
+    if did.withdrawn > 0 then more[#more + 1] = ("%d waiting proposal%s withdrawn"):format(did.withdrawn, did.withdrawn == 1 and "" or "s") end
+    if did.removals > 0 then
+      more[#more + 1] = ("taking off %d identifier%s proposed (%s)"):format(did.removals, did.removals == 1 and "" or "s", lulibre.hint("review"))
+    end
+    lulibre.notify(("%s %d book%s %s non-catalog%s"):format(args == "add" and "marked" or "took", #ids, #ids == 1 and "" or "s",
+      args == "add" and "as" or "out of the", #more > 0 and ": " .. table.concat(more, ", ") or ""))
+  elseif args == "" or args == nil then
+    lulibre.filter("is:noncatalog")
+  else
+    lulibre.notify("noncatalog takes add, remove, or nothing (to list them)", "error")
+  end
+end, "[add | remove]  works no catalogue has a record of (handouts, course notes): no DOI or ISBN is looked for; add and remove act on the selection")
 lulibre.command("learn", function()
   local st, why = require("lulibre.learn").run()
   if not st then
