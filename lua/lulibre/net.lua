@@ -282,6 +282,41 @@ local function arxiv_record(entry)
   return rec
 end
 
+local WEEKDAY_MONTH = { Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5, Jun = 6, Jul = 7, Aug = 8, Sep = 9, Oct = 10, Nov = 11, Dec = 12 }
+
+-- A record as arXiv's metadata snapshot holds it: one JSON object to a line,
+--   {"id":"0704.0001","authors":"C. Bal\\'azs, E. L. Berger","title":"...","doi":"...","categories":"hep-ph math.AG",
+--    "versions":[{"version":"v1","created":"Mon, 2 Apr 2007 19:18:42 GMT"}],"authors_parsed":[["Balázs","C.",""]], ...}
+local function snapshot_record(line)
+  local ok, j = pcall(json.decode, line)
+  if not ok or type(j) ~= "table" or type(j.title) ~= "string" then return nil end
+  local authors = {}
+  for _, a in ipairs(type(j.authors_parsed) == "table" and j.authors_parsed or {}) do
+    if type(a) == "table" and type(a[1]) == "string" then
+      -- { family, given, suffix }
+      local name = trim(((type(a[2]) == "string" and a[2] or "") .. " " .. a[1] .. " " .. (type(a[3]) == "string" and a[3] or "")):gsub("%s+", " "))
+      if name ~= "" then authors[#authors + 1] = name end
+    end
+  end
+  if #authors == 0 and type(j.authors) == "string" then
+    for name in (j.authors:gsub("%s+and%s+", ", ") .. ","):gmatch("%s*([^,]+),") do authors[#authors + 1] = trim(name) end
+  end
+  -- the first version is the submission
+  local first = type(j.versions) == "table" and type(j.versions[1]) == "table" and j.versions[1].created
+  local day, month, year = (type(first) == "string" and first or ""):match("(%d%d?)%s+(%a%a%a)%s+(%d%d%d%d)")
+  local date = WEEKDAY_MONTH[month or ""] and ("%s-%02d-%02d"):format(year, WEEKDAY_MONTH[month], tonumber(day)) or nil
+  local class = type(j.categories) == "string" and j.categories:match("^%S+") or nil
+  local rec = {
+    title = trim(j.title:gsub("%s+", " ")), authors = authors, class = class, year = tonumber(date and date:sub(1, 4)),
+    date = date, subjects = {}, ids = {}, type = "preprint",
+    summary = type(j.abstract) == "string" and trim(j.abstract:gsub("%s+", " ")) or "",
+  }
+  if type(j.doi) == "string" and j.doi ~= "" then rec.ids.doi = trim(j.doi) end
+  local subject = class and taxonomy.from_arxiv(class)
+  if subject then rec.subjects[1] = { tag = subject, confidence = 0.95, why = "arXiv class " .. class } end
+  return rec
+end
+
 --- An arXiv number as arXiv itself writes it, or nil if it is not one:
 -- without a version ("1012.6008v2" is "1012.6008") and, for the numbers of
 -- before April 2007, without the subject class ("math.AG/0601001" is
@@ -372,6 +407,51 @@ function M.arxiv_prefetch(ids)
   return got
 end
 
+--- Read papers' records out of arXiv's metadata snapshot instead of asking
+-- arXiv: the file arXiv publishes for the purpose (on Kaggle, as
+-- arxiv-metadata-oai-snapshot.json: every paper, one JSON object to a line,
+-- several gigabytes). path: that file, or the .zip it comes in. ids: the
+-- numbers wanted. The file is read through once, each record found is kept
+-- as an answer from arXiv, and a number it does not hold is left to be
+-- asked for (the paper may be newer than the file). progress(lines): called
+-- now and then. Returns how many were found and how many lines were read,
+-- or nil and why.
+function M.arxiv_snapshot(path, ids, progress)
+  local want, left = {}, 0
+  for _, raw in ipairs(ids) do
+    local id = M.arxiv_id(raw)
+    if id and not want[id] and not M.kept("arxiv", id) then
+      want[id] = true
+      left = left + 1
+    end
+  end
+  if left == 0 then return 0, 0 end
+  local f, err
+  if path:lower():match("%.zip$") then
+    f, err = io.popen("unzip -p '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null", "r")
+  else
+    f, err = io.open(path, "r")
+  end
+  if not f then return nil, ("cannot read %s: %s"):format(path, tostring(err)) end
+  local found, lines = 0, 0
+  for line in f:lines() do
+    lines = lines + 1
+    -- the number is looked for without decoding the line: there are millions
+    local id = line:match('^%s*{%s*"id"%s*:%s*"([^"]+)"') or line:match('"id"%s*:%s*"([^"]+)"')
+    id = id and M.arxiv_id(id)
+    if id and want[id] and snapshot_record(line) then
+      M.keep("arxiv", id, 200, line)
+      want[id] = nil
+      found, left = found + 1, left - 1
+      if left == 0 then break end
+    end
+    if progress and lines % 200000 == 0 then progress(lines) end
+  end
+  f:close()
+  if lines == 0 then return nil, ("%s is empty, or is not arXiv's snapshot"):format(path) end
+  return found, lines
+end
+
 --- arXiv's record for a number ("1012.6008", "hep-th/9711200"; a version is ignored).
 function M.arxiv(raw)
   local id = M.arxiv_id(raw)
@@ -388,7 +468,8 @@ function M.arxiv(raw)
     local till = M.held("arxiv")
     return nil, till and paused("arxiv", till) or ("arXiv gave no answer about " .. id)
   end
-  local rec = kept and arxiv_record(kept)
+  -- kept as arXiv's API gave it (an Atom entry), or as its snapshot holds it (JSON)
+  local rec = kept and (kept:find("^%s*{") and snapshot_record(kept) or arxiv_record(kept))
   if not rec then return nil, "arXiv has no record of " .. id end
   rec.ids.arxiv, rec.source = id, "arXiv " .. id
   return rec

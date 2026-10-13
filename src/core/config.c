@@ -91,6 +91,11 @@ static const struct opt_def opts[] = {
       "an address sent with each request to those services (CrossRef and OpenAlex give steadier "
       "service to callers they can reach); nothing is sent while this is empty",
       NULL),
+  OPT(arxiv_snapshot, OPT_PATH, "", NULL,
+      "arXiv's metadata snapshot, as arXiv publishes it on Kaggle (arxiv-metadata-oai-snapshot.json, "
+      "or the .zip it comes in): :enrich reads a paper's record from it and asks arXiv only about "
+      "papers newer than the file",
+      NULL),
   OPT(sync_dir, OPT_PATH, "", NULL,
       "a folder of files waiting to be added to the library; gS shows it", "The sync folder"),
   OPT(sync_propose, OPT_STR, "ask", POLICY,

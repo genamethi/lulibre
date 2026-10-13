@@ -22,6 +22,7 @@ struct config {
   char *leader;        /* the key <Leader> stands for in key bindings */
   char *contact_email; /* sent to metadata services with each request, when set */
   char *enrich_services; /* which metadata services :enrich asks, comma-separated */
+  char *arxiv_snapshot; /* arXiv's metadata snapshot (JSON lines, or the .zip it comes in): read before arXiv is asked */
   char *review_sort;   /* confidence | id: the order of books in review */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
