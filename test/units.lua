@@ -1881,6 +1881,15 @@ do
   eq("sh is found", features.find("sh") ~= nil, true)
 end
 
+-- roman numerals a catalogue put in title case
+do
+  local tc = require "lulibre.titlecase"
+  eq("numerals put back", { tc.numerals("Lectures in Abstract Algebra: Ii. Linear Algebra"), tc.numerals("Part Viii and Xiv"),
+    tc.numerals("Xi Jinping Thought"), tc.numerals("Learning Vi"), tc.numerals("Volume Vi. Topology"), tc.numerals("Mix and Divide") },
+    { "Lectures in Abstract Algebra: II. Linear Algebra", "Part VIII and XIV", "Xi Jinping Thought", "Learning Vi", "Volume VI. Topology",
+      "Mix and Divide" })
+end
+
 -- grammars of publications, over the opening lines of a page
 do
   local G = require "lulibre.grammars"
