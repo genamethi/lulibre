@@ -5,6 +5,12 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Fixed: OCR replaced a page's text whatever it was, so a title page that
+  read well could come back empty. A page is now read by OCR only when its
+  own text is no text (little of it, or garbled), and replaced only when
+  OCR reads it better; a garbled file has every page the index holds read,
+  not only the first `ocr_pages`.
+
 - Changed: each file's text keeps a garbled share (characters no font
   could map; a run of them once), and `is:needsocr` goes by it: little
   text, more than 4% unreadable, or almost no words (quality below 0.2).
