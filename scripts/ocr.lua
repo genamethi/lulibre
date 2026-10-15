@@ -1,7 +1,9 @@
 -- Read text from page images with tesseract, for files whose own text layer
 -- is missing or garbage. The text and its lines (with their heights, so the
 -- title-page reader can tell a title from body text) replace what the index
--- held for those pages.
+-- held for a page, where that was no text (little, or garbled) and OCR
+-- reads better: the first ocr_pages pages, and any other the index holds
+-- that is garbled.
 --   :run ocr                 books with no usable text (is:needsocr)
 --   :run ocr FILTER          books matching a filter
 --   :run ocr all             every book
@@ -75,19 +77,50 @@ local pages_read, pages_failed = {}, {} -- one entry per page; table.insert is s
 
 local t0 = uv.hrtime()
 local ids_to_read = write_only and {} or ids
+-- A page's text as it stands is kept unless it is no text (little of it, or
+-- garbled) or OCR's reading is plainly the better one: OCR of a page that
+-- read well is a loss (a title page in large type can come back empty).
+local verify = require "lulibre.verify"
+local function letters(text)
+  return select(2, (text or ""):gsub("%a", ""))
+end
+local function no_text(text)
+  return letters(text) < 40 or verify.garbled(text) > verify.GARBLED
+end
+local kept = {}
 lulibre.each(ids_to_read, function(id)
   local f = lulibre.files(id)[1]
   if f and f.status ~= "missing" then
-    for page = 1, math.min(f.pages or 1, per_file) do
-      local pgm = lulibre.render(f.path, page, WIDTH)
-      local r = pgm and lulibre.system({ tesseract, "stdin", "stdout", "-l", lang, "tsv" },
-        { stdin = pgm, timeout = 180000 })
-      if r and r.code == 0 then
-        local text, lines = parse(r.stdout)
-        lulibre.page_put(id, page, { text = text, lines = lines, src = "ocr" })
-        table.insert(pages_read, true)
+    local held = {}
+    for _, p in ipairs(lulibre.sql("SELECT page, text FROM pages WHERE file = (SELECT id FROM files WHERE book = ? ORDER BY id LIMIT 1)", id)) do
+      held[p.page] = p.text
+    end
+    -- the first ocr_pages, and any further page the index holds that is no text
+    local want, last = {}, math.min(f.pages or 1, per_file)
+    for page = 1, last do want[#want + 1] = page end
+    for page, text in pairs(held) do
+      if page > last and no_text(text) then want[#want + 1] = page end
+    end
+    table.sort(want)
+    for _, page in ipairs(want) do
+      local old = held[page]
+      if old == nil or no_text(old) then
+        local pgm = lulibre.render(f.path, page, WIDTH)
+        local r = pgm and lulibre.system({ tesseract, "stdin", "stdout", "-l", lang, "tsv" },
+          { stdin = pgm, timeout = 180000 })
+        if r and r.code == 0 then
+          local text, lines = parse(r.stdout)
+          if old == nil or letters(text) > letters(old) * 0.5 and verify.garbled(text) < verify.garbled(old) or letters(old) < 40 and letters(text) > letters(old) then
+            lulibre.page_put(id, page, { text = text, lines = lines, src = "ocr" })
+            table.insert(pages_read, true)
+          else
+            table.insert(kept, true)
+          end
+        else
+          table.insert(pages_failed, true)
+        end
       else
-        table.insert(pages_failed, true)
+        table.insert(kept, true)
       end
     end
   end
@@ -96,7 +129,8 @@ local read, failed = #pages_read, #pages_failed
 lulibre.progress(nil)
 if not lulibre.headless then lulibre.reload() end
 if not write_only then
-  print(("OCR read %d pages of %d books in %.0fs%s"):format(read, total, (uv.hrtime() - t0) / 1e9,
+  print(("OCR read %d pages of %d books in %.0fs%s%s"):format(read, total, (uv.hrtime() - t0) / 1e9,
+    #kept > 0 and (", left %d pages whose own text reads better"):format(#kept) or "",
     failed > 0 and (", %d pages failed"):format(failed) or ""))
 end
 
