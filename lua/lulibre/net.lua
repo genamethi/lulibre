@@ -767,6 +767,7 @@ local function crossref_record(m)
   if rec.title and sub and sub ~= "" and not lulibre.fold(rec.title):find(lulibre.fold(sub), 1, true) then
     rec.title = rec.title .. ": " .. sub
   end
+  rec.title = rec.title and require("lulibre.titlecase").numerals(rec.title)
   return rec
 end
 
@@ -1157,7 +1158,7 @@ function M.openlibrary(isbn)
       rec.series, rec.series_index = name and #name > 3 and name or series, name and #name > 3 and number or nil
     end
     if type(b.subtitle) == "string" and b.subtitle ~= "" then title = title .. ": " .. trim(b.subtitle) end
-    rec.title = title
+    rec.title = require("lulibre.titlecase").numerals(title)
   end
   -- an edition's own note of its series: "Graduate texts in mathematics ; 52"
   local noted = type(b.series) == "table" and b.series[1]

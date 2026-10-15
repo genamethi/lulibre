@@ -144,6 +144,19 @@ function M.apply(s)
   return table.concat(out)
 end
 
+--- Roman numerals a catalogue put in title case ("Lectures in Abstract
+-- Algebra: Ii. Linear Algebra") back in capitals. Only numerals of two
+-- letters or more, and not "Xi" (a name, a Greek letter) nor "Vi" unless
+-- a full stop follows it.
+function M.numerals(s)
+  if type(s) ~= "string" then return s end
+  return (s:gsub("%f[%a](%u[ivx]+)%f[%A](%.?)", function(w, dot)
+    local up = w:upper()
+    if not is_roman(up) or w == "Xi" or (w == "Vi" and dot == "") then return nil end
+    return up .. dot
+  end))
+end
+
 --- The title as it should be proposed: in title case when it was found in
 -- capitals and the option title_case allows; otherwise as it is.
 function M.proposed(s)

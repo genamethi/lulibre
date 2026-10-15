@@ -5,6 +5,10 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Fixed: roman numerals a catalogue had put in title case ("Lectures in
+  Abstract Algebra: Ii. Linear Algebra", from Open Library) are put back in
+  capitals in the records' titles.
+
 - New: grammars may use LPeg patterns, per line (`peg = ...`) or over the
   opening lines, when LPeg is installed (`lulibre.features` names it).
 - Fixed: a C module built for another Lua crashed lulibre when a script
