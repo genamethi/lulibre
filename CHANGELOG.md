@@ -5,6 +5,13 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: grammars may use LPeg patterns, per line (`peg = ...`) or over the
+  opening lines, when LPeg is installed (`lulibre.features` names it).
+- Fixed: a C module built for another Lua crashed lulibre when a script
+  required it. Each C module is now loaded once in a child process first and
+  refused, with the reason, if that crashes. `rocks_tree` is searched before
+  the usual places.
+
 - New: grammars of publications (`lulibre.grammars`): how a kind of
   document sets its opening lines, and what follows. Built in: Keith
   Conrad's handouts, the Stacks project's chapters (in the order of its

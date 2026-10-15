@@ -1913,6 +1913,21 @@ do
   for _, m in ipairs(mine) do if m.grammar.name == "unit-mine" then got = m.fields end end
   eq("a grammar of one's own, with a capture and a line skipped", got and { got.series_index, got.title }, { "4", "The Title" })
   G.remove("unit-mine")
+  -- with LPeg (when it is installed for this Lua), patterns over a line, and over the opening lines
+  local lpeg = G.lpeg()
+  if lpeg then
+    local C, Cg, Ct, P, R, S = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.P, lpeg.R, lpeg.S
+    local caps = (R"AZ" + S" '-")^3
+    G.add { name = "unit-peg", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
+    G.add { name = "unit-pegline", lines = { G.line { peg = P"Lecture " * C(R"09"^1), take = "series_index" } } }
+    local found = {}
+    for _, m in ipairs(G.match { lines = { L("SHEAVES ON SPACES"), L("A. Person"), L("Lecture 7") } }) do found[m.grammar.name] = m.fields end
+    eq("an LPeg grammar over the opening lines", found["unit-peg"] and { found["unit-peg"].title, found["unit-peg"].authors },
+      { "SHEAVES ON SPACES", "A. Person" })
+    eq("and an LPeg pattern in a line rule", (G.match { lines = { L("Lecture 12") } })[1] ~= nil, true)
+    G.remove("unit-peg")
+    G.remove("unit-pegline")
+  end
   local parts = require "lulibre.parts"
   parts.set(1, { whole = "A Whole", part = 2, parts = 3 })
   parts.set(2, { whole = "A Whole", part = 1, parts = 3 })

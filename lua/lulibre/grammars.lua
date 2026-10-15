@@ -33,6 +33,15 @@
 -- Besides lines: text = { patterns } that must stand somewhere in the pages
 -- read (without regard to case), pages = { min, max } for the file's length,
 -- and read = function(doc, got) returning more fields from the document.
+-- With LPeg installed (a rock; lulibre.features names it), a line rule may
+-- give peg = an LPeg pattern instead of pattern (its first capture is what
+-- take takes; a table capture gives fields), and a grammar may give peg =
+-- a pattern over its opening lines (head of them, 12 by default) joined by
+-- newlines, whose table capture (lpeg.Ct with named lpeg.Cg) gives fields:
+--   local lpeg = G.lpeg()
+--   local P, C, Cg, Ct, R, S = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.R, lpeg.S
+--   local caps = (R"AZ" + S" '-:,")^3
+--   G.add { name = "my-notes", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
 -- Fields are the book's (title, authors, tags, ...) and three of their own:
 -- part_of (the whole the file is a part of), part (its number in it) and
 -- parts (how many there are), which lulibre keeps (:parts).
@@ -40,9 +49,17 @@ local M = {}
 
 M.list = {}
 
+--- LPeg, when it is installed (and loads: lulibre refuses a C module built
+-- for another Lua); nil and why not otherwise.
+function M.lpeg()
+  local ok, lpeg = pcall(require, "lpeg")
+  if ok then return lpeg end
+  return nil, "LPeg is not installed for " .. _VERSION .. " (luarocks install lpeg, or the option rocks_tree): " .. tostring(lpeg):match("[^\n]*$")
+end
+
 function M.add(g)
   assert(type(g) == "table" and type(g.name) == "string", "a grammar is a table with a name")
-  assert(g.lines or g.read or g.text, "a grammar needs lines, text or read to say what it looks for")
+  assert(g.lines or g.read or g.text or g.peg, "a grammar needs lines, peg, text or read to say what it looks for")
   for i, x in ipairs(M.list) do
     if x.name == g.name then
       M.list[i] = g
@@ -87,6 +104,18 @@ end
 local function line_ok(rule, line, page)
   local text = line.text or ""
   local cap
+  if rule.peg then
+    local r = rule.peg:match(text)
+    if r == nil then return nil end
+    if type(r) == "table" then
+      local got = {}
+      for k, v in pairs(r) do
+        if type(k) == "string" then got[k] = v end
+      end
+      return got
+    end
+    if type(r) == "string" then cap = r end
+  end
   if rule.pattern then
     local subject = rule.nocase and text:lower() or text
     local s, e, c = subject:find(rule.nocase and rule.pattern:lower() or rule.pattern)
@@ -190,6 +219,17 @@ function M.match(doc)
     end
     local got = ok and {} or nil
     if ok and g.lines then got = seq(g.lines, 1, lines, 1, page, {}) end
+    if got and g.peg then
+      local head = {}
+      for i = 1, math.min(g.head or 12, #lines) do head[i] = lines[i].text end
+      local r = g.peg:match(table.concat(head, "\n"))
+      if r == nil then got = nil
+      elseif type(r) == "table" then
+        for k, v in pairs(r) do
+          if type(k) == "string" then got[k] = v end
+        end
+      end
+    end
     if got and g.read then
       local more = g.read(doc, got)
       if more == false then got = nil
