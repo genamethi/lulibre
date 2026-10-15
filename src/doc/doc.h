@@ -70,6 +70,10 @@ void doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned fla
 void doc_page_finish(struct doc_page *pg, int keep_lines);
 double doc_text_quality(const char *s, long *nchars);
 
+/* A PDF's XMP packet and Info dictionary ("Key: value" lines), or an EPUB's
+ * package document, as text (malloc'd; "" when there is none). NULL and
+ * *err (malloc'd) when the file cannot be opened. */
+char *doc_metadata(const char *path, char **err);
 void doc_mupdf_extract(const char *path, const struct doc_opts *o, struct doc_info *out);
 void doc_djvu_extract(const char *path, const struct doc_opts *o, struct doc_info *out);
 

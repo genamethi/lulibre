@@ -45,6 +45,23 @@ static sqlite3_stmt *prep(lua_State *L, const char *sql) {
   return st;
 }
 
+/* lulibre.doc_metadata(path): the metadata a file carries beside its pages,
+ * as text (doc_metadata); nil and why when it cannot be opened */
+static int l_doc_metadata(lua_State *L) {
+  const char *path = luaL_checkstring(L, 1);
+  char *err = NULL;
+  char *text = doc_metadata(path, &err);
+  if (!text) {
+    lua_pushnil(L);
+    lua_pushstring(L, err ? err : "cannot read");
+    free(err);
+    return 2;
+  }
+  lua_pushstring(L, text);
+  free(text);
+  return 1;
+}
+
 static int l_text(lua_State *L) {
   lua_Integer id = luaL_checkinteger(L, 1);
   int page = (int)luaL_optinteger(L, 2, 0);
@@ -404,7 +421,7 @@ static int l_page_put(lua_State *L) {
 
 void l_doc_open(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"text", l_text},     {"lines", l_lines},       {"files", l_files}, {"extract", l_extract},
+    {"doc_metadata", l_doc_metadata}, {"text", l_text},     {"lines", l_lines},       {"files", l_files}, {"extract", l_extract},
     {"render", l_render}, {"page_put", l_page_put}, {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);

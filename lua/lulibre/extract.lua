@@ -138,7 +138,17 @@ function M.from_doc(doc)
   -- a DOI further down that follows other words on its line, or stands among
   -- the references, is as likely a cited work's: offered, but not vouched for
   -- (and in a work no catalogue has a record of, any DOI or ISBN is: none is offered)
-  if not (doc.id and require("lulibre.noncatalog").is(doc.id)) then
+  -- what the file's own metadata names as its identifiers (a publisher's XMP,
+  -- an EPUB's package): surer than the pages, which also cite other works
+  local outside = doc.id and require("lulibre.noncatalog").is(doc.id)
+  if doc.path and lulibre.doc_metadata then
+    for _, m in ipairs(ids.from_metadata(lulibre.doc_metadata(doc.path))) do
+      if m.kind == "arxiv" or not outside then
+        add("identifiers", m.kind .. ":" .. m.value, "the file's metadata (" .. m.where .. ")", 0.9)
+      end
+    end
+  end
+  if not outside then
     local doi, own = ids.doi_in(text)
     if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.8 or 0.5) end
     local isbn = ids.isbn(text)

@@ -1,9 +1,21 @@
 -- Identifiers found in page text: DOI, ISBN, arXiv id, MSC area.
 local M = {}
 
+-- A DOI runs to the first space, comma, quote or bracket; a parenthesis is
+-- part of it when it is closed within it (Elsevier's "S1570-7954(96)80014-3"),
+-- and a closing one it did not open ends it ("(see doi:10.1/x)").
+local DOI = "10%.%d%d%d%d+/[^%s,;\"'%]>]+"
+local function trim_doi(d)
+  d = d:gsub("[%.]+$", "")
+  while d:sub(-1) == ")" and select(2, d:gsub("%(", "")) < select(2, d:gsub("%)", "")) do d = d:sub(1, -2) end
+  local open = d:find("%)") and select(2, d:gsub("%(", "")) < select(2, d:gsub("%)", "")) and d:find("%)")
+  if open then d = d:sub(1, open - 1) end
+  return (d:gsub("[%.]+$", ""))
+end
+
 function M.doi(text)
-  local d = text:match("10%.%d%d%d%d+/[^%s,;\"'%)%]>]+")
-  return d and (d:gsub("%.+$", "")) or nil
+  local d = text:match(DOI)
+  return d and trim_doi(d) or nil
 end
 
 --- The DOI in a text, and whether it reads as the text's own rather than
@@ -15,9 +27,9 @@ end
 -- among the references is a citation.
 M.DOI_TOP = 4000 -- bytes from the start that count as the top
 function M.doi_in(text)
-  local s, e = text:find("10%.%d%d%d%d+/[^%s,;\"'%)%]>]+")
+  local s, e = text:find(DOI)
   if not s then return nil end
-  local doi = text:sub(s, e):gsub("%.+$", "")
+  local doi = trim_doi(text:sub(s, e))
   if s <= M.DOI_TOP then return doi, true end
   local low = text:sub(1, s - 1):lower()
   if low:find("\n%s*references%s*\n", M.DOI_TOP) or low:find("\n%s*bibliography%s*\n", M.DOI_TOP) then return doi, false end
@@ -26,6 +38,59 @@ function M.doi_in(text)
   local own = label:find("^d[o0][il1]:?$") or label:find("^digital object identifier:?$")
     or (not label:find("%s") and label:find("d[o0][il1]"))
   return doi, own and true or false
+end
+
+--- The identifiers a file's own metadata gives it (lulibre.doc_metadata:
+-- a PDF's XMP packet and Info dictionary, an EPUB's package document).
+-- Only those labelled as the work's own are taken: prism:doi, pdfx:doi,
+-- crossmark:DOI, dc:identifier (with a doi or isbn scheme or prefix), and
+-- an Info entry named doi or a "doi:" in its Subject. Returns a list of
+-- { kind=, value=, where= } ("XMP", "PDF info", "EPUB package").
+function M.from_metadata(text)
+  local out, seen = {}, {}
+  if not text or text == "" then return out end
+  local where = text:find("<package", 1, true) and "EPUB package" or "XMP"
+  local function add(kind, value, place)
+    if kind == "isbn" then value = M.isbn13(value) end
+    if kind == "doi" then value = value and M.doi(value) end
+    -- arXiv's own DOIs (10.48550/arXiv.2504.14413) stand for the arXiv number
+    local ax = kind == "doi" and value and value:match("^10%.48550/[aA][rR][xX][iI][vV]%.(.+)$")
+    if ax then kind, value = "arxiv", ax end
+    if value and not seen[kind .. ":" .. value:lower()] then
+      seen[kind .. ":" .. value:lower()] = true
+      out[#out + 1] = { kind = kind, value = value, where = place }
+    end
+  end
+  -- elements and attributes that name the DOI
+  for _, tag in ipairs { "prism:doi", "pdfx:doi", "crossmark:DOI", "pdfx:DOI", "prism:DOI" } do
+    for v in text:gmatch("<" .. tag:gsub("%p", "%%%0") .. "[^>]*>%s*([^<]+)") do add("doi", v, where) end
+    for v in text:gmatch(tag:gsub("%p", "%%%0") .. '="([^"]+)"') do add("doi", v, where) end
+  end
+  -- dc:identifier: an rdf:li list, or the element itself (EPUB)
+  for block in text:gmatch("<dc:identifier[^>]*>(.-)</dc:identifier>") do
+    local items = {}
+    for li in block:gmatch("<rdf:li[^>]*>%s*([^<]+)") do items[#items + 1] = li end
+    if #items == 0 then items[1] = block end
+    for _, v in ipairs(items) do
+      local low = v:lower()
+      if low:find("isbn") or (low:gsub("[^%dx]", "")):match("^97[89]%d%d%d%d%d%d%d%d%d%d$") then add("isbn", v:gsub("^.-isbn:?", ""), where)
+      elseif low:find("10%.%d%d%d%d") then add("doi", v, where) end
+    end
+  end
+  -- an EPUB names the scheme in an attribute: <dc:identifier opf:scheme="ISBN">
+  for scheme, v in text:gmatch('<dc:identifier[^>]-scheme="(%a+)"[^>]*>%s*([^<]+)') do
+    if scheme:lower() == "isbn" then add("isbn", v, where) elseif scheme:lower() == "doi" then add("doi", v, where) end
+  end
+  -- the Info dictionary, as "Key: value" lines
+  for key, v in text:gmatch("\n?([%w_]+): ([^\n]*)") do
+    local k = key:lower()
+    if k == "doi" then add("doi", v, "PDF info")
+    elseif k == "subject" or k == "keywords" then
+      local d = v:match("[dD][oO][iI]:?%s*(10%.%d%d%d%d+/%S+)")
+      if d then add("doi", d, "PDF info") end
+    end
+  end
+  return out
 end
 
 local function isbn13_ok(d)

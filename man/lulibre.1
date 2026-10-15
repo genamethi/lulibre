@@ -73,6 +73,18 @@ asking anybody: arXiv's records, Open Library's editions and authors,
 zbMATH's links to arXiv. With no argument it says what there is and asks
 which to fetch. It can be run again whenever.
 .TP
+.BR verify " [" \-\-list " title|authors|ids|unread] [\fIfilter\fR]"
+Hold the library against its files: whether the opening pages show each
+book's title and name its authors, and where its identifiers stand.
+Changes nothing.
+.TP
+.BR recheck " [" \-\-list " | " \-\-propose " | " \-\-apply "] [" \-\-since " \fIsnap\fR] [\fIfilter\fR]"
+Go back over what lulibre wrote, with each book's file deciding: titles and
+authors a record replaced that the pages do not bear out go back, and
+identifiers of cited or other works come off.
+.B \-\-apply
+takes a snapshot first. Typed values are left alone.
+.TP
 .BR snapshot " [\fIname\fR | " list " | " plan " \fIsnap\fR | " rollback " \fIsnap\fR | " retire " \fIsnap\fR | " import " \fIfile\fR]"
 Points in the journal of changes that the library can be put back to.
 .B rollback
