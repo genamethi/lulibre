@@ -815,6 +815,59 @@ A title or author from a record is taken as surer than one read from a
 title page, so with `propose_over = "sure"` it is proposed over a value
 that differs.
 
+## Grammars of publications: `:run grammars`
+
+Some kinds of document always open the same way. Keith Conrad's handouts put
+the title in capitals with KEITH CONRAD, smaller, under it; a chapter of the
+Stacks project its name in capitals, then its tag ("01H8") or its contents;
+a Springer chapter its number and title in very large type; a chapter of
+Elsevier's Handbook of Algebra carries a DOI that says its volume and its
+place in it. A *grammar* says what a kind of document's opening lines look
+like, line by line (their text, the size of their type, capitals, bold),
+and what follows when they do.
+
+    :run grammars [filter]           what each grammar finds; nothing is changed
+    :run grammars --apply [filter]   keep the parts and the non-catalog marks
+
+What a grammar says of a title or authors is proposed by `:propose`, like
+what the title page says (source `grammar: keith-conrad`). Conrad's
+handouts and the Stacks project's chapters are marked non-catalog by
+`--apply`.
+
+**Parts of a whole.** A grammar may say which whole a file is a part of, its
+number in it and how many there are; so may a record much longer than the
+file. lulibre keeps that in its own index (calibre has no field for it):
+`is:part` finds such books, and `:parts` lists each whole with its parts in
+order and the numbers missing. For the Stacks project the order is the one
+its Makefile gives: a book holding the table "Chapters in reading order"
+(`| # | Chapter | Pages | PDF |`) is read for it.
+
+Your own grammars go in init.lua or a module:
+
+```lua
+local G = require "lulibre.grammars"
+G.add {
+  name = "my-seminar",
+  kind = "seminar notes",
+  noncatalog = true,
+  lines = {
+    G.line { pattern = "^Seminar on (.+)$", take = "series" },
+    G.skip(2),                                    -- up to two lines between
+    G.line { upper = true, bigger = true, take = "title", case = "title" },
+    G.opt(G.line { smaller = true, take = "authors" }),
+  },
+  confidence = 0.9,
+}
+```
+
+A line rule may ask for `pattern` (`nocase = true`), `upper`, `bold`,
+`bigger` or `smaller` (than the page's body type), `largest`, or `size = {
+min, max }`; it may `take` a field (the line, or the pattern's capture;
+`case = "title"`) or `give` fixed values. `G.skip(n)`, `G.opt(rule)` and
+`G.either{ ... }` join rules; `text = { patterns }` and `pages = { min, max
+}` ask things of the whole file, and `read(doc, got)` can work out more (or
+return false to say no after all).
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.

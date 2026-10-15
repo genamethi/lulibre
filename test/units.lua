@@ -1881,6 +1881,47 @@ do
   eq("sh is found", features.find("sh") ~= nil, true)
 end
 
+-- grammars of publications, over the opening lines of a page
+do
+  local G = require "lulibre.grammars"
+  local function L(text, size, bold) return { text = text, size = size or 10.9, bold = bold or false } end
+  local function names(found)
+    local out = {}
+    for _, m in ipairs(found) do out[#out + 1] = m.grammar.name end
+    table.sort(out)
+    return table.concat(out, ",")
+  end
+  local conrad = G.match { lines = { L("TENSOR PRODUCTS II", 10.9, true), L("KEITH CONRAD", 9.0), L("1. Introduction"), L("Body text here.") } }
+  eq("a Conrad handout", { names(conrad), conrad[1] and conrad[1].fields.title, conrad[1] and conrad[1].fields.authors },
+    { "keith-conrad", "Tensor Products II", "Keith Conrad" })
+  local stacks = G.match { id = 1, lines = { L("ADEQUATE MODULES", 10, true), L("06VX", 10), L("Contents") } }
+  eq("a chapter of the Stacks project", { names(stacks), stacks[1] and stacks[1].fields.authors, stacks[1] and stacks[1].fields.part_of },
+    { "stacks-project", "The Stacks Project", "The Stacks Project" })
+  eq("but not any capitals and a word", names(G.match { id = 1, lines = { L("ADEQUATE MODULES"), L("WORD"), L("text") } }), "")
+  local body = {}
+  for i = 1, 20 do body[i] = L("ordinary text of the chapter, line " .. i, 10) end
+  table.insert(body, 1, L("Distribution Functions and", 41.8))
+  table.insert(body, 1, L("7 Characteristic Functions", 41.8))
+  local ch = G.match { lines = body, pages = 40 }
+  eq("a numbered chapter, its title run on", { names(ch), ch[1] and ch[1].fields.part, ch[1] and ch[1].fields.title },
+    { "numbered-chapter", 7, "Characteristic Functions Distribution Functions and" })
+  eq("a handbook chapter by its DOI", (G.match { lines = { L("Infinite Galois Theory", 15.4) }, idents = { doi = "10.1016/S1570-7954(96)80012-X" } })[1].fields.part_of,
+    "Handbook of Algebra, Volume 1")
+  G.add { name = "unit-mine", lines = { G.line { pattern = "^Lecture (%d+)$", take = "series_index" }, G.skip(1), G.line { bold = true, take = "title" } } }
+  local mine = G.match { lines = { L("Lecture 4"), L("a line between"), L("The Title", 12, true) } }
+  local got
+  for _, m in ipairs(mine) do if m.grammar.name == "unit-mine" then got = m.fields end end
+  eq("a grammar of one's own, with a capture and a line skipped", got and { got.series_index, got.title }, { "4", "The Title" })
+  G.remove("unit-mine")
+  local parts = require "lulibre.parts"
+  parts.set(1, { whole = "A Whole", part = 2, parts = 3 })
+  parts.set(2, { whole = "A Whole", part = 1, parts = 3 })
+  local w = parts.wholes()[1]
+  eq("parts in order, and what is missing", { w.whole, w.books[1].id, w.books[2].id, w.missing[1], lulibre.count("is:part") }, { "A Whole", 2, 1, 3, 2 })
+  parts.set(1, nil)
+  parts.set(2, nil)
+end
+
 -- snapshots: working out what going back would do (nothing here is written to calibre)
 do
   local snapshots = require "lulibre.snapshots"

@@ -22,7 +22,7 @@ local SECTIONS = {
   { "Copying", "yank" },
   { "Windows", "focus split close only resize console" },
   { "The sync folder", "sync sync-dialog source beside" },
-  { "Looking after the library", "dupes orphans good noncatalog verify snapshot snapshots rollback terms learn refs junk datasets datasets-dialog arxiv-fetch browse reload" },
+  { "Looking after the library", "dupes orphans good noncatalog parts verify snapshot snapshots rollback terms learn refs junk datasets datasets-dialog arxiv-fetch browse reload" },
   { "lulibre itself", "help help-plain config features quit reload-cfg set echo lua run" },
 }
 local PLACES = { { "panel", "In a panel (review, the edit form ...)" }, { "line", "While typing" }, { "picker", "In a picker" },
@@ -72,6 +72,7 @@ local ABOUT = {
   ["noncatalog"] = "works no catalogue has a record of: no DOI or ISBN is looked for",
   ["verify"] = "the library held against its files: titles, authors and identifiers the pages bear out",
   ["snapshot"] = "take a snapshot of the library, or plan, import, retire one",
+  ["parts"] = "the books that are parts of a whole, in order, with what is missing",
   ["config"] = "the configuration window: every option, its value and what it does; E edits init.lua",
   ["features"] = "the features that need programs of their own: installed or not, on or off",
   ["snapshots"] = "the snapshot browser: what going back to each would do; go back, take, retire",

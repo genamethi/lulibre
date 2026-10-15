@@ -5,6 +5,15 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: grammars of publications (`lulibre.grammars`): how a kind of
+  document sets its opening lines, and what follows. Built in: Keith
+  Conrad's handouts, the Stacks project's chapters (in the order of its
+  Makefile), Elsevier's Handbook of Algebra (volume and place by DOI),
+  numbered chapters in very large type. `:run grammars [--apply]`; their
+  titles and authors are proposed by `:propose`. Your own in init.lua.
+- New: parts of a whole, kept in lulibre's index: `is:part`, `:parts`
+  (each whole, its parts in order, what is missing).
+
 - New: the configuration window, `gC` / `:config`: every option with its
   value, default and the line of init.lua that sets it, and what it does;
   a value changed there is written to init.lua (kept as `init.lua.bak`
