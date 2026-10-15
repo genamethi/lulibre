@@ -89,7 +89,7 @@ const char db_schema[] =
   " npages INTEGER, req_pages INTEGER, req_layout INTEGER,"
   " nchars INTEGER, quality REAL, text_src TEXT,"
   " emb_title TEXT, emb_author TEXT, emb_subject TEXT, emb_keywords TEXT,"
-  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER,"
+  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER, garbled REAL,"
   " UNIQUE(book, format));"
   "CREATE INDEX IF NOT EXISTS files_path ON files(path);"
   "CREATE TABLE IF NOT EXISTS pages("

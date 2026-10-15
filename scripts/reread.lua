@@ -7,7 +7,9 @@
 --      fonts where MuPDF does not), with its line boxes, so the title page
 --      can still be told by the size of its type;
 --   2. letters shifted back, when one shift turns the page into words;
--- and names the books that still need OCR (:run ocr).
+-- and names the books that still need OCR (:run ocr). Every file's text is
+-- measured again as it is now (is:needsocr goes by it), so a file whose
+-- text is still garbled is one :ocr takes.
 --   :run reread              books whose text is garbled
 --   :run reread FILTER       books matching a filter
 --   lulibre reread [FILTER]
@@ -33,11 +35,11 @@ end
 -- (a page of mathematics has fewer of them than prose)
 local function readable(text)
   local g, w, n = reading(text)
-  return n >= 5 and g < 0.02 and w >= 0.25
+  return n >= 5 and g < verify.GARBLED and w >= 0.25
 end
 -- a page that is not text: more than a few unreadable characters
 local function unreadable(text)
-  return #(text or "") > 40 and verify.garbled(text) > 0.02
+  return #(text or "") > 40 and verify.garbled(text) > verify.GARBLED
 end
 
 -- a page is read again only when it is not readable, and the new reading
@@ -88,7 +90,7 @@ local function file_shift(texts)
   local votes, long = {}, 0
   for _, text in ipairs(texts) do
     local now, n = common_share(text)
-    if n >= 80 and verify.garbled(text) <= 0.02 then
+    if n >= 80 and verify.garbled(text) <= verify.GARBLED then
       long = long + 1
       if now <= 0.03 then
         -- the best of each way of moving back; the character codes win a near
@@ -220,11 +222,13 @@ for k, id in ipairs(ids) do
       end
     end
     if changed then done.books = done.books + 1 end
+    -- every file is measured as it would be now (is:needsocr goes by it)
+    lulibre.text_measure(id)
     -- what is still not text
     local all = {}
     for _, p in ipairs(lulibre.sql("SELECT text FROM pages WHERE file = ? ORDER BY page", f.id)) do all[#all + 1] = p.text or "" end
     local joined = table.concat(all, "\n")
-    if #joined > 200 and verify.garbled(joined) > 0.05 then still[#still + 1] = id end
+    if #joined > 200 and verify.garbled(joined) > verify.GARBLED then still[#still + 1] = id end
   end
 end
 lulibre.progress(nil)

@@ -405,13 +405,15 @@ static int l_page_put(lua_State *L) {
     sqlite3_finalize(st);
   }
   long nchars = 0;
-  double quality = doc_text_quality(all.s ? all.s : "", &nchars);
+  double garbled = 0;
+  double quality = doc_text_quality(all.s ? all.s : "", &nchars, &garbled);
   sb_free(&all);
-  if (sqlite3_prepare_v2(h, "UPDATE files SET nchars = ?, quality = ?, text_src = ? WHERE id = ?", -1, &st, NULL) == SQLITE_OK) {
+  if (sqlite3_prepare_v2(h, "UPDATE files SET nchars = ?, quality = ?, text_src = ?, garbled = ? WHERE id = ?", -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, nchars);
     sqlite3_bind_double(st, 2, quality);
     sqlite3_bind_text(st, 3, src, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(st, 4, file);
+    sqlite3_bind_double(st, 4, garbled);
+    sqlite3_bind_int64(st, 5, file);
     sqlite3_step(st);
     sqlite3_finalize(st);
   }
@@ -419,10 +421,50 @@ static int l_page_put(lua_State *L) {
   return 0;
 }
 
+/* lulibre.text_measure(id): measure again the text the index holds for each
+ * of a book's files (nchars, quality), as indexing would now: after the
+ * measure has changed, or text was put by other means (garbled too). Returns how many
+ * files were measured. */
+static int l_text_measure(lua_State *L) {
+  lua_Integer id = luaL_checkinteger(L, 1);
+  sqlite3 *h = lapi_db(L)->h;
+  sqlite3_stmt *files, *pages, *up;
+  int n = 0;
+  if (sqlite3_prepare_v2(h, "SELECT id FROM files WHERE book = ? AND status = 1", -1, &files, NULL) != SQLITE_OK) return 0;
+  sqlite3_bind_int64(files, 1, id);
+  while (sqlite3_step(files) == SQLITE_ROW) {
+    sqlite3_int64 file = sqlite3_column_int64(files, 0);
+    sbuf all = SBUF_INIT;
+    if (sqlite3_prepare_v2(h, "SELECT text FROM pages WHERE file = ? ORDER BY page", -1, &pages, NULL) == SQLITE_OK) {
+      sqlite3_bind_int64(pages, 1, file);
+      while (sqlite3_step(pages) == SQLITE_ROW) {
+        sb_puts(&all, (const char *)sqlite3_column_text(pages, 0));
+        sb_putc(&all, '\n');
+      }
+      sqlite3_finalize(pages);
+    }
+    long nchars = 0;
+    double garbled = 0;
+    double quality = doc_text_quality(all.s ? all.s : "", &nchars, &garbled);
+    sb_free(&all);
+    if (sqlite3_prepare_v2(h, "UPDATE files SET nchars = ?, quality = ?, garbled = ? WHERE id = ?", -1, &up, NULL) == SQLITE_OK) {
+      sqlite3_bind_int64(up, 1, nchars);
+      sqlite3_bind_double(up, 2, quality);
+      sqlite3_bind_double(up, 3, garbled);
+      sqlite3_bind_int64(up, 4, file);
+      if (sqlite3_step(up) == SQLITE_DONE) n++;
+      sqlite3_finalize(up);
+    }
+  }
+  sqlite3_finalize(files);
+  lua_pushinteger(L, n);
+  return 1;
+}
+
 void l_doc_open(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"doc_metadata", l_doc_metadata}, {"text", l_text},     {"lines", l_lines},       {"files", l_files}, {"extract", l_extract},
-    {"render", l_render}, {"page_put", l_page_put}, {NULL, NULL},
+    {"render", l_render}, {"page_put", l_page_put}, {"text_measure", l_text_measure}, {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
 }

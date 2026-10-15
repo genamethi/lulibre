@@ -312,15 +312,19 @@ static void test_log(void) {
 
 static void test_quality(void) {
   long n = 0;
-  double prose = doc_text_quality("The quick brown fox jumps over the lazy dog, twice.", &n);
-  ok(prose > 0.6, "prose reads as text");
-  double frag = doc_text_quality("T h e q u i c k b r o w n f o x", &n);
+  double g = 0;
+  double prose = doc_text_quality("The quick brown fox jumps over the lazy dog, twice.", &n, &g);
+  ok(prose > 0.6 && g == 0, "prose reads as text");
+  double frag = doc_text_quality("T h e q u i c k b r o w n f o x", &n, &g);
   ok(frag < 0.1, "one-letter fragments do not");
   /* a font with no map to Unicode: U+FFFD among the words */
-  double fffd = doc_text_quality("The \xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd quick brown fox jumps over the lazy dog", &n);
-  ok(fffd < prose * 0.8, "unreadable characters count against it");
-  double pua = doc_text_quality("\xee\x80\x81\xee\x80\x82\xee\x80\x83\xee\x80\x84 word", &n);
-  ok(pua < 0.1, "a page of private-use glyphs is not text");
+  doc_text_quality("The \xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd quick brown fox jumps over the lazy dog", &n, &g);
+  ok(g > 0.05, "unreadable characters are counted");
+  doc_text_quality("\xee\x80\x81\xee\x80\x82\xee\x80\x83\xee\x80\x84 word", &n, &g);
+  ok(g >= 0.5, "a page of private-use glyphs is no text");
+  /* dots leading to a page number: one run counts once */
+  doc_text_quality("Introduction \xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd 1 and the rest of a long table of contents line", &n, &g);
+  ok(g < 0.05, "a run of them counts once");
 }
 
 int main(void) {
