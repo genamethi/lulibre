@@ -868,6 +868,18 @@ min, max }`; it may `take` a field (the line, or the pattern's capture;
 }` ask things of the whole file, and `read(doc, got)` can work out more (or
 return false to say no after all).
 
+With LPeg installed for lulibre's Lua (`:features` says), a line rule may
+give `peg = PATTERN` in place of `pattern`, and a grammar may give one LPeg
+pattern over its opening lines joined by newlines (`head` of them, 12 by
+default); a table capture (`lpeg.Ct` with named `lpeg.Cg`) gives fields:
+
+```lua
+local lpeg = G.lpeg()            -- nil and why, when LPeg is not there
+local C, Cg, Ct, P, R, S = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.P, lpeg.R, lpeg.S
+G.add { name = "caps-then-names",
+  peg = Ct(Cg(C((R"AZ" + S" '-:,")^3), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
+```
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.
@@ -1054,6 +1066,7 @@ needs it is used, and `:features` says which are installed and on.
 | poppler | `pdftotext` | `:run reread` (`text_fallback`) |
 | tesseract | `tesseract` | `:ocr` (`ocr`) |
 | ocrmypdf | `ocrmypdf` | giving PDFs a text layer (`ocr_write`) |
+| lpeg | the Lua module `lpeg` (a rock) | grammars written with LPeg patterns |
 
 When one is missing, lulibre says how to install it. With `pixi_deps = "on"`
 it can also keep an environment of its own with pixi (under
@@ -1061,9 +1074,17 @@ it can also keep an environment of its own with pixi (under
 first. That is off by default, since it means running what pixi fetches.
 
 Scripts may need Lua modules: `rocks_tree` names a luarocks tree whose modules
-`require` finds, and with `rocks_install = "on"`, `lulibre.require_rock(module
+`require` finds (before the usual places), and with `rocks_install = "on"`, `lulibre.require_rock(module
 [, rock])` offers to install a missing one there (off by default, for the same
 reason).
+
+A C module (a `.so`) built for another Lua than lulibre's crashes whatever
+loads it: a `lua.h` of another version earlier on the compiler's include
+path (`/usr/local/include` comes before `/usr/include`) is enough to cause
+it. So lulibre loads each C module once in a child process first, and
+refuses one that does not survive that, saying so, instead of going down
+with it. (Rebuild such a module against the right headers:
+`luarocks --lua-version 5.5 install lpeg LUA_INCDIR=/usr/local/include/lua/5.5`.)
 
 ## Without the content server
 

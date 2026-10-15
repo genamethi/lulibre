@@ -22,6 +22,9 @@ M.list = {
     used_for = "reading the text of scanned pages (:run ocr, the option ocr)",
     option = "ocr", pixi = "tesseract",
     packages = { pacman = "tesseract tesseract-data-eng", apt = "tesseract-ocr", dnf = "tesseract", brew = "tesseract" } },
+  { name = "lpeg", title = "LPeg", programs = {}, modules = { "lpeg" }, rock = "lpeg",
+    used_for = "grammars of publications written with LPeg patterns (lulibre.grammars)",
+    packages = { luarocks = "lpeg (luarocks --lua-version " .. _VERSION:match("%d+%.%d+") .. " install lpeg)" } },
   { name = "ocrmypdf", title = "OCRmyPDF", programs = { "ocrmypdf" },
     used_for = "giving a scanned PDF itself the text OCR reads (the option ocr_write)",
     option = "ocr_write", pixi = "ocrmypdf",
@@ -30,7 +33,7 @@ M.list = {
 
 --- A feature of a script's own, listed and looked for like these.
 function M.declare(f)
-  assert(f.name and f.programs, "a feature has a name and the programs it needs")
+  assert(f.name and (f.programs or f.modules), "a feature has a name and the programs or modules it needs")
   for i, g in ipairs(M.list) do
     if g.name == f.name then
       M.list[i] = f
@@ -94,9 +97,14 @@ end
 function M.status(f)
   if type(f) == "string" then f = by_name(f) end
   local missing, paths = {}, {}
-  for _, p in ipairs(f.programs) do
+  for _, p in ipairs(f.programs or {}) do
     local at = M.find(p)
     if at then paths[p] = at else missing[#missing + 1] = p end
+  end
+  -- Lua modules: there when require finds one that loads (one that would crash is refused)
+  for _, m in ipairs(f.modules or {}) do
+    local ok, mod = pcall(require, m)
+    if ok then paths[m] = mod else missing[#missing + 1] = m end
   end
   return { here = #missing == 0, missing = missing, paths = paths, enabled = enabled(f) }
 end
@@ -104,10 +112,13 @@ end
 --- How to get a feature's programs, in a sentence.
 function M.how(f)
   local parts = {}
-  for _, k in ipairs { "pacman", "apt", "dnf", "brew" } do
+  for _, k in ipairs { "pacman", "apt", "dnf", "brew", "luarocks" } do
     if f.packages and f.packages[k] then parts[#parts + 1] = ("%s %s"):format(k, f.packages[k]) end
   end
-  local s = ("%s is not installed (%s)"):format(table.concat(f.programs, ", "), table.concat(parts, "; "))
+  local names = {}
+  for _, p in ipairs(f.programs or {}) do names[#names + 1] = p end
+  for _, m in ipairs(f.modules or {}) do names[#names + 1] = "the Lua module " .. m end
+  local s = ("%s is not installed (%s)"):format(table.concat(names, ", "), table.concat(parts, "; "))
   if f.pixi then
     s = s .. (lulibre.o.pixi_deps == "on" and "; lulibre can add it to its own pixi environment"
       or '; or set pixi_deps = "on" and lulibre can add it to an environment of its own')
@@ -123,6 +134,12 @@ function M.need(name)
   if not f then return nil, "no feature " .. tostring(name) end
   local st = M.status(f)
   if st.here then return st.paths end
+  -- a rock: lulibre.require_rock offers to install it (rocks_install = "on")
+  if f.rock and #(f.programs or {}) == 0 then
+    local ok, mod = pcall(lulibre.require_rock, f.modules[1], f.rock)
+    if ok then return { [f.modules[1]] = mod } end
+    return nil, M.how(f)
+  end
   if lulibre.o.pixi_deps == "on" and f.pixi and not lulibre.headless and lulibre.task_id() then
     local pixi = M.find("pixi")
     if pixi and lulibre.confirm(("%s needs %s; add %s to lulibre's pixi environment (%s)? pixi fetches it from conda-forge"):format(
