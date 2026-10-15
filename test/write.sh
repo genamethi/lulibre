@@ -348,6 +348,21 @@ contains "snapshots are listed"           "taken by a rollback" "$(srun snapshot
 step srun snapshot retire start
 expect   "a retired snapshot leaves the list" 0 "$(srun snapshot list 2>&1 | grep -c '^ *1  ' || true)"
 contains "but not --all"                  "retired" "$(srun snapshot list --all 2>&1)"
+# ---- OCR written into the PDF itself, the original kept outside the library, and undone
+if command -v ocrmypdf >/dev/null 2>&1; then
+  wid=$(slua 'print(lulibre.ids("in:library fmt:pdf")[1])')
+  before=$(slua "print(lulibre.md5(lulibre.files($wid)[1].path))")
+  out=$(srun -o ocr_write=keep -o ocr_originals="$t/originals" ocr --write id:$wid 2>&1)
+  contains "ocr --write gives the PDF a text layer" "1 PDF given a text layer" "$out"
+  expect   "the original is kept outside the library" 1 "$(find "$t/originals" -name '*.pdf' | wc -l)"
+  expect   "and is the same file"          "$before" "$(md5sum "$t"/originals/*.pdf | cut -d' ' -f1)"
+  contains "it is in the journal"           "(format)" "$(slua 'print(lulibre.sql("SELECT field FROM journal ORDER BY id DESC LIMIT 1")[1].field)')"
+  contains "undo puts the original back"   "undid" "$(slua 'local r = require("lulibre.edit").undo() print("undid", #r.restored, #r.failed)')"
+  expect   "calibre has the original again" "$before" "$(slua "print(lulibre.md5(lulibre.files($wid)[1].path))")"
+  contains "ocr_originals in the library is refused" "inside the library" "$(srun -o ocr_write=keep -o ocr_originals="$lib/x" ocr --write id:$wid 2>&1 || true)"
+else
+  echo "skip  ocr --write (no ocrmypdf)"
+fi
 contains "the config prints as Lua"       'o.sync_dir = "' "$(srun config 2>&1)"
 contains "and names the policies"         "auto | ask | never" "$(srun config 2>&1)"
 contains "a bad policy value is refused"  "is one of auto|ask|never" "$(run -o repair_links=maybe query -c '' 2>&1 || true)"

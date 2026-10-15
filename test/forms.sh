@@ -253,6 +253,24 @@ k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
 k q
 
+# ---- the configuration window (a configuration of the test's own: $XDG_CONFIG_HOME)
+run config --write >/dev/null 2>&1
+init=$XDG_CONFIG_HOME/lulibre/init.lua
+k g C
+shown "gC opens the configuration window"     "configuration .*comments: full"
+shown "with what the option does where the list was" "what it does"
+k j j j j j j Enter
+wait_for "pages = "
+k C-u 9 Enter
+shown "a value changed there takes effect"   "pages = 9, and written to init.lua"
+expect "and is written to init.lua"           "o.pages = 9" "$(grep -o '^o.pages = 9' "$init")"
+k d
+shown "d puts it back"                        "pages back to its default"
+expect "commented out with its default"       "-- o.pages = 6" "$(grep -o -- '-- o.pages = 6' "$init")"
+expect "the file was kept before each write"  yes "$(test -e "$init.bak" && echo yes || echo no)"
+k q
+wait_for "all books"
+
 # ---- the snapshot browser
 k g z
 shown "gz opens the snapshot browser"         "no snapshots yet"

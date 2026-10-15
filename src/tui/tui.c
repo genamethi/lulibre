@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "core/log.h"
@@ -1158,6 +1161,99 @@ static void closed(uv_handle_t *h) {
   (void)h;
 }
 
+static void freed(uv_handle_t *h) {
+  free(h);
+}
+
+/* Take the terminal: notcurses, raw keys, the mouse. */
+static void terminal_start(struct tui *t) {
+  struct notcurses_options no = {.flags = NCOPTION_SUPPRESS_BANNERS};
+  t->nc = notcurses_core_init(&no, NULL);
+  if (!t->nc) die("cannot initialise the terminal (TERM=%s)", getenv("TERM") ? getenv("TERM") : "");
+  notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
+  crash_install(); /* again, to run before notcurses' handlers, which give the terminal back */
+  bracketed_paste(1);
+  if (t->app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
+  t->std = notcurses_stdplane(t->nc);
+  t->nc_gen++;
+}
+
+/* notcurses reads the terminal on a thread of its own and says when it has
+ * keys through a descriptor of its own: that is watched */
+static void input_watch(struct tui *t) {
+  t->input = xcalloc(1, sizeof *t->input);
+  uv_poll_init(t->app->loop, t->input, notcurses_inputready_fd(t->nc));
+  t->input->data = t;
+  uv_poll_start(t->input, UV_READABLE, input_cb);
+}
+
+static void input_unwatch(struct tui *t) {
+  if (!t->input) return;
+  uv_poll_stop(t->input);
+  uv_close((uv_handle_t *)t->input, freed);
+  t->input = NULL;
+}
+
+/* a program on $PATH, as a malloc'd path; NULL when there is none */
+static char *which(const char *name) {
+  const char *path = getenv("PATH");
+  if (!path) path = "/usr/bin:/bin";
+  while (*path) {
+    const char *end = strchr(path, ':');
+    size_t n = end ? (size_t)(end - path) : strlen(path);
+    char *full = xasprintf("%.*s/%s", (int)n, path, name);
+    if (access(full, X_OK) == 0) return full;
+    free(full);
+    path += n + (end ? 1 : 0);
+  }
+  return NULL;
+}
+
+/* The editor is given the terminal whole. notcurses cannot simply step
+ * aside (its input thread would take the editor's keys), so it is stopped
+ * and started again around the editor; the planes it held go with it
+ * (nc_gen tells the preview so), and everything is drawn afresh. */
+int tui_edit_file(struct tui *t, const char *path) {
+  const char *editor = getenv("VISUAL");
+  if (!editor || !*editor) editor = getenv("EDITOR");
+  char *fallback = NULL;
+  if (!editor || !*editor) {
+    fallback = which("vim");
+    if (!fallback) fallback = which("vi");
+    if (!fallback) return -1;
+    editor = fallback;
+  }
+  input_unwatch(t);
+  bracketed_paste(0);
+  notcurses_stop(t->nc);
+  t->nc = NULL;
+  int status = -1;
+  struct sigaction ign = {.sa_handler = SIG_IGN}, old_int, old_quit;
+  sigaction(SIGINT, &ign, &old_int);
+  sigaction(SIGQUIT, &ign, &old_quit);
+  pid_t pid = fork();
+  if (pid == 0) {
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    /* through the shell, so that EDITOR="code --wait" works */
+    execl("/bin/sh", "sh", "-c", "exec $0 \"$1\"", editor, path, (char *)NULL);
+    _exit(127);
+  } else if (pid > 0) {
+    int st;
+    while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {
+    }
+    status = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+  }
+  sigaction(SIGINT, &old_int, NULL);
+  sigaction(SIGQUIT, &old_quit, NULL);
+  free(fallback);
+  terminal_start(t);
+  input_watch(t);
+  notcurses_refresh(t->nc, NULL, NULL);
+  tui_dirty(t);
+  return status;
+}
+
 int tui_run(struct app *app) {
   if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
     warnf("the interactive interface needs a terminal; see `lulibre -h` for commands");
@@ -1171,14 +1267,7 @@ int tui_run(struct app *app) {
   char *err = NULL;
   if (db_open_reader(&t->rdb, app->db.path, &err)) die("%s", err);
 
-  struct notcurses_options no = {.flags = NCOPTION_SUPPRESS_BANNERS};
-  t->nc = notcurses_core_init(&no, NULL);
-  if (!t->nc) die("cannot initialise the terminal (TERM=%s)", getenv("TERM") ? getenv("TERM") : "");
-  notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
-  crash_install(); /* again, to run before notcurses' handlers, which give the terminal back */
-  bracketed_paste(1);
-  if (app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
-  t->std = notcurses_stdplane(t->nc);
+  terminal_start(t);
 
   t->mode = MODE_NORMAL;
   tui_setup();
@@ -1188,15 +1277,14 @@ int tui_run(struct app *app) {
   wm_init(t);
 
   uv_loop_t *loop = app->loop;
-  uv_poll_init(loop, &t->input, notcurses_inputready_fd(t->nc));
+  input_watch(t);
   uv_prepare_init(loop, &t->prepare);
   uv_timer_init(loop, &t->tick);
   uv_timer_init(loop, &t->settle);
   uv_timer_init(loop, &t->ftimer);
   uv_timer_init(loop, &t->held_timer);
   t->held_timer.data = t;
-  t->input.data = t->prepare.data = t->tick.data = t->settle.data = t->ftimer.data = t;
-  uv_poll_start(&t->input, UV_READABLE, input_cb);
+  t->prepare.data = t->tick.data = t->settle.data = t->ftimer.data = t;
   uv_prepare_start(&t->prepare, prepare_cb);
   uv_timer_start(&t->tick, tick_cb, 2000, 2000);
 
@@ -1233,8 +1321,7 @@ int tui_run(struct app *app) {
   t->nc = NULL;
   log_to_stderr(1);
   if (t->ix) indexer_cancel(t->ix);
-  uv_poll_stop(&t->input);
-  uv_close((uv_handle_t *)&t->input, closed);
+  input_unwatch(t);
   uv_close((uv_handle_t *)&t->prepare, closed);
   uv_close((uv_handle_t *)&t->tick, closed);
   uv_close((uv_handle_t *)&t->settle, closed);

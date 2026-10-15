@@ -504,7 +504,8 @@ struct tui {
   struct ncplane *std;
   int rows_n, cols_n; /* terminal size */
 
-  uv_poll_t input;
+  uv_poll_t *input;   /* the terminal's input; made anew when the terminal is taken back */
+  unsigned nc_gen;    /* counts notcurses contexts: planes of an earlier one are gone */
   uv_prepare_t prepare;
   uv_timer_t tick;     /* periodic: has calibre's metadata.db changed? */
   uv_timer_t settle;   /* fires once the cursor has rested on a book */
@@ -598,6 +599,10 @@ struct tui {
 };
 
 int tui_run(struct app *app);
+/* Hand the terminal to an editor ($VISUAL, $EDITOR, else vim, else vi) on
+ * path, and take it back when it exits. Returns the editor's exit status,
+ * or -1 when none could be run. */
+int tui_edit_file(struct tui *t, const char *path);
 void tui_dirty(struct tui *t);
 void tui_msg(struct tui *t, int error, const char *fmt, ...) PRINTF(3, 4);
 void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial);

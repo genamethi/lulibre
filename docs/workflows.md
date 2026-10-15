@@ -955,12 +955,62 @@ one next to its output. Fields used: `author`, `title`, `date`/`year`,
 
 Entries carry a `file` field, which Zotero, JabRef and BibDesk understand.
 
-## OCR
+## OCR, and text that came out garbled
 
     :ocr [filter]                tesseract, for books with no usable text layer
     lulibre ocr 'is:needsocr'
 
-`lulibre.o.ocr = "auto"` runs it after indexing for files that need it.
+`lulibre.o.ocr = "auto"` runs it after indexing for files that need it. OCR
+reads the first `ocr_pages` pages into lulibre's index; the file itself is
+left alone, unless:
+
+| `ocr_write` | |
+|---|---|
+| `off` (default) | the PDF stays as it is |
+| `replace` | each PDF read is also given a text layer with `ocrmypdf` (every page; it takes a while), and the new PDF takes the old one's place in calibre |
+| `keep` | the same, and the old PDF is first copied to `ocr_originals`, a folder outside the library (default `~/.local/share/lulibre/ocr-originals/`), so that calibre never holds two copies. One inside the library is refused |
+
+`:ocr --write [filter]` does only that part. Each PDF replaced is in the
+journal, and `u` puts a kept original back.
+
+**Garbled text.** Some PDFs set their text in fonts that say nothing of which
+letter each glyph is: what comes out is `�` (U+FFFD), private-use
+characters, or letters moved along ("zkdw dvvxpswlrqv" for "what
+assumptions"). Such text now counts against a file's quality, so
+`is:needsocr` finds it (a long run of them, such as the dots leading to a
+page number in a table of contents, counts once). `:run reread [filter]`
+reads those pages again:
+
+1. with poppler's `pdftotext`, a reader of its own that maps many such fonts
+   where MuPDF does not; its line boxes are kept, so the title page can still
+   be told by the size of its type. A page is replaced only when the new
+   reading is readable and better;
+2. by moving the characters back, when one shift turns the file's longer
+   pages into English (they must agree on it);
+
+and names the books that still need OCR. `text_fallback = "off"` leaves
+poppler out.
+
+## Features and the programs they need
+
+lulibre runs without any of these; each is looked for when the feature that
+needs it is used, and `:features` says which are installed and on.
+
+| Feature | Programs | For |
+|---|---|---|
+| poppler | `pdftotext` | `:run reread` (`text_fallback`) |
+| tesseract | `tesseract` | `:ocr` (`ocr`) |
+| ocrmypdf | `ocrmypdf` | giving PDFs a text layer (`ocr_write`) |
+
+When one is missing, lulibre says how to install it. With `pixi_deps = "on"`
+it can also keep an environment of its own with pixi (under
+`~/.local/share/lulibre/pixi`) and offers to add the program there, asking
+first. That is off by default, since it means running what pixi fetches.
+
+Scripts may need Lua modules: `rocks_tree` names a luarocks tree whose modules
+`require` finds, and with `rocks_install = "on"`, `lulibre.require_rock(module
+[, rock])` offers to install a missing one there (off by default, for the same
+reason).
 
 ## Without the content server
 

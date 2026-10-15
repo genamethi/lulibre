@@ -16,6 +16,7 @@ struct wline {
 
 struct pstate {
   struct tui *t;
+  unsigned plane_gen; /* the notcurses context the image plane belongs to */
   sqlite3_int64 book;
   uint64_t rows_gen;
 
@@ -75,7 +76,8 @@ static char *col(sqlite3_stmt *st, int i) {
 }
 
 static void drop_plane(struct pstate *ps) {
-  if (ps->plane) ncplane_destroy(ps->plane);
+  /* (a plane of an earlier notcurses context is gone already) */
+  if (ps->plane && ps->plane_gen == ps->t->nc_gen) ncplane_destroy(ps->plane);
   ps->plane = NULL;
   ps->plane_valid = 0;
 }
@@ -374,11 +376,17 @@ static void blit_cells(struct pstate *ps, struct rect body, enum imode mode) {
 /* Real pixels go through a notcurses plane, redrawn only when they change. */
 static void blit_pixels(struct pstate *ps, struct rect body) {
   struct tui *t = ps->t;
+  /* the terminal was given away and taken back: the old plane went with it */
+  if (ps->plane && ps->plane_gen != t->nc_gen) {
+    ps->plane = NULL;
+    ps->plane_valid = 0;
+  }
   if (ps->plane && memcmp(&ps->plane_r, &body, sizeof body) != 0) drop_plane(ps);
   if (!ps->plane) {
     struct ncplane_options po = {.y = body.y, .x = body.x, .rows = (unsigned)body.h,
                                  .cols = (unsigned)body.w, .name = "preview"};
     ps->plane = ncplane_create(t->std, &po);
+    ps->plane_gen = t->nc_gen;
     ps->plane_r = body;
     ps->plane_valid = 0;
     if (!ps->plane) return;

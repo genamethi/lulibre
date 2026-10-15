@@ -34,6 +34,19 @@ static const struct opt_def opts[] = {
       NULL),
   OPT(ocr_pages, OPT_INT, "3", NULL, "pages per file the OCR pass reads", NULL),
   OPT(ocr_lang, OPT_STR, "eng", NULL, "tesseract language(s), e.g. eng or eng+fra", NULL),
+  OPT(ocr_write, OPT_STR, "off", "off|replace|keep",
+      "whether OCR also writes the text it read into the PDF itself (with ocrmypdf), so that other "
+      "programs can search it: off leaves the file alone, replace puts the new PDF in its place, keep "
+      "does so and keeps the old one in ocr_originals",
+      NULL),
+  OPT(ocr_originals, OPT_PATH, "", NULL,
+      "where ocr_write = keep puts the PDFs it wrote over: a folder outside the library, so calibre "
+      "never sees two copies (default: ocr-originals/ under the XDG data dir)",
+      NULL),
+  OPT(text_fallback, OPT_STR, "auto", "off|auto",
+      "pages whose text comes out garbled (a font with no map to letters) are read again with "
+      "poppler's pdftotext, when it is installed, and the better reading is kept (:run reread)",
+      NULL),
 
   OPT(write_jobs, OPT_INT, "6", NULL, "calibredb processes at once when writing",
       "Changing the library"),
@@ -135,6 +148,28 @@ static const struct opt_def opts[] = {
       "where stray files are set aside (default: orphans/ under the XDG data dir)", NULL),
   OPT(log_file, OPT_PATH, "", NULL,
       "also append the log to this file (the console, `, shows it either way)", NULL),
+
+  OPT(pixi_deps, OPT_STR, "off", "off|on",
+      "on: programs that features need (pdftotext, tesseract, ocrmypdf) may come from an environment "
+      "lulibre keeps with pixi under its data folder, and it offers to add one that is missing there. "
+      "Off by default: it means running what pixi fetches",
+      "Programs and modules"),
+  OPT(rocks_tree, OPT_PATH, "", NULL,
+      "a luarocks tree (luarocks --tree DIR) whose Lua modules scripts may require", NULL),
+  OPT(rocks_install, OPT_STR, "off", "off|on",
+      "on: when a script needs a rock that is not there, lulibre offers to install it into rocks_tree. "
+      "Off by default: it means running what luarocks fetches",
+      NULL),
+  OPT(config_add_core, OPT_STR, "ask", POLICY,
+      "options of lulibre's own that init.lua does not mention yet are put in it, commented out with "
+      "their defaults (ask: the config window, :config, offers to)",
+      "The configuration file"),
+  OPT(config_add_scripts, OPT_STR, "ask", POLICY,
+      "the same for the options scripts declare (lulibre.option), each script's under its own name", NULL),
+  OPT(config_comments, OPT_STR, "full", "full|values|none",
+      "what is written above an option put in init.lua: its help in full, only the values it takes, or "
+      "nothing (an option with no help gets none either way)",
+      NULL),
 };
 
 const struct opt_def *config_opts(size_t *n) {
