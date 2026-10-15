@@ -517,3 +517,18 @@ lulibre.command("features", function()
   end
   lulibre.show(out, "features and the programs they need")
 end, "the features that need programs of their own (poppler, tesseract, ocrmypdf): installed or not, on or off")
+
+lulibre.command("parts", function()
+  local parts = require "lulibre.parts"
+  local out = {}
+  for _, w in ipairs(parts.wholes()) do
+    out[#out + 1] = ("%s   %d here%s%s"):format(w.whole, #w.books, w.parts and (" of " .. w.parts) or "",
+      #w.missing > 0 and ("; missing " .. table.concat(w.missing, " ", 1, math.min(#w.missing, 30)) .. (#w.missing > 30 and " ..." or "")) or "")
+    for _, b in ipairs(w.books) do
+      local book = lulibre.book(b.id)
+      out[#out + 1] = ("   %4s  %6d  %s"):format(b.part and tostring(b.part) or "?", b.id, book and book.title or "")
+    end
+  end
+  if #out == 0 then out[1] = "no book is known to be part of a whole yet (:run grammars --apply finds them)" end
+  lulibre.show(out, "wholes and their parts, in order")
+end, "the books that are parts of a whole (handbook chapters, the Stacks project), in order, with what is missing")

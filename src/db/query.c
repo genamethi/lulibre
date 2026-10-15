@@ -63,6 +63,7 @@ static const struct { const char *name, *sql; } is_tests[] = {
   {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
   /* marked as a work no catalogue has a record of (:noncatalog) */
   {"noncatalog", "EXISTS(SELECT 1 FROM noncatalog n WHERE n.book = b.id)"},
+  {"part", "EXISTS(SELECT 1 FROM parts pt WHERE pt.book = b.id)"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},

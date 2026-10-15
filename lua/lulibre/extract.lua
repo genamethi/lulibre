@@ -155,6 +155,21 @@ function M.from_doc(doc)
     if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
   end
 
+  -- what the grammars of publications say: a Conrad handout, a Stacks chapter ...
+  if doc.id then
+    local grammars = require "lulibre.grammars"
+    local book = lulibre.book(doc.id)
+    local f = lulibre.sql("SELECT npages FROM files WHERE book = ? AND status = 1 ORDER BY id LIMIT 1", doc.id)[1]
+    local ok, found = pcall(grammars.match, { id = doc.id, lines = doc.pages and doc.pages[1] or doc.lines, texts = doc.texts,
+      pages = f and f.npages, idents = book and book.idents or {} })
+    for _, m in ipairs(ok and found or {}) do
+      for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate" } do
+        local v = m.fields[field]
+        if v and v ~= "" then add(field, tostring(v), "grammar: " .. m.grammar.name, m.grammar.confidence or 0.85) end
+      end
+    end
+  end
+
   -- subject from vocabulary, when the page did not state one
   local ranked = subjects.score((tp.title or "") .. "\n" .. text)
   for i = 1, math.min(2, #ranked) do

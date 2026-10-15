@@ -1,0 +1,357 @@
+-- Grammars of publications: how a kind of document sets its opening page.
+--
+-- Keith Conrad's handouts put the title in capitals and KEITH CONRAD, smaller,
+-- under it; a chapter of the Stacks project its title in capitals and then
+-- its tag ("01H8") or "Contents"; a Springer chapter its number and title in
+-- very large type. The title page as such is rarely telling, but the first
+-- few lines and how they are set are: a grammar says what they look like,
+-- line by line, and what follows when they do (the title, the authors, that
+-- such works have no catalogue record, which whole the file is a part of).
+--
+-- A grammar is matched against the lines of the first page, in order, each
+-- with its text, the size of its type and whether it is bold:
+--
+--   local G = require "lulibre.grammars"
+--   G.add {
+--     name = "keith-conrad",           -- shown as where a value came from
+--     kind = "handout",                -- what such a file is
+--     noncatalog = true,               -- such works have no catalogue record
+--     lines = {                        -- the opening lines, in order
+--       G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
+--       G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
+--     },
+--     confidence = 0.95,
+--   }
+--
+-- A line rule (G.line) may ask for: pattern (a Lua pattern; nocase = true
+-- to ignore case), upper (its letters all capitals), bold, bigger / smaller
+-- (than the type of the page's body text), largest (the largest type on the
+-- page), size = { min, max } (in points). It may take = "field" (the line,
+-- or the pattern's first capture; case = "title" puts it in title case), or
+-- give = { field = value }. G.skip(n) lets up to n lines go by; G.opt(rule)
+-- may be missing; G.either{ rule, rule } is one or the other.
+-- Besides lines: text = { patterns } that must stand somewhere in the pages
+-- read (without regard to case), pages = { min, max } for the file's length,
+-- and read = function(doc, got) returning more fields from the document.
+-- Fields are the book's (title, authors, tags, ...) and three of their own:
+-- part_of (the whole the file is a part of), part (its number in it) and
+-- parts (how many there are), which lulibre keeps (:parts).
+local M = {}
+
+M.list = {}
+
+function M.add(g)
+  assert(type(g) == "table" and type(g.name) == "string", "a grammar is a table with a name")
+  assert(g.lines or g.read or g.text, "a grammar needs lines, text or read to say what it looks for")
+  for i, x in ipairs(M.list) do
+    if x.name == g.name then
+      M.list[i] = g
+      return g
+    end
+  end
+  M.list[#M.list + 1] = g
+  return g
+end
+
+function M.remove(name)
+  for i, x in ipairs(M.list) do
+    if x.name == name then return table.remove(M.list, i) end
+  end
+end
+
+-- ---- rules ----
+
+function M.line(t)
+  t.kind = "line"
+  return t
+end
+
+function M.skip(n)
+  return { kind = "skip", n = n or 1 }
+end
+
+function M.opt(rule)
+  return { kind = "opt", rule = rule }
+end
+
+function M.either(rules)
+  return { kind = "either", rules = rules }
+end
+
+local function is_upper(text)
+  local letters = text:gsub("[^%a]", "")
+  return #letters >= 3 and letters == letters:upper()
+end
+
+-- does a line answer a line rule? returns the fields it gives, or nil
+local function line_ok(rule, line, page)
+  local text = line.text or ""
+  local cap
+  if rule.pattern then
+    local subject = rule.nocase and text:lower() or text
+    local s, e, c = subject:find(rule.nocase and rule.pattern:lower() or rule.pattern)
+    if not s then return nil end
+    cap = c
+    if rule.nocase and c then cap = text:sub(s, e):match(rule.pattern:lower()) and c end
+  end
+  if rule.upper and not is_upper(text) then return nil end
+  if rule.bold ~= nil and (line.bold or false) ~= rule.bold then return nil end
+  local size = line.size or 0
+  if rule.bigger and not (size > page.body * 1.08) then return nil end
+  if rule.smaller and not (size < page.body * 0.95) then return nil end
+  if rule.largest and size < page.largest - 0.05 then return nil end
+  if rule.size and (size < (rule.size[1] or 0) or size > (rule.size[2] or math.huge)) then return nil end
+  local got = {}
+  if rule.take then
+    local v = cap or text
+    v = v:gsub("^%s+", ""):gsub("%s+$", "")
+    if rule.case == "title" then
+      -- in title case; a roman numeral (II, IV) stays as it is
+      local romans = {}
+      for w in v:gmatch("%f[%w]([IVXLC]+)%f[%W]") do romans[w:lower()] = w end
+      v = require("lulibre.titlecase").apply(v:lower()):gsub("%f[%w](%a+)%f[%W]", function(w)
+        return romans[w:lower()] or w
+      end)
+    end
+    got[rule.take] = v
+  end
+  for k, v in pairs(rule.give or {}) do got[k] = v end
+  return got
+end
+
+-- match rules from rule i against lines from line j; returns the fields, or nil
+local function seq(rules, i, lines, j, page, got)
+  if i > #rules then return got end
+  local r = rules[i]
+  if r.kind == "skip" then
+    for k = 0, r.n do
+      local res = seq(rules, i + 1, lines, j + k, page, got)
+      if res then return res end
+    end
+    return nil
+  elseif r.kind == "opt" then
+    return seq({ r.rule, table.unpack(rules, i + 1) }, 1, lines, j, page, got) or seq(rules, i + 1, lines, j, page, got)
+  elseif r.kind == "either" then
+    for _, alt in ipairs(r.rules) do
+      local res = seq({ alt, table.unpack(rules, i + 1) }, 1, lines, j, page, got)
+      if res then return res end
+    end
+    return nil
+  end
+  local line = lines[j]
+  if not line then return nil end
+  local fields = line_ok(r, line, page)
+  if not fields then return nil end
+  local merged = {}
+  for k, v in pairs(got) do merged[k] = v end
+  for k, v in pairs(fields) do
+    -- a field taken twice (a title over two lines) is joined
+    merged[k] = merged[k] and (merged[k] .. " " .. v) or v
+  end
+  return seq(rules, i + 1, lines, j + 1, page, merged)
+end
+
+-- the page's body type: the size most of its lines are set in; and its largest
+local function sizes(lines)
+  local count, largest = {}, 0
+  for _, l in ipairs(lines) do
+    if not l.rotated then
+      local s = math.floor((l.size or 0) * 2 + 0.5) / 2
+      count[s] = (count[s] or 0) + #(l.text or "")
+      if (l.size or 0) > largest then largest = l.size end
+    end
+  end
+  local body, most = 0, -1
+  for s, n in pairs(count) do
+    if n > most then body, most = s, n end
+  end
+  return body, largest
+end
+
+--- What the document is, by the grammars: a list of { grammar=, fields= }.
+-- doc: { id=, lines = (the first page's lines), texts = { page texts }, pages = the file's length }.
+function M.match(doc)
+  local out = {}
+  local lines = {}
+  for _, l in ipairs(doc.lines or {}) do
+    if not l.rotated and (l.text or ""):find("%S") then lines[#lines + 1] = l end
+  end
+  local body, largest = sizes(lines)
+  local page = { body = body, largest = largest }
+  local all
+  for _, g in ipairs(M.list) do
+    local ok = true
+    if g.pages and doc.pages and (doc.pages < (g.pages[1] or 0) or doc.pages > (g.pages[2] or math.huge)) then ok = false end
+    if ok and g.text then
+      all = all or table.concat(doc.texts or {}, "\n"):lower()
+      for _, p in ipairs(g.text) do
+        if not all:find(p:lower()) then ok = false end
+      end
+    end
+    local got = ok and {} or nil
+    if ok and g.lines then got = seq(g.lines, 1, lines, 1, page, {}) end
+    if got and g.read then
+      local more = g.read(doc, got)
+      if more == false then got = nil
+      elseif type(more) == "table" then
+        for k, v in pairs(more) do got[k] = v end
+      end
+    end
+    if got then out[#out + 1] = { grammar = g, fields = got } end
+  end
+  return out
+end
+
+--- The document of a book, as M.match wants it.
+function M.doc(id)
+  local f = lulibre.sql("SELECT id, npages FROM files WHERE book = ? AND status = 1 ORDER BY id LIMIT 1", id)[1]
+  if not f then return nil end
+  local texts = {}
+  for _, p in ipairs(lulibre.sql("SELECT text FROM pages WHERE file = ? ORDER BY page", f.id)) do texts[#texts + 1] = p.text end
+  local book = lulibre.book(id)
+  return { id = id, lines = lulibre.lines(id, 1), texts = texts, pages = f.npages, idents = book and book.idents or {} }
+end
+
+-- ---- built-in grammars ----
+
+M.add {
+  name = "keith-conrad",
+  kind = "handout",
+  noncatalog = true,
+  lines = {
+    M.line { upper = true, take = "title", case = "title" },
+    M.opt(M.line { upper = true, take = "title", case = "title" }),
+    M.line { pattern = "^KEITH CONRAD$", give = { authors = "Keith Conrad" } },
+  },
+  confidence = 0.95,
+}
+
+-- The Stacks project: each chapter opens with its name in capitals and then
+-- its tag (four characters, 01H8) or its contents. The reading order is in
+-- the project's Makefile; a book whose text holds that table ("Chapters in
+-- reading order", | # | Chapter | Pages | PDF |) gives each chapter its number.
+local stacks_order -- stem -> { n=, pages= }, and the count; read once
+local function read_stacks_order()
+  if stacks_order ~= nil then return stacks_order end
+  stacks_order = false
+  local row = lulibre.sql([[SELECT p.text FROM pages p JOIN files f ON f.id = p.file
+    WHERE p.text LIKE '%Chapters in reading order%' LIMIT 1]])[1]
+  if not row then return false end
+  local fid = lulibre.sql([[SELECT p.file FROM pages p WHERE p.text LIKE '%Chapters in reading order%' LIMIT 1]])[1].file
+  local text = {}
+  for _, r in ipairs(lulibre.sql("SELECT text FROM pages WHERE file = ? ORDER BY page", fid)) do text[#text + 1] = r.text end
+  local order, n = {}, 0
+  for num, stem, pages in table.concat(text, "\n"):gmatch("|%s*(%d+)%s*|%s*([%w%-_]+)%s*|%s*(%d+)%s*|") do
+    order[stem:lower()] = { n = tonumber(num), pages = tonumber(pages) }
+    n = math.max(n, tonumber(num))
+  end
+  if n == 0 then return false end
+  stacks_order = { order = order, count = n }
+  return stacks_order
+end
+
+M.add {
+  name = "stacks-project",
+  kind = "chapter of the Stacks project",
+  noncatalog = true,
+  lines = {
+    M.line { upper = true, take = "title", case = "title" },
+    M.either {
+      M.line { pattern = "^%w%w%w%w$" },  -- its tag
+      M.line { pattern = "^Contents$" },
+      M.line { pattern = "^Copyright %(C%) %d+ %-%- %d+ Johan de Jong" },
+    },
+  },
+  read = function(doc, got)
+    -- a tag is four characters of figures and capitals, with a figure among them
+    local first = doc.lines and doc.lines[2] and doc.lines[2].text or ""
+    if first:match("^%w%w%w%w$") and not first:find("%d") then return false end
+    local fields = { authors = "The Stacks Project", part_of = "The Stacks Project" }
+    local ord = read_stacks_order()
+    if ord then
+      fields.parts = ord.count
+      -- the chapter by its file's name (calibre's title, when it came from it), else by its title's first word, and its length
+      local book = lulibre.book(doc.id)
+      local keys = { lulibre.fold(book and book.title or ""):gsub("[^%w]+", ""), (lulibre.fold(got.title or ""):match("^(%w+)")) }
+      for _, k in ipairs(keys) do
+        local hit = k and ord.order[k]
+        if hit and (not hit.pages or not doc.pages or math.abs(hit.pages - doc.pages) <= 1) then
+          fields.part = hit.n
+          break
+        end
+      end
+    end
+    return fields
+  end,
+  confidence = 0.9,
+}
+
+-- Elsevier's Handbook of Algebra (ISSN 1570-7954): its chapters' DOIs say the
+-- volume by year ((96) is volume 1) and the chapter's place in it (80014: 14).
+local HANDBOOK_VOLUMES = { ["96"] = 1, ["00"] = 2, ["03"] = 3, ["06"] = 4, ["08"] = 5, ["09"] = 6 }
+M.add {
+  name = "handbook-of-algebra",
+  kind = "chapter of the Handbook of Algebra",
+  read = function(doc)
+    local doi = (doc.idents or {}).doi or ""
+    local yy, item = doi:upper():match("^10%.1016/S1570%-7954%((%d%d)%)(%d%d%d%d%d)")
+    if not yy then return false end
+    local vol = HANDBOOK_VOLUMES[yy]
+    local fields = { part_of = vol and ("Handbook of Algebra, Volume %d"):format(vol) or "Handbook of Algebra",
+      part = tonumber(item:sub(-3)) }
+    -- the title is the largest type on the page, the authors under it
+    local lines, top = doc.lines or {}, 0
+    for _, l in ipairs(lines) do
+      if (l.size or 0) > top then top = l.size end
+    end
+    local title = {}
+    for i, l in ipairs(lines) do
+      if (l.size or 0) >= top - 0.1 and i <= 4 then title[#title + 1] = l.text end
+    end
+    if #title > 0 then fields.title = table.concat(title, " ") end
+    return fields
+  end,
+  confidence = 0.85,
+}
+
+-- A chapter of a book set as Springer and others set them: its number and
+-- its title in very large type, on a file much shorter than a book.
+M.add {
+  name = "numbered-chapter",
+  kind = "chapter",
+  pages = { 2, 90 },
+  lines = {
+    M.line { pattern = "^(%d%d?%s+%u.*)$", largest = true, take = "part" },
+  },
+  read = function(doc, got)
+    local num, title = (got.part or ""):match("^(%d+)%s+(.+)$")
+    if not num then return false end
+    -- the type must be very large beside the text: a heading, not a numbered paragraph
+    local lines, body = doc.lines or {}, nil
+    local first = lines[1] and lines[1].size or 0
+    local count = {}
+    for _, l in ipairs(lines) do
+      local s = math.floor((l.size or 0) + 0.5)
+      count[s] = (count[s] or 0) + 1
+    end
+    local most = 0
+    for s, n in pairs(count) do
+      if n > most then body, most = s, n end
+    end
+    if not body or first < body * 2 then return false end
+    -- a title too long for one line runs on in the same type
+    for i = 2, math.min(4, #lines) do
+      if math.abs((lines[i].size or 0) - first) > 0.5 then break end
+      title = title .. " " .. lines[i].text
+    end
+    local fields = { part = tonumber(num), title = title }
+    -- the whole: the book its ISBN names, when the kept record is much longer than the file
+    local isbn = (doc.idents or {}).isbn
+    local rec = isbn and require("lulibre.net").kept_record("isbn", isbn)
+    if rec and rec.title and rec.pages and doc.pages and rec.pages > doc.pages * 2.5 then fields.part_of = rec.title end
+    return fields
+  end,
+  confidence = 0.8,
+}
+
+return M

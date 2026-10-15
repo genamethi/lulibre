@@ -35,6 +35,7 @@ static const struct {
   {"enrich", cmd_script, "look books up by their identifiers and propose what the records say"},
   {"refs", cmd_script, "read what the books cite, from the bibliography at the end of each file"},
   {"datasets", cmd_script, "databases for looking books up offline: see them, fetch them"},
+  {"grammars", cmd_script, "what the grammars of publications make of the books (Conrad handouts, Stacks chapters, handbooks)"},
   {"reread", cmd_script, "read garbled pages again with poppler, or shift their letters back; what still needs OCR"},
   {"arxiv-titles", cmd_script, "find books' arXiv numbers by title in arXiv's snapshot, asking nobody"},
   {"verify", cmd_script, "the library held against its files: titles, authors and identifiers the pages bear out"},
