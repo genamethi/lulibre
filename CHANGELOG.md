@@ -5,6 +5,10 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Fixed: some Open Library records put the series under the title after a
+  blank line ("Local Fields", line breaks, "Graduate Texts in Mathematics"),
+  and the whole was proposed as the title. The part after the blank line is
+  now the series, and no proposed value but a comment keeps a line break.
 - Fixed: OCR replaced a page's text whatever it was, so a title page that
   read well could come back empty. A page is now read by OCR only when its
   own text is no text (little of it, or garbled), and replaced only when
