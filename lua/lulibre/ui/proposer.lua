@@ -87,7 +87,7 @@ function M.run()
         { id = "over", kind = "choice", label = "a field that has a value", value = 1, choices = {
           ("as the option says (propose_over = %s)"):format(lulibre.o.propose_over), "is left alone: only empty or junk fields",
           "is proposed over wherever a source differs" } },
-        { id = "fresh", kind = "check", label = "as if the ticked fields were empty, and though rejected before (--fresh)", value = false },
+        { id = "fresh", kind = "check", label = "as if the ticked fields were empty, and though barred before (--fresh)", value = false },
         { id = "clear", kind = "check", label = ("drop the proposals waiting for these books first (%d wait in all)"):format(waiting), value = false,
           off = waiting == 0 and "none are waiting" or nil },
       } },

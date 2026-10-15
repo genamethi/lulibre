@@ -29,6 +29,7 @@ struct config {
   char *review_sort;   /* confidence | id: the order of books in review */
   char *review_rows;   /* field | all: one row per field in review, or one per proposal */
   int review_context;  /* 1: review shows what a proposal rests on in the main view */
+  char *review_reject; /* once | always: does a rejected value stay out of later proposals? */
   char *weigh_sources; /* off | on: confidences from measured source weights */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */

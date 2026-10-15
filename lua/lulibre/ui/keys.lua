@@ -34,7 +34,8 @@ local DEFAULTS = {
   },
   review = {
     { "accept", { "a" }, "accept", "accept the proposal (again: back to pending); on a book's line, all of that book's" },
-    { "reject", { "r" }, "reject", "reject the proposal; on a book's line, all of that book's still pending" },
+    { "reject", { "r" }, "reject", "reject the proposal; on a book's line, all of that book's still pending. A later run may propose it again (unless review_reject = \"always\")" },
+    { "never", { "N" }, "never again", "reject the proposal, and never propose that value for this field of this book again; on a book's line, all of that book's still pending" },
     { "edit", { "e", "<CR>" }, "edit", "correct the proposed value, or type one for a field nothing was proposed for" },
     { "clear", { "c" }, "clear", "propose blanking this field" },
     { "titlecase", { "t" }, "title case", "put the value in title case, and accept that" },

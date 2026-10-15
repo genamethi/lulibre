@@ -227,7 +227,7 @@ function M.wanted(book, candidates, over)
 end
 
 --- Propose for one book from its file. opts.over, opts.only and opts.fresh
--- as for M.wanted; opts.again proposes even what was rejected before. Returns how many
+-- as for M.wanted; opts.again proposes even what was barred before. Returns how many
 -- proposals were added, and how many of them replace a value the book has.
 function M.book(id, opts)
   opts = opts or {}
