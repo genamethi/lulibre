@@ -606,6 +606,9 @@ do
   eq("replaces: a value over a value", { proposals.replaces { book = 2, field = "authors", op = "set" },
     proposals.replaces { book = 2, field = "publisher", op = "set" }, proposals.replaces { book = 2, field = "tags", op = "add" } },
     { true, false, false })
+  local _, lpid = proposals.add(2, "publisher", "Two\r\n   Line House ", { source = "test" })
+  eq("a line break is no part of a proposed value but comments'", lulibre.store("SELECT value FROM proposals WHERE id = ?", lpid)[1].value,
+    "Two Line House")
   lulibre.store("DELETE FROM proposals WHERE book = 2 AND field = 'publisher'")
 end
 
@@ -1165,6 +1168,11 @@ do
   eq("Open Library: the series out of the title's bracket, the subject from the shelf class",
     { r.title, r.series, r.authors, r.publisher, r.date, r.subjects[1].tag }, { "Algebraic Geometry", "Graduate Texts in Mathematics",
       { "Robin Hartshorne" }, "Springer", "1997-04-01", "math/algebraic-geometry" })
+  net.keep("openlibrary", "9781475756753", 200, [=[{"ISBN:9781475756753":{"title":"Local Fields\r\n            \r\n                Graduate Texts in Mathematics",
+    "authors":[{"name":"Jean-Pierre Serre"}]}}]=])
+  r = net.openlibrary("9781475756753")
+  eq("Open Library: a series under the title, after a blank line, is the series", { r.title, r.series },
+    { "Local Fields", "Graduate Texts in Mathematics" })
   net.keep("crossref", "10.9999/none", 404)
   local none, why = net.crossref("10.9999/none")
   eq("what a service did not have is remembered as such", { none, why }, { nil, "crossref has no record of 10.9999/none" })

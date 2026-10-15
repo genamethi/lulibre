@@ -1149,6 +1149,14 @@ function M.openlibrary(isbn)
   local rec = { authors = {}, subjects = {}, ids = { isbn = isbn }, type = "book", source = "Open Library " .. isbn,
     pages = tonumber(b.number_of_pages) }
   local title = type(b.title) == "string" and trim(b.title) or nil
+  -- "Local Fields\r\n   \r\n   Graduate Texts in Mathematics": a title with the
+  -- series under it, after a blank line
+  local under
+  if title then
+    local head, rest = title:match("^(.-)%s*\r?\n%s*\r?\n%s*(.+)$")
+    if head and head:find("%a") then title, under = head, rest:gsub("%s+", " ") end
+    title = title:gsub("%s+", " ")
+  end
   if title then
     -- "Algebraic Geometry (Graduate Texts in Mathematics)": the bracket is the series
     local head, series = title:match("^(.-)%s*%(([^()]+)%)$")
@@ -1157,7 +1165,7 @@ function M.openlibrary(isbn)
       local name, number = series:match("^(.-)%s*[;,]?%s*[vVnNoO.#]*%s*(%d+)$")
       rec.series, rec.series_index = name and #name > 3 and name or series, name and #name > 3 and number or nil
     end
-    if type(b.subtitle) == "string" and b.subtitle ~= "" then title = title .. ": " .. trim(b.subtitle) end
+    if type(b.subtitle) == "string" and b.subtitle:find("%S") then title = title .. ": " .. trim(b.subtitle:gsub("%s+", " ")) end
     rec.title = require("lulibre.titlecase").numerals(title)
   end
   -- an edition's own note of its series: "Graduate texts in mathematics ; 52"
@@ -1165,6 +1173,7 @@ function M.openlibrary(isbn)
   -- (the number may be noted apart: { "Progress in brain research ;", "v. 110" })
   local apart = type(noted) == "string" and type(b.series[2]) == "string" and b.series[2]:match("^%s*[vVnN]%a*%.?%s*%d+%s*$")
   if apart then noted = noted .. " " .. apart end
+  if type(noted) ~= "string" and under and under:find("%a") then noted = under end
   if not rec.series and type(noted) == "string" and noted:find("%a") then
     local name, number = noted:match("^(.-)%s*[;,:]?%s*%-*%s*[vVnNoO.#]*%s*(%d+)%s*$")
     if not (name and #name > 3) then name, number = noted:gsub("[%s;,:%-]+$", ""), nil end
