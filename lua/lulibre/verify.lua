@@ -74,14 +74,18 @@ end
 M.telling = telling
 
 -- a share of the text that is no text: the replacement character, private
--- use and control characters left by a font that could not be read
+-- use and control characters left by a font that could not be read. A long
+-- run of them (eight or more: the dots leading to a page number in a table
+-- of contents, a rule) counts as one.
+local BAD = { "\239\191\189", "\238[\128-\191][\128-\191]", "\239[\128-\163][\128-\191]", "[\1-\8\14-\31]" }
 local function garbled(text)
   if #text == 0 then return 1 end
+  local marked = text
+  for _, b in ipairs(BAD) do marked = marked:gsub(b, "\0") end
   local bad = 0
-  for _ in text:gmatch("\239\191\189") do bad = bad + 1 end         -- U+FFFD
-  for _ in text:gmatch("\238[\128-\191][\128-\191]") do bad = bad + 1 end -- U+E000..U+EFFF
-  for _ in text:gmatch("[\1-\8\14-\31]") do bad = bad + 1 end
-  return bad / math.max(1, utf8.len(text) or #text)
+  for run in marked:gmatch("%z+") do bad = bad + (#run >= 8 and 1 or #run) end
+  local len = utf8.len(text) or #text
+  return bad / math.max(1, len)
 end
 M.garbled = garbled
 

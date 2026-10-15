@@ -5,6 +5,28 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: the configuration window, `gC` / `:config`: every option with its
+  value, default and the line of init.lua that sets it, and what it does;
+  a value changed there is written to init.lua (kept as `init.lua.bak`
+  first); `E` opens init.lua in `$EDITOR` (vim, vi), and it is read again
+  when you leave. Options init.lua does not mention can be put in,
+  commented out with their defaults (`config_add_core`,
+  `config_add_scripts`), with full help, the values only, or no comment
+  (`config_comments`).
+- New: scripts declare options of their own, `lulibre.option(ns, {...})`,
+  set in init.lua as `lulibre.cfg.ns.name`; init.lua wins over the script.
+- New: `:run reread` reads garbled pages again with poppler's pdftotext,
+  or moves shifted characters back ("zkdw" for "what"), and names what still
+  needs OCR (`text_fallback`). Garbled text now counts against a file's
+  quality, so `is:needsocr` finds it.
+- New: OCR can give the PDF itself a text layer (`ocr_write = replace |
+  keep`, with ocrmypdf), the original kept in `ocr_originals` outside the
+  library; undo puts it back. `:ocr --write`.
+- New: features say which programs they need (`:features`); with
+  `pixi_deps = "on"` lulibre can keep them in a pixi environment of its own,
+  asking first. `rocks_tree` and `rocks_install` do the same for Lua
+  modules. All off by default.
+
 - New: review shows one row per field, the surest proposal for it, with
   `2/3` when there are others: `o` steps to the next source, `O` takes the
   next kind of source for that field throughout the view, `m` switches to a

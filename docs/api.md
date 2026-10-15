@@ -221,6 +221,11 @@ its own documentation.
 | `lulibre.ui.context` | what a proposal rests on, for review's context panel: `rows(pr, others)`, `record_of(pr)` (the kept record a proposal came from or an identifier leads to), `source_class(src)` |
 | `net.kept_record(kind, value)` | the record kept for a doi, isbn or arXiv number, asking nobody; `net.arxiv_by_title(path, {[net.title_key(t)]=true})` looks papers up by title in arXiv's snapshot |
 | `lulibre.panel{ side = "main" }` | a panel in the list's window for a while, the list coming back when it closes; the focus stays where it was |
+| `lulibre.option(ns, { name = { default=, type=, choices=, help= } })` | declare a script's options; returns the namespace to read them from. `lulibre.cfg.NS.NAME` reads or sets one; `require "lulibre.options"`: `declare`, `get`, `set(ns, name, v, "file"|"script"|"session")`, `reset`, `from`, `list`, `namespaces` |
+| `lulibre.config_file` | init.lua as lulibre writes it: `missing()`, `add(items)`, `write_value(item, v)` (nil: back to the default), `line_of(item)` |
+| `lulibre.features` | the programs features need: `find(program)`, `status(f)`, `need(name)` (may offer pixi), `declare{ name=, programs=, used_for=, packages=, pixi= }` |
+| `lulibre.edit_file(path)` | open a file in `$VISUAL`/`$EDITOR` (vim, vi), handing over the terminal; the exit status |
+| `lulibre.require_rock(module [, rock])` | require, offering to install into `rocks_tree` when `rocks_install = "on"` |
 | `lulibre.snapshots` | points in the journal to go back to: `observe()` logs changes made outside lulibre, `take(name)`, `list{all=}`, `find(what)`, `retire(id, on)`, `plan(id, {exact=, unsync=, fields=})`, `describe(plan)`, `rollback(id, opts)`, `summary(out)`, `import(path, name)`, `added(id, from, label)` for a book lulibre has just added; `values(row)` a books row as the journal spells it |
 | `lulibre.calibre_books(path)` | the books of another calibre `metadata.db` (read only), as rows with the columns of the index's `books` |
 | `lulibre.noncatalog` | works no catalogue has a record of: `is(id)`, `set(ids, on)` → `{withdrawn=, removals=}`, `ids()`; `RECORDS`, `KINDS` (what counts as a catalogue's) |

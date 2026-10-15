@@ -83,6 +83,50 @@ the password itself to log in to the server. What protects it is the file's
 permissions, and keeping the file out of anything that is copied or
 committed.
 
+### The configuration window: `gC`
+
+`gC` (or `:config`) lists every option under its heading, lulibre's own and
+each script's under the script's name, with its value, its default and the
+line of init.lua that sets it; where the list is, it shows what the option
+under the cursor does and what it takes.
+
+| Key | |
+|---|---|
+| `Enter` `e` | give it a value: it takes effect now and is written to its line in init.lua (the file is kept as `init.lua.bak` first) |
+| `d` | back to its default: the line is commented out, with the default |
+| `E` | open init.lua in your editor (`$VISUAL`, `$EDITOR`, else vim or vi). lulibre steps aside until you leave it, then reads init.lua again |
+| `a` | put the options init.lua does not mention in it, commented out with their defaults |
+| `c` | what is written above such an option: `full` help, the `values` it takes, or `none` (`config_comments`) |
+| `f` | only the options that differ from their defaults |
+
+The first time it opens in a session it offers to put in the options init.lua
+does not mention yet. `config_add_core` and `config_add_scripts` say what
+happens to such options: `ask` (the offer), `auto` (put in when lulibre
+starts), `never`. An option with no help gets no comment, whatever the style.
+
+### Options of scripts
+
+A script declares its options when it starts, under a name of its own:
+
+```lua
+local opt = lulibre.option("mytags", {
+  depth = { default = 2, type = "number", help = "how many levels of subject to keep" },
+  style = { default = "short", choices = "short|long" },
+})
+if opt.depth > 1 then ... end
+```
+
+and init.lua sets them by that name, before or after the script has run:
+
+```lua
+lulibre.cfg.mytags.depth = 3
+```
+
+What init.lua says wins over what the script itself sets (unless it sets it
+with `force`), and what is changed in the session (the configuration
+window, `:lua`) wins over both until lulibre closes. A value is checked
+against the declared type and choices.
+
 ## Colours
 
 ```lua

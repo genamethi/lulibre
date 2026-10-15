@@ -124,26 +124,64 @@ void doc_page_finish(struct doc_page *pg, int keep_lines) {
   }
 }
 
+/* A character that is no character: U+FFFD (what a font with no map to
+ * Unicode comes out as), the private use area (a font's own glyph numbers),
+ * C0 controls. n: its length in bytes, or 0 when p is something else. */
+static int unreadable(const unsigned char *p, int *n) {
+  if (p[0] == 0xef && p[1] == 0xbf && p[2] == 0xbd) return *n = 3, 1;
+  if (p[0] == 0xee && p[1] >= 0x80 && p[2] >= 0x80) return *n = 3, 1; /* U+E000..U+EFFF */
+  if (p[0] == 0xef && p[1] >= 0x80 && p[1] <= 0xa3 && p[2] >= 0x80) return *n = 3, 1; /* ..U+F8FF */
+  if (p[0] == 0xf3 && p[1] >= 0xb0) return *n = 4, 1; /* planes 15 and 16 */
+  if (p[0] < 0x20 && p[0] != '\n' && p[0] != '\t' && p[0] != '\r' && p[0] != '\f') return *n = 1, 1;
+  return *n = 0, 0;
+}
+
 /* A scanned book's stale OCR layer is mostly one- and two-letter fragments;
- * real prose is mostly longer words. Used to decide when OCR is worth it. */
+ * real prose is mostly longer words. Text a font could not be read from is
+ * full of unreadable characters, which count against it: each per cent of
+ * them takes a tenth off. Used to decide when OCR is worth it. */
 double doc_text_quality(const char *s, long *nchars) {
-  long tokens = 0, good = 0, chars = 0;
+  long tokens = 0, good = 0, chars = 0, bad = 0;
   const unsigned char *p = (const unsigned char *)s;
+  int n;
+  int run = 0; /* unreadable characters in a row: a run of eight or more (dots
+                 leading to a page number, a rule) counts as one */
   while (*p) {
+    if (unreadable(p, &n)) {
+      if (++run < 8) bad++;
+      else if (run == 8) bad -= 6;
+      chars++;
+      p += n;
+      continue;
+    }
+    run = 0;
     if (*p >= 0x80 || isalpha(*p)) {
       long len = 0;
+      int spoilt = 0;
       while (*p && (*p >= 0x80 || isalpha(*p))) {
+        if (unreadable(p, &n)) {
+          spoilt = 1;
+          bad++;
+          len++;
+          p += n;
+          continue;
+        }
         if ((*p & 0xc0) != 0x80) len++; /* count code points, not bytes */
         p++;
       }
       tokens++;
       chars += len;
-      if (len >= 3) good++;
+      if (len >= 3 && !spoilt) good++;
     } else {
       if (isdigit(*p)) chars++;
       p++;
     }
   }
   if (nchars) *nchars = chars;
-  return tokens ? (double)good / (double)tokens : 0.0;
+  double q = tokens ? (double)good / (double)tokens : 0.0;
+  if (chars > 0 && bad > 0) {
+    double keep = 1.0 - 10.0 * (double)bad / (double)chars;
+    q *= keep > 0 ? keep : 0;
+  }
+  return q;
 }
