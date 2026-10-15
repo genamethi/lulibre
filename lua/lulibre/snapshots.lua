@@ -256,6 +256,8 @@ function M.plan(id, opts)
       restored[r.book] = r
     elseif r.field == M.DROPPED then
       dropped[#dropped + 1] = r
+    elseif r.field:sub(1, 1) == "(" then
+      -- a file replaced ("(format)"): not a field; :undo takes it back
     else
       local k = key(r.book, r.field)
       local f = fields[k]

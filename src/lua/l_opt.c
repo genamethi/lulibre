@@ -11,7 +11,8 @@
  *                                       `lulibre config` writes them
  *   lulibre.settings.info(name)         { name=, value=, default=, type=
  *                                       "number" | "string" | "path",
- *                                       choices = { ... } or nil, help= }
+ *                                       choices = { ... } or nil, help=,
+ *                                       group= (the heading it is under) }
  *   lulibre.settings.paths()            where things are: { config_dir=, init=,
  *                                       scripts=, modules=, data_dir=, index=,
  *                                       library= }
@@ -153,6 +154,16 @@ static int s_info_ui(lua_State *L) {
   lua_setfield(L, -2, "type");
   lua_pushstring(L, o->help);
   lua_setfield(L, -2, "help");
+  /* the heading it comes under: the last one given at or before it */
+  size_t n;
+  const struct opt_def *all = config_opts(&n);
+  const char *group = NULL;
+  for (size_t i = 0; i < n && &all[i] <= o; i++)
+    if (all[i].group) group = all[i].group;
+  if (group) {
+    lua_pushstring(L, group);
+    lua_setfield(L, -2, "group");
+  }
   if (o->choices) {
     lua_newtable(L);
     int k = 0;

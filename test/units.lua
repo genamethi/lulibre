@@ -1826,6 +1826,61 @@ do
   eq("an identifier's record, when nothing was kept", (context.record_of { field = "identifiers", value = "doi:10.9/none", source = "page text" }), nil)
 end
 
+-- options of scripts, and init.lua as lulibre writes to it (a temporary configuration directory)
+do
+  local options = require "lulibre.options"
+  local cf = require "lulibre.config_file"
+  local opt = lulibre.option("unitns", { depth = { default = 2, type = "number", help = "how deep" },
+    style = { default = "short", choices = "short|long" } })
+  eq("a script's option has its default", { opt.depth, opt.style }, { 2, "short" })
+  options.set("unitns", "depth", 5, "file")
+  options.set("unitns", "depth", 7, "script")
+  eq("init.lua wins over the script", { opt.depth, options.from("unitns", "depth") }, { 5, "file" })
+  options.set("unitns", "depth", 7, "script", { force = true })
+  eq("unless the script forces it (then it is the session's)", opt.depth, 7)
+  options.reset("unitns", "depth")
+  eq("the session's value can be forgotten", opt.depth, 5)
+  local okset, why = pcall(options.set, "unitns", "style", "medium")
+  eq("values are checked", { okset, (why or ""):find("unitns.style takes one of short | long, not medium", 1, true) ~= nil }, { false, true })
+  eq("numbers are made numbers", (options.check({ type = "number" }, "3")), 3)
+  local init = cf.path()
+  lulibre.system({ "mkdir", "-p", (init:match("^(.*)/[^/]*$")) })
+  local f = assert(io.open(init, "w"))
+  f:write("local o = lulibre.o\no.pages = 6\n")
+  f:close()
+  local missing = cf.missing()
+  eq("what init.lua does not mention", { #missing.core > 10, missing.scripts[1] and missing.scripts[1].ns }, { true, "unitns" })
+  lulibre.settings.set("config_comments", "full")
+  eq("put in, commented out", cf.add { { ns = "unitns", name = "depth" }, { ns = "unitns", name = "style" }, { name = "jobs" } }, 3)
+  local text = cf.read()
+  eq("with its help, or none when it has none", { text:find("-- how deep\n-- lulibre.cfg.unitns.depth = 2", 1, true) ~= nil,
+    text:find("\n\n-- lulibre.cfg.unitns.style = \"short\"", 1, true) ~= nil, text:find("-- o.jobs = 0", 1, true) ~= nil },
+    { true, true, true })
+  cf.write_value({ name = "pages" }, 9)
+  cf.write_value({ ns = "unitns", name = "style" }, "long")
+  text = cf.read()
+  eq("a value set is written to its line", { text:find("\no.pages = 9\n", 1, true) ~= nil,
+    text:find("\nlulibre.cfg.unitns.style = \"long\"\n", 1, true) ~= nil, (cf.line_of({ name = "pages" })) }, { true, true, 2 })
+  cf.write_value({ name = "pages" }, nil)
+  eq("and back to its default, commented out", cf.read():find("\n-- o.pages = 6\n", 1, true) ~= nil, true)
+  lulibre.settings.set("config_comments", "values")
+  cf.add { { name = "mouse" } }
+  eq("values only", cf.read():find("-- (number)\n-- o.mouse = 1", 1, true) ~= nil, true)
+  lulibre.settings.reset("config_comments")
+  os.remove(init)
+  os.remove(init .. ".bak")
+end
+
+-- features: programs found, and how to get the ones that are not
+do
+  local features = require "lulibre.features"
+  features.declare { name = "unitfeat", programs = { "lulibre-no-such-program" }, used_for = "testing", packages = { pacman = "nothing" } }
+  local st = features.status("unitfeat")
+  eq("a missing program", { st.here, st.missing[1] }, { false, "lulibre-no-such-program" })
+  eq("and how to get it", (select(2, features.need("unitfeat")) or ""):find("pacman nothing", 1, true) ~= nil, true)
+  eq("sh is found", features.find("sh") ~= nil, true)
+end
+
 -- snapshots: working out what going back would do (nothing here is written to calibre)
 do
   local snapshots = require "lulibre.snapshots"

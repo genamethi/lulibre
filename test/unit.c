@@ -10,6 +10,7 @@
 #include "core/md5.h"
 #include "core/util.h"
 #include "db/query.h"
+#include "doc/doc.h"
 #include "match/fold.h"
 #include "match/fuzzy.h"
 #include "version.h"
@@ -307,6 +308,21 @@ static void test_log(void) {
   log_to_stderr(1);
 }
 
+/* ---- the quality of a text layer ---- */
+
+static void test_quality(void) {
+  long n = 0;
+  double prose = doc_text_quality("The quick brown fox jumps over the lazy dog, twice.", &n);
+  ok(prose > 0.6, "prose reads as text");
+  double frag = doc_text_quality("T h e q u i c k b r o w n f o x", &n);
+  ok(frag < 0.1, "one-letter fragments do not");
+  /* a font with no map to Unicode: U+FFFD among the words */
+  double fffd = doc_text_quality("The \xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd quick brown fox jumps over the lazy dog", &n);
+  ok(fffd < prose * 0.8, "unreadable characters count against it");
+  double pua = doc_text_quality("\xee\x80\x81\xee\x80\x82\xee\x80\x83\xee\x80\x84 word", &n);
+  ok(pua < 0.1, "a page of private-use glyphs is not text");
+}
+
 int main(void) {
   test_version();
   test_util();
@@ -315,6 +331,7 @@ int main(void) {
   test_config();
   test_query();
   test_log();
+  test_quality();
   printf("C unit tests: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

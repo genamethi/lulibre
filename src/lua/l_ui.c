@@ -48,6 +48,7 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -638,6 +639,35 @@ static int l_clipboard_ui(lua_State *L) {
 }
 ON_UI(l_clipboard)
 
+/* lulibre.edit_file(path): the editor ($VISUAL, $EDITOR, else vim or vi) on
+ * a file, with the terminal handed over until it exits. Returns its exit
+ * status, or nil and why when none could be run. */
+static int l_edit_file_ui(lua_State *L) {
+  struct app *app = lapi_app(L);
+  const char *path = luaL_checkstring(L, 1);
+  int status = -1;
+  if (app->tui && app->tui->nc) {
+    status = tui_edit_file(app->tui, path);
+  } else {
+    /* no interface: the terminal is the editor's anyway */
+    const char *editor = getenv("VISUAL");
+    if (!editor || !*editor) editor = getenv("EDITOR");
+    if (!editor || !*editor) editor = "vi";
+    char *cmd = xasprintf("%s '%s'", editor, path);
+    int rc = system(cmd);
+    free(cmd);
+    status = rc == -1 ? -1 : WEXITSTATUS(rc);
+  }
+  if (status < 0) {
+    lua_pushnil(L);
+    lua_pushstring(L, "no editor: set $EDITOR (vim and vi were not found either)");
+    return 2;
+  }
+  lua_pushinteger(L, status);
+  return 1;
+}
+ON_UI(l_edit_file)
+
 static int l_progress_ui(lua_State *L) {
   struct app *app = lapi_app(L);
   const char *text = lua_isnoneornil(L, 1) ? NULL : luaL_tolstring(L, 1, NULL);
@@ -882,6 +912,23 @@ static void cli_again_ui(void *arg) {
   }
 }
 
+/* lulibre[name](), if the prelude defines it; its errors are reported */
+static void call_hook(lua_State *L, const char *name) {
+  lua_getglobal(L, "lulibre");
+  if (lua_istable(L, -1)) {
+    lua_getfield(L, -1, name);
+    if (lua_isfunction(L, -1)) {
+      if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        lapi_report(lapi_app(L), 1, lua_tostring(L, -1));
+        lua_pop(L, 1);
+      }
+    } else {
+      lua_pop(L, 1);
+    }
+  }
+  lua_pop(L, 1);
+}
+
 static void reload_cfg(struct app *app, void *arg) { /* Lua thread */
   char *path = arg;
   lua_State *L = app->L;
@@ -893,10 +940,12 @@ static void reload_cfg(struct app *app, void *arg) { /* Lua thread */
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) lua_pop(L, 1);
   }
   lua_pop(L, 1);
+  call_hook(L, "_before_init"); /* what init.lua said before is forgotten */
   if (luaL_dofile(L, path) != LUA_OK) {
     lapi_report(app, 1, lua_tostring(L, -1));
     lua_pop(L, 1);
   } else {
+    call_hook(L, "_after_init");
     char *msg = xasprintf("read %s again", path);
     lapi_report(app, 0, msg);
     free(msg);
@@ -1017,7 +1066,7 @@ void l_ui_open(lua_State *L) {
     {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
-    {"status", l_status},
+    {"status", l_status}, {"edit_file", l_edit_file},
     {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
     {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},

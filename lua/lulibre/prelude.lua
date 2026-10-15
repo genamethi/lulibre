@@ -426,3 +426,94 @@ lulibre.command("embed", function()
   if r and r.code == 0 then lulibre.notify(("metadata embedded in %d book%s"):format(#ids, #ids == 1 and "" or "s"))
   else lulibre.notify(r and (r.stderr ~= "" and r.stderr or r.stdout) or err, "error") end
 end, "write calibre's metadata into the selected books' own files (PDF, EPUB)")
+
+-- ---- options of scripts, and the configuration file ----
+
+--- lulibre.option(namespace, { name = { default=, type=, choices=, help= }, ... }):
+-- declare a script's options; returns the namespace to read them from. See
+-- lulibre.options.
+function lulibre.option(ns, defs)
+  return require("lulibre.options").option(ns, defs)
+end
+
+--- lulibre.cfg.<namespace>.<name>: a script's option, read or set (in
+-- init.lua: lulibre.cfg.mytags.depth = 3).
+lulibre.cfg = require("lulibre.options").cfg
+
+-- Modules of a luarocks tree (the option rocks_tree): looked for when a
+-- script requires one that is not found elsewhere.
+local function rocks_paths(tree)
+  local v = _VERSION:match("%d+%.%d+")
+  return ("%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua"):format(tree, v, tree, v), ("%s/lib/lua/%s/?.so"):format(tree, v)
+end
+table.insert(package.searchers, function(name)
+  local tree = lulibre.o.rocks_tree or ""
+  if tree == "" then return nil end
+  local lpath, cpath = rocks_paths(tree)
+  local file = package.searchpath(name, lpath)
+  if file then return loadfile(file), file end
+  file = package.searchpath(name, cpath)
+  if file then
+    local sym = "luaopen_" .. name:gsub("%.", "_")
+    local f, err = package.loadlib(file, sym)
+    if not f then return err end
+    return f, file
+  end
+  return ("\n\tno module '%s' in the luarocks tree %s"):format(name, tree)
+end)
+
+--- require a module, offering (when the option rocks_install is on, and
+-- someone can be asked) to install the rock that has it into rocks_tree.
+-- rock: the rock's name when it is not the module's.
+function lulibre.require_rock(module, rock)
+  local ok, m = pcall(require, module)
+  if ok then return m end
+  local tree = lulibre.o.rocks_tree or ""
+  if lulibre.o.rocks_install ~= "on" or tree == "" then
+    error(("the Lua module %s is not installed (luarocks install %s%s)"):format(module, rock or module,
+      tree ~= "" and (" --tree " .. tree) or ""), 2)
+  end
+  if lulibre.headless or not lulibre.task_id() or
+      not lulibre.confirm(("install the rock %s into %s? luarocks fetches it from luarocks.org"):format(rock or module, tree)) then
+    error(("the Lua module %s is not installed"):format(module), 2)
+  end
+  lulibre.progress("luarocks: " .. (rock or module))
+  local r, err = lulibre.system({ "luarocks", "--lua-version", _VERSION:match("%d+%.%d+"), "--tree", tree, "install", rock or module },
+    { timeout = 900000 })
+  lulibre.progress(nil)
+  if not r or r.code ~= 0 then error("luarocks could not install " .. (rock or module) .. ": " .. tostring(err or (r and r.stderr)), 2) end
+  return require(module)
+end
+
+-- around init.lua (read at start, and again by :reload-cfg)
+function lulibre._before_init()
+  require("lulibre.options").forget_file()
+end
+function lulibre._after_init()
+  -- options nobody has put in init.lua yet go in on their own when the options say "auto"
+  local add_core, add_scripts = lulibre.o.config_add_core == "auto", lulibre.o.config_add_scripts == "auto"
+  if (add_core or add_scripts) and lulibre.settings.paths().init then
+    local cf = require "lulibre.config_file"
+    local ok, missing = pcall(cf.missing)
+    if ok then
+      local items = {}
+      if add_core then for _, n in ipairs(missing.core) do items[#items + 1] = { name = n } end end
+      if add_scripts then for _, it in ipairs(missing.scripts) do items[#items + 1] = it end end
+      if #items > 0 then pcall(cf.add, items) end
+    end
+  end
+end
+
+lulibre.command("config", function() require("lulibre.ui.config").run() end,
+  "the configuration window: every option, its value and what it does; E edits init.lua itself")
+lulibre.command("features", function()
+  local features = require "lulibre.features"
+  local out = {}
+  for _, f in ipairs(features.list) do
+    local st = features.status(f)
+    out[#out + 1] = ("%-10s %-9s %-4s %s"):format(f.name, st.here and "installed" or "missing", st.enabled and "on" or "off",
+      f.used_for)
+    if not st.here then out[#out + 1] = "             " .. features.how(f) end
+  end
+  lulibre.show(out, "features and the programs they need")
+end, "the features that need programs of their own (poppler, tesseract, ocrmypdf): installed or not, on or off")

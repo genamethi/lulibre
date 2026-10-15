@@ -14,6 +14,9 @@ struct config {
   char *ocr;           /* never | auto | always */
   int ocr_pages;       /* pages per file the OCR pass reads */
   char *ocr_lang;      /* tesseract language(s), e.g. eng or eng+fra */
+  char *ocr_write;     /* off | replace | keep: give the PDF itself the text OCR read (ocrmypdf) */
+  char *ocr_originals; /* where the PDFs OCR wrote over are kept (keep); outside the library */
+  char *text_fallback; /* off | auto: read garbled pages again with poppler's pdftotext */
   int write_jobs;      /* calibredb processes at once when writing */
   char *blitter;       /* image preview: auto | pixel | sextant | quadrant | half */
   char *preview;       /* what the preview shows first: text | image */
@@ -49,6 +52,12 @@ struct config {
   char *orphans_dir;    /* where stray files are set aside; empty = XDG data dir */
   char *write_via;      /* auto | server | direct: how changes reach calibre */
   char *log_file;       /* every log entry is also appended here; empty = no file */
+  char *pixi_deps;      /* off | on: programs features need may come from lulibre's own pixi environment */
+  char *rocks_tree;     /* a luarocks tree whose modules scripts may require */
+  char *rocks_install;  /* off | on: lulibre may install a rock a script needs into that tree (asking) */
+  char *config_add_core;    /* auto | ask | never: put options missing from init.lua in it */
+  char *config_add_scripts; /* auto | ask | never: the same for options scripts declare */
+  char *config_comments;    /* full | values | none: what is written above an option put in init.lua */
   char *config_dir;     /* where init.lua, scripts/ and lua/ are; empty = the XDG default */
 };
 

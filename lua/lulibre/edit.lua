@@ -616,6 +616,24 @@ function M.undo(batch)
         lost[#lost + 1] = { id = row.book, error = why }
       end
       goto next_row
+    elseif row.field == "(format)" then
+      -- a PDF replaced (by OCR): the original goes back, if it was kept
+      if row.old and row.old ~= "" then
+        local cmd = M.calibredb()
+        cmd[#cmd + 1] = "add_format"
+        cmd[#cmd + 1] = tostring(row.book)
+        cmd[#cmd + 1] = row.old
+        local r, e = lulibre.system(cmd, { timeout = 600000 })
+        if r and r.code == 0 then
+          restored[#restored + 1] = row.book
+          lulibre.store("UPDATE journal SET undone = 1 WHERE id = ?", row.id)
+        else
+          lost[#lost + 1] = { id = row.book, error = failure(r, e) }
+        end
+      else
+        lost[#lost + 1] = { id = row.book, error = "the PDF it replaced was not kept (ocr_write = \"replace\")" }
+      end
+      goto next_row
     elseif row.field == "(dropped)" then
       -- a file dropped from the sync folder goes back, with its staged metadata
       local back, why = require("lulibre.sync").undrop(require("lulibre.json").decode(row.old))
@@ -640,7 +658,7 @@ function M.undo(batch)
   if staged_back then lulibre.stage_refresh() end
   if #restored + #lost > 0 then lulibre.reload() end
   local r = M.apply(changes, { label = "undo of " .. batch })
-  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field NOT IN (?, '(dropped)')", batch, REMOVED)
+  lulibre.store("UPDATE journal SET undone = 1 WHERE batch = ? AND field NOT IN (?, '(dropped)', '(format)')", batch, REMOVED)
   r.skipped, r.undid, r.restored = skipped, batch, restored
   r.applied = r.applied + #restored
   for _, l in ipairs(lost) do table.insert(r.failed, l) end

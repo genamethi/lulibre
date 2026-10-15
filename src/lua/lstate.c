@@ -192,6 +192,20 @@ int lstate_run_init(struct app *app) {
     lua_pop(app->L, 1);
     rc = -1;
   }
+  /* what the prelude does once init.lua has had its say (lulibre._after_init) */
+  lua_getglobal(app->L, "lulibre");
+  if (lua_istable(app->L, -1)) {
+    lua_getfield(app->L, -1, "_after_init");
+    if (lua_isfunction(app->L, -1)) {
+      if (lua_pcall(app->L, 0, 0, 0) != LUA_OK) {
+        warnf("%s", lua_tostring(app->L, -1));
+        lua_pop(app->L, 1);
+      }
+    } else {
+      lua_pop(app->L, 1);
+    }
+  }
+  lua_pop(app->L, 1);
   free(init);
   free(dir);
   return rc;
