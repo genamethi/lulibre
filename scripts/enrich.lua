@@ -248,6 +248,8 @@ local TRUST = { arxiv = 0.95, crossref = 0.95, openlibrary = 0.9, zbmath = 0.85,
 -- a page, or from an earlier mistake): net.fits says how it is judged.
 -- Returns whether it fits, and when it does not, whether title and authors
 -- both speak against it.
+local verify = require "lulibre.verify"
+
 local function fits(b, kind, rec)
   if b.in_file[kind == "isbn-record" and "isbn" or kind] then
     if not rec.title or #b.titles == 0 then return true end
@@ -282,6 +284,15 @@ for n, b in ipairs(books) do
         ok, plain, how = fits(b, kind, rec)
         fitting[kind] = ok and (how or true)
       end
+      -- the file decides (lulibre.verify): a record whose title and people
+      -- are both missing from the book's own pages is another work's, and
+      -- one found by searching for a title must have its title there
+      local judged = verify.record(b.ev, rec)
+      rec.judged = judged
+      if ok and judged.another then ok, plain = false, true end
+      if ok and kind == "title" and not judged.unread and judged.title ~= "shown" then ok, plain = false, false end
+      -- a record of the whole the file is a part of (a handbook, for one of its chapters)
+      if ok and judged.part then rec.part_of = judged.size_why end
       -- known for the book's by its people alone: its title may be another work's, or the whole this is a part of
       if fitting[kind] == "people" then rec.by_people = true end
       if not ok then
@@ -308,6 +319,7 @@ for n, b in ipairs(books) do
     end
     return rec
   end
+  b.ev = verify.evidence(b.id)
   local k = b.known
   local ax = k.arxiv and ask("arxiv", "arxiv", net.arxiv, k.arxiv)
   local doi, doi_kind = k.doi, "doi"
@@ -362,12 +374,36 @@ for n, b in ipairs(books) do
       local has_title = b.book.title and not propose.is_gap("title", b.book.title, b.id)
       local short = r.title and has_title and net.shorter_title(b.book.title, r.title)
       local elsewhere = has_title and r.by_people
-      offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
-        or elsewhere and r.source .. " (another title, the same people: the whole this is part of?)" or r.source,
-        math.min(r.title_tex and 0.75 or trust, short and 0.6 or 1, elsewhere and 0.5 or 1))
-      if #r.authors > 0 then
+      -- what the book's own pages say of the record's title and people
+      local judged = r.judged or {}
+      if judged.unread then
+        -- nothing could be checked: what the record says is offered, but less sure
+        -- (by a step, so the sources keep their order)
+        trust = trust - 0.2
+      end
+      local function skip(field, why)
+        local line = ("book %d: %s's %s is not offered: %s"):format(b.id, r.source or r.service, field, why)
+        if lulibre.headless then print("  " .. line) else lulibre.log("enrich: " .. line) end
+      end
+      if r.part_of then
+        -- the record is of the whole: its title, people and numbers are not the file's
+        skip("title, authors and identifiers", "the record is of the whole this file is a part of (" .. r.part_of .. ")")
+      elseif r.title and judged.title == "absent" then
+        skip("title", "its words are not on the book's opening pages")
+      else
+        local partly = judged.title == "partly"
+        offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
+          or elsewhere and r.source .. " (another title, the same people: the whole this is part of?)"
+          or partly and r.source .. " (not all its words are on the book's pages)"
+          or judged.unread and r.source .. " (the file could not be read to check it)" or r.source,
+          math.min(r.title_tex and 0.75 or trust, short and 0.6 or 1, elsewhere and 0.5 or 1, partly and 0.6 or 1))
+      end
+      if #r.authors > 0 and not r.part_of and judged.authors == "absent" then
+        skip("authors", "none of them is named on the book's opening pages")
+      elseif #r.authors > 0 and not r.part_of then
         local authors, source, sure = r.authors, r.source, trust
-        if net.other_people(b:people(), r.authors) then source, sure = source .. " (none of the names the book has)", math.min(sure, 0.6)
+        if judged.authors == "partly" then source, sure = source .. " (not all named on the book's pages)", math.min(sure, 0.6)
+        elseif net.other_people(b:people(), r.authors) then source, sure = source .. " (none of the names the book has)", math.min(sure, 0.6)
         elseif net.fewer_people(b:people(), r.authors) then source, sure = source .. " (fewer names than the book has)", math.min(sure, 0.6) end
         if r.authors_unordered then
           -- a file of arXiv's that does not say who comes first: the paper's own first page does
@@ -395,7 +431,9 @@ for n, b in ipairs(books) do
       offer("series", r.series, r.source, math.min(0.85, trust))
       offer("series_index", r.series_index, r.source, math.min(0.85, trust))
       for _, s in ipairs(r.subjects) do offer("tags", s.tag, ("%s (%s)"):format(r.source, s.why), s.confidence) end
-      for kind, value in pairs(r.ids) do offer("identifiers", kind .. ":" .. value, r.source, math.min(0.95, r.trust or 1)) end
+      if not r.part_of then
+        for kind, value in pairs(r.ids) do offer("identifiers", kind .. ":" .. value, r.source, math.min(0.95, r.trust or 1, trust)) end
+      end
     end
     table.sort(cands, function(x, y)
       if x.field ~= y.field then return x.field < y.field end

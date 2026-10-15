@@ -210,6 +210,8 @@ local function script(name)
   return function(args) lulibre.exec("run " .. name .. (args ~= "" and " " .. args or "")) end
 end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
+lulibre.command("verify", script("verify"),
+  "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
 lulibre.command("snapshot", script("snapshot"),
   "[NAME] | list | plan SNAP | rollback SNAP [--exact --unsync --fields] | retire SNAP | import FILE  points the library can be put back to")
 lulibre.command("snapshots", function(args) lulibre.exec("run snapshot list" .. (args ~= "" and " " .. args or "")) end,

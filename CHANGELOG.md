@@ -5,6 +5,28 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: the file decides. Every record `:enrich` finds is held against the
+  book's own pages (`lulibre.verify`): one whose title and people are both
+  missing there is another work's and left out; one of a work the file is
+  only part of (a 40-page chapter, a 404-page edition) gives no title,
+  authors or identifiers; a title the pages do not show is not offered;
+  one shown in part, or people named in part, are offered at 0.6. A title
+  search's record must have its title on the pages. Where the file could
+  not be read, records are offered 0.2 lower.
+- New: `:verify [filter]` holds the library against its files and changes
+  nothing; `:run recheck` goes back over what lulibre wrote and, with the
+  file deciding, puts back titles and authors a record replaced, takes off
+  identifiers of cited or other works (`--propose` for review, `--apply`
+  after a snapshot). Typed values are never touched.
+- New: identifiers from a file's own metadata (a PDF's XMP and Info, an
+  EPUB's package) are offered as its own (0.9); `lulibre.doc_metadata`.
+- New: CrossRef's subtitle is kept ("MATLAB Deep Learning: With Machine
+  Learning, ..."), and its page range and Open Library's page count are
+  read, to tell a chapter from its book. (Records already kept have no
+  subtitle; they get one when asked again.)
+- Fixed: a DOI with parentheses in it (Elsevier's
+  "10.1016/S1570-7954(96)80014-3") was cut at the first one.
+
 - New: snapshots. `:snapshot NAME` marks a point in the journal of
   changes, and `:rollback SNAP` puts the library back to it: what lulibre
   changed since goes back, changes made outside lulibre stay (unless
