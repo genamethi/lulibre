@@ -1881,6 +1881,9 @@ do
   eq("sh is found", features.find("sh") ~= nil, true)
 end
 
+eq("a file name's stem after a dash is no title", { require("lulibre.junk").unlikely_title("titile -equivnorms"),
+  require("lulibre.junk").unlikely_title("Title Deeds and Land") }, { true, false })
+
 -- roman numerals a catalogue put in title case
 do
   local tc = require "lulibre.titlecase"
