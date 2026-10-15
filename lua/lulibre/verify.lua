@@ -32,6 +32,9 @@ local M = {}
 M.FRONT = 6
 -- a share of words at or above this is "shown"; at or above PARTLY, "partly"
 M.SHOWN, M.PARTLY = 0.8, 0.5
+-- a text with more unreadable characters than this is garbled (mathematics
+-- set in fonts with symbols in the private-use area comes to 2-3 per cent)
+M.GARBLED = 0.04
 -- a file this much shorter than the edition a record describes is a part of it
 M.PART = 0.4
 
@@ -111,7 +114,7 @@ function M.evidence(id)
       all[#all + 1] = r.text
     end
     local text = table.concat(opening, "\n")
-    if garbled(text) > 0.02 then why = "the file's text is garbled (unreadable characters)"
+    if garbled(text) > M.GARBLED then why = "the file's text is garbled (unreadable characters)"
     else
       local refs = {}
       for _, r in ipairs(lulibre.sql("SELECT raw FROM refs WHERE book = ?", id)) do refs[#refs + 1] = r.raw or "" end

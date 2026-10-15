@@ -113,7 +113,8 @@ static void store(struct indexer *ix, struct job *j) {
   sqlite3_bind_double(u, 9, d->quality);
   bind_text(u, 10, d->error ? NULL : "emb");
   for (int k = 0; k < DOC_META_N; k++) bind_text(u, 11 + k, d->meta[k]);
-  sqlite3_bind_int64(u, 11 + DOC_META_N, j->file);
+  sqlite3_bind_double(u, 11 + DOC_META_N, d->garbled);
+  sqlite3_bind_int64(u, 12 + DOC_META_N, j->file);
   run(u);
 
   ix->st.chars += d->nchars;
@@ -282,7 +283,7 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
                  "UPDATE files SET size = ?, mtime = ?, status = ?, error = ?, npages = ?,"
                  " req_pages = ?, req_layout = ?, nchars = ?, quality = ?, text_src = ?,"
                  " emb_title = ?, emb_author = ?, emb_subject = ?, emb_keywords = ?,"
-                 " emb_creator = ?, emb_producer = ?, indexed_at = strftime('%s', 'now')"
+                 " emb_creator = ?, emb_producer = ?, garbled = ?, indexed_at = strftime('%s', 'now')"
                  " WHERE id = ?",
                  &ix->upd_file, err) ||
       plan(ix, err)) {

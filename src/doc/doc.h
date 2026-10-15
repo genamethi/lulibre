@@ -38,6 +38,7 @@ struct doc_info {
   int n;
   long nchars;    /* letters and digits across the extracted pages */
   double quality; /* share of word tokens that look like words, 0..1 */
+  double garbled; /* share of characters that are no characters (U+FFFD, private use), 0..1 */
   char *error;    /* set when the file could not be read at all */
 };
 
@@ -68,7 +69,7 @@ void doc_image_free(struct doc_image *img);
 void doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags, float x0,
                        float y0, float x1, float y1); /* takes ownership of text */
 void doc_page_finish(struct doc_page *pg, int keep_lines);
-double doc_text_quality(const char *s, long *nchars);
+double doc_text_quality(const char *s, long *nchars, double *garbled);
 
 /* A PDF's XMP packet and Info dictionary ("Key: value" lines), or an EPUB's
  * package document, as text (malloc'd; "" when there is none). NULL and
