@@ -1063,9 +1063,11 @@ journal, and `u` puts a kept original back.
 **Garbled text.** Some PDFs set their text in fonts that say nothing of which
 letter each glyph is: what comes out is `�` (U+FFFD), private-use
 characters, or letters moved along ("zkdw dvvxpswlrqv" for "what
-assumptions"). Such text now counts against a file's quality, so
-`is:needsocr` finds it (a long run of them, such as the dots leading to a
-page number in a table of contents, counts once). `:run reread [filter]`
+assumptions"). Each file keeps the share of such characters (a long run of
+them, such as the dots leading to a page number in a table of contents,
+counts once), and `is:needsocr` takes a file with more than 4% of them, or
+with almost no text. (Mathematics set in fonts with its symbols in the
+private-use area comes to 2 or 3%, and is left alone.) `:run reread [filter]`
 reads those pages again:
 
 1. with poppler's `pdftotext`, a reader of its own that maps many such fonts

@@ -70,7 +70,10 @@ static const struct { const char *name, *sql; } is_tests[] = {
   {"missing", "(NOT " ANY_FILE("1") " OR " ANY_FILE("f.status = 3") ")"},
   /* thresholds measured on a maths-heavy library, where sound text scores
    * 0.5-0.8 because formulas are full of one-letter tokens */
-  {"needsocr", ANY_FILE("f.status = 1 AND (f.nchars < 200 OR f.quality < 0.4)")},
+  /* little text, or more than a few characters no font could map (a word's
+   * share alone is no sign: mathematics has few long words; and its symbols
+   * in private-use characters come to two or three per cent) */
+  {"needsocr", ANY_FILE("f.status = 1 AND (f.nchars < 200 OR coalesce(f.garbled, 0) > 0.04 OR f.quality < 0.2)")},
   {"multiformat", "(SELECT count(*) FROM files f WHERE f.book = b.id) > 1"},
   {"marked", "b.id IN (SELECT id FROM marks)"},
   {"ocr", ANY_FILE("f.text_src = 'ocr'")},

@@ -5,6 +5,13 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Changed: each file's text keeps a garbled share (characters no font
+  could map; a run of them once), and `is:needsocr` goes by it: little
+  text, more than 4% unreadable, or almost no words (quality below 0.2).
+  A word's share alone is no sign: mathematics has few long words, and
+  Keith Conrad's handouts were being taken for scans. `:run reread`
+  measures every file again (`lulibre.text_measure`).
+
 - Fixed: roman numerals a catalogue had put in title case ("Lectures in
   Abstract Algebra: Ii. Linear Algebra", from Open Library) are put back in
   capitals in the records' titles.

@@ -182,6 +182,32 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
   return rc;
 }
 
+/* Columns added to the index since it was made: added, empty, to one made
+ * before (the index is derived data, but rebuilding it would cost the text
+ * of every file). */
+static int add_columns(struct db *db, char **err) {
+  static const struct { const char *table, *column, *decl; } cols[] = {
+    {"files", "garbled", "REAL"},
+  };
+  for (size_t i = 0; i < ARRAY_LEN(cols); i++) {
+    char *q = xasprintf("SELECT 1 FROM pragma_table_info('%s') WHERE name = '%s'", cols[i].table, cols[i].column);
+    sqlite3_stmt *st;
+    int have = 0;
+    if (sqlite3_prepare_v2(db->h, q, -1, &st, NULL) == SQLITE_OK) {
+      have = sqlite3_step(st) == SQLITE_ROW;
+      sqlite3_finalize(st);
+    }
+    free(q);
+    if (!have) {
+      char *alter = xasprintf("ALTER TABLE %s ADD COLUMN %s %s", cols[i].table, cols[i].column, cols[i].decl);
+      int rc = db_exec(db, alter, err);
+      free(alter);
+      if (rc) return rc;
+    }
+  }
+  return 0;
+}
+
 /* An index from before the history had a journal of its own: its rows move
  * to the history (once, and only into an empty one), and it goes. */
 static int move_journal(struct db *db, char **err) {
@@ -220,7 +246,7 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;"
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
-      reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
+      reset_if_stale(db, err) || db_exec(db, db_schema, err) || add_columns(db, err) || attach_history(db, 1, err) ||
       db_exec(db, history_schema, err) || move_journal(db, err) || attach_custom(db, "rwc", err) ||
       db_exec(db, custom_schema, err) || db_register_functions(db, err)) {
     db_close(db);

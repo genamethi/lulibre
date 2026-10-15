@@ -72,7 +72,7 @@ void doc_extract(const char *path, const char *format, const struct doc_opts *o,
     sb_puts(&all, out->pages[i].text ? out->pages[i].text : "");
     sb_putc(&all, '\n');
   }
-  out->quality = doc_text_quality(all.s ? all.s : "", &out->nchars);
+  out->quality = doc_text_quality(all.s ? all.s : "", &out->nchars, &out->garbled);
   sb_free(&all);
 }
 
@@ -137,15 +137,18 @@ static int unreadable(const unsigned char *p, int *n) {
 }
 
 /* A scanned book's stale OCR layer is mostly one- and two-letter fragments;
- * real prose is mostly longer words. Text a font could not be read from is
- * full of unreadable characters, which count against it: each per cent of
- * them takes a tenth off. Used to decide when OCR is worth it. */
-double doc_text_quality(const char *s, long *nchars) {
+ * real prose is mostly longer words: the quality is the share of word tokens
+ * that look like words (a word with an unreadable character in it does not).
+ * *garbled is the share of characters that are no characters, a font that
+ * could not be read (a run of eight or more, such as the dots leading to a
+ * page number in a table of contents, counts once). Mathematics has few long
+ * words and a fair quality; a page a font made unreadable has a garbled
+ * share. Both decide when OCR is worth it (is:needsocr). */
+double doc_text_quality(const char *s, long *nchars, double *garbled) {
   long tokens = 0, good = 0, chars = 0, bad = 0;
   const unsigned char *p = (const unsigned char *)s;
   int n;
-  int run = 0; /* unreadable characters in a row: a run of eight or more (dots
-                 leading to a page number, a rule) counts as one */
+  int run = 0; /* unreadable characters in a row */
   while (*p) {
     if (unreadable(p, &n)) {
       if (++run < 8) bad++;
@@ -178,10 +181,6 @@ double doc_text_quality(const char *s, long *nchars) {
     }
   }
   if (nchars) *nchars = chars;
-  double q = tokens ? (double)good / (double)tokens : 0.0;
-  if (chars > 0 && bad > 0) {
-    double keep = 1.0 - 10.0 * (double)bad / (double)chars;
-    q *= keep > 0 ? keep : 0;
-  }
-  return q;
+  if (garbled) *garbled = chars > 0 ? (double)bad / (double)chars : 0.0;
+  return tokens ? (double)good / (double)tokens : 0.0;
 }
