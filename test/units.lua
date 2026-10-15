@@ -20,7 +20,17 @@ local function eq(what, got, want)
 end
 
 -- identifiers
-eq("doi", ids.doi("see https://doi.org/10.1016/S1570-7954(07)05013-9."), "10.1016/S1570-7954(07")
+eq("doi", ids.doi("see https://doi.org/10.1016/S1570-7954(07)05013-9."), "10.1016/S1570-7954(07)05013-9")
+eq("doi in brackets", ids.doi("(see doi:10.1000/xyz)"), "10.1000/xyz")
+eq("identifiers in a file's metadata", ids.from_metadata([[<x:xmpmeta><prism:doi>10.1016/S1570-7954(96)80014-3</prism:doi>
+<dc:identifier><rdf:Bag><rdf:li>urn:isbn:978-0-387-90244-9</rdf:li></rdf:Bag></dc:identifier></x:xmpmeta>
+Subject: Journal of Things, doi:10.1000/abc
+doi: 10.48550/arXiv.2504.14413
+]]), { { kind = "doi", value = "10.1016/S1570-7954(96)80014-3", where = "XMP" },
+  { kind = "isbn", value = "9780387902449", where = "XMP" }, { kind = "doi", value = "10.1000/abc", where = "PDF info" },
+  { kind = "arxiv", value = "2504.14413", where = "PDF info" } })
+eq("an EPUB's package", ids.from_metadata([[<package><metadata><dc:identifier opf:scheme="ISBN">0446675784</dc:identifier></metadata></package>]]),
+  { { kind = "isbn", value = "9780446675789", where = "EPUB package" } })
 eq("doi plain", ids.doi("DOI 10.1007/978-3-540-06140-1, more"), "10.1007/978-3-540-06140-1")
 eq("isbn13 bad check digit", ids.isbn("ISBN 978-0-387-90244-0 (hardcover)"), nil)
 eq("isbn13 ok", ids.isbn("ISBN 978-3-16-148410-0"), "9783161484100")
@@ -1783,6 +1793,24 @@ do
   eq("taking the mark back withdraws that again", { nc.is(id), back.withdrawn, lulibre.count("is:noncatalog"), offered(id) },
     { false, expect, 0, "doi,isbn" })
   lulibre.store("DELETE FROM proposals")
+end
+
+-- the file decides (lulibre.verify)
+do
+  local verify = require "lulibre.verify"
+  local ev = { words = verify.words("Lectures on the Theory of Numbers\nby SAUNDERS MacLANE and Ali H. Chamseddine1,3 and Sepp¨al¨ainen†"),
+    text = "", all = "", refs = "", pages = 30 }
+  eq("a title on the pages", { verify.title(ev, "Theory of Numbers: Lectures") }, { "shown", 1.0 })
+  eq("a title not there", (verify.title(ev, "Modal Predicate Logic")), "absent")
+  eq("names, with figures and daggers beside them and TeX's accents", { verify.authors(ev, { "Ali H. Chamseddine", "Timo Seppäläinen", "Nobody Else" }) },
+    { "partly", 2, 3 })
+  eq("Mac Lane is MacLane", (verify.authors(ev, "Saunders Mac Lane")), "shown")
+  eq("a file much shorter than the edition is a part of it", { verify.size(ev, { pages = 404 }) },
+    { "part", "30 pages, where the record's is 404" })
+  eq("about as long", (verify.size(ev, { pages = 32 })), "whole")
+  eq("another work's record", verify.record(ev, { title = "Modal Predicate Logic", authors = { "Gary Hardegree" } }).another, true)
+  eq("a record of the whole", verify.record(ev, { title = "Lectures on the Theory of Numbers", authors = {}, pages = 400 }).part, true)
+  eq("nothing known of a file that was not read", verify.record(nil, { title = "x" }).unread, true)
 end
 
 -- snapshots: working out what going back would do (nothing here is written to calibre)

@@ -675,6 +675,12 @@ local function crossref_record(m)
   local year = issued and issued[1]
   local rec = {
     title = m.title and m.title[1] and unescape(m.title[1]:gsub("%s+", " ")) or nil,
+    -- an article's page range, as a length: held against the file's (lulibre.verify)
+    pages = type(m.page) == "string" and (function()
+      local a, b = m.page:match("^%s*(%d+)%s*[-–]%s*(%d+)")
+      a, b = tonumber(a), tonumber(b)
+      return a and b and b >= a and b - a + 1 or nil
+    end)() or nil,
     authors = authors, year = year, type = m.type, subjects = {},
     ids = { doi = m.DOI, isbn = m.ISBN and m.ISBN[1] and m.ISBN[1]:gsub("[^%dXx]", "") or nil },
     container = m["container-title"] and m["container-title"][1] and unescape(m["container-title"][1]:gsub("%s+", " ")) or nil,
@@ -685,6 +691,11 @@ local function crossref_record(m)
     doi = m.DOI, isbn = m.ISBN and m.ISBN[1],
   }
   if issued and issued[2] and issued[3] then rec.date = ("%04d-%02d-%02d"):format(issued[1], issued[2], issued[3]) end
+  -- CrossRef keeps a subtitle apart from the title: "MATLAB Deep Learning" / "With Machine Learning, ..."
+  local sub = type(m.subtitle) == "table" and type(m.subtitle[1]) == "string" and unescape(m.subtitle[1]:gsub("%s+", " "))
+  if rec.title and sub and sub ~= "" and not lulibre.fold(rec.title):find(lulibre.fold(sub), 1, true) then
+    rec.title = rec.title .. ": " .. sub
+  end
   return rec
 end
 
@@ -720,7 +731,7 @@ function M.crossref_prefetch(dois)
   return in_batches("crossref", keys, M.CROSSREF_BATCH, function(chunk)
     local list = {}
     for i, doi in ipairs(chunk) do list[i] = "doi:" .. encode(doi) end
-    return ("https://api.crossref.org/works?filter=%s&rows=%d&select=DOI,type,title,author,issued,publisher,ISBN,container-title%s"):format(
+    return ("https://api.crossref.org/works?filter=%s&rows=%d&select=DOI,type,title,subtitle,author,issued,publisher,ISBN,container-title,page%s"):format(
       table.concat(list, ","), #chunk, mailto("&"))
   end, function(_, body)
     local ok, data = pcall(json.decode, body)
@@ -1063,7 +1074,8 @@ function M.openlibrary(isbn)
     M.keep("openlibrary", isbn, 404)
     return nil, "Open Library has no record of ISBN " .. isbn
   end
-  local rec = { authors = {}, subjects = {}, ids = { isbn = isbn }, type = "book", source = "Open Library " .. isbn }
+  local rec = { authors = {}, subjects = {}, ids = { isbn = isbn }, type = "book", source = "Open Library " .. isbn,
+    pages = tonumber(b.number_of_pages) }
   local title = type(b.title) == "string" and trim(b.title) or nil
   if title then
     -- "Algebraic Geometry (Graduate Texts in Mathematics)": the bracket is the series
@@ -1228,7 +1240,7 @@ function M.openlibrary_dump(isbns)
     end
     local record = {
       title = (type(e.title_prefix) == "string" and e.title_prefix or "") .. e.title, subtitle = e.subtitle, publish_date = e.publish_date,
-      classifications = { lc_classifications = e.lc_classifications, dewey_decimal_class = e.dewey_decimal_class }, series = e.series, key = e.key,
+      classifications = { lc_classifications = e.lc_classifications, dewey_decimal_class = e.dewey_decimal_class }, series = e.series, key = e.key, number_of_pages = e.number_of_pages,
     }
     -- (a list with nothing in it is left out: written out it would read as a table of fields)
     if #authors > 0 then record.authors = authors end

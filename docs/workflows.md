@@ -581,6 +581,67 @@ withdraws what still waits from them and proposes putting back what the
 books said before, as a run of its own in review ("wrong title matches").
 It asks no service anything: the answers were kept.
 
+#### The file decides
+
+A record is somebody's word that the file is a certain work; the file is
+the one witness that cannot be about another work. So before anything is
+offered, the record is also held against the book's own pages
+(`lulibre.verify`):
+
+| The book's pages | |
+|---|---|
+| show neither the record's title nor any of its people | the record is another work's: left out, as above |
+| are much shorter than the edition the record describes (a 40-page file, a 404-page book), or the record is of a whole book and the pages do not show its title | the file is a **part** of that work (a chapter of a handbook): the record's title, people and identifiers are the whole's and are not offered; its publisher and year are |
+| do not show the record's title | its title is not offered |
+| show only some of its words, or name only some of its people | that value is offered at 0.6 or less |
+| could not be read (no text, a scan, garbled characters) | everything is offered 0.2 lower: nothing could be checked |
+
+A title found by searching for it must stand on the pages, or the record
+is not taken. Words are compared folded (case and accents gone), with what
+TeX leaves beside a letter ("Universit´e") joined up, and figures and
+daggers beside a name ("Chamseddine1,3", "Joyner†") apart from it.
+
+A file's own metadata counts too. Publishers put a work's DOI in the PDF's
+XMP packet (`prism:doi`, `dc:identifier`), some in its Info dictionary; an
+EPUB names its ISBN in its package. Those are offered (0.9) as the file's
+own, ahead of a DOI read off the pages, which may be a cited work's. An
+arXiv DOI (`10.48550/arXiv....`) is taken as the arXiv number.
+
+### Checking the library against its files: `:verify` and `:run recheck`
+
+`:verify [filter]` holds every book against its own file and changes
+nothing: whether the opening pages show its title, name its authors, and
+where each DOI, ISBN and arXiv number it holds stands (named in the file's
+metadata, on the opening pages, further in, only in its reference list, or
+nowhere). `--list title|authors|ids|unread` names every book of one kind.
+
+`:run recheck` goes back over what lulibre has written, with the file
+deciding:
+
+- a title a catalogue's record put there goes back to what the book had
+  before, when the pages read that one better (more of it, in order); for
+  a title from anywhere else, only when the old one stands in the largest
+  type of the first pages and the new one hardly stands there at all. A
+  name run on to the old title ("Noncommutative Geometry Alain") is taken
+  off; junk and headings any file may have ("Front Matter") are never put
+  back;
+- authors go back when the pages name none of those there now and some of
+  those before;
+- a DOI, ISBN or arXiv number it added comes off when it stands only in
+  the reference list, or its record is plainly another work's; one it took
+  off that the file's own metadata names goes back on.
+
+Values you typed are left alone, and so are changes made outside lulibre
+and books whose file could not be read.
+
+    :run recheck [--list] [filter]   say what would change
+    :run recheck --propose           put it in review, as a run
+    :run recheck --apply             change it now, after taking a snapshot
+    :run recheck --since SNAP        only what was written after a snapshot
+
+`--apply` also withdraws what still waits from `:run unmatch --fix`: this
+settles the same books, with the file to go by.
+
 ### Works no catalogue has: `:noncatalog`
 
 A handout, the notes of a course, a chapter of the Stacks project, a page
