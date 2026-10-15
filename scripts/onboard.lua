@@ -166,6 +166,7 @@ local function add_all()
     local r, err = lulibre.system(args, { timeout = 300000 })
     local out = r and (r.stdout .. r.stderr) or ""
     local new_id = r and r.code == 0 and tonumber(out:match("Added book ids:%s*(%d+)"))
+    if new_id then require("lulibre.snapshots").added(new_id, it.path, "onboard") end
     if new_id and (it.pubdate or it.publisher) then
       -- calibredb add has no option for these; they follow as an ordinary change
       follow[#follow + 1] = { id = new_id, field = "pubdate", value = it.pubdate or "" }

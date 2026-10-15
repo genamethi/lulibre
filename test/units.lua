@@ -1785,5 +1785,37 @@ do
   lulibre.store("DELETE FROM proposals")
 end
 
+-- snapshots: working out what going back would do (nothing here is written to calibre)
+do
+  local snapshots = require "lulibre.snapshots"
+  local edit = require "lulibre.edit"
+  eq("a books row as the journal keeps it", snapshots.values { title = "T", authors = "Unknown", series_index = 3, idents = "doi:1" },
+    { title = "T", authors = "", tags = "", series = "", series_index = "", publisher = "", pubdate = "", languages = "",
+      identifiers = "doi:1" })
+  eq("authors and tags compare as calibre does, without case", { snapshots.same("tags", "math/Topology", "math/topology"),
+    snapshots.same("title", "Algebra", "algebra") }, { true, false })
+  local snap = snapshots.take("units")
+  eq("a snapshot is a place in the journal", { snap.name, snap.upto, #snapshots.list() }, { "units", 0, 1 })
+  local b1, b2 = lulibre.book(1), lulibre.book(2)
+  local function log(batch, book, field, old, new, label)
+    lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label)
+      VALUES(?, ?, ?, ?, ?, 'applied', ?, ?)]], batch, book, field, old, new, os.time(), label)
+  end
+  -- as if lulibre had set book 1's title to what it is now, and someone else book 2's
+  log(1, 1, "title", "Before Lulibre", b1.title, "edit")
+  log(2, 2, "title", "Before Someone", b2.title, "outside")
+  log(3, 2, "publisher", "Gone By", "Not What It Is", "edit")
+  local plan = snapshots.plan(snap.id)
+  eq("lulibre's change is put back, an outside one kept, one changed since left alone", {
+    #plan.changes, plan.changes[1] and plan.changes[1].value, plan.kept.outside, plan.kept.since },
+    { 1, "Before Lulibre", 1, 1 })
+  eq("--exact puts back all three", #snapshots.plan(snap.id, { exact = true }).changes, 3)
+  eq("described", snapshots.describe(plan)[2], "  1 field of 1 book put back")
+  eq("retired, it leaves the list", { snapshots.retire(snap.id), #snapshots.list(), #snapshots.list { all = true } }, { true, 0, 1 })
+  lulibre.store("DELETE FROM journal")
+  lulibre.store("DELETE FROM snapshots")
+  local _ = edit
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

@@ -14,6 +14,13 @@ local uv = require "luv"
 
 local M = {}
 
+-- Folders under the sync folder with a meaning of their own: a file added
+-- from non-catalog/ is marked as a work no catalogue has (lulibre.noncatalog),
+-- one from good/ as a record known to be right (lulibre.quality); unsynced/
+-- is where books taken back out of the library go (lulibre.snapshots), and
+-- is not looked in for files to add.
+M.NONCATALOG, M.GOOD, M.UNSYNCED = "non-catalog", "good", "unsynced"
+
 local EXT = { pdf = true, djvu = true, djv = true, epub = true, mobi = true, azw3 = true, fb2 = true,
   cbz = true, txt = true, ps = true }
 
@@ -37,7 +44,8 @@ local function files_under(dir)
       if not name then break end
       local path = d .. "/" .. name
       if kind == "directory" then
-        if name:sub(1, 1) ~= "." then visit(path) end
+        -- unsynced/ holds books taken back out of the library: not waiting to be added
+        if name:sub(1, 1) ~= "." and not (d == dir and name == M.UNSYNCED) then visit(path) end
       elseif kind == "file" and EXT[(name:match("%.(%w+)$") or ""):lower()] then
         out[#out + 1] = path
       end
@@ -197,6 +205,23 @@ function M.add(ids, opts)
   end, { jobs = edit.write_jobs(), progress = "adding" })
 
   lulibre.reload()
+  -- each book added is logged with what it came with, so a rollback can put
+  -- it back to that (lulibre.snapshots); then the folders' marks
+  local snapshots = require "lulibre.snapshots"
+  local batch, marks = nil, { nc = {}, good = {} }
+  local root = M.dir() or ""
+  for _, job in ipairs(jobs) do
+    local book = job.added and lulibre.book(job.library_id)
+    if book then
+      batch = snapshots.added(book.id, job.row.path, "sync", batch)
+      local sub = job.row.path:sub(1, #root + 1) == root .. "/" and job.row.path:sub(#root + 2):match("^([^/]+)/")
+      if sub == M.NONCATALOG then table.insert(marks.nc, book.id)
+      elseif sub == M.GOOD then table.insert(marks.good, book.id) end
+    end
+  end
+  if #marks.nc > 0 then require("lulibre.noncatalog").set(marks.nc, true) end
+  if #marks.good > 0 then require("lulibre.quality").set_good(marks.good, true) end
+  out.noncatalog, out.good = #marks.nc, #marks.good
   if #follow > 0 then edit.apply(follow, { label = "sync" }) end
 
   for _, job in ipairs(jobs) do
@@ -313,6 +338,8 @@ function M.summary(out)
   if out.added > 0 then parts[#parts + 1] = ("added %d to the library"):format(out.added) end
   if out.held > 0 then parts[#parts + 1] = ("%d already there"):format(out.held) end
   if (out.carried or 0) > 0 then parts[#parts + 1] = ("%d proposals for the books that were"):format(out.carried) end
+  if (out.noncatalog or 0) > 0 then parts[#parts + 1] = ("%d marked non-catalog"):format(out.noncatalog) end
+  if (out.good or 0) > 0 then parts[#parts + 1] = ("%d marked known good"):format(out.good) end
   if out.removed > 0 then parts[#parts + 1] = ("%d files removed from the sync folder"):format(out.removed) end
   if #out.kept > 0 then parts[#parts + 1] = ("%d kept: %s"):format(#out.kept, out.kept[1]) end
   if #out.failed > 0 then parts[#parts + 1] = ("%d failed: %s"):format(#out.failed, out.failed[1]) end

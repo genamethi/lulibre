@@ -16,39 +16,59 @@
 /* Bump when the SQL below changes, so existing indexes re-copy. */
 #define MIRROR_VERSION "3"
 
+/* calibre's books (in the database attached as `cal`) as the index keeps
+ * them: one row each, list fields joined into text. calibre stores "no date"
+ * as year 0101; the column has numeric affinity, so a substr() of it is
+ * compared (a bare string literal would be coerced). */
+#define CAL_BOOKS \
+  " SELECT b.id AS id, b.title AS title, b.sort AS sort," \
+  "  (SELECT group_concat(replace(a.name, '|', ','), ' & ' ORDER BY l.id)" \
+  "     FROM cal.books_authors_link l JOIN cal.authors a ON a.id = l.author WHERE l.book = b.id) AS authors," \
+  "  b.author_sort AS author_sort," \
+  "  (SELECT group_concat(t.name, ', ' ORDER BY t.name)" \
+  "     FROM cal.books_tags_link l JOIN cal.tags t ON t.id = l.tag WHERE l.book = b.id) AS tags," \
+  "  (SELECT s.name FROM cal.books_series_link l JOIN cal.series s ON s.id = l.series" \
+  "    WHERE l.book = b.id) AS series," \
+  "  b.series_index AS series_index," \
+  "  (SELECT p.name FROM cal.books_publishers_link l JOIN cal.publishers p ON p.id = l.publisher" \
+  "    WHERE l.book = b.id) AS publisher," \
+  "  CASE WHEN b.pubdate IS NULL OR substr(b.pubdate, 1, 4) < '0102' THEN NULL" \
+  "       ELSE substr(b.pubdate, 1, 10) END AS pubdate," \
+  "  CASE WHEN b.pubdate IS NULL OR substr(b.pubdate, 1, 4) < '0102' THEN NULL" \
+  "       ELSE CAST(substr(b.pubdate, 1, 4) AS INTEGER) END AS year," \
+  "  (SELECT group_concat(g.lang_code, ',') FROM cal.books_languages_link l" \
+  "     JOIN cal.languages g ON g.id = l.lang_code WHERE l.book = b.id) AS languages," \
+  "  (SELECT group_concat(i.type || ':' || i.val, ', ' ORDER BY i.type)" \
+  "     FROM cal.identifiers i WHERE i.book = b.id) AS idents," \
+  "  EXISTS(SELECT 1 FROM cal.comments c WHERE c.book = b.id AND length(c.text) > 0) AS has_comments," \
+  "  b.path AS path," \
+  "  (SELECT group_concat(upper(d.format), ',' ORDER BY d.format) FROM cal.data d" \
+  "    WHERE d.book = b.id) AS formats," \
+  "  b.timestamp AS added, b.last_modified AS modified" \
+  " FROM cal.books b"
+
+/* Before the books are replaced, what they were is kept in mirror_prev, so
+ * that changes made outside lulibre can be found and logged
+ * (lua/lulibre/snapshots.lua). While an earlier copy waits there unexamined
+ * (kv 'history:pending') it is left alone: several refreshes between two
+ * looks come out as one change. */
+static const char prev_sql[] =
+  "DELETE FROM mirror_prev WHERE NOT EXISTS(SELECT 1 FROM kv WHERE key = 'history:pending');"
+  "INSERT INTO mirror_prev(id, title, authors, tags, series, series_index, publisher, pubdate,"
+  " languages, idents, formats, path)"
+  " SELECT id, title, authors, tags, series, series_index, publisher, pubdate, languages, idents,"
+  "  formats, path FROM books"
+  " WHERE id > 0 AND NOT EXISTS(SELECT 1 FROM kv WHERE key = 'history:pending');"
+  "INSERT OR REPLACE INTO kv(key, value)"
+  " SELECT 'history:pending', '1' WHERE EXISTS(SELECT 1 FROM mirror_prev);";
+
 static const char mirror_sql[] =
   "DELETE FROM books; DELETE FROM authors; DELETE FROM book_authors;"
   "DELETE FROM tags; DELETE FROM book_tags; DELETE FROM idents; DELETE FROM books_fts;"
 
   "INSERT INTO books(id, title, sort, authors, author_sort, tags, series, series_index,"
   " publisher, pubdate, year, languages, idents, has_comments, path, formats, added, modified)"
-  " SELECT b.id, b.title, b.sort,"
-  "  (SELECT group_concat(replace(a.name, '|', ','), ' & ' ORDER BY l.id)"
-  "     FROM cal.books_authors_link l JOIN cal.authors a ON a.id = l.author WHERE l.book = b.id),"
-  "  b.author_sort,"
-  "  (SELECT group_concat(t.name, ', ' ORDER BY t.name)"
-  "     FROM cal.books_tags_link l JOIN cal.tags t ON t.id = l.tag WHERE l.book = b.id),"
-  "  (SELECT s.name FROM cal.books_series_link l JOIN cal.series s ON s.id = l.series"
-  "    WHERE l.book = b.id),"
-  "  b.series_index,"
-  "  (SELECT p.name FROM cal.books_publishers_link l JOIN cal.publishers p ON p.id = l.publisher"
-  "    WHERE l.book = b.id),"
-  /* calibre stores "no date" as year 0101. The column has numeric affinity,
-   * so compare a substr() of it: a bare string literal would be coerced. */
-  "  CASE WHEN b.pubdate IS NULL OR substr(b.pubdate, 1, 4) < '0102' THEN NULL"
-  "       ELSE substr(b.pubdate, 1, 10) END,"
-  "  CASE WHEN b.pubdate IS NULL OR substr(b.pubdate, 1, 4) < '0102' THEN NULL"
-  "       ELSE CAST(substr(b.pubdate, 1, 4) AS INTEGER) END,"
-  "  (SELECT group_concat(g.lang_code, ',') FROM cal.books_languages_link l"
-  "     JOIN cal.languages g ON g.id = l.lang_code WHERE l.book = b.id),"
-  "  (SELECT group_concat(i.type || ':' || i.val, ', ' ORDER BY i.type)"
-  "     FROM cal.identifiers i WHERE i.book = b.id),"
-  "  EXISTS(SELECT 1 FROM cal.comments c WHERE c.book = b.id AND length(c.text) > 0),"
-  "  b.path,"
-  "  (SELECT group_concat(upper(d.format), ',' ORDER BY d.format) FROM cal.data d"
-  "    WHERE d.book = b.id),"
-  "  b.timestamp, b.last_modified"
-  " FROM cal.books b;"
+  CAL_BOOKS ";"
 
   "INSERT INTO authors(id, name, sort, key, n_books)"
   " SELECT a.id, replace(a.name, '|', ','), a.sort, fold(replace(a.name, '|', ',')),"
@@ -114,7 +134,8 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
   rc = -1;
   if (db_exec(db, "BEGIN IMMEDIATE", err) == 0) {
     sqlite3_stmt *cf = NULL;
-    int ok = db_exec(db, mirror_sql, err) == 0 && db_prepare(db, files_sql, &cf, err) == 0;
+    int ok = db_exec(db, prev_sql, err) == 0 && db_exec(db, mirror_sql, err) == 0 &&
+             db_prepare(db, files_sql, &cf, err) == 0;
     if (ok) {
       sqlite3_bind_text(cf, 1, library, -1, SQLITE_STATIC);
       ok = sqlite3_step(cf) == SQLITE_DONE;
@@ -141,5 +162,36 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
 out:
   free(stamp);
   free(cal);
+  return rc;
+}
+
+int db_calibre_books(struct db *db, const char *path, int (*fn)(void *ud, sqlite3_stmt *st), void *ud,
+                     char **err) {
+  char *uri = xasprintf("file:%s?mode=ro&immutable=1", path);
+  sqlite3_stmt *att = NULL, *st = NULL;
+  int rc = -1;
+  if (db_prepare(db, "ATTACH DATABASE ?1 AS cal", &att, err) == 0) {
+    sqlite3_bind_text(att, 1, uri, -1, SQLITE_STATIC);
+    if (sqlite3_step(att) != SQLITE_DONE)
+      *err = xasprintf("cannot open %s: %s", path, sqlite3_errmsg(db->h));
+    else
+      rc = 0;
+    sqlite3_finalize(att);
+  }
+  free(uri);
+  if (rc) return rc;
+  rc = db_prepare(db, CAL_BOOKS " ORDER BY b.id", &st, err);
+  if (!rc) {
+    int r;
+    while ((r = sqlite3_step(st)) == SQLITE_ROW)
+      if (fn(ud, st)) break;
+    if (r != SQLITE_ROW && r != SQLITE_DONE) {
+      *err = xasprintf("reading %s: %s", path, sqlite3_errmsg(db->h));
+      rc = -1;
+    }
+    sqlite3_finalize(st);
+  }
+  char *ignored = NULL;
+  if (db_exec(db, "DETACH DATABASE cal", &ignored)) free(ignored);
   return rc;
 }

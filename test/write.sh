@@ -297,6 +297,57 @@ contains "sync move"                      "3 already there, 3 files removed from
 expect   "the sync folder is empty"       0 "$(find "$t/sync" -name '*.pdf' | wc -l)"
 expect   "and nothing is staged"          0 "$(srun query -c in:sync 2>&1)"
 expect   "the library gained two books"   7 "$(srun query -c '' 2>&1)"
+# ---- snapshots: changes logged (lulibre's, and those made outside it), put back, rolled forward
+step() { # a step whose output is not checked, only that it worked
+  _out=$("$@" 2>&1) || { echo "FAIL  $*: $_out"; fails=$((fails + 1)); }
+}
+outside() { calibredb --with-library http://127.0.0.1:18099 --username tester --password secret set_metadata "$@" >/dev/null 2>&1; }
+set -- $(slua 'print(table.concat(lulibre.ids("in:library"), " "))')
+b1=$1 b2=$2 b3=$3
+contains "a snapshot is taken"            'took snapshot 1, "start"' "$(srun snapshot start 2>&1)"
+t1=$(field $b1 title) t2=$(field $b2 title) p1=$(field $b1 publisher)
+step slua "local e = require 'lulibre.edit' e.apply { { id = $b1, field = 'title', value = 'Knots, Changed' },
+  { id = $b2, field = 'tags', value = 'x/y', op = 'add' } }"
+step outside $b1 --field "publisher:Outside Press"
+step outside $b2 --field "title:Outside Title"
+step slua "local e = require 'lulibre.edit' e.apply { { id = $b3, field = 'title', value = 'Algebra Changed' } }"
+expect   "changes made outside are logged" "$b1:publisher:Outside Press|$b2:title:Outside Title" "$(slua '
+  local out = {}
+  for _, r in ipairs(lulibre.sql("SELECT book, field, new FROM journal WHERE label = ? AND field NOT LIKE ? ORDER BY book", "outside", "(%")) do
+    out[#out + 1] = r.book .. ":" .. r.field .. ":" .. r.new end
+  print(table.concat(out, "|"))')"
+expect   "lulibre's own are not taken for outside ones" 0 "$(slua 'print(#lulibre.sql("SELECT 1 FROM journal WHERE label = ? AND field IN (?, ?)", "outside", "title", "tags") - 1)')"
+mkdir -p "$t/sync/non-catalog"
+pdf "$t/sync/non-catalog/handout.pdf" "A Handout" "Some Lecturer"
+step srun sync
+contains "a file from non-catalog/ is marked" "1 marked non-catalog" "$(srun sync move 'title:handout' 2>&1)"
+handout=$(slua 'print(lulibre.ids("in:library is:noncatalog")[1])')
+contains "and its arrival is logged"      "non-catalog/handout.pdf" "$(slua "print(lulibre.sql('SELECT old FROM journal WHERE field = ? AND book = ?', '(added)', $handout)[1].old)")"
+came=$(field $handout title)
+step slua "require('lulibre.edit').apply { { id = $handout, field = 'title', value = 'Edited After Adding' } }"
+plan=$(srun snapshot plan start 2>&1)
+contains "the plan: lulibre's changes"    "4 fields of 4 books put back" "$plan"
+contains "the plan: outside ones are kept" "2 fields changed outside lulibre left as they are" "$plan"
+contains "a rollback asks for --yes without a screen" "(add --yes to do it)" "$(srun snapshot rollback start 2>&1)"
+contains "rollback"                       "4 books put back (snapshot 2 is how it was before" "$(srun snapshot rollback start --yes 2>&1)"
+expect   "lulibre's changes went back"    "$t1|$came|Outside Title|Outside Press" "$(slua "
+  local e = require 'lulibre.edit'
+  print(table.concat({ lulibre.book($b1).title, lulibre.book($handout).title, lulibre.book($b2).title, e.current(lulibre.book($b1), 'publisher') }, '|'))")"
+expect   "a book added since stays, as it came" "$came" "$(field $handout title)"
+contains "a second rollback does nothing" "nothing to do" "$(srun snapshot rollback start --yes 2>&1)"
+contains "rolling forward"                "4 books put back" "$(srun snapshot rollback 2 --yes 2>&1)"
+expect   "is the changes again"           "Knots, Changed|Edited After Adding" "$(slua "print(lulibre.book($b1).title .. '|' .. lulibre.book($handout).title)")"
+contains "--exact puts back outside changes too" "4 books put back" "$(srun snapshot rollback start --exact --yes 2>&1)"
+expect   "outside changes went back"      "$t2|$p1" "$(slua "print(lulibre.book($b2).title .. '|' .. require('lulibre.edit').current(lulibre.book($b1), 'publisher'))")"
+contains "--unsync takes added books out" "1 taken out to unsynced/" "$(srun snapshot rollback start --unsync --yes 2>&1)"
+expect   "the book left the library"      gone "$(field $handout title)"
+test -e "$t/sync/unsynced/handout.pdf" && r=yes || r=no
+expect   "its file is in unsynced/"       yes "$r"
+expect   "and is not waiting to be added" 0 "$(srun query -c 'in:sync title:handout' 2>&1)"
+contains "snapshots are listed"           "taken by a rollback" "$(srun snapshot list 2>&1)"
+step srun snapshot retire start
+expect   "a retired snapshot leaves the list" 0 "$(srun snapshot list 2>&1 | grep -c '^ *1  ' || true)"
+contains "but not --all"                  "retired" "$(srun snapshot list --all 2>&1)"
 contains "the config prints as Lua"       'o.sync_dir = "' "$(srun config 2>&1)"
 contains "and names the policies"         "auto | ask | never" "$(srun config 2>&1)"
 contains "a bad policy value is refused"  "is one of auto|ask|never" "$(run -o repair_links=maybe query -c '' 2>&1 || true)"

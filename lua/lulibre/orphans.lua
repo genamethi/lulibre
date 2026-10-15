@@ -319,6 +319,8 @@ function M.apply(found)
       local ok, why = calibredb("add", "--duplicates", s.path)
       if ok and why:find("Added book ids") then
         out.added = out.added + 1
+        local id = tonumber(why:match("Added book ids:%s*(%d+)"))
+        if id then require("lulibre.snapshots").added(id, s.path, "orphans") end
         aside(s)
       else
         table.insert(out.failed, s.rel .. ": " .. tostring(why))
