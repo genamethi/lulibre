@@ -26,8 +26,9 @@ static void node_free(struct tui *t, struct node *n) {
   if (n->split) {
     node_free(t, n->a);
     node_free(t, n->b);
-  } else if (n->cls->destroy) {
-    n->cls->destroy(t, n->state);
+  } else {
+    if (n->cls->destroy) n->cls->destroy(t, n->state);
+    if (n->under_cls && n->under_cls->destroy) n->under_cls->destroy(t, n->under_state);
   }
   free(n);
 }
@@ -174,6 +175,16 @@ static int within(const struct node *root, const struct node *n) {
 }
 
 static void close_node(struct tui *t, struct node *n) {
+  if (!n->split && n->under_cls) {
+    /* a view shown over the list: closing it brings the list back */
+    if (n->cls->destroy) n->cls->destroy(t, n->state);
+    n->cls = n->under_cls;
+    n->state = n->under_state;
+    n->under_cls = NULL;
+    n->under_state = NULL;
+    tui_dirty(t);
+    return;
+  }
   struct node *p = n->parent;
   struct node *sib = p->a == n ? p->b : p->a;
   int had_focus = within(n, t->focus);
@@ -234,6 +245,35 @@ struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, f
   return leaf;
 }
 
+struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *state) {
+  struct node *stack[64], *list = NULL;
+  int n = 0;
+  if (t->root) stack[n++] = t->root;
+  while (n && !list) {
+    struct node *x = stack[--n];
+    if (x->split) {
+      if (n < 62) {
+        stack[n++] = x->b;
+        stack[n++] = x->a;
+      }
+    } else if (x->cls == &view_list && !x->under_cls) {
+      list = x;
+    }
+  }
+  if (!list) {
+    struct node *keep = t->focus;
+    struct node *leaf = wm_dock(t, cls, state, 0.4f, 'l');
+    if (keep) t->focus = keep;
+    return leaf;
+  }
+  list->under_cls = list->cls;
+  list->under_state = list->state;
+  list->cls = cls;
+  list->state = state;
+  tui_dirty(t);
+  return list;
+}
+
 /* Close the window showing this state, if there is one. */
 void wm_undock(struct tui *t, void *state) {
   struct node *stack[64];
@@ -248,7 +288,15 @@ void wm_undock(struct tui *t, void *state) {
         stack[n++] = x->b;
       }
     } else if (x->state == state) {
-      if (x->parent) {
+      if (x->under_cls) {
+        /* it was shown over the list for a while: the list comes back */
+        if (x->cls->destroy) x->cls->destroy(t, x->state);
+        x->cls = x->under_cls;
+        x->state = x->under_state;
+        x->under_cls = NULL;
+        x->under_state = NULL;
+        tui_dirty(t);
+      } else if (x->parent) {
         close_node(t, x);
       } else {
         /* It is the only window left (:only was used on it). Its view still

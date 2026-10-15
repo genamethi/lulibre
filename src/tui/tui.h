@@ -297,6 +297,10 @@ struct node {
   struct node *a, *b, *parent;
   const struct view_class *cls;
   void *state;
+  /* a view put over this window's own for a while (wm_over_list): the own
+   * one waits here and comes back when the other is undocked */
+  const struct view_class *under_cls;
+  void *under_state;
   struct rect r;
 };
 
@@ -326,6 +330,10 @@ char wm_divider_at(struct tui *t, int y, int x);
 int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x);
 const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
+/* Show a view in the list's window for a while, the list kept aside until
+ * it is undocked; the focus stays where it is. Docks on the left when there
+ * is no list window. */
+struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *state);
 void wm_undock(struct tui *t, void *state);
 /* Give the docked window showing this state that share of the screen. */
 void wm_set_size(struct tui *t, void *state, float size);

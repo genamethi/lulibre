@@ -9,6 +9,7 @@
 -- Review has views, shown as tabs in its bar: one for each run of proposing
 -- that still has something waiting (lulibre.runs), and "all waiting". h and
 -- l step through them; D drops what the one in view holds.
+local context = require "lulibre.ui.context"
 local edit = require "lulibre.edit"
 local proposals = require "lulibre.proposals"
 local suggest = require "lulibre.suggest"
@@ -21,6 +22,21 @@ local panels = require "lulibre.ui.panels"
 
 -- the fields a book opens up to, in the order they are shown
 M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "identifiers" }
+
+-- fields that hold one value: their proposals are alternatives to each
+-- other, and with one row per field (the option review_rows) one is shown
+-- at a time
+M.single = { title = true, authors = true, pubdate = true, publisher = true, series = true, series_index = true,
+  languages = true }
+
+--- What the panel where the list is shows about the proposal under the
+-- cursor (the option review_context; i shows and hides it): rows of
+-- { label, text, style = }. pr: the proposal; others: the other proposals
+-- waiting for that book and field. Replace it in init.lua to show something
+-- else:  require("lulibre.ui.review").context = function(pr, others) return { { "source", pr.source } } end
+function M.context(pr, others)
+  return context.rows(pr, others)
+end
 
 local function key_of(item)
   if not item then return nil end
@@ -150,6 +166,33 @@ session = function(args)
   end
   local items       -- row index -> a proposal, { plain=, book=, field= } or { heading=, book= }
   local open = {}   -- book id -> its other fields are shown
+  -- one row per field, or every proposal its own; and which proposal a field's row shows
+  local rows_mode = args.rows or lulibre.o.review_rows or "field"
+  local chosen = {} -- "book\0field" -> proposal id
+  -- the proposals that are alternatives for one book's field (single-valued, op set), surest first
+  local function alternatives(pr)
+    local out = {}
+    if not (M.single[pr.field] and pr.op == "set") then return out end
+    for _, q in ipairs(listed()) do
+      if q.book == pr.book and q.field == pr.field and q.op == "set" then out[#out + 1] = q end
+    end
+    table.sort(out, function(a, b)
+      if (a.confidence or 0) ~= (b.confidence or 0) then return (a.confidence or 0) > (b.confidence or 0) end
+      return a.id < b.id
+    end)
+    return out
+  end
+  -- the one a field's row shows: the one picked with o or O, else the accepted one, else the surest
+  local function shown_of(group)
+    local slot = group[1].book .. "\0" .. group[1].field
+    for _, q in ipairs(group) do
+      if q.id == chosen[slot] then return q end
+    end
+    for _, q in ipairs(group) do
+      if q.status == "accepted" then return q end
+    end
+    return group[1]
+  end
   local options = {} -- "book field" -> suggestions, read once
 
   -- The order of the books. With "confidence" the book whose surest proposal
@@ -183,13 +226,15 @@ session = function(args)
   end
   rank_books()
 
-  local function proposal_row(book, pr)
+  local function proposal_row(book, pr, of)
     local shown = pr.value == "" and edit.BLANK or pr.value
     if pr.op == "add" then shown = "+ " .. shown elseif pr.op == "remove" then shown = "- " .. shown end
     return {
       pr.status == "accepted" and "✓" or "", pr.field, edit.current(book, pr.field), shown,
-      -- where it is from, how sure, and how far the book's sources agree about the field
-      ("%s%s%s"):format(pr.source or "", pr.confidence and (" %.2f"):format(pr.confidence) or "",
+      -- where it is from, how sure, how far the book's sources agree about the field, and
+      -- (one row per field) which of the field's proposals this is
+      ("%s%s%s%s"):format(of and ("%d/%d "):format(of[1], of[2]) or "", pr.source or "",
+        pr.confidence and (" %.2f"):format(pr.confidence) or "",
         pr.note and pr.note:find(" agree") and ("  [%s]"):format(pr.note:match("^%d+/%d+") or "") or ""),
       id = book.id, style = pr.status == "accepted" and "ok" or nil,
     }
@@ -233,8 +278,29 @@ session = function(args)
           waiting > 0 and ("     %d to decide, surest %.2f"):format(waiting, best) or "     all decided"),
           id = id, style = "head" }
         items[#rows] = { heading = true, book = id }
+        -- with one row per field, a field's alternatives stand behind the one shown
+        local done = {}
         local function put(pr)
-          rows[#rows + 1] = proposal_row(book, pr)
+          local of
+          if rows_mode == "field" and M.single[pr.field] and pr.op == "set" then
+            if done[pr.field] then return end
+            done[pr.field] = true
+            local group = {}
+            for _, q in ipairs(by_book[id]) do
+              if q.field == pr.field and q.op == "set" then group[#group + 1] = q end
+            end
+            if #group > 1 then
+              table.sort(group, function(a, b)
+                if (a.confidence or 0) ~= (b.confidence or 0) then return (a.confidence or 0) > (b.confidence or 0) end
+                return a.id < b.id
+              end)
+              pr = shown_of(group)
+              for i, q in ipairs(group) do
+                if q == pr then of = { i, #group } end
+              end
+            end
+          end
+          rows[#rows + 1] = proposal_row(book, pr, of)
           items[#rows] = pr
         end
         if not open[id] then
@@ -303,17 +369,59 @@ session = function(args)
     return (items[1] and items[1].banner and 1 or 0) + math.min(2, #rows)
   end
   local function title()
-    return ("review%s  %d pending, %d accepted   %s%s"):format(scope == "sync" and " (sync folder)" or "",
+    return ("review%s  %d pending, %d accepted   %s   %s%s"):format(scope == "sync" and " (sync folder)" or "",
       #listed("pending"), #listed("accepted"), SORTS[sort] or "by id",
+      rows_mode == "field" and ("one row per field (%s %s)"):format(keys:key("other") or "o", keys:key("other_all") or "O")
+        or "every proposal",
       field_only and ("   only %s (%s%s shows all)"):format(field_only, keys:key("field") or "f", keys:key("field") or "f") or "")
   end
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("accept", "reject", "edit", "expand", "write"), follow = true, height = 0.42,
-    keys = keys:own(), pass = panels.PASS, reloads = true,
+    title = title(), help = keys:hint("accept", "reject", "edit", "other", "about", "write"), follow = true, height = 0.42,
+    keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows, tabs = tab_names(), tab = at,
   }
   p:cursor(first_row())
+  -- what the proposal under the cursor rests on, where the list is (the option review_context)
+  local ctx
+  local closing <close> = setmetatable({}, { __close = function()
+    if ctx then pcall(ctx.close, ctx) end
+  end })
+  local function about(row)
+    if not ctx then return end
+    if not ctx:is_open() then
+      ctx = nil
+      return
+    end
+    local it = items[row]
+    if it and not it.heading and not it.plain and not it.banner then
+      local others = {}
+      for _, q in ipairs(listed()) do
+        if q.book == it.book and q.field == it.field and q.id ~= it.id then others[#others + 1] = q end
+      end
+      local ok, rows_ = pcall(M.context, it, others)
+      ctx:rows(ok and rows_ or { { "", tostring(rows_), style = "error" } })
+      ctx:title(("about this proposal   %s hides"):format(keys:key("about") or "i"))
+    elseif it and it.book then
+      local book = lulibre.book(it.book)
+      local rows_ = { { ("book %d"):format(it.book), book and book.title or "", style = "head" } }
+      if book then
+        for _, field in ipairs(M.fields) do rows_[#rows_ + 1] = { field, edit.current(book, field) } end
+      end
+      ctx:rows(rows_)
+      ctx:title("the book")
+    end
+  end
+  local function toggle_about(row)
+    if ctx and ctx:is_open() then
+      ctx:close()
+      ctx = nil
+      return
+    end
+    ctx = lulibre.panel { side = "main", title = "about this proposal", columns = { { "", 14 }, { "", 0 } }, rows = {} }
+    about(row)
+  end
+  if lulibre.o.review_context ~= 0 then toggle_about(first_row()) end
   -- other tasks reach this review here: a run that has finished asks for its
   -- view, and any change to the runs has the tabs written again
   local wanted
@@ -350,6 +458,10 @@ session = function(args)
   while true do
     local key, row = p:wait()
     if not key then return end
+    if key == "<Move>" then
+      about(row)
+      goto next_key
+    end
     local item = items[row]
     local keep = key_of(item) -- where the cursor should be after the rows change
     if item and item.banner then item = nil end
@@ -435,6 +547,62 @@ session = function(args)
     elseif act == "sort" then
       sort = sort == "confidence" and "disputed" or sort == "disputed" and "id" or "confidence"
       rank_books()
+    elseif act == "about" then
+      toggle_about(row)
+    elseif act == "rows" then
+      rows_mode = rows_mode == "field" and "all" or "field"
+      lulibre.notify(rows_mode == "field" and "one row per field: the surest proposal shown, o for the next source"
+        or "every proposal a row of its own")
+    elseif pr and (act == "other" or act == "other_all") then
+      local group = alternatives(pr)
+      if #group < 2 then
+        lulibre.notify(("nothing else is proposed for this book's %s"):format(pr.field))
+      elseif act == "other" then
+        if rows_mode ~= "field" then rows_mode = "field" end
+        local at_ = 1
+        for i, q in ipairs(group) do
+          if q.id == pr.id then at_ = i end
+        end
+        local nxt = group[at_ % #group + 1]
+        chosen[pr.book .. "\0" .. pr.field] = nxt.id
+        keep = "p" .. nxt.id
+      else
+        rows_mode = "field"
+        -- the kinds of source proposing this field, in the order they first come
+        local classes, seen = {}, {}
+        for _, q in ipairs(listed()) do
+          if q.field == pr.field and q.op == "set" then
+            local c = context.source_class(q.source)
+            if not seen[c] then
+              seen[c] = true
+              classes[#classes + 1] = c
+            end
+          end
+        end
+        local mine = context.source_class(pr.source)
+        local want = classes[1]
+        for i, c in ipairs(classes) do
+          if c == mine then want = classes[i % #classes + 1] end
+        end
+        local n = 0
+        for _, q in ipairs(listed()) do
+          if q.field == pr.field and q.op == "set" and context.source_class(q.source) == want then
+            local slot = q.book .. "\0" .. q.field
+            local was = chosen[slot]
+            local cur
+            for _, x in ipairs(listed()) do
+              if x.id == was then cur = x end
+            end
+            -- the surest of that kind, if a book has several
+            if not cur or context.source_class(cur.source) ~= want or (q.confidence or 0) > (cur.confidence or 0) then
+              chosen[slot] = q.id
+              if not cur or context.source_class(cur.source) ~= want then n = n + 1 end
+            end
+            if q.book == pr.book then keep = "p" .. chosen[slot] end
+          end
+        end
+        lulibre.notify(("%s: showing %s for %d book%s (the others keep theirs)"):format(pr.field, want, n, n == 1 and "" or "s"))
+      end
     elseif act == "field" then
       -- the next key says which field: a letter as in :propose --only, or f again for all
       p:title(("show only: %s   (%s all)"):format("t title  a authors  s subject  i identifiers  d date  p publisher  e series", key))
@@ -582,17 +750,22 @@ session = function(args)
     p:rows(rows)
     p:title(title())
     p:tabs(tab_names(), at)
+    local at_row = row
     if to_top then
       to_top = false
-      p:cursor(first_row())
+      at_row = first_row()
+      p:cursor(at_row)
     elseif keep then
       for i, it in ipairs(items) do
         if key_of(it) == keep then
+          at_row = i
           p:cursor(i)
           break
         end
       end
     end
+    about(at_row)
+    ::next_key::
   end
 end
 

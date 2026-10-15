@@ -182,13 +182,14 @@ function M.headline(ev, title)
   if not ev.head then
     local parts = {}
     for page = 1, M.HEADLINE_PAGES do
+      -- (a line set sideways is arXiv's stamp in the margin, not the title)
       local lines = lulibre.lines(ev.id, page)
       local top = 0
       for _, l in ipairs(lines) do
-        if (l.size or 0) > top then top = l.size end
+        if not l.rotated and (l.size or 0) > top then top = l.size end
       end
       for _, l in ipairs(lines) do
-        if top > 0 and (l.size or 0) >= top * 0.8 then parts[#parts + 1] = l.text end
+        if not l.rotated and top > 0 and (l.size or 0) >= top * 0.8 then parts[#parts + 1] = l.text end
       end
     end
     ev.head = { text = table.concat(parts, "\n") }

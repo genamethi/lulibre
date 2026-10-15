@@ -144,6 +144,15 @@ wait_for "all books"
 k g r
 shown "review opens"                          "review  3 pending"
 shown "with what waits for each book"         "1 to decide, surest 0.99"
+shown "where the list was, what the proposal rests on" "about this proposal"
+k i
+shown "i gives the list its place back"       "all books"
+k i
+shown "and i brings it back"                  "about this proposal"
+k m
+shown "m: every proposal a row of its own"    "every proposal"
+k m
+shown "m again: one row per field"            "one row per field"
 first=$(screen | grep -n "▸ 3  Rings" | head -1 | cut -d: -f1)
 second=$(screen | grep -n "▸ 1  Knots" | head -1 | cut -d: -f1)
 if [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ]; then
@@ -243,6 +252,17 @@ fi
 k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
 k q
+
+# ---- the snapshot browser
+k g z
+shown "gz opens the snapshot browser"         "no snapshots yet"
+k n
+wait_for "name for the snapshot"
+k "first point" Enter
+shown "n takes one"                           'took snapshot 1, "first point"'
+shown "and the plan for it shows where the list was" "going back"
+k q
+wait_for "all books"
 
 # ---- from duplicates: the edit form for a row's book, and the preview's keys
 k g d

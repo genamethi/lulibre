@@ -1813,6 +1813,19 @@ do
   eq("nothing known of a file that was not read", verify.record(nil, { title = "x" }).unread, true)
 end
 
+-- review's context: sources by kind, titles as keys
+do
+  local context = require "lulibre.ui.context"
+  local net = require "lulibre.net"
+  eq("kinds of source", { context.source_class("CrossRef 10.1007/x (the title with words left out)"),
+    context.source_class("CrossRef title search"), context.source_class("Open Library 9780387902449"),
+    context.source_class("arXiv 1012.6008"), context.source_class("arXiv id"), context.source_class("vocabulary (12)"),
+    context.source_class(nil) },
+    { "CrossRef", "CrossRef title search", "Open Library", "arXiv record", "arXiv id", "vocabulary", "(none)" })
+  eq("a title as a key", net.title_key("The $p$-adic Skolem Problem: a Survey!"), "the p adic skolem problem a survey")
+  eq("an identifier's record, when nothing was kept", (context.record_of { field = "identifiers", value = "doi:10.9/none", source = "page text" }), nil)
+end
+
 -- snapshots: working out what going back would do (nothing here is written to calibre)
 do
   local snapshots = require "lulibre.snapshots"

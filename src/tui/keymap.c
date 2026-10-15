@@ -312,6 +312,7 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "gd", "dupes"},
     {MODE_NORMAL, "go", "orphans"},
     {MODE_NORMAL, "gk", "good"},
+    {MODE_NORMAL, "gz", "snapshots"},
     /* the sync folder (lua/lulibre/sync.lua) */
     {MODE_NORMAL, "gS", "sync"},
     {MODE_NORMAL, "gb", "beside"},

@@ -24,6 +24,8 @@ struct config {
   char *enrich_services; /* which metadata services :enrich asks, comma-separated */
   char *arxiv_snapshot; /* arXiv's metadata snapshot (JSON lines, or the .zip it comes in): read before arXiv is asked */
   char *review_sort;   /* confidence | id: the order of books in review */
+  char *review_rows;   /* field | all: one row per field in review, or one per proposal */
+  int review_context;  /* 1: review shows what a proposal rests on in the main view */
   char *weigh_sources; /* off | on: confidences from measured source weights */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
