@@ -250,3 +250,18 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   running for two days.
 - Test scripts do not `rm` paths built from variables; plant and remove
   files from Lua with exact paths.
+- A change to the user's real library (calibredb through their server) may
+  be refused by the session's permission checks even when the user asked
+  for it. Do not route around that: run the same command against a copy of
+  the index first (`-o index=COPY`), show the dry run, and give the user the
+  one command to run themselves.
+- Something a heuristic "repairs" in bulk (text re-read, letters shifted
+  back, titles restored) is checked on the whole library copy and the
+  changed items read one by one before it is trusted: three passes of
+  `reread` and four of `recheck` each turned up a class of false fixes
+  (TOC leaders taken for garbage, a "shift" found in symbols, junk titles
+  restored) that the unit cases had not.
+- Lua C modules found on the default `cpath` may be built for another Lua:
+  the user's `~/.luarocks/lib/lua/5.5/lpeg.so` crashes on load (so does LPeg
+  1.1.0 built here against 5.5.1). Do not `require` an optional C module in
+  the interface without a way out.
