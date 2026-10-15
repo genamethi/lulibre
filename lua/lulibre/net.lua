@@ -617,6 +617,77 @@ function M.arxiv_snapshot(path, ids, progress)
   return found, passed
 end
 
+--- A title as compared when looking papers up by it: folded, every run of
+-- what is not a letter or a figure one space.
+function M.title_key(title)
+  return (lulibre.fold(title or ""):gsub("%$", ""):gsub("[^%w\128-\255]+", " "):gsub("^ ", ""):gsub(" $", ""))
+end
+
+--- Look papers up by title in arXiv's own snapshot (the file of one JSON
+-- record a line; a hypergraph has no use here), asking nobody. wanted:
+-- { [M.title_key(title)] = true }. Every record whose title is one of them
+-- is kept as arXiv's answer for its number. Returns { [key] = { id, ... } }
+-- and how many papers were passed, or nil and why.
+function M.arxiv_by_title(path, wanted, progress)
+  local f, err = io.open(path, "r")
+  if not f then return nil, ("cannot read %s: %s"):format(path, tostring(err)) end
+  local head = f:read(4096) or ""
+  if not (head:find('^%s*{%s*"id"%s*:') or head:find('"versions"')) then
+    f:close()
+    return nil, path .. " is not arXiv's own snapshot (one record a line): looking up by title needs that one"
+  end
+  f:seek("set", 0)
+  local out, n = {}, 0
+  for line in f:lines() do
+    n = n + 1
+    local raw = line:match('"title"%s*:%s*"(.-[^\\])"%s*,')
+    if raw then
+      local ok, title = pcall(json.decode, '"' .. raw .. '"')
+      local key = M.title_key(ok and title or raw)
+      if wanted[key] then
+        local id = M.arxiv_id(line:match('"id"%s*:%s*"([^"]+)"') or "")
+        if id and snapshot_record(line) then
+          M.keep("arxiv", id, 200, line)
+          out[key] = out[key] or {}
+          table.insert(out[key], id)
+        end
+      end
+    end
+    if progress and n % 200000 == 0 then progress(("%.1f million papers"):format(n / 1e6)) end
+  end
+  f:close()
+  return out, n
+end
+
+--- The record kept for a work, read from what was kept and asking nobody:
+-- kind is "doi" (CrossRef, else OpenAlex), "isbn" (Open Library) or "arxiv".
+-- nil when nothing was kept. It neither waits nor reads the arXiv snapshot.
+function M.kept_record(kind, value)
+  if not value or value == "" then return nil end
+  local tries
+  if kind == "doi" then
+    tries = { { "crossref", value:lower(), M.crossref }, { "openalex", value:lower(), M.openalex } }
+  elseif kind == "isbn" then
+    local digits = value:gsub("[^%dXx]", ""):upper()
+    tries = { { "openlibrary", digits, M.openlibrary } }
+  elseif kind == "arxiv" then
+    local id = M.arxiv_id(value)
+    tries = { { "arxiv", id, M.arxiv } }
+  else
+    return nil
+  end
+  for _, t in ipairs(tries) do
+    if t[2] and M.kept(t[1], t[2]) then
+      local was = M.offline
+      M.offline = true
+      local ok, rec = pcall(t[3], value)
+      M.offline = was
+      if ok and type(rec) == "table" then return rec end
+    end
+  end
+  return nil
+end
+
 --- arXiv's record for a number ("1012.6008", "hep-th/9711200"; a version is ignored).
 function M.arxiv(raw)
   local id = M.arxiv_id(raw)

@@ -29,7 +29,7 @@ local PLACES = { { "panel", "In a panel (review, the edit form ...)" }, { "line"
   { "pager", "In a page of text such as a guide" }, { "console", "In the console" }, { "select", "Selecting text in the preview" } }
 local SCREENS = { { "review", "Review" }, { "edit", "The edit form" }, { "dupes", "Duplicates" }, { "orphans", "Orphans" },
   { "beside", "The sync folder beside the library" }, { "good", "Known good records" }, { "terms", "Subject phrases" },
-  { "capture", "Capture" }, { "browse", "The browse column" } }
+  { "capture", "Capture" }, { "browse", "The browse column" }, { "snapshots", "Snapshots" } }
 
 -- What the keys that come with lulibre do, in a few words: a binding of
 -- your own shows its description, or its command.
@@ -72,7 +72,7 @@ local ABOUT = {
   ["noncatalog"] = "works no catalogue has a record of: no DOI or ISBN is looked for",
   ["verify"] = "the library held against its files: titles, authors and identifiers the pages bear out",
   ["snapshot"] = "take a snapshot of the library, or plan, import, retire one",
-  ["snapshots"] = "the snapshots, with how much has changed since each",
+  ["snapshots"] = "the snapshot browser: what going back to each would do; go back, take, retire",
   ["rollback"] = "put the library back to a snapshot (shows what it will do, then asks)",
   ["sync"] = "read the sync folder and show it", ["beside"] = "the sync folder in a column beside the library",
   ["source library"] = "show the library", ["sync add"] = "add the selected waiting files to the library",

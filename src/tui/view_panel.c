@@ -83,7 +83,8 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->page = 10;
   p->size = size;
   p->side = side;
-  wm_dock(t, &view_panel, p, size, side);
+  if (side == 'm') wm_over_list(t, &view_panel, p);
+  else wm_dock(t, &view_panel, p, size, side);
   return p;
 }
 
@@ -128,7 +129,8 @@ static void follow(struct panel *p);
 void panel_show(struct panel *p) {
   if (!p->open || !p->hidden) return;
   p->hidden = 0;
-  wm_dock(p->t, &view_panel, p, p->size, p->side);
+  if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
+  else wm_dock(p->t, &view_panel, p, p->size, p->side);
   follow(p);
 }
 

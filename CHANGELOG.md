@@ -5,6 +5,22 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: review shows one row per field, the surest proposal for it, with
+  `2/3` when there are others: `o` steps to the next source, `O` takes the
+  next kind of source for that field throughout the view, `m` switches to a
+  row for every proposal (option `review_rows`).
+- New: while review is open, the list's place shows what the proposal
+  under the cursor rests on: the record behind it (for an identifier, the
+  one it leads to), what the book's pages say of the value, and the other
+  sources' values (`i` hides it; option `review_context`; replaceable as
+  `require("lulibre.ui.review").context`).
+- New: the snapshot browser, `gz` / `:snapshots`: what going back to each
+  would do, shown where the list is; go back, take, retire.
+- New: `:run arxiv-titles` finds arXiv numbers by title in arXiv's snapshot
+  kept on this machine, taking a paper only when the pages show its title
+  and people.
+- New: panels can be shown in the list's window (`side = "main"`).
+
 - New: the file decides. Every record `:enrich` finds is held against the
   book's own pages (`lulibre.verify`): one whose title and people are both
   missing there is another work's and left out; one of a work the file is
