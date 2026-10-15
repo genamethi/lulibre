@@ -6,7 +6,7 @@
 --                                 only those fields: title authors subject ids date publisher,
 --                                 or their letters t a s i d p
 --   :run propose --fresh FILTER   as if the fields were empty: the file's best reading of each,
---                                 whatever the book says now, and even if it was rejected before.
+--                                 whatever the book says now, and even if it was barred before.
 --                                 With --only, for when one field went wrong across many books.
 --   :run propose --over           also where the file disagrees with a value the book has,
 --                                 however weak the evidence

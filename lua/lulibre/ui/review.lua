@@ -640,7 +640,7 @@ session = function(args)
           if it.heading then open[it.book] = true end
         end
       end
-    elseif item and item.heading and (act == "accept" or act == "reject") then
+    elseif item and item.heading and (act == "accept" or act == "reject" or act == "never") then
       -- on a book's own line the key speaks for all of its proposals
       local mine = {}
       for _, q in ipairs(listed()) do
@@ -650,11 +650,12 @@ session = function(args)
       for _, q in ipairs(mine) do
         if q.status == "pending" then pending = pending + 1 end
       end
-      if act == "reject" then
+      if act == "reject" or act == "never" then
         for _, q in ipairs(mine) do
-          if q.status == "pending" then proposals.set_status(q.id, "rejected") end
+          if q.status == "pending" then proposals.set_status(q.id, act == "never" and "barred" or "rejected") end
         end
-        lulibre.notify(("rejected the %d still pending for book %d"):format(pending, item.book))
+        lulibre.notify(("%s the %d still pending for book %d"):format(act == "never" and "rejected for good" or "rejected",
+          pending, item.book))
       elseif pending == 0 then
         -- all decided already: a second press takes the acceptances back
         for _, q in ipairs(mine) do proposals.set_status(q.id, "pending") end
@@ -676,8 +677,8 @@ session = function(args)
     elseif pr and act == "accept" then
       if pr.status == "accepted" then proposals.set_status(pr.id, "pending") else proposals.accept(pr) end
       keep = key_of(items[row + 1]) or keep
-    elseif pr and act == "reject" then
-      proposals.set_status(pr.id, "rejected")
+    elseif pr and (act == "reject" or act == "never") then
+      proposals.set_status(pr.id, act == "never" and "barred" or "rejected")
       -- an opened book shows the field as it stands in the proposal's place
       keep = open[pr.book] and ("f" .. pr.book .. pr.field) or key_of(items[row + 1]) or key_of(items[row - 1])
     elseif pr and act == "edit" then

@@ -5,6 +5,13 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Changed: rejecting a proposal (`r`) no longer keeps the value from being
+  proposed again by a later run; it decides that proposal only. `N` in
+  review rejects for good (that value, for that book and field, is not
+  proposed again unless `--over` asks). The option `review_reject = "always"`
+  brings back the old behaviour for `r`. Earlier rejections no longer block
+  anything: what they kept out, such as an author a grammar reads off the
+  title page, can be proposed again.
 - Fixed: some Open Library records put the series under the title after a
   blank line ("Local Fields", line breaks, "Graduate Texts in Mathematics"),
   and the whole was proposed as the title. The part after the blank line is

@@ -230,7 +230,9 @@ else
   echo "ok    its proposals are no longer shown"
 fi
 expect "and no other book was taken"          4 "$(run query -c 2>/dev/null)"
-k q
+k g g j N
+shown "N rejects for good"                    "nothing left to review"
+expect "and bars the value"                   "barred" "$(lua 'print(lulibre.store("SELECT status FROM proposals ORDER BY id DESC LIMIT 1")[1].status)')"
 
 # ---- orphans: what does not fit a column is one key away
 lua 'local f = lulibre.files(4)[1]

@@ -132,6 +132,10 @@ static const struct opt_def opts[] = {
   OPT(review_context, OPT_INT, "1", NULL,
       "1: review shows, where the list is, what the proposal under the cursor rests on: the record "
       "it came from, what the book's pages say of it, the other sources for the field (i hides it)", NULL),
+  OPT(review_reject, OPT_STR, "once", "once|always",
+      "once: rejecting a proposal decides that proposal only, and a later run may propose the value "
+      "again (N in review is the key that says never again); always: a rejected value is not proposed "
+      "again for that book and field", NULL),
   OPT(weigh_sources, OPT_STR, "off", "off|on",
       "a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right "
       "in this library (measured by :weigh, adjustable in :weights), instead of the confidence its rule claims", NULL),

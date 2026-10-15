@@ -160,7 +160,7 @@ quotes and punctuation. The option `propose_over` moves the line:
 | `sure` (default) | is proposed for when the file is confident and differs |
 | `any` | is proposed for whenever the file's best candidate differs |
 
-    :propose --over [filter]     as `any` for this run, and proposing again what was rejected before
+    :propose --over [filter]     as `any` for this run, and proposing again what was barred before
     :propose --gaps [filter]     as `gaps` for this run
     :propose --only FIELDS ...   only those fields: title authors subject ids date publisher, or t a s i d p
     :propose --fresh ...         as if the fields were empty: the file's best reading, whatever the book says
@@ -187,8 +187,10 @@ proposes the file's own title for each, whatever the record says, and review
 `:clear FIELDS [filter]` blanks fields outright (`u` puts them back), and
 `:propose --fresh` without `--only` re-reads every field of the books.
 
-A proposal you rejected is not made again by a later run, unless `--over`
-asks. In review, `A` (accept everything above a confidence) asks before it
+Rejecting a proposal (`r`) decides that proposal only: a later run may
+propose the same value again. `N` rejects it for good: that value is not
+proposed again for that book and field, unless `--over` asks. With the
+option `review_reject = "always"`, `r` does what `N` does. In review, `A` (accept everything above a confidence) asks before it
 includes proposals that replace a value.
 
 `gr` lists the proposals book by book, with the current value beside each;
@@ -204,6 +206,7 @@ changes under them: a book removed with `:remove` leaves the panel.
 | Key | |
 |---|---|
 | `a` `r` | accept, reject; on a book's own line, all of that book's proposals |
+| `N` | reject, and never propose that value for that field of the book again |
 | `e` | correct the proposed value, then accept it |
 | `x` · `X` | show this book's other fields under its proposals · for every book |
 | `e` on a shown field | edit it in the same pass; it becomes an accepted proposal |

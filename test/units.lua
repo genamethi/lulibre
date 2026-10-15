@@ -597,12 +597,20 @@ do
     propose.is_gap("title", "2019 44 31 x"), propose.is_gap("title", "A Course in Arithmetic"), propose.is_gap("authors", "libgen.li"),
     propose.is_gap("authors", "Professor Emeritus"), propose.is_gap("authors", "Jean-Pierre Serre"), propose.is_gap("authors", "") },
     { true, true, true, false, true, true, false, true })
-  -- a rejection is remembered
+  -- a rejection decides that proposal only; barring it (N) holds
   local ok, pid = proposals.add(2, "publisher", "Rejected House", { source = "test", confidence = 0.9 })
   eq("a proposal is added", ok, true)
   proposals.set_status(pid, "rejected")
-  eq("what was rejected is not proposed again", proposals.add(2, "publisher", "Rejected House", { source = "test" }), false)
-  eq("unless asked to", (proposals.add(2, "publisher", "Rejected House", { source = "test", again = true })), true)
+  local again, apid = proposals.add(2, "publisher", "Rejected House", { source = "test" })
+  eq("what was rejected may be proposed again", again, true)
+  lulibre.o.review_reject = "always"
+  lulibre.store("DELETE FROM proposals WHERE id = ?", apid)
+  eq("unless review_reject is always", proposals.add(2, "publisher", "Rejected House", { source = "test" }), false)
+  lulibre.o.review_reject = "once"
+  local _, bpid = proposals.add(2, "publisher", "Barred House", { source = "test" })
+  proposals.set_status(bpid, "barred")
+  eq("what was barred is not proposed again", proposals.add(2, "publisher", "Barred House", { source = "test" }), false)
+  eq("unless asked to", (proposals.add(2, "publisher", "Barred House", { source = "test", again = true })), true)
   eq("replaces: a value over a value", { proposals.replaces { book = 2, field = "authors", op = "set" },
     proposals.replaces { book = 2, field = "publisher", op = "set" }, proposals.replaces { book = 2, field = "tags", op = "add" } },
     { true, false, false })
