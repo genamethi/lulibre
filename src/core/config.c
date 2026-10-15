@@ -112,6 +112,13 @@ static const struct opt_def opts[] = {
       "1: the review screen starts with every book's other fields shown", NULL),
   OPT(review_sort, OPT_STR, "confidence", "confidence|id|disputed",
       "the order of books in review: the surest proposals first, by book id, or those whose sources disagree most first", NULL),
+  OPT(review_rows, OPT_STR, "field", "field|all",
+      "review shows one row for each field of a book, with the surest proposal for it (o steps to the "
+      "next source, O takes that source for the field in every book, m switches), or all: every "
+      "proposal a row of its own", NULL),
+  OPT(review_context, OPT_INT, "1", NULL,
+      "1: review shows, where the list is, what the proposal under the cursor rests on: the record "
+      "it came from, what the book's pages say of it, the other sources for the field (i hides it)", NULL),
   OPT(weigh_sources, OPT_STR, "off", "off|on",
       "a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right "
       "in this library (measured by :weigh, adjustable in :weights), instead of the confidence its rule claims", NULL),

@@ -7,7 +7,9 @@
  *     rows = { {"authors", "Unknown", "E. Di Nardo", "title page", id = 1299, style = "ok"} },
  *     follow = true,      -- moving through rows moves the list to row.id
  *     height = 0.45,      -- share of the screen
- *     side = "left",      -- a column down the left instead (width = 0.28)
+ *     side = "left",      -- a column down the left instead (width = 0.28);
+ *                         -- "main": in the list's window, which comes back when
+ *                         -- the panel closes (the focus stays where it was)
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
  *     reloads = true,     -- and "<Reload>" when the library has been read again
  *     tabs = { "this run (9)", "all waiting (212)" }, tab = 1,
@@ -257,7 +259,7 @@ static int l_panel_ui(lua_State *L) {
   if (!t || !t->nc) return luaL_error(L, "panels need the interface, which is not running");
   luaL_checktype(L, 1, LUA_TTABLE);
   lua_getfield(L, 1, "side");
-  char side = lua_isstring(L, -1) && lua_tostring(L, -1)[0] == 'l' ? 'l' : 'b';
+  char side = !lua_isstring(L, -1) ? 'b' : lua_tostring(L, -1)[0] == 'l' ? 'l' : lua_tostring(L, -1)[0] == 'm' ? 'm' : 'b';
   lua_getfield(L, 1, side == 'l' ? "width" : "height");
   float size = (float)luaL_optnumber(L, -1, side == 'l' ? 0.28 : 0.45);
   lua_pop(L, 2);

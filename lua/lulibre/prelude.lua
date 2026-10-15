@@ -214,8 +214,8 @@ lulibre.command("verify", script("verify"),
   "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
 lulibre.command("snapshot", script("snapshot"),
   "[NAME] | list | plan SNAP | rollback SNAP [--exact --unsync --fields] | retire SNAP | import FILE  points the library can be put back to")
-lulibre.command("snapshots", function(args) lulibre.exec("run snapshot list" .. (args ~= "" and " " .. args or "")) end,
-  "[--all]  the snapshots, with how much has changed since each")
+lulibre.command("snapshots", function() require("lulibre.ui.snapshots").run() end,
+  "the snapshot browser: what going back to each would do, where the list is; go back, take, retire")
 lulibre.command("rollback", function(args) lulibre.exec("run snapshot rollback " .. (args or "")) end,
   "SNAP [--exact --unsync --fields]  put the library back to a snapshot (shows what it will do, then asks)")
 lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page images with tesseract")

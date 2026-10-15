@@ -217,6 +217,31 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `l` `h` | the next view, the one before (the tabs in the bar; a click on one works too) |
 | `D` | drop what the view in front holds: deleted, not rejected, so it can be proposed again |
 | `w` | write the accepted ones as one batch |
+| `o` | the next source's proposal for this field (one row per field) |
+| `O` | for this field, the next kind of source (CrossRef, Open Library, the title page, ...) in every book that has one |
+| `m` | one row per field, or every proposal a row of its own |
+| `i` | show or hide, where the list is, what the proposal under the cursor rests on |
+
+**One row per field.** A title, the authors, a date, a publisher or a
+series holds one value, so the proposals for it are alternatives. Review
+shows one of them, the surest, with `2/3` before its source when there are
+others; `o` steps to the next, and `O` shows the same kind of source for
+that field throughout the view, so you can look at all the titles CrossRef
+gave, then all those the title pages gave. Accepting takes the one shown.
+`m` (or the option `review_rows = "all"`) shows every proposal on a row of
+its own instead. Subjects and identifiers that are added or taken off are
+not alternatives and always have a row each.
+
+**What a proposal rests on.** While review is open, the place where the list
+was shows the proposal under the cursor: where it came from and how sure,
+what the book's own pages say of it (and of the value it would replace),
+the record behind it (for an identifier, the record that identifier leads
+to: what taking it would bring), with that record's title, people, date,
+type, length and identifiers and how they stand against the pages, and the
+other sources' values for the field. `i` hides it and brings it back; the
+option `review_context = 0` starts without it. To show something else
+there, replace `require("lulibre.ui.review").context` in init.lua: it is
+given the proposal and the others for its field and returns rows.
 
 `:review FILTER` keeps the review to the books a filter matches
 (`:review author:unknown`); `w` then writes only theirs.
@@ -642,6 +667,15 @@ and books whose file could not be read.
 `--apply` also withdraws what still waits from `:run unmatch --fix`: this
 settles the same books, with the file to go by.
 
+### arXiv numbers by title, on this machine: `:run arxiv-titles`
+
+With arXiv's own snapshot kept here (`:datasets`), `:run arxiv-titles
+[filter]` looks every book with no arXiv number up by its title (and by
+the part before a colon), in one pass through the file and asking nobody.
+A paper with the same title is taken only when the book's pages show that
+title and name its people; its number is then proposed, and `:enrich
+--offline` proposes the rest of its record. It takes a minute or so.
+
 ### Works no catalogue has: `:noncatalog`
 
 A handout, the notes of a course, a chapter of the Stacks project, a page
@@ -989,6 +1023,20 @@ A snapshot imported from an older `metadata.db` is placed in the journal
 at that copy's time. Where the copy differs from what the journal says the
 library was then (a change nobody logged), those values go with the
 snapshot and count as changes made outside lulibre.
+
+### The snapshot browser: `gz`
+
+`gz` (or `:snapshots`) lists the snapshots along the bottom; where the list
+was, it shows what going back to the one under the cursor would do, with
+some of the books it would change.
+
+| Key | |
+|---|---|
+| `Enter` | go back to it (asks first) |
+| `n` | take a snapshot now |
+| `x` | retire it, or bring it back |
+| `a` | show the retired ones too |
+| `E` `U` `F` | go back with `--exact`, `--unsync`, `--fields` (the title says which are on) |
 
 ## When something goes wrong
 
