@@ -13,6 +13,8 @@ local title_patterns = {
   "^series editors?$", "^editorial.board$", "^joined document",
   "^arxiv:", "service temporarily unavailable", "^%d%d%d %a+ ?%a* ?%a*$", "page not found",
   "access denied", "just a moment",
+  -- a file name with its words after a dash: "titile -equivnorms", "title -crt"
+  "^titi?le%s*%-",
 }
 
 -- headings that are never a book's title on their own
