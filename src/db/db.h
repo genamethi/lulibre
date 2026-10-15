@@ -23,6 +23,9 @@ int db_open_reader(struct db *db, const char *path, char **err);
  * for a thread of its own. */
 int db_open_writer(struct db *db, const char *path, char **err);
 void db_close(struct db *db);
+/* Where the history (the journal and the snapshots) of the index at `index`
+ * is kept. malloc'd. */
+char *db_history_path(const char *index);
 /* Rebuild the rows that show staged files (the `staged` table) as books
  * with negative ids. In its own transaction unless in_txn. */
 int db_stage_refresh(struct db *db, int in_txn, char **err);
@@ -35,6 +38,12 @@ int db_meta_set(struct db *db, const char *key, const char *val);
 /* Copy calibre's metadata into the index when metadata.db has changed (or
  * force is set). Returns 1 if a copy ran, 0 if already current, -1 on error. */
 int db_mirror(struct db *db, const char *library, int force, char **err);
+
+/* Call fn with each book of the calibre database at path (read, never
+ * written), as a row with the columns of the index's books table, named.
+ * fn returns nonzero to stop. */
+int db_calibre_books(struct db *db, const char *path, int (*fn)(void *ud, sqlite3_stmt *st), void *ud,
+                     char **err);
 
 /* dbfuncs.c */
 int db_register_functions(struct db *db, char **err);

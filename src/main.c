@@ -35,6 +35,7 @@ static const struct {
   {"enrich", cmd_script, "look books up by their identifiers and propose what the records say"},
   {"refs", cmd_script, "read what the books cite, from the bibliography at the end of each file"},
   {"datasets", cmd_script, "databases for looking books up offline: see them, fetch them"},
+  {"snapshot", cmd_script, "points the library can be put back to: take, list, plan, rollback, import"},
 };
 
 static void usage(FILE *f) {

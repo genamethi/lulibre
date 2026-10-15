@@ -210,6 +210,12 @@ local function script(name)
   return function(args) lulibre.exec("run " .. name .. (args ~= "" and " " .. args or "")) end
 end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
+lulibre.command("snapshot", script("snapshot"),
+  "[NAME] | list | plan SNAP | rollback SNAP [--exact --unsync --fields] | retire SNAP | import FILE  points the library can be put back to")
+lulibre.command("snapshots", function(args) lulibre.exec("run snapshot list" .. (args ~= "" and " " .. args or "")) end,
+  "[--all]  the snapshots, with how much has changed since each")
+lulibre.command("rollback", function(args) lulibre.exec("run snapshot rollback " .. (args or "")) end,
+  "SNAP [--exact --unsync --fields]  put the library back to a snapshot (shows what it will do, then asks)")
 lulibre.command("ocr", script("ocr"), "[filter | all]  read text from page images with tesseract")
 lulibre.command("enrich", script("enrich"),
   "[--offline] [--titles] [filter]  look books up by their identifiers (arXiv, CrossRef, zbMATH, Open Library); proposes")
