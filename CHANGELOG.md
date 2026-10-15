@@ -18,8 +18,14 @@ written in `src/version.h`.
   Makefile), Elsevier's Handbook of Algebra (volume and place by DOI),
   numbered chapters in very large type. `:run grammars [--apply]`; their
   titles and authors are proposed by `:propose`. Your own in init.lua.
-- New: parts of a whole, kept in lulibre's index: `is:part`, `:parts`
-  (each whole, its parts in order, what is missing).
+- New: custom fields (`:custom`): metadata of your own beside calibre's,
+  in a database of lulibre's own beside the index (calibre's is never
+  changed for them), named as calibre's custom columns (`#partof`). They are
+  edited, proposed, reviewed, journaled, undone and rolled back like any
+  field, shown in the preview, and filtered by (`#partof:handbook`,
+  `has:#partof`).
+- New: parts of a whole, as the custom fields `#partof`, `#part`, `#parts`:
+  `is:part`, `:parts` (each whole, its parts in order, what is missing).
 
 - New: the configuration window, `gC` / `:config`: every option with its
   value, default and the line of init.lua that sets it, and what it does;

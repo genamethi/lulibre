@@ -836,7 +836,7 @@ handouts and the Stacks project's chapters are marked non-catalog by
 
 **Parts of a whole.** A grammar may say which whole a file is a part of, its
 number in it and how many there are; so may a record much longer than the
-file. lulibre keeps that in its own index (calibre has no field for it):
+file. These are custom fields (below): `#partof`, `#part`, `#parts`.
 `is:part` finds such books, and `:parts` lists each whole with its parts in
 order and the numbers missing. For the Stacks project the order is the one
 its Makefile gives: a book holding the table "Chapters in reading order"
@@ -879,6 +879,28 @@ local C, Cg, Ct, P, R, S = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.P, lpeg.R, lpeg.S
 G.add { name = "caps-then-names",
   peg = Ct(Cg(C((R"AZ" + S" '-:,")^3), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
 ```
+
+## Custom fields: `:custom`
+
+calibre has the fields it has. Metadata of your own goes beside them, in a
+database of lulibre's own (`<index>.custom.db`, beside the index): calibre's
+database is never changed for it, and building the index again loses
+nothing. A field is named as calibre names a custom column (`#partof`), so
+it could become one later.
+
+    :custom                          the fields, what they are, how many books have each
+    :custom add NAME [type] [help]   declare one: text (the default), number, date or list
+    :custom set NAME VALUE           set it for the selection (an empty value removes it)
+
+Otherwise a custom field is a field like the others: it is in the edit form
+(`e`), it can be proposed and reviewed, it is written through the same path
+(so it is in the journal, and undo, snapshots and rollbacks take it back),
+the preview shows it under the book's identifiers, and filters find it:
+
+    #partof:handbook     #part:3     #part:none     has:#partof     no:#series2
+
+lulibre's own: `#partof`, `#part`, `#parts` (parts of a whole). Scripts read
+and write them through `lulibre.custom` and `lulibre.apply`.
 
 ## What books cite: `:refs`
 

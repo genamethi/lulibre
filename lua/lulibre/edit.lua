@@ -42,6 +42,8 @@ end
 
 --- A book's current value of a field, in the form edits use.
 function M.current(book, field)
+  -- a custom field (#partof): kept by lulibre.custom, not calibre
+  if field:sub(1, 1) == "#" then return require("lulibre.custom").get(book.id, field) end
   if field == "title" then return book.title or "" end
   if field == "authors" then return is_unknown(book.author) and "" or book.author end
   if field == "tags" then return table.concat(book.tags, ", ") end
@@ -72,7 +74,15 @@ end
 --- The value a field ends up with after a change.
 function M.resolve(book, field, op, value)
   op = op or "set"
-  local sep = M.separator[field]
+  local custom = field:sub(1, 1) == "#" and require("lulibre.custom")
+  if custom then
+    local spec = custom.field(field) or { type = "text" }
+    if spec.type ~= "list" then
+      if op ~= "set" then error(field .. " holds one value; only op = \"set\" applies") end
+      return custom.resolve(field, value)
+    end
+  end
+  local sep = M.separator[field] or (custom and ", ")
   if not sep then
     if op ~= "set" then error(field .. " holds one value; only op = \"set\" applies") end
     value = trim(value or "")
@@ -102,10 +112,10 @@ function M.resolve(book, field, op, value)
     if field ~= "authors" then table.sort(items) end
     return table.concat(items, sep)
   end
-  if op == "set" then return finish(M.split(field, value)) end
-  local items, seen = M.split(field, M.current(book, field)), {}
+  if op == "set" then return finish(M.split(custom and "tags" or field, value)) end
+  local items, seen = M.split(custom and "tags" or field, M.current(book, field)), {}
   for i, item in ipairs(items) do seen[key_of(field, item)] = i end
-  for _, item in ipairs(M.split(field, value)) do
+  for _, item in ipairs(M.split(custom and "tags" or field, value)) do
     local k = key_of(field, item)
     if op == "add" then
       if seen[k] then items[seen[k]] = item -- same tag, or a new value for that identifier
@@ -341,23 +351,49 @@ function M.apply(changes, opts)
   local ran, trouble = pcall(lulibre.each, queue, function(job)
     if job.id < 0 then
       -- a file staged from the sync folder: its metadata is lulibre's own
-      local ok, why = pcall(require("lulibre.sync").write, job.id, job.fields)
+      -- (custom fields too, which follow it into the library when it is added)
+      local calibre_fields, custom_ok = {}, true
+      for _, f in ipairs(job.fields) do
+        if f.field:sub(1, 1) == "#" then
+          custom_ok = pcall(require("lulibre.custom").put, job.id, f.field, f.new, opts.label or "edit") and custom_ok
+        else
+          calibre_fields[#calibre_fields + 1] = f
+        end
+      end
+      local ok, why = true, nil
+      if #calibre_fields > 0 then ok, why = pcall(require("lulibre.sync").write, job.id, calibre_fields) end
+      if not custom_ok then ok, why = false, why or "a custom field could not be written" end
       lulibre.store("UPDATE journal SET status = ?, error = ? WHERE batch = ? AND book = ?",
         ok and "applied" or "failed", not ok and tostring(why) or nil, batch, job.id)
       if not ok then table.insert(failed, { id = job.id, error = tostring(why) }) end
       staged = true
       return
     end
-    local args = M.calibredb()
-    args[#args + 1] = "set_metadata"
-    args[#args + 1] = tostring(job.id)
+    -- custom fields (#partof) are lulibre's own; the rest go to calibre
+    local own, theirs = {}, {}
     for _, f in ipairs(job.fields) do
-      args[#args + 1] = "--field"
-      args[#args + 1] = f.field .. ":" .. wire(f.field, f.new)
+      if f.field:sub(1, 1) == "#" then own[#own + 1] = f else theirs[#theirs + 1] = f end
     end
-    local r, e = lulibre.system(args, { timeout = 120000 })
-    local good = r ~= nil and r.code == 0
-    local why = not good and failure(r, e) or nil
+    local good, why = true, nil
+    if #theirs > 0 then
+      local args = M.calibredb()
+      args[#args + 1] = "set_metadata"
+      args[#args + 1] = tostring(job.id)
+      for _, f in ipairs(theirs) do
+        args[#args + 1] = "--field"
+        args[#args + 1] = f.field .. ":" .. wire(f.field, f.new)
+      end
+      local r, e = lulibre.system(args, { timeout = 120000 })
+      good = r ~= nil and r.code == 0
+      why = not good and failure(r, e) or nil
+    end
+    if good then
+      local custom = #own > 0 and require("lulibre.custom")
+      for _, f in ipairs(own) do
+        local ok, err = pcall(custom.put, job.id, f.field, f.new, opts.label or "edit")
+        if not ok then good, why = false, tostring(err) end
+      end
+    end
     lulibre.store("UPDATE journal SET status = ?, error = ? WHERE batch = ? AND book = ?",
       good and "applied" or "failed", why, batch, job.id)
     if not good then table.insert(failed, { id = job.id, error = why }) end
@@ -562,6 +598,8 @@ end
 function M.restore_removed(row, label)
   local new, why = restore(row.book, require("lulibre.json").decode(row.old))
   if new then
+    -- its custom fields come back with it
+    require("lulibre.custom").move(row.book, new)
     lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
     local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
     lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label)

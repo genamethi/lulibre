@@ -26,6 +26,8 @@ void db_close(struct db *db);
 /* Where the history (the journal and the snapshots) of the index at `index`
  * is kept. malloc'd. */
 char *db_history_path(const char *index);
+/* Where the custom fields (#partof ...) of the index at `index` are kept. */
+char *db_custom_path(const char *index);
 /* Rebuild the rows that show staged files (the `staged` table) as books
  * with negative ids. In its own transaction unless in_txn. */
 int db_stage_refresh(struct db *db, int in_txn, char **err);

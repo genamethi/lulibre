@@ -36,6 +36,14 @@ again.
 | `sort` | `[-]id title author year series added modified` |
 | `in` | `library` (default), `sync` (files staged from the sync folder), `all` |
 
+## Custom fields
+
+`#name:value` matches a custom field (`:custom`) as a field term does
+(`=`, `^`, `~` work as above); `#name:none` the books without it;
+`has:#name` and `no:#name` likewise.
+
+    #partof:handbook  #part:=3  has:#partof
+
 ## `is:`
 
 | | |

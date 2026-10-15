@@ -243,6 +243,8 @@ function M.add(ids, opts)
       -- proposals not yet reviewed follow the file into the library
       lulibre.store("UPDATE proposals SET book = ? WHERE book = ? AND status IN ('pending', 'accepted')",
         job.library_id, job.id)
+      -- and so do its custom fields
+      if job.added then require("lulibre.custom").move(job.id, job.library_id) end
       pcall(lulibre.mark, job.id, false)
       local gone = false
       if opts.remove then

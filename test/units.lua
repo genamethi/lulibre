@@ -1928,13 +1928,37 @@ do
     G.remove("unit-peg")
     G.remove("unit-pegline")
   end
+  -- parts are custom fields (written here straight, as lulibre.edit would)
+  local custom = require "lulibre.custom"
   local parts = require "lulibre.parts"
-  parts.set(1, { whole = "A Whole", part = 2, parts = 3 })
-  parts.set(2, { whole = "A Whole", part = 1, parts = 3 })
+  custom.put(1, "#partof", "A Whole") custom.put(1, "#part", "2") custom.put(1, "#parts", "3")
+  custom.put(2, "#partof", "A Whole") custom.put(2, "#part", "1") custom.put(2, "#parts", "3")
   local w = parts.wholes()[1]
-  eq("parts in order, and what is missing", { w.whole, w.books[1].id, w.books[2].id, w.missing[1], lulibre.count("is:part") }, { "A Whole", 2, 1, 3, 2 })
-  parts.set(1, nil)
-  parts.set(2, nil)
+  eq("parts in order, and what is missing", { w.whole, w.books[1].id, w.books[2].id, w.missing[1], lulibre.count("is:part"),
+    parts.of(1).part }, { "A Whole", 2, 1, 3, 2, 2 })
+  lulibre.store("DELETE FROM custom.data")
+end
+
+-- custom fields: declared, resolved, filtered (writing them goes through lulibre.edit: test/write.sh)
+do
+  local custom = require "lulibre.custom"
+  local edit = require "lulibre.edit"
+  custom.declare("unitlist", { type = "list", help = "a list" })
+  eq("declared, by its # name", { custom.field("#unitlist").type, custom.field("#partof").type }, { "list", "text" })
+  local b = lulibre.book(1)
+  eq("a number is checked", { pcall(edit.resolve, b, "#part", "set", "four") }, { false, "#part is a number" })
+  eq("a date as dates are", edit.resolve(b, "#unitdate", "set", "1999") , "1999")
+  custom.declare("#unitdate", { type = "date" })
+  eq("a declared date", edit.resolve(b, "#unitdate", "set", "1999"), "1999-01-01")
+  custom.put(1, "#unitlist", "b, a")
+  eq("a list adds as tags do", { edit.current(b, "#unitlist"), edit.resolve(b, "#unitlist", "add", "c") }, { "b, a", "a, b, c" })
+  eq("filtered by", { lulibre.count("#unitlist:a"), lulibre.count("has:#unitlist"), lulibre.count("#unitlist:none"),
+    lulibre.count("-has:#unitlist") }, { 1, 1, lulibre.count("") - 1, lulibre.count("") - 1 })
+  eq("and listed", (function()
+    for _, f in ipairs(custom.fields()) do if f.name == "#unitlist" then return f.books end end
+  end)(), 1)
+  lulibre.store("DELETE FROM custom.data")
+  lulibre.store("DELETE FROM custom.fields")
 end
 
 -- snapshots: working out what going back would do (nothing here is written to calibre)

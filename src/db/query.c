@@ -63,7 +63,7 @@ static const struct { const char *name, *sql; } is_tests[] = {
   {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
   /* marked as a work no catalogue has a record of (:noncatalog) */
   {"noncatalog", "EXISTS(SELECT 1 FROM noncatalog n WHERE n.book = b.id)"},
-  {"part", "EXISTS(SELECT 1 FROM parts pt WHERE pt.book = b.id)"},
+  {"part", "EXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = '#partof')"},
   {"indexed", ANY_FILE("f.status = 1")},
   {"unindexed", ANY_FILE("f.status = 0")},
   {"error", ANY_FILE("f.status = 2")},
@@ -226,6 +226,12 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
       return 0;
     case F_HAS:
     case F_NO: {
+      if (*val == '#') { /* a custom field: has:#partof */
+        sb_printf(sql, "%sEXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = ?)",
+                  f->kind == F_NO ? "NOT " : "");
+        add_param(q, val);
+        return 0;
+      }
       const char *t = LOOKUP(has_tests, val);
       if (!t) {
         char *names = NAMES(has_tests);
@@ -348,6 +354,36 @@ int query_compile_in(const char *filter, int scope, struct query *q, char **err)
 
     int neg = 0;
     if (*p == '-' && p[1] && !isspace((unsigned char)p[1])) { neg = 1; p++; }
+
+    /* a custom field: #name:value (#name:none, #name:=exact ...) */
+    if (*p == '#') {
+      const char *e = p + 1;
+      while (isalnum((unsigned char)*e) || *e == '_') e++;
+      if (*e == ':' && e > p + 1) {
+        char *name = xstrndup(p, (size_t)(e - p));
+        p = e + 1;
+        char *val = read_value(&p, err);
+        if (!val) {
+          free(name);
+          goto fail;
+        }
+        if (terms_in_group) sb_puts(&sql, " AND ");
+        if (neg) sb_puts(&sql, "NOT ");
+        if (strcasecmp(val, "none") == 0) {
+          sb_puts(&sql, "NOT EXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = ?)");
+          add_param(q, name);
+        } else {
+          sb_puts(&sql, "EXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = ? AND ");
+          add_param(q, name);
+          match(q, &sql, "d.value", val);
+          sb_putc(&sql, ')');
+        }
+        free(name);
+        free(val);
+        terms_in_group++;
+        continue;
+      }
+    }
 
     /* field: prefix? */
     const struct field *f = NULL;

@@ -603,3 +603,31 @@ lulibre.command("parts", function()
   if #out == 0 then out[1] = "no book is known to be part of a whole yet (:run grammars --apply finds them)" end
   lulibre.show(out, "wholes and their parts, in order")
 end, "the books that are parts of a whole (handbook chapters, the Stacks project), in order, with what is missing")
+
+lulibre.command("custom", function(args)
+  local custom = require "lulibre.custom"
+  local verb, rest = (args or ""):match("^%s*(%S*)%s*(.-)%s*$")
+  if verb == "add" then
+    local name, kind, help = rest:match("^(%S+)%s*(%S*)%s*(.-)$")
+    if not name then return lulibre.notify(":custom add NAME [text|number|date|list] [what it is]", "error") end
+    if kind ~= "" and not custom.TYPES[kind] then help, kind = (kind .. " " .. help):gsub("%s+$", ""), "text" end
+    local ok, err = pcall(custom.declare, name, { type = kind ~= "" and kind or "text", help = help ~= "" and help or nil })
+    lulibre.notify(ok and ("custom field %s (%s)"):format(err, kind ~= "" and kind or "text") or tostring(err), not ok and "error" or nil)
+  elseif verb == "set" then
+    local name, value = rest:match("^(%S+)%s*(.-)$")
+    if not name then return lulibre.notify(":custom set NAME VALUE (for the selection; an empty value removes it)", "error") end
+    local changes = {}
+    for _, id in ipairs(lulibre.selection()) do changes[#changes + 1] = { id = id, field = custom.norm(name), value = value } end
+    local r = require("lulibre.edit").apply(changes, { label = "custom" })
+    lulibre.notify(require("lulibre.edit").summary(r), #r.failed > 0 and "error" or nil)
+  else
+    local out = {}
+    for _, f in ipairs(custom.fields()) do
+      out[#out + 1] = ("%-14s %-7s %5d book%s   %s%s"):format(f.name, f.type, f.books, f.books == 1 and " " or "s", f.help or "",
+        f.undeclared and "(not declared)" or "")
+    end
+    out[#out + 1] = ""
+    out[#out + 1] = "filter by them: #partof:handbook  #part:none  has:#partof; :custom add NAME TYPE HELP; :custom set NAME VALUE"
+    lulibre.show(out, "custom fields (kept beside calibre's, in lulibre's own database)")
+  end
+end, "[add NAME [type] [help] | set NAME VALUE]  fields of your own beside calibre's (#partof ...): list, declare, set for the selection")

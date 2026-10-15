@@ -21,6 +21,7 @@ struct pstate {
   uint64_t rows_gen;
 
   char *title, *authors, *tags, *pub, *idents, *year;
+  char *custom; /* the custom fields (#partof ...), as one line; NULL when none */
   sqlite3_int64 file;
   char *fpath, *fmt, *ferror, *etitle, *eauthor;
   int fstatus, npages, indexed;
@@ -83,7 +84,7 @@ static void drop_plane(struct pstate *ps) {
 }
 
 static void clear_book(struct pstate *ps) {
-  char **fields[] = {&ps->title, &ps->authors, &ps->tags, &ps->pub, &ps->idents, &ps->year,
+  char **fields[] = {&ps->title, &ps->authors, &ps->tags, &ps->pub, &ps->idents, &ps->year, &ps->custom,
                      &ps->fpath, &ps->fmt, &ps->ferror, &ps->etitle, &ps->eauthor, &ps->text,
                      &ps->job_error};
   for (size_t i = 0; i < ARRAY_LEN(fields); i++) {
@@ -140,6 +141,16 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
       ps->idents = col(st, 4);
       ps->year = col(st, 5);
     }
+    sqlite3_finalize(st);
+  }
+  /* (where the custom fields' database is not attached, there are none) */
+  if (sqlite3_prepare_v2(h,
+                         "SELECT group_concat(field || ' ' || v, '  ·  ') FROM (SELECT field,"
+                         " group_concat(value, ', ') AS v FROM custom.data WHERE book = ?"
+                         " GROUP BY field ORDER BY field)",
+                         -1, &st, NULL) == SQLITE_OK) {
+    sqlite3_bind_int64(st, 1, id);
+    if (sqlite3_step(st) == SQLITE_ROW) ps->custom = col(st, 0);
     sqlite3_finalize(st);
   }
   if (sqlite3_prepare_v2(h,
@@ -509,6 +520,10 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
               ps->eauthor && ps->etitle ? ", " : "", ps->etitle ? ps->etitle : "");
   dr_style(n, theme.dim, C_DEFAULT, 0);
   dr_text(n, y++, x, w, line.len ? line.s : "no file");
+  if (ps->custom) {
+    dr_style(n, theme.accent, C_DEFAULT, 0);
+    dr_text(n, y++, x, w, ps->custom);
+  }
 
   /* Settle the image question before drawing the rule, which reports it. */
   int overlay = t->picker != NULL || t->help != NULL;
