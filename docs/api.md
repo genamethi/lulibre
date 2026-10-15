@@ -227,7 +227,8 @@ its own documentation.
 | `lulibre.edit_file(path)` | open a file in `$VISUAL`/`$EDITOR` (vim, vi), handing over the terminal; the exit status |
 | `lulibre.require_rock(module [, rock])` | require, offering to install into `rocks_tree` when `rocks_install = "on"` |
 | `lulibre.grammars` | grammars of publications: `add{ name=, kind=, lines = { G.line{...}, G.skip(n), G.opt(r), G.either{...} }, text=, pages=, read=, noncatalog=, confidence= }`, `remove(name)`, `match(doc)` → `{ {grammar=, fields=} }`, `doc(id)` |
-| `lulibre.parts` | books that are parts of a whole: `set(id, {whole=, part=, parts=, source=})`, `of(id)`, `wholes()` (parts in order, numbers missing) |
+| `lulibre.parts` | books that are parts of a whole (the custom fields #partof, #part, #parts): `set{ {id=, whole=, part=, parts=}, ... }` (one journaled change), `of(id)`, `wholes()` (parts in order, numbers missing) |
+| `lulibre.custom` | custom fields beside calibre's: `declare(name, {type=, help=})`, `field(name)`, `fields()`, `get(id, name)`, `all(id)`; set them with `lulibre.apply{ {id=, field="#name", value=} }` |
 | `lulibre.snapshots` | points in the journal to go back to: `observe()` logs changes made outside lulibre, `take(name)`, `list{all=}`, `find(what)`, `retire(id, on)`, `plan(id, {exact=, unsync=, fields=})`, `describe(plan)`, `rollback(id, opts)`, `summary(out)`, `import(path, name)`, `added(id, from, label)` for a book lulibre has just added; `values(row)` a books row as the journal spells it |
 | `lulibre.calibre_books(path)` | the books of another calibre `metadata.db` (read only), as rows with the columns of the index's `books` |
 | `lulibre.noncatalog` | works no catalogue has a record of: `is(id)`, `set(ids, on)` → `{withdrawn=, removals=}`, `ids()`; `RECORDS`, `KINDS` (what counts as a catalogue's) |

@@ -17,7 +17,7 @@ end
 local ids = lulibre.ids(#words > 0 and table.concat(words, " ") or "in:library")
 
 local by, order = {}, {}
-local kept, marked = 0, {}
+local kept, marked, pending = 0, {}, {}
 for k, id in ipairs(ids) do
   if k % 100 == 0 then lulibre.progress(("reading %d/%d"):format(k, #ids)) end
   local doc = grammars.doc(id)
@@ -30,7 +30,7 @@ for k, id in ipairs(ids) do
     table.insert(by[g.name], { id = id, fields = m.fields })
     if apply then
       if m.fields.part_of then
-        parts.set(id, { whole = m.fields.part_of, part = tonumber(m.fields.part), parts = tonumber(m.fields.parts), source = "grammar: " .. g.name })
+        pending[#pending + 1] = { id = id, whole = m.fields.part_of, part = tonumber(m.fields.part), parts = tonumber(m.fields.parts) }
         kept = kept + 1
       end
       if g.noncatalog then marked[#marked + 1] = id end
@@ -38,6 +38,8 @@ for k, id in ipairs(ids) do
   end
 end
 lulibre.progress(nil)
+-- the parts, as one change (journaled: undo takes it back)
+if #pending > 0 then parts.set(pending, "grammars") end
 local nc
 if apply and #marked > 0 then nc = require("lulibre.noncatalog").set(marked, true) end
 
