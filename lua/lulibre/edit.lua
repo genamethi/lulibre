@@ -298,6 +298,9 @@ function M.apply(changes, opts)
       break
     end
   end
+  -- changes made outside lulibre since it last looked are logged before this one
+  local snapshots = require "lulibre.snapshots"
+  if #changes > 0 then snapshots.observe() end
   local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
   local now = os.time()
   local queue, unchanged = {}, 0
@@ -378,6 +381,7 @@ function M.apply(changes, opts)
       local book = lulibre.book(row.book)
       if book then lulibre.store("UPDATE journal SET new = ? WHERE id = ?", M.current(book, row.field), row.id) end
     end
+    snapshots.observe()
   end
   return { batch = batch, books = total, applied = total - #failed, unchanged = unchanged, failed = failed,
     links = links }
@@ -427,6 +431,7 @@ local function snapshot(book)
   for _, field in ipairs(M.fields) do snap[field] = M.current(book, field) end
   return snap
 end
+M.state = snapshot
 
 --- Remove books from the library. Waits. calibre moves them to its recycle
 -- bin (.caltrash in the library folder) rather than deleting them, and each
@@ -443,6 +448,7 @@ function M.remove(ids, opts)
   end
   if #ids == 0 then return 0 end
   M.calibredb() -- stops here if the password file is missing
+  require("lulibre.snapshots").observe()
   local json = require "lulibre.json"
   local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
   local label, now = opts and opts.label or "remove", os.time()
@@ -474,7 +480,10 @@ function M.remove(ids, opts)
     removed = removed + #chunk
   end
   lulibre.progress(nil)
-  if removed > 0 then lulibre.reload() end
+  if removed > 0 then
+    lulibre.reload()
+    require("lulibre.snapshots").observe()
+  end
   return removed
 end
 
@@ -545,6 +554,23 @@ local function restore(id, snap)
   return new
 end
 
+--- Bring back a book a journal row says was removed, and log it: the row
+-- is marked undone and says which book it came back as, and a "(restored)"
+-- row for the new book says which one it was. label names the batch.
+-- Returns the new id (and a warning if not all of its metadata came back),
+-- or nil and why not.
+function M.restore_removed(row, label)
+  local new, why = restore(row.book, require("lulibre.json").decode(row.old))
+  if new then
+    lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
+    local batch = lulibre.store("SELECT coalesce(max(batch), 0) + 1 AS n FROM journal")[1].n
+    lulibre.store([[INSERT INTO journal(batch, book, field, old, new, status, ts, label)
+      VALUES(?, ?, '(restored)', ?, ?, 'applied', ?, ?)]], batch, new, tostring(row.book), row.old, os.time(),
+      label or "restore")
+  end
+  return new, why
+end
+
 --- One line for the message area about what apply() did.
 function M.summary(r)
   if r.books == 0 then return "nothing to change" end
@@ -582,10 +608,9 @@ function M.undo(batch)
     if row.field == REMOVED then
       -- a removed book comes back out of calibre's recycle bin
       lulibre.progress(("putting back %d"):format(#restored + #lost + 1))
-      local new, why = restore(row.book, require("lulibre.json").decode(row.old))
+      local new, why = M.restore_removed(row, "undo of " .. batch)
       if new then
         restored[#restored + 1] = new
-        lulibre.store("UPDATE journal SET undone = 1, new = ? WHERE id = ?", "restored as book " .. new, row.id)
         if why then lost[#lost + 1] = { id = row.book, error = why } end
       else
         lost[#lost + 1] = { id = row.book, error = why }

@@ -36,11 +36,8 @@ const char db_schema[] =
   " op TEXT NOT NULL DEFAULT 'set', value TEXT NOT NULL, source TEXT, confidence REAL,"
   " status TEXT NOT NULL DEFAULT 'pending', created INTEGER, note TEXT);"
   "CREATE INDEX IF NOT EXISTS proposals_status ON proposals(status, book);"
-  "CREATE TABLE IF NOT EXISTS journal("
-  " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, book INTEGER NOT NULL, field TEXT NOT NULL,"
-  " old TEXT, new TEXT, status TEXT NOT NULL DEFAULT 'pending', error TEXT, ts INTEGER,"
-  " label TEXT, undone INTEGER NOT NULL DEFAULT 0);"
-  "CREATE INDEX IF NOT EXISTS journal_batch ON journal(batch);"
+  /* the journal of changes lives in the history file beside the index
+   * (db.c, history_schema), so that nothing done to the index loses it */
   "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);"
   /* records the user has confirmed as right: what is learned about subjects
    * is learned from these (lua/lulibre/quality.lua, learn.lua) */
@@ -78,6 +75,12 @@ const char db_schema[] =
   " id INTEGER PRIMARY KEY, path TEXT UNIQUE NOT NULL, size INTEGER, mtime INTEGER,"
   " title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL, publisher TEXT,"
   " pubdate TEXT, idents TEXT, languages TEXT, added INTEGER, twin INTEGER, note TEXT);"
+  /* the books as they were the last time changes made outside lulibre were
+   * looked for (db/mirror.c keeps it, lua/lulibre/snapshots.lua compares it
+   * with the books as they are now and empties it) */
+  "CREATE TABLE IF NOT EXISTS mirror_prev("
+  " id INTEGER PRIMARY KEY, title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL,"
+  " publisher TEXT, pubdate TEXT, languages TEXT, idents TEXT, formats TEXT, path TEXT);"
 
   /* ---- files and their extracted text; survives mirror refreshes ---- */
   "CREATE TABLE IF NOT EXISTS files("

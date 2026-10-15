@@ -3,7 +3,7 @@
 lulibre reads calibre's `metadata.db` and the book files directly, and never
 writes to either itself. Every change goes to calibre through `calibredb`,
 is recorded in a journal with the value it replaced, and can be undone with
-`u`.
+`u`, or the whole library put back to a snapshot (`:rollback`).
 
 Most actions apply to the **selection**: the range being selected with `V`,
 else the marked books that are in the list, else (in a grouped list, with
@@ -816,6 +816,12 @@ edits are kept by lulibre; nothing reaches calibre until:
 `=` marks a staged file the library already has. Adding it adds nothing;
 moving it only clears it out of the folder.
 
+Some folders under the sync folder mean something. A file added from
+`non-catalog/` is marked as a work no catalogue has (`:noncatalog`), one
+from `good/` as a record known to be right (`gk`). `unsynced/` is where a
+rollback puts books it takes back out of the library (`--unsync`, below);
+files there are not waiting to be added.
+
 ### Beside the library: `gb`
 
 `gb` (`:beside`) puts the sync folder in a column on the left and leaves the
@@ -867,6 +873,61 @@ Entries carry a `file` field, which Zotero, JabRef and BibDesk understand.
 the library folder, which calibre permits only while none of its programs
 has the library open), or `"auto"`, the default: the server when it answers,
 else direct.
+
+## Snapshots: `:snapshot`, `:rollback`
+
+The journal of changes is kept in a file of its own beside the index
+(`<index>.history.db`), so that rebuilding or deleting the index never
+loses it. It holds every field lulibre wrote with the value it replaced,
+every book it removed, added from the sync folder, put back or dropped, and
+also the changes made to calibre by other means (its own window, the
+content server, another program): those are found by comparing the books
+with how they were the last time lulibre looked, and logged as one batch
+labelled `outside` when the next change is logged.
+
+A snapshot is a place in that journal; no copy of the library is made.
+
+| Command | |
+|---|---|
+| `:snapshot [NAME]` | take one now (named by the time without a name) |
+| `:snapshots [--all]` | list them, with how much has changed since each; `--all` shows retired ones |
+| `:snapshot plan SNAP` | what going back to it would do; nothing is changed |
+| `:rollback SNAP` | go back to it: shows the plan, then asks |
+| `:snapshot retire SNAP` | take it out of the list (`unretire` brings it back; nothing is deleted) |
+| `:snapshot import FILE [NAME]` | a snapshot from a copy of calibre's `metadata.db` kept from before |
+
+`SNAP` is a snapshot's number or name. From the shell: `lulibre snapshot
+list`, `lulibre snapshot rollback 3 --yes`.
+
+Going back works out, for each field changed since, what it was then, and
+writes that through calibre like any other change (so it is in the journal
+and `:undo` takes it back too):
+
+- a field lulibre changed goes back to what it was;
+- a field changed outside lulibre is left as it is, unless `--exact`;
+- a field changed again by means the journal did not see (it is no longer
+  what lulibre last wrote) is left alone and counted;
+- a book added from the sync folder since goes back to how it was when it
+  was added, since what was done to it in the library is what is being
+  undone. With `--unsync` it leaves the library instead, its files moved to
+  the sync folder's `unsynced/`;
+- a book removed since comes back out of calibre's recycle bin, with its
+  fields as they were; a book put back since is removed again;
+- `--fields` puts back fields only: no book is brought back, removed or
+  taken out.
+
+Before it writes anything a rollback takes a snapshot of its own ("before
+going back to ..."). Going back to that one rolls forward again. Books
+nothing has touched since are not looked at, and going back to the same
+snapshot twice changes nothing the second time.
+
+Author and tag names are compared without case, as calibre stores them: a
+tag renamed `math/topology` to `math/Topology` in calibre is the same tag.
+
+A snapshot imported from an older `metadata.db` is placed in the journal
+at that copy's time. Where the copy differs from what the journal says the
+library was then (a change nobody logged), those values go with the
+snapshot and count as changes made outside lulibre.
 
 ## When something goes wrong
 

@@ -73,6 +73,20 @@ asking anybody: arXiv's records, Open Library's editions and authors,
 zbMATH's links to arXiv. With no argument it says what there is and asks
 which to fetch. It can be run again whenever.
 .TP
+.BR snapshot " [\fIname\fR | " list " | " plan " \fIsnap\fR | " rollback " \fIsnap\fR | " retire " \fIsnap\fR | " import " \fIfile\fR]"
+Points in the journal of changes that the library can be put back to.
+.B rollback
+puts back what lulibre changed since (with
+.BR \-\-exact ,
+what was changed outside it too), after taking a snapshot to roll forward
+to; without a screen it needs
+.BR \-\-yes .
+.B plan
+says what it would do.
+.B import
+makes a snapshot from an older copy of calibre's
+.IR metadata.db .
+.TP
 .BR refs " [" \-\-force "] [\fIfilter\fR | " all ]
 Read what the books cite, from the bibliography at the end of each file.
 .TP
@@ -154,7 +168,9 @@ beside it, modules in
 .IR lua/ .
 .TP
 .I ~/.local/share/lulibre/
-The index (one file for each library), the databases
+The index (one file for each library) and beside it its history
+.RI ( <index>.history.db :
+the journal of changes and the snapshots), the databases
 .B "lulibre datasets"
 fetches, and files dropped from the sync folder.
 .SH ENVIRONMENT

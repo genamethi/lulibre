@@ -232,7 +232,9 @@ static int store_authorizer(void *ud, int action, const char *a, const char *b, 
     case SQLITE_DELETE:
       return a && (!strcmp(a, "proposals") || !strcmp(a, "journal") || !strcmp(a, "kv") ||
                    !strcmp(a, "staged") || !strcmp(a, "good") || !strcmp(a, "terms") || !strcmp(a, "refs") ||
-                   !strcmp(a, "lookups") || !strcmp(a, "noncatalog"))
+                   !strcmp(a, "lookups") || !strcmp(a, "noncatalog") || !strcmp(a, "snapshots") ||
+                   !strcmp(a, "snapshot_values") ||
+                   !strcmp(a, "mirror_prev"))
                ? SQLITE_OK : SQLITE_DENY;
     case SQLITE_SELECT:
     case SQLITE_READ:
@@ -254,7 +256,7 @@ static int run_sql(lua_State *L, int writable) {
   if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
   if (prc) {
     lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, kv, staged, good, terms, refs, lookups, noncatalog"
+                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, snapshots, snapshot_values, kv, staged, good, terms, refs, lookups, noncatalog, mirror_prev"
                         : err);
     free(err);
     return lua_error(L);
@@ -313,6 +315,39 @@ static int l_store(lua_State *L) {
   return run_sql(L, 1);
 }
 
+static int push_cal_row(void *ud, sqlite3_stmt *st) {
+  lua_State *L = ud;
+  int ncol = sqlite3_column_count(st);
+  lua_createtable(L, 0, ncol);
+  for (int c = 0; c < ncol; c++) {
+    switch (sqlite3_column_type(st, c)) {
+      case SQLITE_INTEGER: lua_pushinteger(L, sqlite3_column_int64(st, c)); break;
+      case SQLITE_FLOAT: lua_pushnumber(L, sqlite3_column_double(st, c)); break;
+      case SQLITE_NULL: continue;
+      default:
+        lua_pushlstring(L, (const char *)sqlite3_column_text(st, c), (size_t)sqlite3_column_bytes(st, c));
+    }
+    lua_setfield(L, -2, sqlite3_column_name(st, c));
+  }
+  lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
+  return 0;
+}
+
+/* lulibre.calibre_books(path): the books of another calibre database (a
+ * copy kept from before, say), read-only, as rows with the columns of the
+ * index's books table */
+static int l_calibre_books(lua_State *L) {
+  const char *path = luaL_checkstring(L, 1);
+  char *err = NULL;
+  lua_newtable(L);
+  if (db_calibre_books(db_of(L), path, push_cal_row, L, &err)) {
+    lua_pushstring(L, err);
+    free(err);
+    return lua_error(L);
+  }
+  return 1;
+}
+
 static int reload_ui(lua_State *L) {
   struct app *app = lapi_app(L);
   app_open_db(app);
@@ -364,7 +399,7 @@ void l_db_open(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"ids", l_ids},         {"books", l_books}, {"book", l_book}, {"count", l_count},
     {"authors", l_authors}, {"tags", l_tags},   {"sql", l_sql},   {"store", l_store},
-    {"reload", l_reload},   {"source", l_source}, {"stage_refresh", l_stage_refresh},
+    {"reload", l_reload},   {"source", l_source}, {"stage_refresh", l_stage_refresh}, {"calibre_books", l_calibre_books},
     {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);

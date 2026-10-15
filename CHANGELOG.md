@@ -5,6 +5,27 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- New: snapshots. `:snapshot NAME` marks a point in the journal of
+  changes, and `:rollback SNAP` puts the library back to it: what lulibre
+  changed since goes back, changes made outside lulibre stay (unless
+  `--exact`), books added from the sync folder since go back to how they
+  came (or out of the library to the sync folder's `unsynced/` with
+  `--unsync`), removed books come back from calibre's recycle bin. A
+  rollback first takes a snapshot of its own, so going back to that rolls
+  forward. `:snapshot plan SNAP` shows what it would do, `:snapshots` lists
+  them, `:snapshot retire` takes one out of the list, `:snapshot import
+  FILE` makes one from an older copy of calibre's `metadata.db`. From the
+  shell: `lulibre snapshot ...`.
+- Changed: the journal now lives in a file of its own beside the index
+  (`<index>.history.db`), moved there the first time this version opens
+  the index; rebuilding or deleting the index no longer touches it.
+  Changes made to calibre outside lulibre are now logged in it too (as
+  `outside` batches), and so are books added to the library (by `:sync
+  add`, `:orphans`, `:onboard`).
+- New: folders under the sync folder: a file added from `non-catalog/` is
+  marked non-catalog, one from `good/` known good; `unsynced/` holds books
+  a rollback took back out and is not looked in for files to add.
+
 - New: `:noncatalog add` marks the selection as works no catalogue has a
   record of (a handout, course notes, a chapter of the Stacks project).
   Such a book is not looked up by DOI or ISBN nor searched for by title,
