@@ -18,6 +18,10 @@ function M.add(id, field, value, opts)
   local op = opts.op or "set"
   local book = lulibre.book(id)
   if not book then return false end
+  -- only comments run over lines; a line break anywhere else is a record's layout
+  if field ~= "comments" and type(value) == "string" and value:find("[\r\n\t]") then
+    value = value:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+  end
   if field == "title" and op == "set" and opts.source ~= "typed" and not opts.as_is then
     value = require("lulibre.titlecase").proposed(value)
   end
