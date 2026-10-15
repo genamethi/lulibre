@@ -262,6 +262,12 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   (TOC leaders taken for garbage, a "shift" found in symbols, junk titles
   restored) that the unit cases had not.
 - Lua C modules found on the default `cpath` may be built for another Lua:
-  the user's `~/.luarocks/lib/lua/5.5/lpeg.so` crashes on load (so does LPeg
-  1.1.0 built here against 5.5.1). Do not `require` an optional C module in
-  the interface without a way out.
+  `/usr/local/include/lua.h` here is a 5.4-era header that GCC finds before
+  `/usr/include` (and `-I/usr/include` is ignored, being a system
+  directory), so a module compiled for 5.5 without an explicit include path
+  gets 5.4's `LUA_REGISTRYINDEX` and crashes in `luaopen_*`. The user's
+  `~/.luarocks/lib/lua/5.5/lpeg.so` is such a build. Build test modules with
+  `-I/usr/local/include/lua/5.5`. I first blamed LPeg for "not supporting
+  5.5" after one crash: when a widely used library seems broken, check the
+  build environment (headers, ABI, which library is linked) before the
+  library, and say what was checked before naming a cause.
