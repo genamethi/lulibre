@@ -9,8 +9,9 @@ local M = {}
 -- note. A title that arrives in capitals is proposed in title case, as the
 -- option title_case allows, unless it was typed (source "typed") or
 -- opts.as_is is set. A value that was proposed for this book and field and
--- rejected is not proposed again (a decision made in review holds), unless
--- it is typed or opts.again is set. Returns true and the proposal's id, or false if the book already
+-- barred (N in review: never again) is not proposed again, nor one that
+-- was rejected when the option review_reject is "always"; unless it is
+-- typed or opts.again is set. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
 function M.add(id, field, value, opts)
@@ -31,8 +32,9 @@ function M.add(id, field, value, opts)
   local dup = lulibre.store([[SELECT id, confidence, source FROM proposals WHERE book = ? AND field = ? AND op = ?
     AND value = ? AND status IN ('pending', 'accepted')]], id, field, op, value)[1]
   if not dup and not opts.again and opts.source ~= "typed" then
+    local barred = lulibre.o.review_reject == "always" and "('barred', 'rejected')" or "('barred')"
     local said_no = lulibre.store([[SELECT 1 AS x FROM proposals WHERE book = ? AND field = ? AND op = ?
-      AND value = ? AND status = 'rejected' LIMIT 1]], id, field, op, value)[1]
+      AND value = ? AND status IN ]] .. barred .. " LIMIT 1", id, field, op, value)[1]
     if said_no then return false end
   end
   if dup then
