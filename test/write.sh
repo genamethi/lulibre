@@ -348,6 +348,19 @@ contains "snapshots are listed"           "taken by a rollback" "$(srun snapshot
 step srun snapshot retire start
 expect   "a retired snapshot leaves the list" 0 "$(srun snapshot list 2>&1 | grep -c '^ *1  ' || true)"
 contains "but not --all"                  "retired" "$(srun snapshot list --all 2>&1)"
+# ---- custom fields: written by lulibre, never to calibre; journaled, undone, rolled back
+cb=$(slua 'print(lulibre.ids("in:library")[1])')
+contains "a snapshot before custom fields" "took snapshot" "$(srun snapshot before custom 2>&1)"
+contains "a custom field is set"          "changed 1 book" "$(slua "local e = require 'lulibre.edit' print(e.summary(e.apply { { id = $cb, field = '#partof', value = 'A Handbook' }, { id = $cb, field = '#part', value = '3' } }))")"
+expect   "and read back"                  "A Handbook|3" "$(slua "local c = require 'lulibre.custom' print(c.get($cb, '#partof') .. '|' .. c.get($cb, '#part'))")"
+expect   "calibre knows nothing of it"    0 "$(sqlite3 "$lib/metadata.db" "select count(*) from custom_columns")"
+expect   "filters find it"                1 "$(srun query -c '#partof:handbook' 2>&1)"
+contains "undo takes it back"             "undid" "$(slua 'local r = require("lulibre.edit").undo() print("undid", r.applied)')"
+expect   "it is gone"                     "" "$(slua "print(require('lulibre.custom').get($cb, '#partof'))")"
+slua "require('lulibre.edit').apply { { id = $cb, field = '#partof', value = 'Again' } }" >/dev/null
+contains "a rollback takes it back too"   "put back" "$(srun snapshot rollback 'before custom' --yes 2>&1)"
+expect   "gone again"                     "" "$(slua "print(require('lulibre.custom').get($cb, '#partof'))")"
+
 # ---- OCR written into the PDF itself, the original kept outside the library, and undone
 if command -v ocrmypdf >/dev/null 2>&1; then
   wid=$(slua 'print(lulibre.ids("in:library fmt:pdf")[1])')

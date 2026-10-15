@@ -35,10 +35,17 @@ function M.run(args)
     return first
   end
 
+  -- calibre's fields, then the custom ones (#partof ...: lulibre.custom)
+  local custom = require "lulibre.custom"
+  local fields = {}
+  for _, f in ipairs(edit.fields) do fields[#fields + 1] = f end
+  for _, f in ipairs(custom.fields()) do fields[#fields + 1] = f.name end
+
   local function suggestions(field)
     if not options[field] then
       lulibre.progress("reading the files…")
-      options[field] = suggest.for_field(field, ids)
+      local ok, list = pcall(suggest.for_field, field, ids)
+      options[field] = ok and list or {}
       lulibre.progress(nil)
     end
     return options[field]
@@ -46,7 +53,7 @@ function M.run(args)
 
   local function rows()
     local out = {}
-    for i, field in ipairs(edit.fields) do
+    for i, field in ipairs(fields) do
       local cur = now(field)
       out[i] = { field, cur == nil and ("(%d different values)"):format(#books) or cur,
         new[field] == "" and edit.BLANK or new[field] or "", from[field] or "", style = new[field] and "ok" or nil }
@@ -65,13 +72,13 @@ function M.run(args)
   while true do
     local key, row = p:wait()
     if not key then return end
-    local field = edit.fields[row]
+    local field = fields[row]
     local act = keys:action(key)
     if act == "write" then break end
     if act == "help" then
       keys:show("edit")
     elseif field and act == "edit" then
-      local list = edit.separator[field]
+      local list = edit.separator[field] or (custom.is(field) and (custom.field(field) or {}).type == "list" and ", ") or nil
       local v = lulibre.input {
         prompt = field .. (list and #books > 1 and " (+add, -remove, or a new value): " or ": "),
         default = new[field] or now(field) or "",
@@ -119,7 +126,7 @@ function M.run(args)
     elseif act == "fill" then
       -- take the best suggestion from the files for every field that is empty
       local filled = 0
-      for _, f in ipairs(edit.fields) do
+      for _, f in ipairs(fields) do
         local cur = now(f)
         if not new[f] and cur ~= nil and is_gap(f, cur) then
           for _, s in ipairs(suggestions(f)) do
