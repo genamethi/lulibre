@@ -43,6 +43,8 @@ again.
 | `listauthor` | several authors run together in one name |
 | `filetitle` | the title looks like a file name |
 | `good` | confirmed as right (`gk`) |
+| `noncatalog` | a work no catalogue has a record of (`:noncatalog`) |
+| `part` | a part of a whole: a chapter of a handbook, of the Stacks project (`:parts`) |
 | `capstitle` | the title is in CAPITALS (`gT` puts it in title case) |
 | `indexed` `unindexed` `error` | state of text extraction |
 | `missing` | the record's file is not on disk |

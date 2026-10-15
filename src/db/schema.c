@@ -46,6 +46,11 @@ const char db_schema[] =
    * no DOI or ISBN of their own and are not looked up by one
    * (lua/lulibre/noncatalog.lua) */
   "CREATE TABLE IF NOT EXISTS noncatalog(book INTEGER PRIMARY KEY, ts INTEGER);"
+  /* the whole a book is a part of (a chapter of a handbook, of the Stacks
+   * project), its number in it and how many parts it has, as the grammars
+   * of publications or a record's length say (lua/lulibre/parts.lua) */
+  "CREATE TABLE IF NOT EXISTS parts(book INTEGER PRIMARY KEY, whole TEXT NOT NULL, part INTEGER, parts INTEGER,"
+  " source TEXT, ts INTEGER);"
   /* the phrases that tell one subject from the others, learned from the good
    * records; state is 'learned', 'kept' (the user's own, or pinned) or
    * 'dropped' (never to come back) */
