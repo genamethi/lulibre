@@ -271,3 +271,12 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   5.5" after one crash: when a widely used library seems broken, check the
   build environment (headers, ABI, which library is linked) before the
   library, and say what was checked before naming a cause.
+- Those headers were Pallene's patched Lua 5.4.7, installed by its `make
+  install` (the user has since uninstalled it).
+- The merge into the user's tree is gated on lulibre not running, but I
+  wrote the check as `pgrep -a lulibre; test -z "$(git status --short)" &&
+  git merge ...`: pgrep printed the running process and the merge went on
+  anyway. It was harmless that time (the process was /usr/local/bin/lulibre,
+  not build/lulibre), but a check that only prints is no check. Gate on it:
+  `! pgrep -x lulibre >/dev/null && test -z "$(git status --short)" && git
+  merge ...`, and stop and say so when it fails.
