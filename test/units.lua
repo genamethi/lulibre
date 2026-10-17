@@ -1827,6 +1827,32 @@ do
   eq("another work's record", verify.record(ev, { title = "Modal Predicate Logic", authors = { "Gary Hardegree" } }).another, true)
   eq("a record of the whole", verify.record(ev, { title = "Lectures on the Theory of Numbers", authors = {}, pages = 400 }).part, true)
   eq("nothing known of a file that was not read", verify.record(nil, { title = "x" }).unread, true)
+  -- dates, publishers and series on the pages
+  local dated = "Notes on Sieves\nPaul Erdős and A. Writer\nWe follow the 1996 paper of Selberg.\n© 2004 Springer-Verlag Berlin Heidelberg\nGraduate Texts in Mathematics"
+  local ev2 = { words = verify.words(dated), text = dated, all = dated, refs = "", pages = 30 }
+  eq("a date: its year where the book says when it is from, elsewhere, or not at all",
+    { verify.date(ev2, "2004-01-01"), verify.date(ev2, "1996"), verify.date(ev2, "1999-05-02"), verify.date(ev2, "n.d."), verify.date(ev2, "20041") },
+    { "stated", "mentioned", "absent", "unknown", "unknown" })
+  eq("a publisher by its own words, not the trade's", { verify.named(ev2, "Springer"), verify.named(ev2, "Springer Nature"),
+    verify.named(ev2, "Cambridge University Press"), verify.named(ev2, "University Press") }, { "shown", "partly", "absent", "absent" })
+  eq("a series as it is written", { verify.shows(ev2, "series", "Graduate Texts in Mathematics"),
+    verify.shows(ev2, "series", "Lecture Notes in Mathematics") }, { "shown", "absent" })
+  eq("subjects the pages cannot settle", verify.shows(ev2, "tags", "math/number-theory"), "unknown")
+  -- a proposal judged against what the book has now (book 2, with its file read as ev2)
+  local real = verify.evidence
+  verify.evidence = function() return ev2 end
+  local edit = require "lulibre.edit"
+  local b2 = lulibre.book(2)
+  local function level(field, value, op) return verify.judge { book = 2, field = field, op = op or "set", value = value }.level end
+  eq("book 2 is as the checks below take it", { edit.current(b2, "authors"), edit.current(b2, "publisher"), edit.current(b2, "series") },
+    { "Paul Erdős", "", "" })
+  eq("judged: better, more, both, neither, silent", {
+    level("publisher", "Springer"), level("authors", "Paul Erdős & A. Writer"), level("authors", "P. Erdős"),
+    level("pubdate", "1999"), level("series", "Lecture Notes in Mathematics"), level("tags", "math"),
+    level("identifiers", "doi:10.1/x", "remove") },
+    { "better", "more", "both", "neither", "neither", "silent", "better" })
+  eq("and against: the pages show what it has, not this", level("authors", "Somebody Else"), "against")
+  verify.evidence = real
 end
 
 -- review's context: sources by kind, titles as keys
@@ -1899,6 +1925,88 @@ end
 
 eq("a file name's stem after a dash is no title", { require("lulibre.junk").unlikely_title("titile -equivnorms"),
   require("lulibre.junk").unlikely_title("Title Deeds and Land") }, { true, false })
+
+-- mathematics in titles, in Unicode (lulibre.notation)
+do
+  local nt, tc, names = require "lulibre.notation", require "lulibre.titlecase", require "lulibre.names"
+  eq("TeX formulas in Unicode", { nt.render("$a^x+b^y=c^z$"), nt.render("On $\\mathbb{Z}_p$-extensions"),
+    nt.render("chaos in $L^2$ for diffusions"), nt.render("a Modified $\\Lambda$CDM Framework"), nt.render("$\\mathrm{SL}_2(\\mathbb{Z})$"),
+    nt.render("$F_q$ and $\\mathbf{F}_p$"), nt.render("$X^{3} −5$"), nt.render("$\\mathcal{O}_K$ and $\\mathfrak{g}$") },
+    { "aˣ + bʸ = cᶻ", "On ℤₚ-extensions", "chaos in L² for diffusions", "a Modified ΛCDM Framework", "SL₂(ℤ)", "𝔽_q and 𝔽ₚ",
+      "X³ − 5", "𝒪_K and 𝔤" })
+  eq("a formula with no Unicode form keeps its dollars", nt.render("$\\frac{1}{2}$ and $\\cite{x}$"), "$\\frac{1}{2}$ and $\\cite{x}$")
+  eq("footnote marks go, when asked", { nt.render("over $Semirings^{∗}$", { notes = true }), nt.render("a case $^{*}$", { notes = true }) },
+    { "over Semirings", "a case" })
+  local said = {}
+  for _, t in ipairs { "A Noncommutator in SL_2", "COMPACT SUBGROUPS OF GLn(Qp)", "sl2(z)", "SIMPLICITY OF PSLn(F)",
+    "IRREDUCIBILITY TESTS IN Fp[T]", "Irreducibility Tests in Q[t]", "ISOMETRIES OF Rn", "The Division Algorithm in Z and F[t]",
+    "The Splitting Field of X3 −5 Over Q", "FIELD AUTOMORPHISMS OF R AND Qp", "COUNTING SUBGROUPS OF Z/paZ × Z/pbZ",
+    "Classical Algebraic K-Theory: The Functors Ko, K1, K2", "Lectures On Applied `-Adic Cohomology", "Representations of Aff(Fq)" } do
+    said[#said + 1] = nt.notation(t)
+  end
+  eq("the glossary: what reads one way", said, { "A Noncommutator in SL₂", "COMPACT SUBGROUPS OF GLₙ(ℚₚ)", "sl₂(ℤ)",
+    "SIMPLICITY OF PSLₙ(F)", "IRREDUCIBILITY TESTS IN 𝔽ₚ[T]", "Irreducibility Tests in ℚ[t]", "ISOMETRIES OF ℝⁿ",
+    "The Division Algorithm in ℤ and F[t]", "The Splitting Field of X³ − 5 Over ℚ", "FIELD AUTOMORPHISMS OF ℝ AND ℚₚ",
+    "COUNTING SUBGROUPS OF ℤ/paℤ × ℤ/pbℤ", "Classical Algebraic K-Theory: The Functors K₀, K₁, K₂",
+    "Lectures On Applied ℓ-Adic Cohomology", "Representations of Aff(𝔽_q)" })
+  local left = {}
+  for _, t in ipairs { "Programming in R", "The C Programming Language", "f(R) theories", "A4 Paper Sizes", "Windows XP",
+    "B550 AORUS PRO AC", "Gnu Mp", "Modeling With Sine_Cos", "On the Shimura subgroup of J (N)", "The Division Theorem in Z and R[t]" } do
+    left[#left + 1] = nt.notation(t) == t
+  end
+  eq("and leaves what could be read two ways", left, { true, true, true, true, true, true, true, true, true, false })
+  eq("the glossary leaves formulas to render", nt.notation("$\\mathbb{Z}$ and SL2"), "$\\mathbb{Z}$ and SL₂")
+  eq("a page's title: case for the words, Unicode for the formulas", {
+    nt.title("COMPACT SUBGROUPS OF $GL_{n}(\\mathbf{Q}_{p})$", names.title_caps),
+    nt.title("THE SPLITTING FIELD OF $X^{3} −5$ OVER Q", tc.proposed),
+    nt.title("BINOMIAL COEFFICIENTS AND $p$-ADIC LIMITS", tc.proposed),
+    nt.title("UNIVERSAL IDENTITIES, II: $⊗$ AND $∧$", tc.proposed) },
+    { "Compact Subgroups of GLₙ(ℚₚ)", "The Splitting Field of X³ − 5 Over ℚ", "Binomial Coefficients and p-adic Limits",
+      "Universal Identities, II: ⊗ and ∧" })
+  lulibre.o.math_notation = "off"
+  eq("math_notation off: case only, formulas as TeX", { nt.title("ISOMETRIES OF $\\mathbf{R}^{n}$", tc.proposed), nt.notation("SL2(Z)") },
+    { "Isometries of $\\mathbf{R}^{n}$", "SL2(Z)" })
+  lulibre.o.math_notation = "unicode"
+  eq("title case leaves mathematics alone", { tc.apply("REPRESENTATIONS OF SL₂(ℤ) OVER 𝔽ₚ"), tc.apply("an introduction to p-adic numbers") },
+    { "Representations of SL₂(ℤ) Over 𝔽ₚ", "An Introduction to p-adic Numbers" })
+  eq("search reads Unicode mathematics as plain", lulibre.fold("SL₂(ℤ) 𝔽ₚ[T] X³ − 5 ℓ-adic ℝⁿ"), "sl2(z) fp[t] x3 - 5 l-adic rn")
+
+  -- the reader marks a line's mathematics up from its fonts and the size and height of its type
+  local pdf = os.tmpname()
+  local f = assert(io.open(pdf, "wb"))
+  f:write([[%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R/F2 6 0 R/F3 7 0 R/F4 8 0 R>>>>>>endobj
+4 0 obj<</Length 400>>stream
+BT /F1 12 Tf 72 700 Td (COMPACT SUBGROUPS OF ) Tj /F3 12 Tf (GL) Tj /F2 8 Tf -2 Ts (n) Tj 0 Ts /F3 12 Tf (\() Tj /F1 12 Tf (Q) Tj /F2 8 Tf -3 Ts (p) Tj 0 Ts /F3 12 Tf (\)) Tj ET
+BT /F1 12 Tf 72 670 Td (THE SPLITTING FIELD OF ) Tj /F2 12 Tf (X) Tj /F3 8 Tf 4 Ts (3) Tj 0 Ts /F4 12 Tf ( \000) Tj /F3 12 Tf (5 OVER Q) Tj ET
+BT /F3 10 Tf 72 640 Td (Plain prose in one font throughout) Tj ET
+endstream
+endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/ABCDEF+CMBX12-Bold>>endobj
+6 0 obj<</Type/Font/Subtype/Type1/BaseFont/ABCDEG+CMMI8>>endobj
+7 0 obj<</Type/Font/Subtype/Type1/BaseFont/ABCDEH+CMR10>>endobj
+8 0 obj<</Type/Font/Subtype/Type1/BaseFont/ABCDEI+CMSY10/ToUnicode 9 0 R>>endobj
+9 0 obj<</Length 120>>stream
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap 1 begincodespacerange <00> <FF> endcodespacerange
+2 beginbfchar <00> <2212> <20> <0020> endbfchar endcmap end end
+endstream
+endobj
+trailer<</Root 1 0 R/Size 10>>
+%%EOF
+]])
+  f:close()
+  local d = lulibre.extract(pdf, { pages = 1, layout_pages = 1 })
+  os.remove(pdf)
+  local lines = d and d.page[1].lines or {}
+  eq("the reader marks scripts and fonts up", { lines[1] and lines[1].text, lines[1] and lines[1].math, lines[2] and lines[2].math,
+    lines[3] and lines[3].math or "none" },
+    { "COMPACT SUBGROUPS OF GLn(Qp)", "COMPACT SUBGROUPS OF $GL_{n}(\\mathbf{Q}_{p})$", "THE SPLITTING FIELD OF $X^{3} −5$ OVER Q", "none" })
+  -- (both lines are set in the title's type)
+  eq("and the title page carries it", require("lulibre.titlepage").classify(lines).title_math,
+    "COMPACT SUBGROUPS OF $GL_{n}(\\mathbf{Q}_{p})$ THE SPLITTING FIELD OF $X^{3} −5$ OVER Q")
+end
 
 -- roman numerals a catalogue put in title case
 do

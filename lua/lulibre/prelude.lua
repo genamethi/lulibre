@@ -239,6 +239,8 @@ lulibre.command("arxiv-fetch", script("arxiv-fetch"),
   "[--force]  fetch arXiv's snapshot of its records from Kaggle (through pixi), for :enrich to read instead of asking arXiv")
 lulibre.command("refs", script("refs"), "[--force] [filter | all]  read what the books cite, from the bibliography at the end of each file")
 lulibre.command("propose", script("propose"), "[filter]  propose metadata from the files, for :review")
+lulibre.command("notation", script("notation"),
+  "[filter]  propose titles with their mathematics in Unicode (SL₂(ℤ), GLₙ(ℚₚ)), read from the title page where it has them")
 lulibre.command("dupes", screen("lulibre.ui.dupes"), "find books whose files are identical (MD5); keep one, remove the rest")
 lulibre.command("sync", script("sync"),
   "[add | move | drop] [filter]  the sync folder: show it; add the selection; add and delete; drop without adding")

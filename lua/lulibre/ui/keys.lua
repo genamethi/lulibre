@@ -43,7 +43,7 @@ local DEFAULTS = {
     { "expand_all", { "X" }, "all", "show, or hide, every book's other fields" },
     { "accept_above", { "A" }, "accept all above…", "accept every pending proposal at or above a confidence you give" },
     { "reject_rest", { "R" }, "reject rest", "reject everything still pending" },
-    { "sort", { "s" }, "sort", "order the books: the surest proposals first, those whose sources disagree most first, or by id" },
+    { "sort", { "s" }, "sort", "order the books: best borne out by their pages first, the surest proposals first, those whose sources disagree most first, or by id" },
     { "field", { "f" }, "field…", "show one field's proposals only: then t title, a authors, s subject, i identifiers, d date, p publisher; f again for all" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
     { "other", { "o" }, "other source", "show the next source's proposal for this field (one row per field)" },

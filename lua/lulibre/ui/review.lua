@@ -14,8 +14,13 @@ local edit = require "lulibre.edit"
 local proposals = require "lulibre.proposals"
 local suggest = require "lulibre.suggest"
 local runs = require "lulibre.runs"
+local verify = require "lulibre.verify"
 
 local M = {}
+
+--- The mark a row carries for what the book's pages say of its proposal
+-- (verify.judge's levels). Replace it in init.lua to mark them otherwise.
+M.marks = { better = "●", more = "●", both = "=", partly = "◐", silent = "·", neither = "○", against = "✗" }
 
 local keys = require("lulibre.ui.keys").of("review")
 local panels = require "lulibre.ui.panels"
@@ -204,20 +209,35 @@ session = function(args)
   -- field (the note propose leaves: "2/3 agree, 0.41 apart"): where a look
   -- is most needed.
   local sort = args.sort or ((args.run or fresh) and (args.run or fresh).sort) or lulibre.o.review_sort
-  local SORTS = { confidence = "surest first", disputed = "most disputed first", id = "by id" }
+  local SORTS = { evidence = "best borne out first", confidence = "surest first", disputed = "most disputed first",
+    id = "by id" }
+  -- what the pages say of each proposal, worked out once (a value edited is judged again)
+  local judged = {}
+  local function judge(pr)
+    local k = pr.id .. "\0" .. (pr.value or "")
+    if not judged[k] then
+      local ok, j = pcall(verify.judge, pr)
+      judged[k] = ok and j or { level = "silent", says = tostring(j) }
+    end
+    return judged[k]
+  end
   local rank
   local function rank_books()
-    local best, apart, ids = {}, {}, {}
+    local best, apart, borne, ids = {}, {}, {}, {}
     for _, pr in ipairs(listed()) do
       if not best[pr.book] then
-        best[pr.book], apart[pr.book] = -1, 0
+        best[pr.book], apart[pr.book], borne[pr.book] = -1, 0, -1
         ids[#ids + 1] = pr.book
       end
       best[pr.book] = math.max(best[pr.book], pr.confidence or 0)
       apart[pr.book] = math.max(apart[pr.book], tonumber((pr.note or ""):match("([%d.]+) apart")) or 0)
+      if sort == "evidence" and pr.status == "pending" then
+        borne[pr.book] = math.max(borne[pr.book], verify.LEVELS[judge(pr).level] or 0)
+      end
     end
     table.sort(ids, function(a, b)
-      if sort == "confidence" and best[a] ~= best[b] then return best[a] > best[b] end
+      if sort == "evidence" and borne[a] ~= borne[b] then return borne[a] > borne[b] end
+      if (sort == "confidence" or sort == "evidence") and best[a] ~= best[b] then return best[a] > best[b] end
       if sort == "disputed" and apart[a] ~= apart[b] then return apart[a] > apart[b] end
       return math.abs(a) < math.abs(b)
     end)
@@ -230,7 +250,7 @@ session = function(args)
     local shown = pr.value == "" and edit.BLANK or pr.value
     if pr.op == "add" then shown = "+ " .. shown elseif pr.op == "remove" then shown = "- " .. shown end
     return {
-      pr.status == "accepted" and "✓" or "", pr.field, edit.current(book, pr.field), shown,
+      (pr.status == "accepted" and "✓" or " ") .. (M.marks[judge(pr).level] or " "), pr.field, edit.current(book, pr.field), shown,
       -- where it is from, how sure, how far the book's sources agree about the field, and
       -- (one row per field) which of the field's proposals this is
       ("%s%s%s%s"):format(of and ("%d/%d "):format(of[1], of[2]) or "", pr.source or "",
@@ -291,6 +311,10 @@ session = function(args)
             end
             if #group > 1 then
               table.sort(group, function(a, b)
+                if sort == "evidence" then
+                  local la, lb = verify.LEVELS[judge(a).level] or 0, verify.LEVELS[judge(b).level] or 0
+                  if la ~= lb then return la > lb end
+                end
                 if (a.confidence or 0) ~= (b.confidence or 0) then return (a.confidence or 0) > (b.confidence or 0) end
                 return a.id < b.id
               end)
@@ -378,7 +402,7 @@ session = function(args)
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("accept", "reject", "edit", "other", "about", "write"), follow = true, height = 0.42,
     keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
-    columns = { { "", 1 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
+    columns = { { "", 2 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows, tabs = tab_names(), tab = at,
   }
   p:cursor(first_row())
@@ -545,7 +569,8 @@ session = function(args)
     elseif act == "peek" then
       peek()
     elseif act == "sort" then
-      sort = sort == "confidence" and "disputed" or sort == "disputed" and "id" or "confidence"
+      sort = sort == "evidence" and "confidence" or sort == "confidence" and "disputed" or sort == "disputed" and "id"
+        or "evidence"
       rank_books()
     elseif act == "about" then
       toggle_about(row)
@@ -620,6 +645,8 @@ session = function(args)
       end
       rank_books()
     elseif key == "<Reload>" then
+      verify.forget()
+      judged = {}
       rank_books() -- the library changed under us: books may have gone, values may differ
     elseif act == "write" then
       if #listed("accepted") == 0 then

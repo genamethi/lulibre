@@ -4,7 +4,10 @@
  *                                pages joined by form feeds; nil if none
  *   lulibre.lines(id [, page])   the page (default 1) as lines:
  *                                { {text=, size=, bold=, italic=, super=,
- *                                   rotated=, mono=, block=, x0=, y0=, x1=, y1=}, ... }
+ *                                   rotated=, mono=, block=, x0=, y0=, x1=, y1=,
+ *                                   math=}, ... }
+ *                                math: the line with its mathematics marked
+ *                                up as TeX, when it has any (lulibre.notation)
  *   lulibre.files(id)            { {path=, format=, status=, pages=, chars=,
  *                                   quality=, error=, title=, author=, subject=,
  *                                   keywords=, creator=, producer=}, ... }
@@ -89,7 +92,7 @@ static int l_text(lua_State *L) {
 }
 
 static void push_line(lua_State *L, const char *text, double size, unsigned flags, double x0,
-                      double y0, double x1, double y1) {
+                      double y0, double x1, double y1, const char *math) {
   static const struct { const char *name; unsigned bit; } bits[] = {
     {"bold", LINE_BOLD}, {"italic", LINE_ITALIC}, {"super", LINE_SUPER},
     {"rotated", LINE_ROTATED}, {"mono", LINE_MONO}, {"block", LINE_BLOCK},
@@ -107,13 +110,17 @@ static void push_line(lua_State *L, const char *text, double size, unsigned flag
   lua_pushnumber(L, y0); lua_setfield(L, -2, "y0");
   lua_pushnumber(L, x1); lua_setfield(L, -2, "x1");
   lua_pushnumber(L, y1); lua_setfield(L, -2, "y1");
+  if (math) {
+    lua_pushstring(L, math);
+    lua_setfield(L, -2, "math");
+  }
 }
 
 static int l_lines(lua_State *L) {
   lua_Integer id = luaL_checkinteger(L, 1);
   int page = (int)luaL_optinteger(L, 2, 1);
   sqlite3_stmt *st = prep(L,
-    "SELECT text, size, flags, x0, y0, x1, y1 FROM lines WHERE file ="
+    "SELECT text, size, flags, x0, y0, x1, y1, math FROM lines WHERE file ="
     " (SELECT f.id FROM files f WHERE f.book = ?1 ORDER BY f.id LIMIT 1)"
     " AND page = ?2 ORDER BY n");
   sqlite3_bind_int64(st, 1, id);
@@ -124,7 +131,7 @@ static int l_lines(lua_State *L) {
     push_line(L, (const char *)sqlite3_column_text(st, 0), sqlite3_column_double(st, 1),
               (unsigned)sqlite3_column_int(st, 2), sqlite3_column_double(st, 3),
               sqlite3_column_double(st, 4), sqlite3_column_double(st, 5),
-              sqlite3_column_double(st, 6));
+              sqlite3_column_double(st, 6), (const char *)sqlite3_column_text(st, 7));
     lua_rawseti(L, -2, ++i);
   }
   sqlite3_finalize(st);
@@ -220,7 +227,7 @@ static void x_after(uv_work_t *req, int status) {
         lua_createtable(L, pg->nlines, 0);
         for (int k = 0; k < pg->nlines; k++) {
           struct doc_line *l = &pg->lines[k];
-          push_line(L, l->text, l->size, l->flags, l->x0, l->y0, l->x1, l->y1);
+          push_line(L, l->text, l->size, l->flags, l->x0, l->y0, l->x1, l->y1, l->math);
           lua_rawseti(L, -2, k + 1);
         }
         lua_setfield(L, -2, "lines");

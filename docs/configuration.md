@@ -43,13 +43,14 @@ o.library = "~/calibre-library"
 | `subject_catchall` | | subjects (or their last part), separated by commas, that file a book by form rather than topic |
 | `never_authors` | | words and phrases, separated by commas, never proposed as an author (added to the built-in ranks and roles) |
 | `title_case` | `auto` | `auto` · `never`: propose a title found in CAPITALS in title case |
+| `math_notation` | `unicode` | `unicode` · `off`: write the mathematics in proposed titles in Unicode (SL₂(ℤ), GLₙ(ℚₚ)) |
 | `sync_dir` | | folder of files waiting to be added |
 | `orphans_dir` | | where stray files are set aside |
 | `preview` | `text` | `text` · `image`: what the preview shows first |
 | `blitter` | `auto` | `auto` · `pixel` · `sextant` · `quadrant` · `half`: how page images are drawn |
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
-| `review_sort` | `confidence` | `confidence` · `id`: the order of books in review |
+| `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review (best borne out by their pages first, surest, most disputed, by id) |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |

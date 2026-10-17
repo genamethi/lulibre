@@ -47,6 +47,8 @@ M.keep = {
 }
 
 local lower = function(s) return lulibre.lower(s) end
+-- (required when first used: lulibre.notation uses title case itself)
+local function notation() return require "lulibre.notation" end
 local upper = function(s) return lulibre.upper(s) end
 
 --- Is the text set in capitals? True when it has at least two letters and
@@ -78,12 +80,22 @@ local function capitalise(s)
   return upper(first) .. s:sub(#first + 1)
 end
 
+-- a part before a hyphen that is a symbol, not a word: a formula held aside
+-- (lulibre.notation.title), ℓ
+local function is_symbol(part)
+  return part:match("^[\238][\128-\191][\128-\191]$") ~= nil or (part:match("^[\194-\244][\128-\191]+$") ~= nil
+    and utf8.len(part) == 1 and lower(part) == part and upper(part) == part)
+end
+
 -- One word without the punctuation around it. caps: the whole title is in
 -- capitals; first: it opens the title or a subtitle.
 local function word(core, caps, first)
   local low = lower(core)
   if M.keep[low] then return M.keep[low] end
   if core:find("%d") then return core end
+  -- mathematics is spelled as it is: SL₂(ℤ), and p-adic, ℓ-adic
+  if notation().has_math(core) then return core end
+  if not caps and core:match("^%l%-%l+$") then return core end
   if low:match("^%a%.%a[%a.]*$") and #low <= 9 then return upper(low) end -- U.S.A, N.Y
   local o, rest_of = low:match("^(%a)'(%a.*)$") -- O'Neil, D'Alembert
   if o and caps then return upper(o) .. "'" .. capitalise(rest_of) end
@@ -108,7 +120,7 @@ local function word(core, caps, first)
       parts[i] = M.keep[part]
     elseif i == 1 then
       parts[i] = (M.minor[part] and not first) and part or capitalise(part)
-    elseif M.prefixes[before] or M.minor[part] then
+    elseif M.prefixes[before] or M.minor[part] or is_symbol(before) then
       parts[i] = part
     else
       parts[i] = capitalise(part)

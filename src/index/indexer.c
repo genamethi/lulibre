@@ -96,6 +96,7 @@ static void store(struct indexer *ix, struct job *j) {
       sqlite3_bind_double(ix->ins_line, 8, l->y0);
       sqlite3_bind_double(ix->ins_line, 9, l->x1);
       sqlite3_bind_double(ix->ins_line, 10, l->y1);
+      bind_text(ix->ins_line, 11, l->math);
       run(ix->ins_line);
     }
     ix->st.pages++;
@@ -276,8 +277,8 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
       db_prepare(db, "INSERT INTO pages(file, page, text, src, w, h) VALUES(?, ?, ?, 'emb', ?, ?)",
                  &ix->ins_page, err) ||
       db_prepare(db,
-                 "INSERT INTO lines(file, page, n, text, size, flags, x0, y0, x1, y1)"
-                 " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 "INSERT INTO lines(file, page, n, text, size, flags, x0, y0, x1, y1, math)"
+                 " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  &ix->ins_line, err) ||
       db_prepare(db,
                  "UPDATE files SET size = ?, mtime = ?, status = ?, error = ?, npages = ?,"

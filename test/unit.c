@@ -132,6 +132,10 @@ static void test_match(void) {
   fold_utf8(&f, "Erd\xc5\x91s \xc3\x89tale", 13);
   eq(f.s, "erdos etale", "fold: case and accents");
   sb_free(&f);
+  const char *math = "SL\xe2\x82\x82(\xe2\x84\xa4) \xf0\x9d\x94\xbd\xe2\x82\x9a X\xc2\xb3 \xe2\x84\x93";
+  fold_utf8(&f, math, strlen(math));
+  eq(f.s, "sl2(z) fp x3 l", "fold: mathematics in Unicode as its plain letters");
+  sb_free(&f);
   ok(fuzzy_score("grot", "grothendieck") > FUZZY_NONE / 2, "fuzzy: a prefix matches");
   ok(fuzzy_score("xyz", "grothendieck") <= FUZZY_NONE / 2, "fuzzy: absent letters do not");
   ok(fuzzy_score("alg", "algebra") > fuzzy_score("alg", "a long gap"), "fuzzy: adjacent letters score higher");

@@ -26,12 +26,13 @@ struct config {
   char *contact_email; /* sent to metadata services with each request, when set */
   char *enrich_services; /* which metadata services :enrich asks, comma-separated */
   char *arxiv_snapshot; /* arXiv's metadata snapshot (JSON lines, or the .zip it comes in): read before arXiv is asked */
-  char *review_sort;   /* confidence | id: the order of books in review */
+  char *review_sort;   /* evidence | confidence | id | disputed: the order of books in review */
   char *review_rows;   /* field | all: one row per field in review, or one per proposal */
   int review_context;  /* 1: review shows what a proposal rests on in the main view */
   char *review_reject; /* once | always: does a rejected value stay out of later proposals? */
   char *weigh_sources; /* off | on: confidences from measured source weights */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
+  char *math_notation; /* unicode | off: mathematics in proposed titles (lulibre.notation) */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
   char *one_word_titles; /* check | ok | junk: is a title of one word a title? */
   char *good_titles;   /* titles, comma-separated, that are titles whatever they look like */

@@ -99,7 +99,7 @@ const char db_schema[] =
   "CREATE TABLE IF NOT EXISTS lines("
   " file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
   " page INTEGER NOT NULL, n INTEGER NOT NULL, text TEXT NOT NULL,"
-  " size REAL, flags INTEGER, x0 REAL, y0 REAL, x1 REAL, y1 REAL,"
+  " size REAL, flags INTEGER, x0 REAL, y0 REAL, x1 REAL, y1 REAL, math TEXT,"
   " PRIMARY KEY(file, page, n)) WITHOUT ROWID;"
   "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
   " text, content='pages', content_rowid='id', tokenize='unicode61 remove_diacritics 2');"

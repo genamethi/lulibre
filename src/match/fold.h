@@ -4,7 +4,8 @@
 #include "core/util.h"
 
 /* Append a search key for s: ASCII lower-cased, Latin letters stripped of
- * their diacritics ("Erdős" -> "erdos"), combining marks dropped. Other
+ * their diacritics ("Erdős" -> "erdos"), combining marks dropped, and
+ * mathematics in Unicode as its plain letters ("SL₂(ℤ)" -> "sl2(z)"). Other
  * scripts pass through unchanged. */
 void fold_utf8(sbuf *out, const char *s, size_t n);
 

@@ -19,6 +19,10 @@ struct doc_line {
   float size; /* dominant font size; for DjVu, the line height */
   unsigned flags;
   float x0, y0, x1, y1;
+  /* the line with its mathematics marked up as TeX, from the fonts and the
+   * size and height of each character ("THE SPLITTING FIELD OF $X^{3} − 5$
+   * OVER Q"); NULL when it has none, or the format cannot say */
+  char *math;
 };
 
 struct doc_page {
@@ -66,8 +70,9 @@ void doc_render(const char *path, int page, int width, float aspect, struct doc_
 void doc_image_free(struct doc_image *img);
 
 /* helpers shared by the format backends */
-void doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags, float x0,
-                       float y0, float x1, float y1); /* takes ownership of text */
+/* takes ownership of text; returns the line, or NULL when it was only whitespace */
+struct doc_line *doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags,
+                                   float x0, float y0, float x1, float y1);
 void doc_page_finish(struct doc_page *pg, int keep_lines);
 double doc_text_quality(const char *s, long *nchars, double *garbled);
 
