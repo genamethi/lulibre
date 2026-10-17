@@ -529,6 +529,8 @@ static void preview_click_done(struct tui *t) {
   tui_dirty(t);
 }
 
+static const char *tab_command(const struct tui *t, int i);
+
 static void on_mouse(struct tui *t, const struct ncinput *ni) {
   int release = ni->evtype == NCTYPE_RELEASE;
   int wheel = ni->id == NCKEY_SCROLL_UP ? -3 : ni->id == NCKEY_SCROLL_DOWN ? 3 : 0;
@@ -601,9 +603,9 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
-  if (left && ni->y == 0 && t->app->cfg.sync_dir[0]) { /* a click on a source tab */
-    if (ni->x >= t->tab_x[0] && ni->x < t->tab_x[1]) tui_exec(t, "source library");
-    else if (ni->x >= t->tab_x[1] && ni->x < t->tab_x[2]) tui_exec(t, "sync");
+  if (left && ni->y == 0) { /* a click on one of the bar's tabs */
+    for (int i = 0; i < t->tab_n; i++)
+      if (ni->x >= t->tab_x[i] && ni->x < t->tab_x[i + 1]) tui_exec(t, tab_command(t, i));
     return;
   }
   if (!nd) { /* the status line, the message line */
@@ -975,8 +977,9 @@ static void draw_help(struct tui *t) {
   }
 }
 
-/* ---- the source tabs: which of the library and the sync folder the list
- * is showing, and how to get to the other. Shown once a sync folder is set. */
+/* ---- the bar's tabs: which of the library and the sync folder the list
+ * is showing, and the configuration window, which takes the list's place
+ * while it is open. The sync folder's tab is there once one is set. */
 
 static int count_books(struct tui *t, const char *where) {
   sqlite3_stmt *st;
@@ -989,36 +992,51 @@ static int count_books(struct tui *t, const char *where) {
   return n;
 }
 
-static int tabs_shown(const struct tui *t) {
-  return t->app->cfg.sync_dir[0] != '\0';
+/* The command a click on tab i runs. */
+static const char *tab_command(const struct tui *t, int i) {
+  int sync = t->app->cfg.sync_dir[0] != '\0';
+  if (i == 0) return "source library";
+  if (i == 1 && sync) return "sync";
+  return "config";
 }
 
 static void draw_tabs(struct tui *t) {
   struct ncplane *n = t->std;
   dr_style(n, theme.dim, theme.bar_bg, 0);
   dr_fill(n, 0, 0, t->cols_n);
-  char label[2][96];
-  snprintf(label[0], sizeof label[0], " 1  Library  %d ", count_books(t, "id > 0"));
-  snprintf(label[1], sizeof label[1], " 2  Sync folder  %d ", count_books(t, "id < 0"));
+  int sync = t->app->cfg.sync_dir[0] != '\0';
+  char label[3][96];
+  int on[3], bg[3], k = 0;
+  snprintf(label[k], sizeof label[k], " 1  Library  %d ", count_books(t, "id > 0"));
+  on[k] = !t->screen_tab && t->rows.source == 0, bg[k++] = theme.accent;
+  if (sync) {
+    snprintf(label[k], sizeof label[k], " 2  Sync folder  %d ", count_books(t, "id < 0"));
+    on[k] = !t->screen_tab && t->rows.source == 1, bg[k++] = theme.ok;
+  }
+  snprintf(label[k], sizeof label[k], " 3  Configuration ");
+  on[k] = t->screen_tab != NULL, bg[k++] = theme.accent;
+  t->tab_n = k;
   int x = 0;
-  for (int i = 0; i < 2; i++) {
-    int on = t->rows.source == i;
-    dr_style(n, on ? theme.on_accent : theme.bar_fg, on ? (i ? theme.ok : theme.accent) : theme.bar_bg,
-             on ? A_BOLD : 0);
+  for (int i = 0; i < k; i++) {
+    dr_style(n, on[i] ? theme.on_accent : theme.bar_fg, on[i] ? bg[i] : theme.bar_bg, on[i] ? A_BOLD : 0);
     t->tab_x[i] = x;
     x += dr_text(n, 0, x, t->cols_n - x, label[i]);
     t->tab_x[i + 1] = x;
     dr_style(n, theme.border, theme.bar_bg, 0);
-    if (i == 0) x += dr_text(n, 0, x, t->cols_n - x, "│");
+    if (i + 1 < k) x += dr_text(n, 0, x, t->cols_n - x, "│");
   }
   char hint[200];
-  if (t->rows.source)
+  if (t->screen_tab)
+    snprintf(hint, sizeof hint, "%s back to the library", key_hint("source library"));
+  else if (t->rows.source)
     snprintf(hint, sizeof hint, "%s add   %s add and remove   %s drop   %s library", key_hint("sync add"),
              key_hint("sync move"), key_hint("sync drop"), key_hint("source library"));
-  else
+  else if (sync)
     snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("sync"));
+  else
+    hint[0] = '\0';
   int hw = dr_width(hint, strlen(hint));
-  if (x + hw + 3 < t->cols_n) {
+  if (hw && x + hw + 3 < t->cols_n) {
     dr_style(n, theme.dim, theme.bar_bg, 0);
     dr_text(n, 0, t->cols_n - hw - 1, hw, hint);
   }
@@ -1037,7 +1055,7 @@ static void render(struct tui *t) {
     preview_book_changed(t);
   }
   if (t->rows_n >= 4 && t->cols_n >= 20) {
-    int top = tabs_shown(t) ? 1 : 0;
+    int top = 1; /* the bar of tabs */
     wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});
     wm_draw(t);
     if (top) draw_tabs(t);

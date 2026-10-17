@@ -1,7 +1,7 @@
--- The configuration window (:config, gC): every option, lulibre's own under
--- their headings and each script's under its name, with its value, its
--- default and where it is set; where the list is, what the option under the
--- cursor does. A value changed here takes effect now and is written to
+-- The configuration window (the bar's tab 3, :config, gC): in the list's
+-- place until tab 1 or 2 is chosen, every option, lulibre's own under their
+-- headings and each script's under its name, with its value, its default
+-- and where it is set; under it, what the option under the cursor does. A value changed here takes effect now and is written to
 -- init.lua (which is kept as init.lua.bak first). E opens init.lua itself
 -- in your editor ($VISUAL, $EDITOR, else vim or vi), and what you write
 -- there is read again when you leave it.
@@ -38,7 +38,7 @@ local function items()
   return out
 end
 
---- What the panel where the list is shows for an option: rows of
+--- What the panel under the window shows for an option: rows of
 -- { label, text, style = }. Replace it in init.lua to show it your way.
 function M.context(it, line)
   local rows = { { it.ns and ("%s.%s"):format(it.ns, it.name) or it.name, it.group, style = "head" } }
@@ -63,7 +63,10 @@ function M.context(it, line)
   return rows
 end
 
+local open_now -- the window while it is open: the bar's tab opens it once
+
 function M.run()
+  if open_now and open_now:is_open() then return end
   local only_changed = false
   local list, text
   local function load()
@@ -109,23 +112,27 @@ function M.run()
     return out
   end
   local function title()
-    return ("configuration   %s   %s comments: %s%s"):format(cf.path(), keys:key("comments") or "c", lulibre.o.config_comments,
-      only_changed and "   (only what differs from the default)" or "")
+    return ("configuration   %s comments: %s%s   %s"):format(keys:key("comments") or "c", lulibre.o.config_comments,
+      only_changed and "   (only what differs from the default)" or "", cf.path())
   end
+  -- the bar's Configuration tab: in the list's place, until the list's tabs are chosen
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("edit", "default", "editor", "add", "changed"), height = 0.5, moves = true,
-    keys = keys:own(), pass = panels.PASS, rows = rows(),
+    title = title(), help = keys:hint("edit", "default", "editor", "add", "changed"), side = "main", moves = true,
+    screen_tab = true, keys = keys:own(), pass = panels.PASS .. " source sync config", rows = rows(),
     columns = { { "option", 30 }, { "value", -2 }, { "default", -1 }, { "set in", 16 } },
   }
+  open_now = p
   local ctx
   local closing <close> = setmetatable({}, { __close = function()
     if ctx then pcall(ctx.close, ctx) end
+    open_now = nil
   end })
   local function about(row)
     local it = shown[row]
     if not it then return end
     if not ctx or not ctx:is_open() then
-      ctx = lulibre.panel { side = "main", title = "the option under the cursor", columns = { { "", 14 }, { "", 0 } }, rows = {} }
+      ctx = lulibre.panel { title = "the option under the cursor", height = 0.35, focus = false,
+        columns = { { "", 14 }, { "", 0 } }, rows = {} }
     end
     local n, l = cf.line_of(it, text)
     local ok, r = pcall(M.context, it, n and { n = n, text = l } or nil)

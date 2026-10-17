@@ -5,6 +5,11 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- The configuration window is a tab: `3 Configuration` in the bar along the
+  top (always shown now; `2 Sync folder` is there once a sync folder is
+  set). `3`, `gC`, `:config` or a click opens it across the screen in place
+  of the list and the preview; `1`, `2` or their tabs go back. What the
+  option under the cursor does is shown under it.
 - Changed: rejecting a proposal (`r`) no longer keeps the value from being
   proposed again by a later run; it decides that proposal only. `N` in
   review rejects for good (that value, for that book and field, is not

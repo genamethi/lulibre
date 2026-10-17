@@ -438,6 +438,11 @@ void panel_set_follow(struct panel *p, int follow);
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
+/* This panel is the bar's Configuration tab while it is open: the tab is
+ * shown as the one in view, and going to the list's tabs closes it. */
+void panel_set_screen_tab(struct panel *p);
+/* Close the panel that is the Configuration tab, if one is open. */
+void panel_leave_screen_tab(struct tui *t);
 /* Report to the event function, as the key "<Reload>", that the library has
  * been read again (something changed it), so the rows can be brought up to
  * date. panels_reloaded tells every panel on screen that asked. */
@@ -583,7 +588,9 @@ struct tui {
   void (*ix_hook[8])(const struct index_stats *st, void *ud);
   void *ix_hook_ud[8];
   int nix_hook;
-  int tab_x[3];         /* where the source tabs were drawn: columns of their edges */
+  int tab_x[4];         /* where the bar's tabs were drawn: columns of their edges */
+  int tab_n;            /* how many tabs it has: library, [sync folder,] configuration */
+  struct panel *screen_tab; /* the panel that is the bar's Configuration tab, while it is open */
   /* a terminal paste in progress (tui.c): keys held while they might be one
    * of its markers, and the text between the markers */
   struct ncinput held[6];

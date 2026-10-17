@@ -260,7 +260,13 @@ run config --write >/dev/null 2>&1
 init=$XDG_CONFIG_HOME/lulibre/init.lua
 k g C
 shown "gC opens the configuration window"     "configuration .*comments: full"
-shown "with what the option does where the list was" "what it does"
+shown "as the bar's tab 3"                      "3  Configuration"
+shown "with what the option does under it"    "what it does"
+if screen | grep -q "Author .*Title"; then
+  echo "FAIL  in the list's place"; fails=$((fails + 1))
+else
+  echo "ok    in the list's place"
+fi
 k j j j j j j Enter
 wait_for "pages = "
 k C-u 9 Enter
@@ -270,8 +276,19 @@ k d
 shown "d puts it back"                        "pages back to its default"
 expect "commented out with its default"       "-- o.pages = 6" "$(grep -o -- '-- o.pages = 6' "$init")"
 expect "the file was kept before each write"  yes "$(test -e "$init.bak" && echo yes || echo no)"
+k 1
+shown "1 goes back to the list"               "Author .*Title"
+if screen | grep -q "configuration .*comments"; then
+  echo "FAIL  and closes the window"; fails=$((fails + 1))
+else
+  echo "ok    and closes the window"
+fi
+k 3
+shown "3 opens it again"                      "configuration .*comments: full"
+k 3
 k q
 wait_for "all books"
+expect "once"                                 0 "$(screen | grep -c 'configuration .*comments')"
 
 # ---- the snapshot browser
 k g z

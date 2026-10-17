@@ -982,9 +982,9 @@ are repaired after every such change.
 
 ## The sync folder: `gS`
 
-Set `lulibre.o.sync_dir` to a folder where files arrive. A tab line then
-appears along the top: `1 Library` and `2 Sync folder`, with how many each
-holds and which the list is showing. `2` (or `gS`, or a click on the tab)
+Set `lulibre.o.sync_dir` to a folder where files arrive. The tab line along
+the top then has `2 Sync folder` between `1 Library` and `3 Configuration`,
+with how many each holds and which the list is showing. `2` (or `gS`, or a click on the tab)
 reads the folder and shows it in place of the library; `1` (or `gl`) goes
 back.
 
