@@ -80,7 +80,10 @@ void doc_info_free(struct doc_info *d) {
   for (int i = 0; i < DOC_META_N; i++) free(d->meta[i]);
   for (int i = 0; i < d->n; i++) {
     struct doc_page *pg = &d->pages[i];
-    for (int j = 0; j < pg->nlines; j++) free(pg->lines[j].text);
+    for (int j = 0; j < pg->nlines; j++) {
+      free(pg->lines[j].text);
+      free(pg->lines[j].math);
+    }
     free(pg->lines);
     free(pg->text);
   }
@@ -89,8 +92,8 @@ void doc_info_free(struct doc_info *d) {
   memset(d, 0, sizeof *d);
 }
 
-void doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags, float x0,
-                       float y0, float x1, float y1) {
+struct doc_line *doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags,
+                                   float x0, float y0, float x1, float y1) {
   /* trim, and drop lines that are only whitespace */
   size_t n = strlen(text);
   while (n && isspace((unsigned char)text[n - 1])) text[--n] = '\0';
@@ -98,14 +101,15 @@ void doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned fla
   while (*s && isspace((unsigned char)*s)) s++;
   if (!*s) {
     free(text);
-    return;
+    return NULL;
   }
   if (s != text) memmove(text, s, strlen(s) + 1);
   if (pg->nlines == pg->cap) {
     pg->cap = pg->cap ? pg->cap * 2 : 32;
     pg->lines = xrealloc(pg->lines, (size_t)pg->cap * sizeof *pg->lines);
   }
-  pg->lines[pg->nlines++] = (struct doc_line){text, size, flags, x0, y0, x1, y1};
+  pg->lines[pg->nlines] = (struct doc_line){text, size, flags, x0, y0, x1, y1, NULL};
+  return &pg->lines[pg->nlines++];
 }
 
 void doc_page_finish(struct doc_page *pg, int keep_lines) {
@@ -117,7 +121,10 @@ void doc_page_finish(struct doc_page *pg, int keep_lines) {
   }
   pg->text = sb_take(&b);
   if (!keep_lines) {
-    for (int i = 0; i < pg->nlines; i++) free(pg->lines[i].text);
+    for (int i = 0; i < pg->nlines; i++) {
+      free(pg->lines[i].text);
+      free(pg->lines[i].math);
+    }
     free(pg->lines);
     pg->lines = NULL;
     pg->nlines = pg->cap = 0;

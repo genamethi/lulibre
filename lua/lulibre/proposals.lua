@@ -7,8 +7,9 @@ local M = {}
 
 --- Propose a change. opts: op ("set", "add", "remove"), source, confidence,
 -- note. A title that arrives in capitals is proposed in title case, as the
--- option title_case allows, unless it was typed (source "typed") or
--- opts.as_is is set. A value that was proposed for this book and field and
+-- option title_case allows, and with its mathematics in Unicode, as the
+-- option math_notation allows (lulibre.notation), unless it was typed
+-- (source "typed") or opts.as_is is set. A value that was proposed for this book and field and
 -- barred (N in review: never again) is not proposed again, nor one that
 -- was rejected when the option review_reject is "always"; unless it is
 -- typed or opts.again is set. Returns true and the proposal's id, or false if the book already
@@ -24,7 +25,8 @@ function M.add(id, field, value, opts)
     value = value:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
   end
   if field == "title" and op == "set" and opts.source ~= "typed" and not opts.as_is then
-    value = require("lulibre.titlecase").proposed(value)
+    -- in title case, and its mathematics in Unicode (option math_notation)
+    value = require("lulibre.notation").title(value, require("lulibre.titlecase").proposed)
   end
   local ok, new = pcall(edit.resolve, book, field, op, value)
   if not ok then error(new, 2) end

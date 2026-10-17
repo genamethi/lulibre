@@ -115,7 +115,9 @@ function M.from_doc(doc)
   local tp = doc.pages and titlepage.classify_pages(doc.pages) or titlepage.classify(doc.lines or {})
   local conf = tp.arxiv and 0.85 or 0.55
   if tp.title and not junk.title(tp.title) then
-    add("title", names.title_caps(tp.title), "title page", tp.name_first and math.max(conf, 0.65) or conf)
+    local title = tp.title_math and require("lulibre.notation").title(tp.title_math, names.title_caps)
+      or names.title_caps(tp.title)
+    add("title", title, "title page", tp.name_first and math.max(conf, 0.65) or conf)
   end
   if #tp.authors > 0 then
     local people = {}

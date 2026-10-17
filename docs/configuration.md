@@ -43,6 +43,7 @@ o.library = "~/calibre-library"
 | `subject_catchall` | | subjects (or their last part), separated by commas, that file a book by form rather than topic |
 | `never_authors` | | words and phrases, separated by commas, never proposed as an author (added to the built-in ranks and roles) |
 | `title_case` | `auto` | `auto` · `never`: propose a title found in CAPITALS in title case |
+| `math_notation` | `unicode` | `unicode` · `off`: write the mathematics in proposed titles in Unicode (SL₂(ℤ), GLₙ(ℚₚ)) |
 | `sync_dir` | | folder of files waiting to be added |
 | `orphans_dir` | | where stray files are set aside |
 | `preview` | `text` | `text` · `image`: what the preview shows first |

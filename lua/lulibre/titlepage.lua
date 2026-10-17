@@ -2,7 +2,8 @@
 -- the tagged lines the index keeps (text, font size, superscript, rotation).
 --
 --   subject   the arXiv class in the margin stamp, else the MSC footnote
---   title     the run of largest-font lines above the authors
+--   title     the run of largest-font lines above the authors; title_math,
+--             the same with its mathematics marked up, when it has any
 --   authors   the lines under the title that read as names, up to the
 --             abstract or the first affiliation
 local ids = require "lulibre.ids"
@@ -37,6 +38,24 @@ end
 
 local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- The title with its mathematics marked up (lulibre.notation), from the
+-- lines it was read from, or nil when none of them has any. parts: the
+-- title's lines as text, in order.
+local function with_math(parts, lines)
+  local marked = {}
+  for _, l in ipairs(lines) do
+    if l.math then marked[trim(l.text)] = l.math end
+  end
+  if not next(marked) then return nil end
+  local out, found = {}, false
+  for i, t in ipairs(parts) do
+    if marked[t] then found = true end
+    out[i] = marked[t] or t:gsub("[\\$]", "\\%0")
+  end
+  if not found then return nil end
+  return (table.concat(out, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", ""))
 end
 
 -- words that may stand in lower case inside a name
@@ -174,7 +193,9 @@ function M.classify(lines)
   end
   local cand = table.concat(title, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")
   local low = cand:lower()
-  if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then r.title = cand end
+  if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then
+    r.title, r.title_math = cand, with_math(title, body)
+  end
 
   -- A page that opens with its author's name, alone on the first line and set
   -- largest (a home page, a reprint archive, a set of notes), has its title
@@ -214,6 +235,7 @@ function M.classify(lines)
       if ulow:find("%a") and not names.is_person(under) and not names.never(under) and not any(ulow, PUBLISHER)
         and not JUNK[ulow] and not names.is_affiliation(under) and not under:find("^%a+ %d+, %d%d%d%d$") then
         r.title, r.authors, r.name_first = under, { names.clean(cand) }, true
+        r.title_math = with_math(parts, page)
         return r
       end
     end
@@ -281,6 +303,7 @@ function M.classify_pages(pages)
     if not best.arxiv and r.arxiv then best.arxiv, best.class = r.arxiv, r.class end
     if not best.title and r.title then
       best.title, best.authors, best.byline, best.name_first = r.title, r.authors, r.byline, r.name_first
+      best.title_math = r.title_math
     end
     if best.title then break end
   end

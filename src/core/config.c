@@ -95,6 +95,9 @@ static const struct opt_def opts[] = {
   OPT(title_case, OPT_STR, "auto", "auto|never",
       "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
       NULL),
+  OPT(math_notation, OPT_STR, "unicode", "unicode|off",
+      "mathematics in proposed titles is written in Unicode (SL₂(ℤ), GLₙ(ℚₚ)); off leaves it as found",
+      NULL),
   OPT(enrich_services, OPT_STR, "arxiv,crossref,zbmath,openlibrary,openalex", NULL,
       "the metadata services :enrich asks, separated by commas: arxiv (by arXiv number), crossref "
       "and openalex (by DOI), zbmath (by DOI or arXiv number; gives mathematics its subject), "

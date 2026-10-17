@@ -5,6 +5,16 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Mathematics in proposed titles is written in Unicode: SL₂(ℤ), GLₙ(ℚₚ),
+  𝔽ₚ[T], ℤ/pᵃℤ, X³ − 5. The PDF reader marks each line's mathematics from
+  its fonts and from type set smaller and higher or lower, so a title page
+  gives back the scripts its text lost; arXiv's TeX is written out; and a
+  glossary reads plain titles (SL2(Z), GLn(Qp), over Q) where they read one
+  way only. `:notation [filter]` proposes the selected books' titles that
+  way. Title case leaves formulas alone (p-adic stays so). Search reads
+  them as plain letters: `SL2` finds SL₂(ℤ). Option `math_notation`
+  (`unicode`, or `off`).
+
 - Review marks each proposal with what the book's own pages say of it,
   against what the book has now: `●` they show it and not what is there now
   (or it adds to it), `=` they show both, `◐` part of it, `·` they cannot

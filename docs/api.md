@@ -58,7 +58,7 @@ Library books have positive ids; files staged from the sync folder negative ones
 | | |
 |---|---|
 | `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds |
-| `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=}, ... }` |
+| `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=, math=}, ... }`; `math`: the line with its mathematics marked up as TeX, when it has any |
 | `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }` |
 | `lulibre.extract(path [, {pages=, layout_pages=, tail=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
 | `lulibre.render(path, page [, width])` | *waits.* The page as a greyscale PGM string |
@@ -245,6 +245,7 @@ its own documentation.
 | `lulibre.ui.form` | a dialog of boxes, choices, values and actions: `run{title=, sections={{title=, items={{id=, kind=, label=, value=, choices=, off=}}}}}` returns the action chosen and the values |
 | `lulibre.detex` | `plain(s)`: TeX in a title or a name put into plain text (`Erd\H{o}s` is `Erdős`), and whether none is left; the tables `accents`, `letters` |
 | `lulibre.titlecase` | `apply(s)`, `is_caps(s)`, `proposed(s)`; the tables `minor`, `prefixes`, `keep` |
+| `lulibre.notation` | `render(s)` ($…$ in Unicode), `notation(s)` (the glossary), `title(s, case)`, `unicode(tex)`, `subscript(s)`, `superscript(s)`, `has_math(s)`; the lists `glossary`, `groups` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
 | `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another |
