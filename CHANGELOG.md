@@ -5,6 +5,17 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Review marks each proposal with what the book's own pages say of it,
+  against what the book has now: `●` they show it and not what is there now
+  (or it adds to it), `=` they show both, `◐` part of it, `·` they cannot
+  tell, `○` neither, `✗` they show what is there now and not this. Dates
+  (their year, where a book says when it is from), publishers and series
+  are now looked for on the pages too, besides titles, authors and
+  identifiers. The context panel says the verdict in words. Books whose
+  proposals are best borne out come first: `review_sort` is now `evidence`
+  by default, and `s` steps on to the sources' confidence, the most
+  disputed, and id. With one row per field, the alternative shown first is
+  the best borne out.
 - The configuration window is a tab: `3 Configuration` in the bar along the
   top (always shown now; `2 Sync folder` is there once a sync folder is
   set). `3`, `gC`, `:config` or a click opens it across the screen in place

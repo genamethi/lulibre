@@ -24,6 +24,10 @@
 --   verify.size(ev, rec)                     --> "part" | "whole" | "larger" | nil, why
 --   verify.record(ev, rec)                   --> { title=, authors=, size=, another=, part=, unread= }
 --   verify.book(id)                          --> the book's own title, authors and identifiers, judged
+--   verify.date(ev, "2010-12-30")            --> "stated" | "mentioned" | "absent" | "unknown"
+--   verify.named(ev, "Springer-Verlag")      --> "shown" | "partly" | "absent" | "unknown" (a publisher)
+--   verify.shows(ev, field, value)           --> "shown" | "partly" | "absent" | "unknown", any field
+--   verify.judge(pr)                         --> how far the pages bear a proposal out (see there)
 local ids = require "lulibre.ids"
 
 local M = {}
@@ -347,6 +351,150 @@ function M.book(id)
   end
   table.sort(out.idents, function(a, b) return a.ident < b.ident end)
   return out
+end
+
+-- the words of a line where a book states its date: a copyright or
+-- publication line, arXiv's stamp, a "Date:" or "Received" line
+local DATED = { "copyright", "(c)", "published", "publication", "edition", "printed", "date:", "dated",
+  "received", "submitted", "accepted", "revised", "arxiv", "january", "february", "march", "april", "may",
+  "june", "july", "august", "september", "october", "november", "december" }
+
+--- Does a date stand on the opening pages? "stated": its year on a line
+-- where a book says when it is from; "mentioned": its year elsewhere on
+-- them (a year in a paper's text is often another's); "absent"; "unknown"
+-- when there is no year to look for or no text.
+function M.date(ev, value)
+  if not ev then return "unknown" end
+  local year = tostring(value or ""):match("%f[%d](%d%d%d%d)%f[%D]")
+  if not year then return "unknown" end
+  local seen = false
+  for line in ev.text:gmatch("[^\n]+") do
+    if line:find("%f[%d]" .. year .. "%f[%D]") then
+      seen = true
+      if line:find("\194\169") then return "stated" end -- ©
+      local l = lulibre.fold(line)
+      for _, w in ipairs(DATED) do
+        if l:find(w, 1, true) then return "stated" end
+      end
+    end
+  end
+  return seen and "mentioned" or "absent"
+end
+
+-- words every other publisher has: they tell nothing about which one it is
+local TRADE = {}
+for w in ("press university publishing publishers publisher verlag books inc ltd llc gmbh company group international house editions editora edition society"):gmatch("%S+") do
+  TRADE[w] = true
+end
+
+--- Does a publisher's name stand on the opening pages? Its telling words
+-- less the trade's own ("Press", "Verlag", "University" ...), unless that
+-- is all it has.
+function M.named(ev, value)
+  if not ev then return "unknown" end
+  local all, own = telling(value), {}
+  for _, w in ipairs(all) do
+    if not TRADE[w] then own[#own + 1] = w end
+  end
+  if #own == 0 then own = all end
+  if #own == 0 then return "unknown" end
+  local n = 0
+  for _, w in ipairs(own) do
+    if ev.words[w] then n = n + 1 end
+  end
+  local share = n / #own
+  return share >= M.SHOWN and "shown" or share >= M.PARTLY and "partly" or "absent"
+end
+
+-- the fields the pages cannot settle: a subject is a reading of the whole,
+-- a number in a series, a language, a summary are not written as such
+local SILENT = { tags = true, series_index = true, languages = true, comments = true, rating = true }
+
+--- Do the pages show a value of any field? "shown" | "partly" | "absent" |
+-- "unknown" (no text, or a field pages cannot settle).
+function M.shows(ev, field, value)
+  if not ev or SILENT[field] or value == nil or value == "" then return "unknown" end
+  if field == "title" then return (M.title(ev, value))
+  elseif field == "authors" then return (M.authors(ev, value))
+  elseif field == "pubdate" then
+    local d = M.date(ev, value)
+    return d == "stated" and "shown" or d == "mentioned" and "partly" or d
+  elseif field == "publisher" then return M.named(ev, value)
+  elseif field == "series" then
+    local share = M.phrase(ev, value)
+    if not share then return "unknown" end
+    return share >= M.SHOWN and "shown" or share >= M.PARTLY and "partly" or "absent"
+  elseif field == "identifiers" then
+    -- every identifier in the value: as the file's own or on its opening pages
+    local n, shown, partly = 0, 0, 0
+    for item in tostring(value):gsub("^[+-]%s*", ""):gmatch("[^,%s]+") do
+      local w = M.ident(ev, item)
+      if w ~= "unknown" then
+        n = n + 1
+        if w == "own" or w == "front" then shown = shown + 1 elseif w == "inside" then partly = partly + 1 end
+      end
+    end
+    if n == 0 then return "unknown" end
+    return shown == n and "shown" or shown + partly > 0 and "partly" or "absent"
+  end
+  return "unknown"
+end
+
+--- How far a book's pages bear a proposal out: { level =, says = }, level
+-- one of (best first)
+--   "better"   they show it, and not what the book has now (or it has nothing)
+--   "more"     they show it, and it is what the book has now and more
+--   "both"     they show it and what the book has now
+--   "partly"   they show part of it
+--   "silent"   they cannot tell: no text, or a field they cannot settle
+--   "neither"  they show neither it nor what the book has now
+--   "against"  they show what the book has now, and not it
+-- and says, the same in words. For a removal it is the other way about: the
+-- pages showing what is taken away is against it.
+M.LEVELS = { better = 6, more = 5, both = 4, partly = 3, silent = 2, neither = 1, against = 0 }
+function M.judge(pr)
+  local edit = require "lulibre.edit"
+  local book = lulibre.book(pr.book)
+  if not book then return { level = "silent", says = "the book is no longer there" } end
+  local ev, why = M.evidence(book.id)
+  if not ev then return { level = "silent", says = "the pages cannot say: " .. (why or "no text") } end
+  if SILENT[pr.field] then return { level = "silent", says = "the pages cannot settle " .. pr.field } end
+  local v = M.shows(ev, pr.field, pr.value)
+  if v == "unknown" then return { level = "silent", says = "the pages cannot say" } end
+  if pr.op == "remove" then
+    if v == "shown" then return { level = "against", says = "the pages show what would be taken away" } end
+    if v == "partly" then return { level = "partly", says = "the pages show some of what would be taken away" } end
+    return { level = "better", says = "the pages do not show what would be taken away" }
+  end
+  if pr.op == "add" then
+    if v == "shown" then return { level = "better", says = "the pages show it" } end
+    if v == "partly" then return { level = "partly", says = "the pages show part of it" } end
+    return { level = "neither", says = "the pages do not show it" }
+  end
+  local now = edit.current(book, pr.field)
+  local gap = now == "" or require("lulibre.propose").is_gap(pr.field, now, book.id)
+  local was = gap and "absent" or M.shows(ev, pr.field, now)
+  if v == "shown" then
+    if gap then return { level = "better", says = "the pages show it, and the book has nothing there" } end
+    if was ~= "shown" then return { level = "better", says = "the pages show it, not what the book has now" } end
+    -- a title that holds the one there and more (a subtitle) is more of the same
+    if pr.field == "title" or pr.field == "authors" then
+      local mine = {}
+      for _, w in ipairs(telling(pr.value)) do mine[w] = true end
+      local holds, theirs = true, telling(now)
+      for _, w in ipairs(theirs) do
+        if not mine[w] then holds = false end
+      end
+      if holds and #telling(pr.value) > #theirs then
+        return { level = "more", says = "the pages show it, and it is what the book has now and more" }
+      end
+    end
+    return { level = "both", says = "the pages show it, and what the book has now" }
+  elseif v == "partly" then
+    return { level = "partly", says = "the pages show part of it" .. (was == "shown" and ", and all of what the book has now" or "") }
+  end
+  if was == "shown" then return { level = "against", says = "the pages show what the book has now, not this" } end
+  return { level = "neither", says = "the pages show neither this nor what the book has now" }
 end
 
 return M

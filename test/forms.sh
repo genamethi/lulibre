@@ -145,6 +145,8 @@ k g r
 shown "review opens"                          "review  3 pending"
 shown "with what waits for each book"         "1 to decide, surest 0.99"
 shown "where the list was, what the proposal rests on" "about this proposal"
+shown "with the pages' verdict on it"         "verdict .*the pages"
+shown "books ordered by how far their pages bear them out" "best borne out first"
 k i
 shown "i gives the list its place back"       "all books"
 k i
@@ -165,6 +167,8 @@ shown "f then t shows only the title proposals" "review  2 pending.*only title"
 k f f
 shown "f twice shows all again"               "review  3 pending"
 k s
+shown "s orders by the sources' confidence"   "surest first"
+k s
 shown "s puts the most disputed first"        "most disputed first"
 k s
 shown "s again orders by id"                  "by id"
@@ -182,6 +186,8 @@ expect "the publisher is gone"                "" "$(field 1 publisher)"
 # neighbour the list has fallen back to
 k g r
 shown "review again"                          "review  2 pending"
+k s
+wait_for "surest first"
 k s
 shown "past the most disputed"                "most disputed first"
 k s

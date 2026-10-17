@@ -123,8 +123,9 @@ static const struct opt_def opts[] = {
       "1: click selects, the wheel scrolls (Shift selects text); 0: off", NULL),
   OPT(review_open, OPT_INT, "0", NULL,
       "1: the review screen starts with every book's other fields shown", NULL),
-  OPT(review_sort, OPT_STR, "confidence", "confidence|id|disputed",
-      "the order of books in review: the surest proposals first, by book id, or those whose sources disagree most first", NULL),
+  OPT(review_sort, OPT_STR, "evidence", "evidence|confidence|id|disputed",
+      "the order of books in review: those whose pages best bear their proposals out first (each row's "
+      "mark says how far), the surest proposals first, by book id, or those whose sources disagree most first", NULL),
   OPT(review_rows, OPT_STR, "field", "field|all",
       "review shows one row for each field of a book, with the surest proposal for it (o steps to the "
       "next source, O takes that source for the field in every book, m switches), or all: every "

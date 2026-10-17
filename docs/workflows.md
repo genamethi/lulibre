@@ -194,11 +194,28 @@ option `review_reject = "always"`, `r` does what `N` does. In review, `A` (accep
 includes proposals that replace a value.
 
 `gr` lists the proposals book by book, with the current value beside each;
-the list and preview follow the cursor, so the title page is in view. The
-book whose surest proposal is surest comes first, so what can be accepted at
-a glance is at the top and what needs thought is further down; each book's
-line says how many proposals wait and how sure the surest is. `s` switches
-to book id order (the option `review_sort` sets which it starts in).
+the list and preview follow the cursor, so the title page is in view.
+
+**The pages' verdict.** Each proposal's row is marked with what the book's
+own pages say of it, against what the book has now:
+
+| Mark | |
+|---|---|
+| `●` | the pages show it, and not what the book has now (or the field is empty); or it is what the book has and more (a subtitle) |
+| `=` | the pages show it, and what the book has now |
+| `◐` | the pages show part of it |
+| `·` | the pages cannot tell: no readable text, or a field they cannot settle (subjects) |
+| `○` | the pages show neither it nor what the book has now |
+| `✗` | the pages show what the book has now, and not this |
+
+A title, authors, a series or a publisher is looked for on the opening
+pages; a date by its year, where a book says when it is from (a copyright
+line, arXiv's stamp); an identifier as the file's own, not one it cites.
+Books whose proposals the pages bear out best come first, so what can be
+accepted at a glance is at the top. `s` steps through the orders: best
+borne out, surest (by the sources' confidence), most disputed, by id (the
+option `review_sort` sets which it starts in). Replace
+`require("lulibre.ui.review").marks` in init.lua to mark them otherwise.
 
 Review, duplicates and orphans bring themselves up to date when the library
 changes under them: a book removed with `:remove` leaves the panel.
@@ -214,7 +231,7 @@ changes under them: a book removed with `:remove` leaves the panel.
 | `R` | reject everything still pending |
 | `c` | propose blanking the field |
 | `t` | put the value in title case, and accept that |
-| `s` | sort: surest first, or by id |
+| `s` | sort: best borne out by the pages, surest, most disputed, by id |
 | `f` then a letter | only one field's proposals: `t` title, `a` authors, `s` subject, `i` identifiers, `d` date, `p` publisher; `f` `f` shows all again. Accept-all and reject-rest then speak for that field alone |
 | `p` | more preview: shrink the panel, and again to bring it back |
 | `l` `h` | the next view, the one before (the tabs in the bar; a click on one works too) |
@@ -237,7 +254,8 @@ not alternatives and always have a row each.
 
 **What a proposal rests on.** While review is open, the place where the list
 was shows the proposal under the cursor: where it came from and how sure,
-what the book's own pages say of it (and of the value it would replace),
+the pages' verdict in words, what the book's own pages say of it (and of
+the value it would replace),
 the record behind it (for an identifier, the record that identifier leads
 to: what taking it would bring), with that record's title, people, date,
 type, length and identifiers and how they stand against the pages, and the
@@ -261,7 +279,7 @@ colour:
 and nothing tells you to open review until it is done. Review shows the
 runs as tabs in its bar, the one in view standing out:
 
-     review  13 pending, 0 accepted   surest first   09:41 · 4 books (13)   all waiting (1140)
+     review  13 pending, 0 accepted   best borne out first   09:41 · 4 books (13)   all waiting (1140)
 
 | Tab | Holds |
 |---|---|
