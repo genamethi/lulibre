@@ -1,6 +1,7 @@
 -- What a proposal in review rests on, as rows for the panel review shows
--- where the list is: the record it came from (or the record an identifier
--- leads to), what the book's own pages say of the value and of the record,
+-- where the list is: the verdict of the book's own pages on it (the mark its
+-- row carries, verify.judge), what the pages say of the value and of the
+-- record, the record it came from (or the record an identifier leads to),
 -- and what the other sources propose for the field.
 --
 --   local context = require "lulibre.ui.context"
@@ -87,9 +88,21 @@ local function judged(ev, field, value)
   elseif field == "identifiers" then
     local where = verify.ident(ev, (value or ""):gsub("^[+-]%s*", ""))
     return WHERE[where], where == "own" or where == "front"
+  elseif field == "pubdate" then
+    local d = verify.date(ev, value)
+    if d == "unknown" then return nil end
+    return d == "stated" and "state its year where they give a date (a copyright line, a stamp)"
+      or d == "mentioned" and "have its year, but not where they give a date" or "do not have its year", d == "stated"
+  elseif field == "publisher" or field == "series" then
+    local v = verify.shows(ev, field, value)
+    if v == "unknown" then return nil end
+    return v == "shown" and "show it" or v == "partly" and "show part of it" or "do not show it", v == "shown"
   end
   return nil
 end
+
+-- how a verdict's level is shown (verify.judge)
+local GOOD = { better = "ok", more = "ok", both = nil, partly = "accent", silent = "dim", neither = "warn", against = "warn" }
 
 --- Rows for a proposal: { label, text, style = }. others: the other
 -- proposals waiting for the same book and field.
@@ -107,6 +120,9 @@ function M.rows(pr, others)
   add("now", edit.current(book, pr.field))
   add("from", ("%s%s"):format(pr.source or "?", pr.confidence and ("   %.2f"):format(pr.confidence) or ""))
   if pr.note and pr.note ~= "" then add("note", pr.note) end
+  local j = verify.judge(pr)
+  local mark = require("lulibre.ui.review").marks[j.level]
+  add("verdict", ("%s %s"):format(mark or "", j.says), GOOD[j.level])
   if not ev then
     add("the pages", "cannot say: " .. (why or "the file could not be read"), "dim")
   else

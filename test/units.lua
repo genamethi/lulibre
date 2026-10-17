@@ -1827,6 +1827,32 @@ do
   eq("another work's record", verify.record(ev, { title = "Modal Predicate Logic", authors = { "Gary Hardegree" } }).another, true)
   eq("a record of the whole", verify.record(ev, { title = "Lectures on the Theory of Numbers", authors = {}, pages = 400 }).part, true)
   eq("nothing known of a file that was not read", verify.record(nil, { title = "x" }).unread, true)
+  -- dates, publishers and series on the pages
+  local dated = "Notes on Sieves\nPaul Erdős and A. Writer\nWe follow the 1996 paper of Selberg.\n© 2004 Springer-Verlag Berlin Heidelberg\nGraduate Texts in Mathematics"
+  local ev2 = { words = verify.words(dated), text = dated, all = dated, refs = "", pages = 30 }
+  eq("a date: its year where the book says when it is from, elsewhere, or not at all",
+    { verify.date(ev2, "2004-01-01"), verify.date(ev2, "1996"), verify.date(ev2, "1999-05-02"), verify.date(ev2, "n.d."), verify.date(ev2, "20041") },
+    { "stated", "mentioned", "absent", "unknown", "unknown" })
+  eq("a publisher by its own words, not the trade's", { verify.named(ev2, "Springer"), verify.named(ev2, "Springer Nature"),
+    verify.named(ev2, "Cambridge University Press"), verify.named(ev2, "University Press") }, { "shown", "partly", "absent", "absent" })
+  eq("a series as it is written", { verify.shows(ev2, "series", "Graduate Texts in Mathematics"),
+    verify.shows(ev2, "series", "Lecture Notes in Mathematics") }, { "shown", "absent" })
+  eq("subjects the pages cannot settle", verify.shows(ev2, "tags", "math/number-theory"), "unknown")
+  -- a proposal judged against what the book has now (book 2, with its file read as ev2)
+  local real = verify.evidence
+  verify.evidence = function() return ev2 end
+  local edit = require "lulibre.edit"
+  local b2 = lulibre.book(2)
+  local function level(field, value, op) return verify.judge { book = 2, field = field, op = op or "set", value = value }.level end
+  eq("book 2 is as the checks below take it", { edit.current(b2, "authors"), edit.current(b2, "publisher"), edit.current(b2, "series") },
+    { "Paul Erdős", "", "" })
+  eq("judged: better, more, both, neither, silent", {
+    level("publisher", "Springer"), level("authors", "Paul Erdős & A. Writer"), level("authors", "P. Erdős"),
+    level("pubdate", "1999"), level("series", "Lecture Notes in Mathematics"), level("tags", "math"),
+    level("identifiers", "doi:10.1/x", "remove") },
+    { "better", "more", "both", "neither", "neither", "silent", "better" })
+  eq("and against: the pages show what it has, not this", level("authors", "Somebody Else"), "against")
+  verify.evidence = real
 end
 
 -- review's context: sources by kind, titles as keys
