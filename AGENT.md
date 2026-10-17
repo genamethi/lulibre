@@ -5,6 +5,19 @@ counts mistakes of process as bugs: a misunderstanding between agent and
 user is a defect in the interface, to be fixed and recorded like one in the
 code.
 
+## What the library is for
+
+The user's library is the motivation for the application, not the work.
+Its problems show what the program cannot do yet (a title the program
+cannot write, a value it cannot check, a step that takes a person too
+long), and that is what gets built. Organizing the library is not the
+goal of a session: do not run cleanups on it, do not report its state
+item by item, and do not list library chores as work to do ("fix the
+authors of book 400" is the user's, and ongoing). Fixing a class of
+problem in the program is the work; say what the library showed only as
+far as it explains the feature. Suggesting a way to do something with the
+program as it stands is fine.
+
 ## Branches and versions
 
 - **The user's tree, `/media/servd/staging/lulibre`, is theirs.** They run
