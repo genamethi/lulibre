@@ -95,10 +95,24 @@ int panel_is_open(const struct panel *p) {
 /* The panel is closed for good: say so, and drop the window's reference. */
 static void gone(struct panel *p) {
   p->open = 0;
+  if (p->t->screen_tab == p) {
+    p->t->screen_tab = NULL;
+    tui_dirty(p->t);
+  }
   panel_event_fn *fn = p->event;
   p->event = NULL;
   if (fn) fn(p, NULL, -1, p->event_ud);
   panel_unref(p);
+}
+
+void panel_set_screen_tab(struct panel *p) {
+  if (!p->open) return;
+  p->t->screen_tab = p;
+  tui_dirty(p->t);
+}
+
+void panel_leave_screen_tab(struct tui *t) {
+  if (t->screen_tab) panel_close(t->screen_tab);
 }
 
 void panel_close(struct panel *p) {

@@ -83,11 +83,14 @@ the password itself to log in to the server. What protects it is the file's
 permissions, and keeping the file out of anything that is copied or
 committed.
 
-### The configuration window: `gC`
+### The configuration window: tab `3`
 
-`gC` (or `:config`) lists every option under its heading, lulibre's own and
-each script's under the script's name, with its value, its default and the
-line of init.lua that sets it; where the list is, it shows what the option
+The bar along the top has a tab for it, `3 Configuration`: `3` (or `gC`,
+`:config`, or a click on the tab) opens it across the screen, in place of
+the list and the preview, until `1` or `2` (or a click on their tabs) goes
+back to the list. It lists every option under its heading, lulibre's own
+and each script's under the script's name, with its value, its default and
+the line of init.lua that sets it; under it, it shows what the option
 under the cursor does and what it takes.
 
 | Key | |

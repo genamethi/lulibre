@@ -10,6 +10,8 @@
  *     side = "left",      -- a column down the left instead (width = 0.28);
  *                         -- "main": in the list's window, which comes back when
  *                         -- the panel closes (the focus stays where it was)
+ *     focus = false,      -- leave the focus where it is (a panel takes it otherwise)
+ *     screen_tab = true,  -- the panel is the bar's Configuration tab while open
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
  *     reloads = true,     -- and "<Reload>" when the library has been read again
  *     tabs = { "this run (9)", "all waiting (212)" }, tab = 1,
@@ -269,8 +271,16 @@ static int l_panel_ui(lua_State *L) {
   luaL_setmetatable(L, MT);
   struct lpanel *lp = *ud = xcalloc(1, sizeof *lp);
   lp->app = lapi_app(L);
+  lua_getfield(L, 1, "focus");
+  int keep_focus = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+  lua_getfield(L, 1, "screen_tab");
+  int screen_tab = lua_toboolean(L, -1);
+  lua_pop(L, 2);
+  struct node *was = t->focus;
   lp->p = panel_open(t, size, side);
+  if (keep_focus && was) t->focus = was;
   panel_on_event(lp->p, on_event, lp);
+  if (screen_tab) panel_set_screen_tab(lp->p);
 
   lua_getfield(L, 1, "title");
   if (lua_isstring(L, -1)) panel_set_title(lp->p, lua_tostring(L, -1));
