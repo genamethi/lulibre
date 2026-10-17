@@ -84,7 +84,10 @@ local function judged(ev, field, value)
   elseif field == "authors" then
     local v, shown, named_ = verify.authors(ev, value)
     if v == "unknown" then return nil end
-    return ("name %d of the %d"):format(shown, named_), v == "shown"
+    local said = shown == named_ and (named_ == 1 and "name them" or ("name all %d of them"):format(named_))
+      or shown == 0 and (named_ == 1 and "do not name them" or ("name none of the %d"):format(named_))
+      or ("name %d of the %d"):format(shown, named_)
+    return said, v == "shown"
   elseif field == "identifiers" then
     local where = verify.ident(ev, (value or ""):gsub("^[+-]%s*", ""))
     return WHERE[where], where == "own" or where == "front"
@@ -127,9 +130,10 @@ function M.rows(pr, others)
     add("the pages", "cannot say: " .. (why or "the file could not be read"), "dim")
   else
     local said, good = judged(ev, pr.field, pr.value)
-    if said then add("the pages", said, good and "ok" or "warn") end
+    -- what the pages say of the proposed value, and of the value it would replace
+    if said then add("pages: new", said, good and "ok" or "warn") end
     local was = judged(ev, pr.field, edit.current(book, pr.field))
-    if was and pr.op == "set" then add("…of now", was, "dim") end
+    if was and pr.op == "set" then add("pages: now", was, "dim") end
   end
 
   local rec, kind, value = M.record_of(pr)
