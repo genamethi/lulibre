@@ -188,6 +188,7 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
 static int add_columns(struct db *db, char **err) {
   static const struct { const char *table, *column, *decl; } cols[] = {
     {"files", "garbled", "REAL"},
+    {"lines", "math", "TEXT"},
   };
   for (size_t i = 0; i < ARRAY_LEN(cols); i++) {
     char *q = xasprintf("SELECT 1 FROM pragma_table_info('%s') WHERE name = '%s'", cols[i].table, cols[i].column);

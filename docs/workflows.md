@@ -122,6 +122,41 @@ tc.minor["de"] = true        -- for French titles
 tc.keep["cw"] = "CW"
 ```
 
+### Mathematics in titles
+
+Proposed titles write their mathematics in Unicode, as far as Unicode
+goes: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], ℤ/pᵃℤ, X³ − 5, ℓ-adic. A script Unicode
+has no letter for is written `_q` or `^q` (𝔽_q), a longer one `_{…}`, and
+TeX it cannot write at all (a fraction) keeps its dollars. Search is not
+affected: in lulibre and in calibre, `SL2` finds SL₂(ℤ) and `Fp` finds 𝔽ₚ.
+
+- From the pages: the PDF reader marks each line's mathematics from its
+  fonts (a maths italic, a symbol or blackboard font) and from type set
+  smaller and higher or lower (X³, GLₙ), so a title page gives back the
+  scripts its plain text lost. A capital alone in bold inside a formula is
+  a number system, as many authors write it (**Z** for ℤ).
+- From TeX: arXiv and the like give titles as their authors typed them
+  (`On $\mathbb{Z}_p$-extensions` becomes On ℤₚ-extensions).
+- From plain text, a glossary changes only what reads one way: `SL2(Z)`,
+  `GLn(Qp)`, `Fp[T]`, `Z/nZ`, `Rn`, `over Q`, `X3 −5`, `K0` in a K-theory
+  title, `` `-adic ``. `F[t]` (any field), `R[t]` (any ring), `f(R)`,
+  `Programming in R` and `A4` are left.
+
+`:notation [filter]` proposes the selected books' titles that way, reading
+each PDF's title page again where it gives the same title (books indexed
+before this version have no marks kept), and the glossary otherwise. Title
+case leaves formulas alone and keeps the word after one in lower case
+(p-adic). `math_notation = "off"` proposes titles as found. The glossary
+is a list of functions in `init.lua`'s reach:
+
+```lua
+local nt = require "lulibre.notation"
+table.insert(nt.groups, "PU")          -- PU2 as PU₂
+nt.glossary[#nt.glossary + 1] = function(s)        -- Spin3 as Spin₃
+  return (s:gsub("%f[%w]Spin(%d)%f[%W]", function(n) return "Spin" .. nt.subscript(n) end))
+end
+```
+
 ## Proposals and review: `gr`
 
 Scripts do not change the library; they *propose*, and you review.
