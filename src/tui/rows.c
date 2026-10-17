@@ -335,6 +335,7 @@ void rows_move(struct tui *t, int to) {
 
 void rows_set_source(struct tui *t, int source) {
   struct rows *r = &t->rows;
+  panel_leave_screen_tab(t); /* the list's tabs are the list again */
   if (r->source == !!source) return;
   r->source = !!source;
   atomic_store(&t->app->source, r->source);

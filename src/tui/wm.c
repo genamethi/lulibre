@@ -49,26 +49,40 @@ void wm_free(struct tui *t) {
   t->root = t->focus = NULL;
 }
 
-static void layout(struct node *n, struct rect r) {
+/* Nothing but previews of a book under this node. */
+static int only_preview(const struct node *n) {
+  if (!n->split) return n->cls == &view_preview;
+  return only_preview(n->a) && only_preview(n->b);
+}
+
+/* bare: the bar's Configuration tab is open, and a book's preview beside it
+ * gets no room (draw() then takes it off the screen). */
+static void layout(struct node *n, struct rect r, int bare) {
   n->r = r;
   if (!n->split) return;
+  if (bare && n->split == 'v' && only_preview(n->a) != only_preview(n->b)) {
+    struct node *keep = only_preview(n->a) ? n->b : n->a, *drop = keep == n->a ? n->b : n->a;
+    layout(keep, r, bare);
+    layout(drop, (struct rect){r.y, r.x + r.w, r.h, 0}, bare);
+    return;
+  }
   if (n->split == 'v') {
     int wa = (int)((float)(r.w - 1) * n->ratio);
     if (wa < 1) wa = 1;
     if (wa > r.w - 2) wa = r.w - 2 > 1 ? r.w - 2 : 1;
-    layout(n->a, (struct rect){r.y, r.x, r.h, wa});
-    layout(n->b, (struct rect){r.y, r.x + wa + 1, r.h, r.w - wa - 1});
+    layout(n->a, (struct rect){r.y, r.x, r.h, wa}, bare);
+    layout(n->b, (struct rect){r.y, r.x + wa + 1, r.h, r.w - wa - 1}, bare);
   } else {
     int ha = (int)((float)r.h * n->ratio);
     if (ha < 1) ha = 1;
     if (ha > r.h - 1) ha = r.h - 1 > 1 ? r.h - 1 : 1;
-    layout(n->a, (struct rect){r.y, r.x, ha, r.w});
-    layout(n->b, (struct rect){r.y + ha, r.x, r.h - ha, r.w});
+    layout(n->a, (struct rect){r.y, r.x, ha, r.w}, bare);
+    layout(n->b, (struct rect){r.y + ha, r.x, r.h - ha, r.w}, bare);
   }
 }
 
 void wm_layout(struct tui *t, struct rect area) {
-  layout(t->root, area);
+  layout(t->root, area, t->screen_tab != NULL);
 }
 
 static void draw(struct tui *t, struct node *n) {
@@ -79,7 +93,7 @@ static void draw(struct tui *t, struct node *n) {
   }
   draw(t, n->a);
   draw(t, n->b);
-  if (n->split == 'v') {
+  if (n->split == 'v' && n->a->r.w > 0 && n->b->r.w > 0) {
     /* the line between them; the stretch beside the focused window is lit */
     int x = n->a->r.x + n->a->r.w;
     const struct rect *f = t->focus ? &t->focus->r : NULL;
@@ -415,7 +429,7 @@ int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x) {
   /* half a cell past the pointer, so rounding down lands the line under it */
   if (n->split == 'v') set_ratio(n, ((float)(to_x - n->r.x) + 0.5f) / (float)(n->r.w > 1 ? n->r.w - 1 : 1));
   else set_ratio(n, ((float)(to_y - n->r.y) + 0.5f) / (float)(n->r.h > 0 ? n->r.h : 1));
-  layout(n, n->r); /* its windows take their new places now, not at the next frame */
+  layout(n, n->r, t->screen_tab != NULL); /* its windows take their new places now, not at the next frame */
   if (n->split == 'v') *x = n->a->r.x + n->a->r.w;
   else *y = n->b->r.y;
   tui_dirty(t);
