@@ -212,6 +212,8 @@ end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
 lulibre.command("verify", script("verify"),
   "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
+lulibre.command("offline", script("offline"),
+  "[restart | cancel ID]  the changes calibre makes only while the content server is stopped: what waits; restart the server for them now")
 lulibre.command("snapshot", script("snapshot"),
   "[NAME] | list | plan SNAP | rollback SNAP [--exact --unsync --fields] | retire SNAP | import FILE  points the library can be put back to")
 lulibre.command("snapshots", function() require("lulibre.ui.snapshots").run() end,
@@ -622,14 +624,30 @@ lulibre.command("custom", function(args)
     for _, id in ipairs(lulibre.selection()) do changes[#changes + 1] = { id = id, field = custom.norm(name), value = value } end
     local r = require("lulibre.edit").apply(changes, { label = "custom" })
     lulibre.notify(require("lulibre.edit").summary(r), #r.failed > 0 and "error" or nil)
+  elseif verb == "calibre" then
+    local name, heading = rest:match("^(%S+)%s*(.-)$")
+    if not name then return lulibre.notify(":custom calibre NAME [heading]  (a calibre column for the field)", "error") end
+    local id, err = custom.to_calibre(name, { heading = heading ~= "" and heading or nil })
+    if not id then return lulibre.notify(err, "error") end
+    require("lulibre.offline").ask()
+  elseif verb == "push" then
+    if rest == "" then return lulibre.notify(":custom push NAME  (copy lulibre's values into calibre's column)", "error") end
+    local ok, r = pcall(custom.push, rest)
+    if not ok then return lulibre.notify(tostring(r), "error") end
+    lulibre.notify(("%d book%s copied into calibre's %s%s"):format(r.copied, r.copied == 1 and "" or "s", custom.norm(rest),
+      #r.failed > 0 and ("; %d failed: %s"):format(#r.failed, r.failed[1].error) or ""), #r.failed > 0 and "error" or nil)
   else
     local out = {}
     for _, f in ipairs(custom.fields()) do
-      out[#out + 1] = ("%-14s %-7s %5d book%s   %s%s"):format(f.name, f.type, f.books, f.books == 1 and " " or "s", f.help or "",
-        f.undeclared and "(not declared)" or "")
+      local st = custom.state(f.name)
+      local where = st.state == "lulibre" and "lulibre only" or st.state == "waiting" and "waits for a restart"
+        or st.differ > 0 and ("calibre: %d differ"):format(st.differ) or "calibre too"
+      out[#out + 1] = ("%-14s %-7s %5d book%s  %-19s %s%s"):format(f.name, f.type, f.books, f.books == 1 and " " or "s", where,
+        f.help or "", f.undeclared and "(not declared)" or "")
     end
     out[#out + 1] = ""
     out[#out + 1] = "filter by them: #partof:handbook  #part:none  has:#partof; :custom add NAME TYPE HELP; :custom set NAME VALUE"
+    out[#out + 1] = "in calibre too: :custom calibre NAME [heading] (a column; made while the server is stopped); :custom push NAME"
     lulibre.show(out, "custom fields (kept beside calibre's, in lulibre's own database)")
   end
-end, "[add NAME [type] [help] | set NAME VALUE]  fields of your own beside calibre's (#partof ...): list, declare, set for the selection")
+end, "[add NAME [type] [help] | set NAME VALUE | calibre NAME [heading] | push NAME]  fields of your own beside calibre's (#partof ...): list, declare, set for the selection, put in calibre")

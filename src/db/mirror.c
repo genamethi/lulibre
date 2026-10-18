@@ -14,7 +14,7 @@
 #include "db/db.h"
 
 /* Bump when the SQL below changes, so existing indexes re-copy. */
-#define MIRROR_VERSION "3"
+#define MIRROR_VERSION "4"
 
 /* calibre's books (in the database attached as `cal`) as the index keeps
  * them: one row each, list fields joined into text. calibre stores "no date"
@@ -100,6 +100,61 @@ static const char files_sql2[] =
   "   AND NOT EXISTS(SELECT 1 FROM cf WHERE cf.book = files.book AND cf.fmt = files.format);"
   "DROP TABLE cf;";
 
+/* calibre's custom columns and their values (cal_columns, cal_values),
+ * spelled as lulibre's custom fields spell theirs. A column's values are in
+ * custom_column_N, linked to books through books_custom_column_N_link when
+ * the column is normalized (text, series, enumeration); a composite column
+ * keeps none. */
+static int mirror_custom(struct db *db, char **err) {
+  if (db_exec(db, "DELETE FROM cal_columns; DELETE FROM cal_values;", err)) return -1;
+  sqlite3_stmt *st = NULL;
+  if (sqlite3_prepare_v2(db->h,
+                         "SELECT id, label, name, datatype, is_multiple, normalized FROM cal.custom_columns"
+                         " WHERE NOT mark_for_delete ORDER BY id",
+                         -1, &st, NULL) != SQLITE_OK)
+    return 0; /* a database calibre made has the table; one that lacks it has no columns */
+  int rc = 0;
+  while (!rc && sqlite3_step(st) == SQLITE_ROW) {
+    int id = sqlite3_column_int(st, 0);
+    const char *label = (const char *)sqlite3_column_text(st, 1), *type = (const char *)sqlite3_column_text(st, 3);
+    if (!label || !type) continue;
+    sqlite3_stmt *ins = NULL;
+    if (db_prepare(db, "INSERT OR REPLACE INTO cal_columns(label, name, datatype, multiple) VALUES(?1, ?2, ?3, ?4)",
+                   &ins, err))
+      break;
+    sqlite3_bind_text(ins, 1, label, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_value(ins, 2, sqlite3_column_value(st, 2));
+    sqlite3_bind_text(ins, 3, type, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(ins, 4, sqlite3_column_int(st, 4));
+    sqlite3_step(ins);
+    sqlite3_finalize(ins);
+    if (!strcmp(type, "composite")) continue;
+    const char *value = !strcmp(type, "int") || !strcmp(type, "float") ? "printf('%.10g', v.value)"
+                        : !strcmp(type, "datetime")                     ? "substr(v.value, 1, 10)"
+                                                                        : "v.value";
+    char *q = sqlite3_column_int(st, 5)
+                  ? xasprintf("INSERT INTO cal_values(book, label, ord, value) SELECT l.book, ?1, l.id, %s"
+                              " FROM cal.books_custom_column_%d_link l JOIN cal.custom_column_%d v ON v.id = l.value",
+                              value, id, id)
+                  : xasprintf("INSERT INTO cal_values(book, label, ord, value) SELECT v.book, ?1, 0, %s"
+                              " FROM cal.custom_column_%d v",
+                              value, id);
+    if (sqlite3_prepare_v2(db->h, q, -1, &ins, NULL) == SQLITE_OK) {
+      sqlite3_bind_text(ins, 1, label, -1, SQLITE_TRANSIENT);
+      if (sqlite3_step(ins) != SQLITE_DONE) {
+        *err = xasprintf("reading calibre's column #%s: %s", label, sqlite3_errmsg(db->h));
+        rc = -1;
+      }
+    } else {
+      log_debug("calibre's column #%s has no table of values: %s", label, sqlite3_errmsg(db->h));
+    }
+    sqlite3_finalize(ins);
+    free(q);
+  }
+  sqlite3_finalize(st);
+  return rc;
+}
+
 int db_mirror(struct db *db, const char *library, int force, char **err) {
   char *cal = xasprintf("%s/metadata.db", library);
   struct stat st;
@@ -143,6 +198,7 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
     }
     sqlite3_finalize(cf);
     ok = ok && db_exec(db, files_sql2, err) == 0;
+    ok = ok && mirror_custom(db, err) == 0;
     /* the wholesale replace above took the staged files' rows with it */
     ok = ok && db_stage_refresh(db, 1, err) == 0;
     if (ok) {

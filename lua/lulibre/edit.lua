@@ -152,6 +152,7 @@ end
 
 -- calibredb's spelling of a value
 local function wire(field, value)
+  if field:sub(1, 1) == "#" then return require("lulibre.custom").wire(field, value) end
   if field == "tags" or field == "identifiers" then
     return (value:gsub("%s*,%s*", ","))
   end
@@ -285,6 +286,7 @@ local function failure(r, err)
   end
   return msg ~= "" and msg or ("calibredb exited with status " .. r.code)
 end
+M.failure = failure
 
 --- Apply changes. Waits; shows progress. Returns
 -- { batch=, books=, applied=, unchanged=, failed={ {id=, error=}, ... } }.
@@ -369,13 +371,31 @@ function M.apply(changes, opts)
       staged = true
       return
     end
-    -- custom fields (#partof) are lulibre's own; the rest go to calibre
-    local own, theirs = {}, {}
+    -- custom fields (#partof) are lulibre's own, and calibre's too where
+    -- it has a column of that name; the rest go to calibre
+    local own, theirs, cleared = {}, {}, {}
     for _, f in ipairs(job.fields) do
-      if f.field:sub(1, 1) == "#" then own[#own + 1] = f else theirs[#theirs + 1] = f end
+      if f.field:sub(1, 1) == "#" then
+        own[#own + 1] = f
+        if require("lulibre.custom").column(f.field) then
+          -- set_metadata cannot empty a number's or a date's column; set_custom can
+          if f.new == "" then cleared[#cleared + 1] = f else theirs[#theirs + 1] = f end
+        end
+      else
+        theirs[#theirs + 1] = f
+      end
     end
     local good, why = true, nil
-    if #theirs > 0 then
+    for _, f in ipairs(cleared) do
+      local args = M.calibredb()
+      for _, a in ipairs { "set_custom", f.field:sub(2), tostring(job.id), "" } do args[#args + 1] = a end
+      local r, e = lulibre.system(args, { timeout = 120000 })
+      if not (r and r.code == 0) then
+        good, why = false, failure(r, e)
+        break
+      end
+    end
+    if good and #theirs > 0 then
       local args = M.calibredb()
       args[#args + 1] = "set_metadata"
       args[#args + 1] = tostring(job.id)
