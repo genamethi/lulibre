@@ -65,10 +65,6 @@ static void on_fatal(int sig) {
   raise(sig);
 }
 
-const char *crash_log_path(void) {
-  return path;
-}
-
 void crash_install(void) {
   const char *xdg = getenv("XDG_STATE_HOME");
   char *dir = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.local/state/lulibre");

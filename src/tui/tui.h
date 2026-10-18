@@ -105,10 +105,9 @@ uint32_t key_from_input(const struct ncinput *ni);
 /* "gg", "<C-w>v", "<Space>": returns the number of keys, 0 if unparseable */
 int key_parse(const char *spec, uint32_t out[KEYSEQ_MAX]);
 void key_format(sbuf *out, const uint32_t *keys, int n);
-/* Add or replace a binding. modes is a bitmask of enum mode. */
-int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command);
-/* The same, with what the help overlay is to say of it (NULL: the command
- * itself), or hidden from it. */
+/* Add or replace a binding. modes is a bitmask of enum mode; about is what
+ * the help overlay is to say of it (NULL: the command itself), or hidden
+ * from it. */
 int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
                    int hidden);
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
@@ -163,7 +162,6 @@ int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
  * not wanted. */
 int ctx_feed(int ctx, uint32_t *pending, uint32_t key);
 int ctx_bound(int ctx, uint32_t key); /* does any binding there begin with it? */
-int ctx_key_of(int ctx, int action, sbuf *out);
 /* A place's key for an action, for a hint ("" when unbound); like key_hint,
  * each ctx_hint() has a buffer of its own. */
 const char *ctx_hint_in(char *buf, size_t size, int ctx, int action);
@@ -345,7 +343,6 @@ void wm_resize_dir(struct tui *t, char dir, int cells);
  * line there any more. */
 char wm_divider_at(struct tui *t, int y, int x);
 int wm_divider_drag(struct tui *t, int *y, int *x, int to_y, int to_x);
-const struct view_class *wm_class(const char *name);
 struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, float size, char side);
 /* Show a view in the list's window for a while, the list kept aside until
  * it is undocked; the focus stays where it is. Docks on the left when there
@@ -511,7 +508,6 @@ void command_register_lua(const char *name, int ref, const char *help);
 void tui_exec(struct tui *t, const char *line);
 void commands_builtin(void);
 void commands_free(void);
-void command_help(struct tui *t);
 /* Call fn for each command, in the order they were made; a non-zero return stops. */
 void command_each(int (*fn)(const char *name, const char *help, void *ud), void *ud);
 

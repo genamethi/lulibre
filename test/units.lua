@@ -418,6 +418,17 @@ do
   end
 end
 
+-- where modules are looked for: one runtime, never the current directory
+do
+  local function has(list, entry) return (";" .. list .. ";"):find(";" .. entry .. ";", 1, true) ~= nil end
+  eq("no module is looked for in the current directory", { has(package.path, "./?.lua"), has(package.cpath, "./?.so") },
+    { false, false })
+  -- run from a build tree (as make unit does), the installed runtime is not searched as well
+  local from_tree = package.path:find("/build/../lua/?.lua", 1, true) ~= nil
+  local installed = has(package.path, lulibre.settings.paths().installed .. "/lua/?.lua")
+  eq("from a build tree, only the tree's runtime", { from_tree, installed }, { true, false })
+end
+
 -- settings
 do
   local S = lulibre.settings
@@ -428,6 +439,16 @@ do
   eq("settings.set with a table", { S.get("ocr_pages"), S.get("ocr_lang") }, { 4, "deu" })
   S.reset("ocr_pages")
   S.reset("ocr_lang")
+  lulibre.o.ocr_pages = 9
+  lulibre.o.ocr_pages = nil
+  eq("an option set to nil is back at its default", lulibre.o.ocr_pages, S.info("ocr_pages").default)
+  S.set("ocr_pages", 9)
+  S.set("ocr_pages", nil)
+  eq("and so with settings.set", lulibre.o.ocr_pages, S.info("ocr_pages").default)
+  local opt = lulibre.option("unit_nil", { depth = { default = 2, type = "number" } })
+  lulibre.cfg.unit_nil.depth = 5
+  lulibre.cfg.unit_nil.depth = nil
+  eq("a script's option set to nil is back at its default", opt.depth, 2)
   eq("settings.reset", { S.get("ocr_pages"), S.get("ocr_lang") }, { 3, "eng" })
   eq("settings.get() has every option", S.get().write_via, "auto")
   local names = S.names()
@@ -1942,7 +1963,9 @@ do
   f:write("local o = lulibre.o\no.pages = 6\n")
   f:close()
   local missing = cf.missing()
-  eq("what init.lua does not mention", { #missing.core > 10, missing.scripts[1] and missing.scripts[1].ns }, { true, "unitns" })
+  local names = {}
+  for _, it in ipairs(missing.scripts) do names[it.ns] = true end
+  eq("what init.lua does not mention", { #missing.core > 10, names.unitns }, { true, true })
   lulibre.settings.set("config_comments", "full")
   eq("put in, commented out", cf.add { { ns = "unitns", name = "depth" }, { ns = "unitns", name = "style" }, { name = "jobs" } }, 3)
   local text = cf.read()
