@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.1)
+## 0.2.0-alpha.2
 
 - Added: custom fields can be calibre columns too. `:custom column add
   NAME` asks calibre for the column; from then on every change to the field
