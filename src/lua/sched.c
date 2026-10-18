@@ -75,11 +75,12 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
   if (!ok && !t->cancelled) {
     s->failed++;
     /* a failure may be the tree's Lua files no longer fitting this binary */
-    const char *why = lstate_tree_mismatch();
+    char *why = lstate_tree_mismatch();
     char *msg = why ? xasprintf("%s: %s\n%s", t->name, err ? err : "error", why)
                     : xasprintf("%s: %s", t->name, err ? err : "error");
     lapi_report(s->app, 1, msg);
     free(msg);
+    free(why);
   }
   lua_closethread(t->co, s->L); /* run pending to-be-closed variables */
   luaL_unref(s->L, LUA_REGISTRYINDEX, t->ref);

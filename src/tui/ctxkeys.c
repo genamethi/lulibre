@@ -230,12 +230,9 @@ int ctx_key_of(int ctx, int action, sbuf *out) {
   return 0;
 }
 
-const char *ctx_hint(int ctx, int action) {
-  static char ring[8][32];
-  static int at;
-  char *buf = ring[at++ % 8];
+const char *ctx_hint_in(char *buf, size_t size, int ctx, int action) {
   sbuf out = SBUF_INIT;
-  if (ctx_key_of(ctx, action, &out)) snprintf(buf, sizeof ring[0], "%s", out.s);
+  if (ctx_key_of(ctx, action, &out)) snprintf(buf, size, "%s", out.s);
   else buf[0] = '\0';
   sb_free(&out);
   return buf;

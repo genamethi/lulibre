@@ -45,7 +45,7 @@ void doc_extract(const char *path, const char *format, const struct doc_opts *o,
   char magic[8] = {0};
   FILE *f = fopen(path, "rb");
   if (!f) {
-    out->error = xasprintf("cannot open: %s", strerror(errno));
+    out->error = xasprintf("cannot open: %s", errstr(errno));
     return;
   }
   size_t got = fread(magic, 1, sizeof magic, f);

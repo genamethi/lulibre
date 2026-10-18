@@ -39,6 +39,12 @@ char *xstrndup(const char *s, size_t n) {
   return p;
 }
 
+const char *errstr_in(char *buf, size_t size, int err) {
+  /* the GNU strerror_r (_GNU_SOURCE): it returns the message, which is in
+   * buf or a string of its own that nothing writes */
+  return strerror_r(err, buf, size);
+}
+
 char *xasprintf(const char *fmt, ...) {
   va_list ap;
   char *p;

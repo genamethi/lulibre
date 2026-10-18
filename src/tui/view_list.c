@@ -8,11 +8,8 @@ struct lstate {
   sqlite3_stmt *st;
 };
 
-static int page_rows = 20;
-
 int list_page_rows(struct tui *t) {
-  (void)t;
-  return page_rows;
+  return t->list_rows > 0 ? t->list_rows : 20; /* before the list is first drawn */
 }
 
 static void *create(struct tui *t) {
@@ -45,7 +42,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
 
   int body = r.h - 1;
   if (body < 1) body = 1;
-  page_rows = body;
+  t->list_rows = body;
   if (R->cur < R->top) R->top = R->cur;
   if (R->cur >= R->top + body) R->top = R->cur - body + 1;
   if (R->top > R->n - body) R->top = R->n - body;

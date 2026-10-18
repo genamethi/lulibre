@@ -13,6 +13,11 @@ char *xstrdup(const char *s);
 char *xstrndup(const char *s, size_t n);
 char *xasprintf(const char *fmt, ...) PRINTF(1, 2);
 
+/* strerror, safe on any thread: errstr(err) gives each call a buffer of
+ * its own, which lives until the end of the statement or block. */
+const char *errstr_in(char *buf, size_t size, int err);
+#define errstr(err) errstr_in((char[128]){0}, 128, (err))
+
 /* growable string; s is always NUL-terminated once anything is appended */
 typedef struct sbuf {
   char *s;
