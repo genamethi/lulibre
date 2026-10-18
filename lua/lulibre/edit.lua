@@ -265,10 +265,23 @@ function M.calibredb()
       a[#a + 1] = "<f:" .. o.password_file .. ">"
     end
   else
+    -- straight to the folder: calibre's program, if it is open, could be
+    -- changing the same library; wait until it is closed
+    require("lulibre.calibre").wait_for_program("writing to the library")
     a[#a + 1] = "--with-library"
     a[#a + 1] = o.library
   end
   return a
+end
+
+--- After lulibre has changed the library straight in its folder (no
+-- server, no program open): calibre's backup_metadata writes the opf files
+-- of the books changed, as nothing else will (backup_metadata option).
+-- Errors are logged, not raised: the change itself is made.
+function M.after_direct()
+  if lulibre.o.backup_metadata ~= "on" or M.route() ~= "direct" then return end
+  local ok, err = pcall(require("lulibre.backup").metadata)
+  if not ok then lulibre.log("the books' opf files were not written: " .. tostring(err), "warn") end
 end
 
 local function failure(r, err)
@@ -432,6 +445,7 @@ function M.apply(changes, opts)
   if staged then lulibre.stage_refresh() end
   local links = 0
   if total > 0 then
+    M.after_direct()
     lulibre.reload()
     if renamed then links = M.repair_links() end
     -- Record what calibre actually stored (it may normalise a value), so

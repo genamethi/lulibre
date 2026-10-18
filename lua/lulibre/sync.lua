@@ -263,6 +263,7 @@ function M.add(ids, opts)
     end
   end
   lulibre.stage_refresh()
+  if out.added > 0 then require("lulibre.edit").after_direct() end
   lulibre.reload()
   return out
 end

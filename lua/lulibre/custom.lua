@@ -284,6 +284,7 @@ function M.push(name)
       out.failed[#out.failed + 1] = { id = d.book, error = edit.failure(r, err) }
     end
   end, { jobs = edit.write_jobs(), progress = "copying " .. name })
+  if out.copied > 0 then edit.after_direct() end
   lulibre.reload()
   return out
 end
