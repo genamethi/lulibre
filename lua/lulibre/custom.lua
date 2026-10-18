@@ -49,14 +49,17 @@ function M.is(field)
 end
 
 local declared -- name -> { type=, help= }, read once
+-- (built whole, then put in place in one step: a task interrupted while
+-- building must not leave another task reading half of it)
 local function load()
   if declared then return declared end
-  declared = {}
-  for name, spec in pairs(M.builtin) do declared[name] = spec end
+  local d = {}
+  for name, spec in pairs(M.builtin) do d[name] = spec end
   for _, r in ipairs(lulibre.sql("SELECT name, type, help FROM custom.fields")) do
-    declared[r.name] = { type = r.type, help = r.help }
+    d[r.name] = { type = r.type, help = r.help }
   end
-  return declared
+  declared = d
+  return d
 end
 
 --- Declare a field (or say again what it is). type: text, number, date or list.

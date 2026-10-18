@@ -57,7 +57,7 @@ static void h_after(uv_work_t *req, int status) {
   if (L) {
     if (j->err) {
       lua_pushnil(L);
-      lua_pushfstring(L, "%s: %s", j->path, strerror(j->err));
+      lua_pushfstring(L, "%s: %s", j->path, errstr(j->err));
       sched_wake(j->task, 2);
     } else {
       lua_pushstring(L, j->hex);
@@ -80,7 +80,7 @@ static int l_md5(lua_State *L) {
   struct stat sb;
   if (stat(path, &sb)) {
     lua_pushnil(L);
-    lua_pushfstring(L, "%s: %s", path, strerror(errno));
+    lua_pushfstring(L, "%s: %s", path, errstr(errno));
     return 2;
   }
   struct db *db = lapi_db(L);

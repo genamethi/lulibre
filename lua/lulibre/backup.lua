@@ -197,11 +197,11 @@ end
 -- The first change to the library in a session, with the newest copy too
 -- old: said once, in a popup that offers one. A replaceable function.
 -- (The interface only: a script's output stays its own.)
-local warned = false
+local said = {} -- said.warned: the session's one popup (lulibre.claim)
 function M.warn()
-  if warned or lulibre.headless or not lulibre.task_id() then return end
+  if said.warned or lulibre.headless or not lulibre.task_id() then return end
   if tostring(lulibre.o.backup_too_old) ~= "warn" or lulibre.o.library == "" or not M.too_old() then return end
-  warned = true
+  if not lulibre.claim(said, "warned") then return end -- another task has said it
   local age = M.age()
   local what = age and ("the newest copy of calibre's database is %d days old"):format(math.floor(age))
     or "there is no copy of calibre's database yet"

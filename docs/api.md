@@ -171,6 +171,7 @@ The edit form and review can be opened for given books from a script:
 | `lulibre.sleep(ms)` | *waits* |
 | `lulibre.yield()` | give others a turn now |
 | `lulibre.tasks()` `lulibre.cancel(id)` `lulibre.task_id()` | |
+| `lulibre.claim(t, key [, value])` | sets `t[key]` (to `value`, default true) if it is nil, as one step: true if this call set it. Tasks are interrupted between any two Lua operations, so a test followed by a set is not one; give it back with `t[key] = nil` |
 | `lulibre.system({"prog", "arg"} [, {stdin=, cwd=, timeout=}])` | *waits.* `{ code=, signal=, stdout=, stderr=, timed_out= }`, or nil, message |
 | `lulibre.fold(s)` | search key: lower case, accents stripped |
 | `lulibre.lower(s)` `lulibre.upper(s)` | case for more than ASCII: accented Latin, Greek, Cyrillic |

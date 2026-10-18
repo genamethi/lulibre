@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## In development (since 0.2.0-alpha.2)
+
+- Fixed: requests to an online service could go out two at a time when
+  several tasks looked a book up together (two found the service free in
+  the same moment); a key hint in a long message could show another
+  command's key; shared caches could be read half-built.
+  `lulibre.claim(t, key)` gives scripts the same one-step test and set.
+
 ## 0.2.0-alpha.2
 
 - Added: custom fields can be calibre columns too. `:custom column add

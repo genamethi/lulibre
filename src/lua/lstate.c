@@ -51,8 +51,7 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
 
 static char tree_root[4096]; /* the tree this binary runs from, or "" */
 
-const char *lstate_tree_mismatch(void) {
-  static char msg[768];
+char *lstate_tree_mismatch(void) {
   if (!tree_root[0]) return NULL;
   char *path = xasprintf("%s/src/version.h", tree_root);
   FILE *f = fopen(path, "r");
@@ -71,11 +70,9 @@ const char *lstate_tree_mismatch(void) {
   char now[128];
   snprintf(now, sizeof now, "%d.%d.%d%s", major, minor, patch, pre);
   if (!strcmp(now, LULIBRE_VERSION)) return NULL;
-  snprintf(msg, sizeof msg,
-           "this lulibre is %s, but the source tree it runs from (%.200s) is now %s: its Lua files belong to that "
-           "version and may fail here. Quit, run make there, and start again; or run an installed lulibre.",
-           LULIBRE_VERSION, tree_root, now);
-  return msg;
+  return xasprintf("this lulibre is %s, but the source tree it runs from (%s) is now %s: its Lua files belong to that "
+                   "version and may fail here. Quit, run make there, and start again; or run an installed lulibre.",
+                   LULIBRE_VERSION, tree_root, now);
 }
 
 /* Search order: the user's own modules, a source tree when running from one

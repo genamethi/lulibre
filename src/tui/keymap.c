@@ -153,13 +153,10 @@ int keymap_key_of(const struct keymap *km, unsigned mode, const char *command, s
   return 0;
 }
 
-const char *key_hint(const char *command) {
-  static char ring[4][48];
-  static int at;
-  char *buf = ring[at++ % 4];
+const char *key_hint_in(char *buf, size_t size, const char *command) {
   sbuf out = SBUF_INIT;
-  if (keymap_key_of(&tui_keymap, MODE_NORMAL, command, &out)) snprintf(buf, sizeof ring[0], "%s", out.s);
-  else snprintf(buf, sizeof ring[0], ":%s", command);
+  if (keymap_key_of(&tui_keymap, MODE_NORMAL, command, &out)) snprintf(buf, size, "%s", out.s);
+  else snprintf(buf, size, ":%s", command);
   sb_free(&out);
   return buf;
 }

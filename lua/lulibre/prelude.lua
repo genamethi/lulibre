@@ -480,16 +480,17 @@ local probe_cache
 local function cache_file() return lulibre.settings.paths().data_dir .. "/cmodules.cache" end
 local function load_cache()
   if probe_cache then return probe_cache end
-  probe_cache = {}
+  local cache = {} -- built whole, then put in place (a task may be interrupted)
   local f = io.open(cache_file(), "r")
   if f then
     for line in f:lines() do
       local verdict, stamp, path = line:match("^(%a+) (%d+) (.+)$")
-      if path then probe_cache[path] = { verdict = verdict, stamp = stamp } end
+      if path then cache[path] = { verdict = verdict, stamp = stamp } end
     end
     f:close()
   end
-  return probe_cache
+  probe_cache = cache
+  return cache
 end
 local function shq(s) return "'" .. tostring(s):gsub("'", "'\\''") .. "'" end
 local function c_module_ok(name, file)

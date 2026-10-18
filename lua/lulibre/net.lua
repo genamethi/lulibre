@@ -116,8 +116,8 @@ end
 -- script run beside the interface, or the same command run again at once)
 -- keeps to the same pace.
 local function turn(service)
-  while busy[service] do lulibre.sleep(50) end
-  busy[service] = true
+  -- (a test and a set in one step: two tasks must not both find it free)
+  while not lulibre.claim(busy, service) do lulibre.sleep(50) end
   -- no sooner than the pace, nor sooner than the last answer took to come
   local pace = math.min(60, math.max(M.PACE[service] or 1, took[service] or 0))
   local wait = (last[service] or -math.huge) + pace - monotonic()
