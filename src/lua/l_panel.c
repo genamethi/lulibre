@@ -13,6 +13,9 @@
  *     focus = false,      -- leave the focus where it is (a panel takes it otherwise)
  *     screen_tab = true,  -- the panel is the bar's Configuration tab while open
  *     moves = true,       -- wait() also returns "<Move>" when the cursor moves
+ *     dialog = true,      -- Esc closes it, as q does (a form that asks
+ *                         -- something); in other panels Esc goes back to
+ *                         -- the window and leaves the panel open
  *     reloads = true,     -- and "<Reload>" when the library has been read again
  *     tabs = { "this run (9)", "all waiting (212)" }, tab = 1,
  *                         -- names in the bar, one of them as the one in view
@@ -290,9 +293,11 @@ static int l_panel_ui(lua_State *L) {
   panel_set_follow(lp->p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "moves");
   panel_set_moves(lp->p, lua_toboolean(L, -1));
+  lua_getfield(L, 1, "dialog");
+  panel_set_dialog(lp->p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "reloads");
   panel_set_reloads(lp->p, lua_toboolean(L, -1));
-  lua_pop(L, 1);
+  lua_pop(L, 2);
   lua_getfield(L, 1, "pass");
   if (lua_isstring(L, -1)) panel_set_pass(lp->p, lua_tostring(L, -1));
   lua_getfield(L, 1, "keys");

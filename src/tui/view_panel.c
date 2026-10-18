@@ -25,6 +25,7 @@ struct panel {
   int nrows, cap;
   int cur, top, page;
   int follow, moves, reloads;
+  int dialog; /* Esc closes it, as q does (panel_set_dialog) */
   uint32_t pending; /* the first key of a two-key binding such as gg */
   float size; /* its share of the screen, and the edge it is docked on */
   char side;
@@ -277,6 +278,10 @@ void panel_set_moves(struct panel *p, int moves) {
   p->moves = moves;
 }
 
+void panel_set_dialog(struct panel *p, int dialog) {
+  p->dialog = dialog;
+}
+
 void panel_set_reloads(struct panel *p, int reloads) {
   p->reloads = reloads;
 }
@@ -338,13 +343,18 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     moved(p, before);
     return 1;
   }
-  if (action == PA_CLOSE) {
+  if (action == PA_CLOSE || (action == PA_BACK && p->dialog)) {
     panel_close(p);
+    return 1;
+  }
+  if (action == PA_BACK) {
+    wm_focus_back(t);
     return 1;
   }
   switch (key) {
     /* these stay global, so the list and preview remain reachable */
     case NCKEY_TAB:
+    case NCKEY_TAB | KEY_SHIFT:
     case ':':
     case KEY_CTRL | 'w':
       return 0;

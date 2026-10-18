@@ -139,7 +139,9 @@ accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
 `"<Move>"` when the cursor moves, and with `reloads = true` it returns
 `"<Reload>"` when the library has been read again, so the rows can be
-brought up to date.
+brought up to date. `Esc` in a panel goes back to the window it was
+reached from and leaves the panel open; with `dialog = true` (a form that
+asks something) it closes the panel, as `q` does.
 
 Tabs are names drawn in the bar after the title, the current one standing
 out; when they do not all fit, the strip moves so that the current one is on

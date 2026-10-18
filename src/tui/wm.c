@@ -353,15 +353,72 @@ void wm_only(struct tui *t) {
   tui_dirty(t);
 }
 
-void wm_focus_next(struct tui *t, int delta) {
+static int is_panel(const struct node *n) { return n->cls == &view_panel; }
+
+/* the leaves of one kind (panels, or the other windows) that are on the
+ * screen: a preview a screen tab has squeezed to nothing is not */
+static int leaves_of(struct tui *t, int panels, struct node **out) {
   struct node *all[32];
-  int n = 0;
+  int n = 0, k = 0;
   leaves(t->root, all, &n);
   for (int i = 0; i < n; i++)
-    if (all[i] == t->focus) {
-      t->focus = all[((i + delta) % n + n) % n];
-      break;
-    }
+    if (is_panel(all[i]) == panels && all[i]->r.w > 0 && all[i]->r.h > 0) out[k++] = all[i];
+  return k;
+}
+
+void wm_note_focus(struct tui *t) {
+  if (!t->focus || !t->focus->state) return;
+  if (is_panel(t->focus)) t->last_panel = t->focus->state;
+  else t->last_window = t->focus->state;
+}
+
+void wm_focus_next(struct tui *t, int delta) {
+  struct node *all[32];
+  int n = leaves_of(t, 0, all);
+  if (n == 0) return;
+  int at = -1;
+  for (int i = 0; i < n; i++)
+    if (all[i] == t->focus) at = i;
+  if (at < 0) { /* from a panel: the window it was reached from, then on */
+    struct node *back = t->last_window ? wm_leaf_of(t, t->last_window) : NULL;
+    for (int i = 0; i < n; i++)
+      if (all[i] == back) at = i;
+    t->focus = at >= 0 ? all[at] : all[0];
+  } else {
+    t->focus = all[((at + delta) % n + n) % n];
+  }
+  tui_dirty(t);
+}
+
+void wm_focus_panel(struct tui *t, int delta) {
+  struct node *all[32];
+  int n = leaves_of(t, 1, all);
+  if (n == 0) {
+    tui_msg(t, 0, "no panel is open");
+    return;
+  }
+  int at = -1;
+  for (int i = 0; i < n; i++)
+    if (all[i] == t->focus) at = i;
+  if (at >= 0) {
+    t->focus = all[((at + delta) % n + n) % n];
+  } else {
+    struct node *last = t->last_panel ? wm_leaf_of(t, t->last_panel) : NULL;
+    t->focus = last && is_panel(last) ? last : all[delta > 0 ? 0 : n - 1];
+  }
+  tui_dirty(t);
+}
+
+void wm_focus_back(struct tui *t) {
+  if (!t->focus || !is_panel(t->focus)) return;
+  struct node *back = t->last_window ? wm_leaf_of(t, t->last_window) : NULL;
+  if (back && !is_panel(back) && back->r.w > 0 && back->r.h > 0) {
+    t->focus = back;
+  } else {
+    struct node *all[32];
+    if (leaves_of(t, 0, all) == 0) return;
+    t->focus = all[0];
+  }
   tui_dirty(t);
 }
 
@@ -375,7 +432,7 @@ void wm_focus_dir(struct tui *t, char dir) {
   long best_d = 0;
   for (int i = 0; i < n; i++) {
     struct rect r = all[i]->r;
-    if (all[i] == t->focus) continue;
+    if (all[i] == t->focus || is_panel(all[i]) || r.w <= 0 || r.h <= 0) continue;
     int ok = 0;
     switch (dir) {
       case 'h': ok = r.x + r.w <= c.x && r.y < c.y + c.h && r.y + r.h > c.y; break;
