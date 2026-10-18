@@ -159,9 +159,11 @@ local function wire(field, value)
   if field == "series_index" and value == "" then return "1" end -- calibre's default
   if field == "pubdate" then
     -- Give calibre a complete UTC timestamp. Left to fill in a missing time
-    -- of day it uses the current one, which can land on the next day.
+    -- of day it uses the current one, which can land on the next day; and
+    -- at midnight UTC the day is the one before wherever calibre shows it
+    -- west of Greenwich. Noon UTC is the same day everywhere.
     if value == "" then return "0101-01-01T00:00:00+00:00" end -- calibre's "no date"
-    if value:match("^%d%d%d%d%-%d%d%-%d%d$") then return value .. "T00:00:00+00:00" end
+    if value:match("^%d%d%d%d%-%d%d%-%d%d$") then return value .. "T12:00:00+00:00" end
   end
   return value
 end
