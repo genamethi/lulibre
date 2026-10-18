@@ -753,7 +753,7 @@ For a marked book:
   title. An arXiv number is still followed: arXiv is where such works
   are kept;
 - having no identifiers does not count against it in `:good`, and
-  `:stats` counts it apart;
+  `lulibre stats` counts it apart;
 - when it is marked, what waits for it from CrossRef, Open Library,
   OpenAlex and zbMATH is withdrawn, and taking off a DOI or ISBN it holds
   is proposed (at 0.8, for review like anything else).

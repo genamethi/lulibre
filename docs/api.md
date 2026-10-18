@@ -229,6 +229,12 @@ its own documentation.
 | `lulibre.edit_file(path)` | open a file in `$VISUAL`/`$EDITOR` (vim, vi), handing over the terminal; the exit status |
 | `lulibre.require_rock(module [, rock])` | require, offering to install into `rocks_tree` when `rocks_install = "on"` |
 | `lulibre.grammars` | grammars of publications: `add{ name=, kind=, lines = { G.line{...}, G.skip(n), G.opt(r), G.either{...} }, text=, pages=, read=, noncatalog=, confidence= }`, `remove(name)`, `match(doc)` → `{ {grammar=, fields=} }`, `doc(id)` |
+| `lulibre.ids` | identifiers in page text: DOIs, ISBNs, arXiv numbers, MSC areas |
+| `lulibre.junk` | titles and authors that are artefacts (build file names, error pages, the PDF's producer), against lower-cased values |
+| `lulibre.names` | people's names: telling a name from an institution or a stray word, splitting author lists, fixing capitals |
+| `lulibre.subjects` | a subject guessed from the first pages' 1- to 3-word sequences |
+| `lulibre.taxonomy` | the one place subject names are decided (arXiv classes, MSC areas to tags) |
+| `lulibre.options` | options of scripts and modules, each in a namespace of its own: what `lulibre.option(ns, spec)` uses |
 | `lulibre.parts` | books that are parts of a whole (the custom fields #partof, #part, #parts): `set{ {id=, whole=, part=, parts=}, ... }` (one journaled change), `of(id)`, `wholes()` (parts in order, numbers missing) |
 | `lulibre.custom` | custom fields beside calibre's: `declare(name, {type=, help=})`, `field(name)`, `fields()`, `get(id, name)`, `all(id)`; set them with `lulibre.apply{ {id=, field="#name", value=} }`. In calibre too: `column(name)`, `state(name)` → `{state = "lulibre" \| "waiting" \| "calibre", differ=}`, `differing(name)`, `add_column(name, {heading=, datatype=})`, `remove_column(name)` (both queued: `lulibre.offline`), `calibre_books(name)`, `push(name)` |
 | `lulibre.backup` | copies of calibre's database: `take(reason)`, `list()`, `last()`, `age()` (days), `too_old([days])`, `prune([keep])`, `policy()`, `due()`, `set(value)`, `on_restart()`, `metadata()` (calibredb backup_metadata), `warn()` (replaceable: the popup) |
