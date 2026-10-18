@@ -349,6 +349,13 @@ Facts found by testing, which the code relies on (calibre 9.15):
   through calibredb or the content server marks the book in
   `metadata_dirtied`; `backup_metadata` writes them. A removed book's mark
   stays behind: count marks joined with `books`.
+- calibre's code run by lulibre is not calibre doing it. Its writing is
+  safe because it happens in the one process holding the library's lock,
+  the one that also renames book folders; the same functions run in another
+  process (over a copy of the database, say) are a second writer outside
+  that lock. I proposed exactly that as "calibre's own writer" for the opf
+  files. Only `backup_metadata` (the server stopped) or the program's own
+  thread is calibre writing them.
 - A content server without `--enable-auth` is read-only unless started
   with `--enable-local-write`; a test against one that is not proves
   nothing about writing.
