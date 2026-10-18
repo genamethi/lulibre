@@ -18,17 +18,17 @@ to come:
   `restore_database` from the books' metadata.opf files (as good as those
   files are: they are written only by calibre's own program or
   `backup_metadata`).
-- **The opf files, kept current.** calibre reads a book's metadata.opf in
-  three places only: `restore_database`, its recycle bin's list, and
-  bringing a book back from the bin (removing a book writes a fresh one
-  first, so that path is safe). Everything else reads the database. The
-  opf files are written by calibre's own code alone (its program's
-  background thread, `backup_metadata`, removal); lulibre never writes
-  one. With the web interface only, they fall behind (1060 of 1860 books
-  on 2026-10-18), so `restore_database` would lose those changes. Run
-  `backup_metadata` (calibre's own writer) whenever the server is stopped
-  for anything, not only before a column changes, and show how many are
-  behind (`metadata_dirtied` joined with `books`, read-only).
+- **The opf files, and calibre's program beside lulibre** (high priority).
+  Every setup is supported: calibre's program open (it writes the opf files
+  itself, a dirty book every ~2 s), the content server alone (nothing writes
+  them), neither. lulibre keeps them current where calibre does not, never
+  in competition with the program: whatever lulibre does that the program
+  could also be doing (writing opf files, moving files in book folders, a
+  direct calibredb run) starts a watcher for the program
+  (`@calibre-singleinstance-<uid>-GUI` in `/proc/net/unix`, the book folder
+  by inotify) and stops when it appears. How the files are written (calibre's
+  `backup_metadata` while stopped, or calibre's own writer over a read-only
+  copy of the database) is being decided: the review board, item 19.
 
 ## 0.2.1: dependencies, declared and installed
 
