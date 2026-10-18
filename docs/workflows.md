@@ -958,6 +958,56 @@ the preview shows it under the book's identifiers, and filters find it:
 lulibre's own: `#partof`, `#part`, `#parts` (parts of a whole). Scripts read
 and write them through `lulibre.custom` and `lulibre.apply`.
 
+### In calibre too
+
+A field can be a calibre custom column as well, of the same name. lulibre
+keeps its values as before, and every change to the field is written to
+calibre's column too.
+
+    :custom calibre NAME [heading]   ask calibre for the column
+    :custom push NAME                copy lulibre's values into it, where calibre's differ
+    :run columns                     the columns for #partof, #part, #parts (an example script)
+
+calibre makes a column only while the content server is stopped, so the
+column waits (below) and lulibre asks: restart now, or not now. Until it is
+there, and wherever calibre's value is not lulibre's, the preview says so
+under the book's custom fields (`not in calibre: #note (lulibre only),
+#partof (calibre: …)`), and `:custom` says it of each field: lulibre only,
+waits for a restart, calibre too, or how many books differ.
+
+### Changes that wait for the server to be stopped: `:offline`
+
+Some of calibredb's commands refuse the content server: they work on the
+library folder, while nothing else has it open.
+
+| Command | What it does |
+|---|---|
+| `add_custom_column` | adds a column to calibre's database |
+| `remove_custom_column` | removes one, and its values |
+| `restore_database` | rebuilds `metadata.db` from the `metadata.opf` kept in each book's folder |
+| `check_library` | reports what disagrees between the database and the folders |
+| `backup_metadata` | writes each book's `metadata.opf` again from the database |
+| `catalog` | writes a catalogue of the library (CSV, BibTeX, EPUB …) |
+
+lulibre queues them (in the history file beside the index) and does them
+the next time the server is stopped. They are done the same way whatever
+stopped it:
+
+- `lulibre.service`, a systemd user unit that runs before each start of the
+  server. `make install` puts it in `<prefix>/share/lulibre/systemd/`; copy
+  it to `~/.config/systemd/user/`, name your server's unit in it if that is
+  not `calibre-server.service`, then `systemctl --user daemon-reload` and
+  `systemctl --user enable lulibre.service`.
+- "restart now": lulibre stops the server with the option `server_stop`,
+  does them, and starts it with `server_start`
+  (`systemctl --user stop calibre-server`, `… start …`).
+- by hand, while the server is down: `lulibre offline`.
+
+      :offline                 what waits, and what failed
+      :offline restart         restart the server for them now
+      :offline cancel ID
+      lulibre offline [list | cancel ID]
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.
