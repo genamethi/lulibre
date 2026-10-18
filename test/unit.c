@@ -1,5 +1,6 @@
 /* Unit tests for the C core: the pieces that can be exercised without a
  * library, a terminal or a Lua state. Built and run by `make unit`. */
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 #include "doc/doc.h"
 #include "match/fold.h"
 #include "match/fuzzy.h"
+#include "tui/tui.h"
 #include "version.h"
 
 static int checks, fails;
@@ -331,6 +333,26 @@ static void test_quality(void) {
   ok(g < 0.05, "a run of them counts once");
 }
 
+/* ---- reentrancy: each hint or message has its own buffer ---- */
+
+static void test_reentrant(void) {
+  tui_setup();
+  static const char *cmds[] = {"console", "filter", "sync add", "sync move", "sync drop", "source library"};
+  char alone[6][KEY_HINT_MAX];
+  for (int i = 0; i < 6; i++) snprintf(alone[i], sizeof alone[i], "%s", key_hint(cmds[i]));
+  char together[6 * KEY_HINT_MAX + 8];
+  /* more hints in one call than the old ring of four buffers held */
+  snprintf(together, sizeof together, "%s|%s|%s|%s|%s|%s", key_hint(cmds[0]), key_hint(cmds[1]), key_hint(cmds[2]),
+           key_hint(cmds[3]), key_hint(cmds[4]), key_hint(cmds[5]));
+  char want[sizeof together];
+  snprintf(want, sizeof want, "%s|%s|%s|%s|%s|%s", alone[0], alone[1], alone[2], alone[3], alone[4], alone[5]);
+  eq(together, want, "key_hint: six hints in one statement are six hints");
+  eq(errstr(ENOENT), "No such file or directory", "errstr: the message for an error number");
+  char two[160];
+  snprintf(two, sizeof two, "%s / %s", errstr(ENOENT), errstr(EACCES));
+  eq(two, "No such file or directory / Permission denied", "errstr: two in one statement");
+}
+
 int main(void) {
   test_version();
   test_util();
@@ -340,6 +362,7 @@ int main(void) {
   test_query();
   test_log();
   test_quality();
+  test_reentrant();
   printf("C unit tests: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

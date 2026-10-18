@@ -56,9 +56,8 @@ void picker_add(struct picker *p, sqlite3_int64 id, const char *text, const char
   it->score = 0;
 }
 
-static struct pitem *sort_items;
-
-static int by_score(const void *a, const void *b) {
+static int by_score(const void *a, const void *b, void *arg) {
+  const struct pitem *sort_items = arg;
   int ia = *(const int *)a, ib = *(const int *)b;
   double sa = sort_items[ia].score, sb = sort_items[ib].score;
   if (sa != sb) return sa < sb ? 1 : -1;
@@ -76,8 +75,7 @@ static void rematch(struct picker *p) {
     if (p->items[i].score > FUZZY_NONE / 2) p->order[p->nmatch++] = i;
   }
   if (!empty) {
-    sort_items = p->items;
-    qsort(p->order, (size_t)p->nmatch, sizeof *p->order, by_score);
+    qsort_r(p->order, (size_t)p->nmatch, sizeof *p->order, by_score, p->items);
   }
   p->sel = p->top = 0;
   sb_free(&q);

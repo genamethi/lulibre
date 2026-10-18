@@ -99,8 +99,8 @@ static size_t segment_start(const struct tui *t) {
   return start;
 }
 
-static double *sugg_scores;
-static int by_sugg_score(const void *a, const void *b) {
+static int by_sugg_score(const void *a, const void *b, void *arg) {
+  const double *sugg_scores = arg;
   int ia = *(const int *)a, ib = *(const int *)b;
   if (sugg_scores[ia] != sugg_scores[ib]) return sugg_scores[ia] < sugg_scores[ib] ? 1 : -1;
   return ia - ib; /* ties keep the order given, which is already a ranking */
@@ -127,8 +127,7 @@ static void suggest_rematch(struct tui *t) {
     t->sugg_order[t->nsugg_match++] = i;
   }
   if (!empty && !t->sugg_prefix) {
-    sugg_scores = scores;
-    qsort(t->sugg_order, (size_t)t->nsugg_match, sizeof *t->sugg_order, by_sugg_score);
+    qsort_r(t->sugg_order, (size_t)t->nsugg_match, sizeof *t->sugg_order, by_sugg_score, scores);
   }
   free(scores);
   sb_free(&q);
@@ -1320,7 +1319,9 @@ int tui_run(struct app *app) {
     else if (pending && !strcmp(policy, "ask"))
       tui_msg(t, 0, "%d file%s not indexed yet; :index reads them", pending, pending == 1 ? " is" : "s are");
   }
-  if (lstate_tree_mismatch()) tui_msg(t, 1, "%s", lstate_tree_mismatch());
+  char *mismatch = lstate_tree_mismatch();
+  if (mismatch) tui_msg(t, 1, "%s", mismatch);
+  free(mismatch);
   tui_dirty(t);
   log_to_stderr(0); /* the terminal is ours; the console shows the log */
   log_on_entry(log_arrived, app);

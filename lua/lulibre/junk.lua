@@ -41,11 +41,12 @@ local never_text, never_list
 local function never_titles()
   local text = lulibre.o.never_titles or ""
   if text ~= never_text then
-    never_text, never_list = text, {}
+    local list = {} -- built whole, then put in place (a task may be interrupted)
     for item in text:gmatch("[^,]+") do
       local phrase = item:lower():gsub("^%s+", ""):gsub("%s+$", "")
-      if phrase ~= "" then never_list[#never_list + 1] = phrase end
+      if phrase ~= "" then list[#list + 1] = phrase end
     end
+    never_list, never_text = list, text
   end
   return never_list
 end
@@ -55,11 +56,12 @@ local good_text, good_set
 local function good_titles()
   local text = lulibre.o.good_titles or ""
   if text ~= good_text then
-    good_text, good_set = text, {}
+    local set = {} -- built whole, then put in place (a task may be interrupted)
     for item in text:gmatch("[^,]+") do
       local title = item:lower():gsub("^%s+", ""):gsub("%s+$", "")
-      if title ~= "" then good_set[title] = true end
+      if title ~= "" then set[title] = true end
     end
+    good_set, good_text = set, text
   end
   return good_set
 end

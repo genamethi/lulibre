@@ -120,7 +120,12 @@ void keymap_free(struct keymap *km);
 /* For a hint on screen: the keys the global keymap has for a command line
  * in normal mode, or ":command" when it has none. The text is good until
  * four more calls. */
-const char *key_hint(const char *command);
+/* The key a command is on, for a hint (":command" when it is on none), in a
+ * buffer of the caller's: key_hint() gives each call its own, which lives
+ * until the end of the statement or block it is written in. */
+#define KEY_HINT_MAX 48
+const char *key_hint_in(char *buf, size_t size, const char *command);
+#define key_hint(command) key_hint_in((char[KEY_HINT_MAX]){0}, KEY_HINT_MAX, (command))
 /* Set what <Leader> stands for, from the option's text. */
 void keymap_set_leader(struct keymap *km, const char *spec);
 /* The keys a command line is bound to in this mode, written as a person
@@ -159,7 +164,10 @@ int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
 int ctx_feed(int ctx, uint32_t *pending, uint32_t key);
 int ctx_bound(int ctx, uint32_t key); /* does any binding there begin with it? */
 int ctx_key_of(int ctx, int action, sbuf *out);
-const char *ctx_hint(int ctx, int action); /* for a hint: "" when unbound; good for eight calls */
+/* A place's key for an action, for a hint ("" when unbound); like key_hint,
+ * each ctx_hint() has a buffer of its own. */
+const char *ctx_hint_in(char *buf, size_t size, int ctx, int action);
+#define ctx_hint(ctx, action) ctx_hint_in((char[KEY_HINT_MAX]){0}, KEY_HINT_MAX, (ctx), (action))
 void ctx_describe(int ctx, sbuf *out, int names);
 
 /* -------------------------------------------------------------- cmdline.c */
@@ -534,6 +542,7 @@ struct tui {
   struct keymap *km; /* the global keymap */
   struct node *root, *focus;
   struct rows rows;
+  int list_rows; /* the list's rows of books when last drawn: a page */
 
   enum prompt_kind prompt;
   struct lineedit line;

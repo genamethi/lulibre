@@ -125,9 +125,8 @@ static int by_int(const void *a, const void *b) {
   return *(const int *)a - *(const int *)b;
 }
 
-static struct rows *sorting; /* qsort has no argument to spare */
-
-static int by_heading(const void *a, const void *b) {
+static int by_heading(const void *a, const void *b, void *arg) {
+  const struct rows *sorting = arg;
   const struct ghead *x = &sorting->heads[*(const int *)a], *y = &sorting->heads[*(const int *)b];
   if (x->last != y->last) return x->last - y->last;
   if (sorting->group_by_count && x->count != y->count) return y->count - x->count;
@@ -236,10 +235,9 @@ static void build(struct tui *t) {
     if (h->parent >= 0) push(&r->heads[h->parent].kids, &r->heads[h->parent].nkids, &r->heads[h->parent].kcap, i);
     else push(&roots, &nroots, &rcap, i);
   }
-  sorting = r;
-  if (nroots > 1) qsort(roots, (size_t)nroots, sizeof *roots, by_heading);
+  if (nroots > 1) qsort_r(roots, (size_t)nroots, sizeof *roots, by_heading, r);
   for (int i = 0; i < r->nheads; i++)
-    if (r->heads[i].nkids > 1) qsort(r->heads[i].kids, (size_t)r->heads[i].nkids, sizeof(int), by_heading);
+    if (r->heads[i].nkids > 1) qsort_r(r->heads[i].kids, (size_t)r->heads[i].nkids, sizeof(int), by_heading, r);
   /* a list short enough to see whole starts out open; one that is not, closed */
   int short_list = r->nall <= 40;
   for (int i = 0; i < r->nheads; i++) {

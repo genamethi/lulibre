@@ -33,6 +33,7 @@ M.KEEP = 6 -- finished runs remembered at most; what older ones proposed still w
 local live = {}      -- runs going on now, the newest first
 local listeners = {}
 local last = 0
+local taken = {} -- the ids given out: each taken with lulibre.claim, so two runs started together differ
 
 local function fire(event, run)
   for _, fn in ipairs(listeners) do
@@ -172,8 +173,10 @@ end
 -- order, for the badge). Returns the run; give it to step and finish.
 function M.start(t)
   local now = os.time()
-  last = math.max(last + 1, now)
-  local run = { id = last, started = now, ids = t.ids or {}, fields = t.fields, min = t.min, sort = t.sort,
+  local id = math.max(last + 1, now)
+  while not lulibre.claim(taken, id) do id = id + 1 end
+  last = math.max(last, id)
+  local run = { id = id, started = now, ids = t.ids or {}, fields = t.fields, min = t.min, sort = t.sort,
     steps = t.steps or {}, at = 0, task = lulibre.task_id and lulibre.task_id() or nil,
     -- what is proposed from here on is the run's own
     first = (lulibre.store("SELECT coalesce(max(id), 0) AS n FROM proposals")[1].n or 0) + 1 }

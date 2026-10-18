@@ -7,6 +7,13 @@
  *   lulibre.tasks()          { {id=, name=, state=}, ... }
  *   lulibre.cancel(id)       ask a task to stop
  *   lulibre.task_id()        id of the running task, or nil outside one
+ *   lulibre.claim(t, key [, value])
+ *                            t[key] = value (default true) if it is nil:
+ *                            true if this call set it, false if it was set.
+ *                            A test and a set as one step, which Lua code
+ *                            cannot be (a task may be interrupted between
+ *                            any two of its operations); give it back with
+ *                            t[key] = nil.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +25,25 @@
 #include "core/util.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
+
+/* One C call is one step for the scheduler: the count hook that interrupts
+ * tasks runs between Lua instructions, never inside a C function. Raw
+ * access, so no metamethod (Lua code) runs in between. */
+static int l_claim(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  luaL_checkany(L, 2);
+  lua_pushvalue(L, 2);
+  if (lua_rawget(L, 1) != LUA_TNIL) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushvalue(L, 2);
+  if (lua_isnoneornil(L, 3)) lua_pushboolean(L, 1);
+  else lua_pushvalue(L, 3);
+  lua_rawset(L, 1);
+  lua_pushboolean(L, 1);
+  return 1;
+}
 
 static int l_spawn(lua_State *L) {
   luaL_checktype(L, 1, LUA_TFUNCTION);
@@ -90,7 +116,7 @@ static int l_task_id(lua_State *L) {
 void l_job_open(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"spawn", l_spawn}, {"sleep", l_sleep},   {"yield", l_yield},
-    {"tasks", l_tasks}, {"cancel", l_cancel}, {"task_id", l_task_id},
+    {"tasks", l_tasks}, {"cancel", l_cancel}, {"task_id", l_task_id}, {"claim", l_claim},
     {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);

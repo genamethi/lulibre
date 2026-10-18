@@ -263,6 +263,30 @@ do
   eq("each raises the first error", (pcall(lulibre.each, { 1, 2, 3 }, function() error("no") end)), false)
 end
 
+-- lulibre.claim: a test and a set in one step; held by one task at a time
+do
+  local t = {}
+  eq("claim sets what is free", { lulibre.claim(t, "k"), t.k }, { true, true })
+  eq("and not what is held", { lulibre.claim(t, "k", "other"), t.k }, { false, true })
+  t.k = nil
+  eq("given back, it is free again", { lulibre.claim(t, "k", 5), t.k }, { true, 5 })
+  local busy, inside, most = {}, 0, 0
+  local items = {}
+  for i = 1, 16 do items[i] = i end
+  lulibre.each(items, function()
+    while not lulibre.claim(busy, "s") do lulibre.sleep(0) end
+    inside = inside + 1
+    if inside > most then most = inside end
+    local x = 0
+    -- longer than a time slice, so a task is interrupted while it holds it
+    -- (with `while busy.s do ... end busy.s = true` instead, all 8 got in)
+    for _ = 1, 1500000 do x = x + 1 end
+    inside = inside - 1
+    busy.s = nil
+  end, { jobs = 8 })
+  eq("claimed by one task at a time, however they interleave", most, 1)
+end
+
 -- editing: typed values, series index
 do
   local edit = require "lulibre.edit"

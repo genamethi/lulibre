@@ -65,7 +65,7 @@ struct lua_State *lstate_new(struct app *app);
 int lstate_run_init(struct app *app); /* loads ~/.config/lulibre/init.lua if present */
 void lstate_close(struct app *app);
 /* When the binary runs from a source tree that has since become another
- * version: a sentence saying so (a static buffer), else NULL. */
-const char *lstate_tree_mismatch(void);
+ * version: a sentence saying so (the caller frees it), else NULL. */
+char *lstate_tree_mismatch(void);
 
 #endif
