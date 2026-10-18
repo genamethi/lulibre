@@ -1,6 +1,7 @@
 /* Settings.
  *
  *   lulibre.o.pages = 8                 read or write an option by name
+ *   lulibre.o.pages = nil               back to its default
  *
  *   lulibre.settings.get(name)          the same, as functions
  *   lulibre.settings.get()              every option: { name = value, ... }
@@ -56,10 +57,14 @@ static const struct opt_def *check_option(lua_State *L, int idx) {
   return o;
 }
 
-/* name at idx, value at idx + 1 */
+/* name at idx, value at idx + 1; nil is the option's default */
 static void set_option(lua_State *L, int idx) {
   struct app *app = lapi_app(L);
   const struct opt_def *o = check_option(L, idx);
+  if (lua_isnoneornil(L, idx + 1)) {
+    lua_settop(L, idx);
+    lua_pushstring(L, o->def);
+  }
   const char *val = luaL_tolstring(L, idx + 1, NULL);
   char *err = NULL;
   if (config_set(&app->cfg, o->name, val, &err)) {

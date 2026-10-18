@@ -194,7 +194,7 @@ The edit form and review can be opened for given books from a script:
 
 | | |
 |---|---|
-| `lulibre.o.name` | read or write an option; see [Configuration](configuration.md) |
+| `lulibre.o.name` | read or write an option (nil puts it back to its default); see [Configuration](configuration.md) |
 | `lulibre.settings.get(name)` | the same, as a function; with no name, every option as a table |
 | `lulibre.settings.set(name, value)` | or `set{ pages = 8, ocr = "auto" }` for several |
 | `lulibre.settings.reset(name)` | back to the default |
