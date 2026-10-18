@@ -277,6 +277,10 @@ int sched_failed(const struct app *app) {
   return app->sched ? atomic_load(&app->sched->failed) : 0;
 }
 
+void sched_note_failure(struct app *app) {
+  if (app->sched) atomic_fetch_add(&app->sched->failed, 1);
+}
+
 void sched_push_tasks(lua_State *L) {
   struct sched *s = lapi_app(L)->sched;
   lua_newtable(L);

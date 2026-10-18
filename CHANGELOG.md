@@ -11,6 +11,14 @@ written in `src/version.h`.
   command's key; shared caches could be read half-built.
   `lulibre.claim(t, key)` gives scripts the same one-step test and set.
 
+- Fixed: with no content server, a new calibre column said it waited for
+  the server to be stopped; it is offered at once when nothing has the
+  library open, and with calibre's program open it says it waits for the
+  program to be closed (`lulibre.calibre` tells which is running).
+- Fixed: an error in a luv callback left `lulibre run` exiting 0; and
+  `lulibre.service` has a start timeout, so a script that never ends cannot
+  keep the content server from starting.
+
 ## 0.2.0-alpha.2
 
 - Added: custom fields can be calibre columns too. `:custom column add

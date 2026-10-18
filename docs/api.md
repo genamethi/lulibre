@@ -24,7 +24,15 @@ that only computes is paused every few milliseconds so others get a turn.
 
 Because a turn can end between any two Lua operations, code shared by tasks
 must not count in a shared variable (`n = n + 1` can lose a count). Use
-`lulibre.each`, put results on the items, or use `table.insert`.
+`lulibre.each`, put results on the items, or use `table.insert`. A test and
+a set (`if not busy then busy = true`) is not one step either: use
+`lulibre.claim(t, key)`. A table other tasks read is built in a local and
+put in place in one assignment.
+
+Headless, `lulibre run` ends once no task runs and nothing they started is
+pending: a luv handle left open (a timer, a socket) keeps it going, so close
+what you open. An error in a luv callback is reported and makes the run
+exit 1, like a task's.
 
 ## The library
 
@@ -240,6 +248,7 @@ its own documentation.
 | `lulibre.custom` | custom fields beside calibre's: `declare(name, {type=, help=})`, `field(name)`, `fields()`, `get(id, name)`, `all(id)`; set them with `lulibre.apply{ {id=, field="#name", value=} }`. In calibre too: `column(name)`, `state(name)` → `{state = "lulibre" \| "waiting" \| "calibre", differ=}`, `differing(name)`, `add_column(name, {heading=, datatype=})`, `remove_column(name)` (both queued: `lulibre.offline`), `calibre_books(name)`, `push(name)` |
 | `lulibre.backup` | copies of calibre's database: `take(reason)`, `list()`, `last()`, `age()` (days), `too_old([days])`, `prune([keep])`, `policy()`, `due()`, `set(value)`, `on_restart()`, `metadata()` (calibredb backup_metadata), `warn()` (replaceable: the popup) |
 | `lulibre.copy_db(src, dst)` | an SQLite database copied whole (SQLite's backup, on a worker thread; from a task) |
+| `lulibre.calibre` | which of calibre's programs are running, seen from outside (`/proc/net/unix`; nothing is opened or locked): `running()` → `{db=, gui=}` (anything with a library open; calibre's program), or nil where it cannot be told; `holds()` |
 | `lulibre.offline` | calibredb commands that wait for the content server to be stopped: `queue(argv, label)` (argv after `--with-library`), `jobs([status])`, `cancel(id)`, `run()` (the server must be stopped; a copy of calibre's database first, as `backup_restart` says), `restart()` (with `server_stop`, `server_start`), `ask()` (restart now, or not now: replaceable), `already` (per command: is there nothing left to do?) |
 | `lulibre.snapshots` | points in the journal to go back to: `observe()` logs changes made outside lulibre, `take(name)`, `list{all=}`, `find(what)`, `retire(id, on)`, `plan(id, {exact=, unsync=, fields=})`, `describe(plan)`, `rollback(id, opts)`, `summary(out)`, `import(path, name)`, `added(id, from, label)` for a book lulibre has just added; `values(row)` a books row as the journal spells it |
 | `lulibre.calibre_books(path)` | the books of another calibre `metadata.db` (read only), as rows with the columns of the index's `books` |
