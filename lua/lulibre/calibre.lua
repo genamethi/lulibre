@@ -9,6 +9,10 @@
 --   local calibre = require "lulibre.calibre"
 --   calibre.running()   -- { db = bool, gui = bool }, or nil where it cannot be told
 --   calibre.holds()     -- something has the library open (db), or nil
+--   calibre.server()    -- calibre's server run through calibre-server-opf.py:
+--                          its status { pid=, opf_thread=, error=, calibre=, libraries= }, or nil
+--   calibre.opf()       -- who keeps the books' metadata.opf files current now:
+--                          { by = "program" | "server" | nil, behind = n, why = "..." }
 local M = {}
 
 local function uid()
@@ -33,6 +37,47 @@ end
 function M.holds()
   local r = M.running()
   return r and r.db
+end
+
+-- where contrib/calibre-server-opf.py says how it is doing
+function M.status_file()
+  local dir = os.getenv("XDG_STATE_HOME")
+  if not dir or dir == "" then dir = (os.getenv("HOME") or "") .. "/.local/state" end
+  return dir .. "/lulibre/calibre-server.json"
+end
+
+--- The status of calibre's server started through calibre-server-opf.py,
+-- if one is running (the process the file names is alive and is it).
+function M.server()
+  local f = io.open(M.status_file())
+  if not f then return nil end
+  local ok, st = pcall(require("lulibre.json").decode, f:read("a"))
+  f:close()
+  if not ok or type(st) ~= "table" or not st.pid then return nil end
+  local cmd = io.open(("/proc/%d/cmdline"):format(st.pid))
+  if not cmd then return nil end -- not running (an unclean stop leaves the file)
+  local line = cmd:read("a")
+  cmd:close()
+  if not line:find("calibre-server-opf.py", 1, true) then return nil end -- the pid was reused
+  return st
+end
+
+--- Who keeps the opf files current, and how many books' files are behind
+-- their record (as the mirror last saw calibre's database).
+function M.opf()
+  local behind = tonumber((lulibre.sql("SELECT value FROM meta WHERE key = 'calibre_opf_behind'")[1] or {}).value)
+  local r = M.running()
+  if r and r.gui then return { by = "program", behind = behind, why = "calibre's program writes them" } end
+  local st = M.server()
+  if st and st.opf_thread then
+    return { by = "server", behind = behind, why = "calibre's server writes them (calibre-server-opf.py)" }
+  end
+  if st then
+    return { behind = behind, why = ("calibre's server runs through calibre-server-opf.py, but without the thread: %s")
+      :format(st.error or "?") }
+  end
+  return { behind = behind, why = "nothing writes them while the server runs: `lulibre server-unit` sets it up; "
+    .. "until then, at each stop (backup_metadata)" }
 end
 
 return M

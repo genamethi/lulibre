@@ -166,4 +166,84 @@ if [ -z "${srv_failed:-}" ]; then
   chmod 600 "$t/pw"
 fi
 
+# ---- calibre's server with calibre's own opf backup (contrib/calibre-server-opf.py).
+# It relies on calibre's internals, so this is the check that a calibre update
+# has not broken it: a title changed through the server must reach the book's
+# metadata.opf, written by calibre's thread in the server.
+[ -n "$srv" ] && kill $srv 2>/dev/null; srv=
+i=0; while ! calibredb --with-library "$lib" list >/dev/null 2>&1; do i=$((i + 1)); [ $i -lt 100 ] || break; sleep 0.1; done
+debug=$(dirname "$(command -v calibre-server)")/calibre-debug
+if [ -x "$debug" ]; then
+  XDG_STATE_HOME=$t/state "$debug" -e "$(dirname "$0")/../contrib/calibre-server-opf.py" -- --listen-on 127.0.0.1 \
+    --port 18098 --enable-local-write "$lib" > "$t/opf-server.log" 2>&1 &
+  srv=$!
+  i=0
+  while ! curl -s -o /dev/null -m 1 http://127.0.0.1:18098/; do
+    i=$((i + 1)); [ $i -lt 200 ] || break; sleep 0.1
+  done
+  contains "calibre's server starts through the launcher, with calibre's metadata backup" \
+    "calibre metadata backup running" "$(cat "$t/opf-server.log")"
+  contains "and says so in its status file" '"opf_thread": true' "$(cat "$t/state/lulibre/calibre-server.json" 2>/dev/null)"
+  calibredb --with-library http://127.0.0.1:18098 set_metadata 1 --field "title:Knots, Kept Current" >/dev/null 2>&1
+  i=0; opf=
+  while [ $i -lt 150 ]; do
+    opf=$(cat "$lib"/*/*"(1)"/metadata.opf 2>/dev/null)
+    case $opf in *"Knots, Kept Current"*) break ;; esac
+    i=$((i + 1)); sleep 0.1
+  done
+  contains "a change through the server reaches the book's metadata.opf" "<dc:title>Knots, Kept Current</dc:title>" "$opf"
+  kill $srv; wait $srv 2>/dev/null; srv=
+  expect   "a clean stop removes the status file" no "$([ -e "$t/state/lulibre/calibre-server.json" ] && echo yes || echo no)"
+else
+  echo "offline: no calibre-debug beside calibre-server, skipping the launcher's checks"
+fi
+
+# ---- lulibre server-unit, on a unit of a home of the test's own: systemctl is
+# a stand-in that reads the unit's files there, and the checks run in a pid
+# namespace of their own, so no calibre-server of the machine's is seen
+home=$t/home
+units=$home/.config/systemd/user
+mkdir -p "$units" "$t/bin"
+cat > "$t/bin/systemctl" <<'SC'
+#!/bin/sh
+[ "$1" = "--user" ] && shift
+case $1 in
+  cat)
+    f=$HOME/.config/systemd/user/$2
+    [ -f "$f" ] || { echo "No files found for $2." >&2; exit 1; }
+    echo "# $f"; cat "$f"
+    for d in "$f.d"/*.conf; do [ -f "$d" ] && { echo; echo "# $d"; cat "$d"; }; done
+    exit 0 ;;
+  daemon-reload|restart) echo "$*" >> "$HOME/systemctl.log"; exit 0 ;;
+esac
+exit 1
+SC
+chmod +x "$t/bin/systemctl"
+server=$(command -v calibre-server)
+plain() { # a user unit as calibre's manual writes it, plus what is given
+  printf '[Unit]\nDescription=calibre Content server\nAfter=network.target\n\n[Service]\nType=simple\n%sExecStart=%s --listen-on 127.0.0.1 "%s"\n\n[Install]\nWantedBy=default.target\n' \
+    "$1" "$server" "$lib" > "$units/calibre-server.service"
+}
+su() { # lulibre server-unit ARGS, answering yes
+  yes | unshare --pid --fork --mount-proc env HOME="$home" PATH="$t/bin:$PATH" "$bin" --clean -L "$lib" server-unit "$@" 2>&1
+}
+plain ""
+contains "server-unit finds the unit that starts calibre-server" "calibre-server.service (a user unit" "$(su)"
+contains "and says what its ExecStart would be" "would: ExecStart=$debug -e " "$(su)"
+su apply >/dev/null
+dropin=$units/calibre-server.service.d/lulibre-opf.conf
+contains "apply writes a drop-in that replaces ExecStart" "ExecStart=
+ExecStart=$debug -e " "$(cat "$dropin" 2>/dev/null)"
+contains "with the unit's own arguments after --" "-- --listen-on 127.0.0.1 \"$lib\"" "$(cat "$dropin" 2>/dev/null)"
+expect   "and leaves the unit's file as it was" no "$(grep -q calibre-debug "$units/calibre-server.service" && echo yes || echo no)"
+contains "then reloads systemd" "daemon-reload" "$(cat "$home/systemctl.log" 2>/dev/null)"
+contains "a second look sees it done" "through calibre-server-opf.py already" "$(su)"
+su remove >/dev/null
+expect   "remove takes the drop-in away" no "$([ -e "$dropin" ] && echo yes || echo no)"
+plain "ProtectSystem=strict
+"
+contains "a hardened unit is not changed" "Not changed by lulibre: it has sandboxing or hardening settings (ProtectSystem)" "$(su apply)"
+expect   "nothing is written for it" no "$([ -e "$dropin" ] && echo yes || echo no)"
+contains "what to add is shown instead" "ExecStart=$debug -e " "$(su)"
+
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -5,6 +5,17 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.2)
 
+- Added: calibre's content server can keep each book's metadata.opf
+  current while it runs, as calibre's program does: the launcher
+  `contrib/calibre-server-opf.py` starts calibre's server with calibre's
+  own metadata backup in it. `lulibre server-unit` finds the systemd unit
+  that runs calibre-server and changes it by a drop-in (`apply`, `remove`);
+  a system unit, or a hardened one, is shown the change instead. calibre's
+  manual's unit, so changed, is installed under `share/lulibre/systemd/`.
+  `:backup` says who keeps the opf files current and how many are behind.
+  The launcher relies on calibre's internals: after a calibre update, its
+  log says whether the backup runs.
+
 - Fixed: requests to an online service could go out two at a time when
   several tasks looked a book up together (two found the service free in
   the same moment); a key hint in a long message could show another

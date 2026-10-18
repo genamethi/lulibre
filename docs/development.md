@@ -89,6 +89,32 @@ A sanitizer build should stay clean on all of them:
 
 (`use_sigaltstack=0` because notcurses installs its own alternate signal stack.)
 
+## calibre's server and the opf files
+
+`contrib/calibre-server-opf.py` runs calibre's content server with calibre's
+own `MetadataBackup` thread, which calibre's program starts for its library
+(`gui2/library/models.py`, `start_metadata_backup`). It is calibre's code in
+calibre's process, but it reaches into calibre's internals, which change
+without notice:
+
+- `calibre.srv.standalone`: `Server`, `main` (it wraps `Server.__init__` and
+  calls `main` with calibre-server's arguments);
+- `Server.handler.router.ctx.library_broker`, and the broker's `lmap` and
+  `get(library_id)` (the libraries the server has, opened);
+- `Server.serve_forever`, an attribute it wraps to stop the threads once
+  the server has stopped;
+- `calibre.db.backup.MetadataBackup`: `start()`, `stop()`, `join()`.
+
+Written against calibre 9.15 (its source is the reference: `src/calibre/srv/
+standalone.py`, `srv/library_broker.py`, `db/backup.py`). After a calibre
+update, `make check-offline` runs the launcher against the installed
+calibre: a title changed through the server must reach the book's
+metadata.opf within 15 s. When it fails, read those files of the new calibre
+and bring the launcher to them. The launcher fails soft at run time (the
+server without the thread, the reason in its log and its status file) and
+hard with `LULIBRE_OPF_REQUIRED=1`. `scripts/server-unit.lua` only changes
+units; it does not depend on calibre's internals.
+
 ## Crashes
 
 A fatal signal appends the version and a backtrace to

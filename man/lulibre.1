@@ -120,6 +120,12 @@ Do the changes calibre makes only while the content server is stopped
 .I lulibre.service
 runs it before each start of the server.
 .TP
+.BR server\-unit " [" apply " | " remove ]
+calibre's content server run with calibre's own opf backup (the launcher
+.IR calibre-server-opf.py ):
+what systemd unit runs calibre-server, and the change to it; a user unit is
+changed by a drop-in, a system or hardened unit is shown the change.
+.TP
 .BR columns " [" push " | " remove ]
 calibre columns for lulibre's own fields (#partof, #part, #parts): queued
 for the next time the server is stopped; an example of the offline API.
