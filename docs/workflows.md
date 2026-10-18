@@ -990,10 +990,11 @@ library folder, while nothing else has it open.
 | `backup_metadata` | writes the `metadata.opf` of each book changed since its last one |
 | `catalog` | writes a catalogue of the library (CSV, BibTeX, EPUB …) |
 
-A book's `metadata.opf` is written by calibre's own program only: a change
-made through calibredb or the content server just marks the book. Before a
-column is added or removed, lulibre writes them (`backup_metadata`, on), so
-that `restore_database` would have them right.
+A book's `metadata.opf` is written by calibre's own code only: a change
+made through calibredb or the content server just marks the book. Each time
+the server is stopped, lulibre has calibre write them (`backup_metadata`,
+on), before anything else, so that `restore_database` would have them right
+(see "The opf files" below).
 
 lulibre queues them (in the history file beside the index) and does them
 the next time the server is stopped. They are done the same way whatever
@@ -1055,8 +1056,16 @@ Only calibre's own code writes them, and only some of calibre's programs do:
 |---|---|
 | calibre's program | the program, a changed book every few seconds |
 | calibre's content server, started through lulibre's launcher | calibre's same writer, in the server |
-| calibre's content server, as calibre documents it | nothing while it runs: changes are only marked, and written when `backup_metadata` runs with the server stopped (lulibre runs it before a calibre column changes) |
-| nothing | calibredb, when asked (`backup_metadata`) |
+| calibre's content server, as calibre documents it | nothing while it runs: changes are only marked; calibre writes them each time the server is stopped (`lulibre offline`, which `lulibre.service` runs before each start) |
+| nothing | calibre (`backup_metadata`), right after lulibre changes the library in its folder |
+
+(The option `backup_metadata`, on by default, is what has lulibre ask
+calibre for them at those times.)
+
+While calibre's program is open, whatever lulibre would do that the program
+could be doing too waits: a change straight to the library's folder, a file
+set aside from a book's folder, the changes queued for a stopped server. The
+status line says so, and lulibre goes on once the program is closed.
 
 lulibre never writes one. Its launcher, `contrib/calibre-server-opf.py`
 (installed in `<prefix>/share/lulibre/contrib/`), starts calibre's content

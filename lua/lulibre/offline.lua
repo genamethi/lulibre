@@ -115,23 +115,36 @@ function M.run()
   -- a copy of calibre's database first, as backup_restart says (it is made
   -- whether or not anything waits: this is the server's start)
   if not up then out.backup = require("lulibre.backup").on_restart() end
-  if #jobs == 0 then return out end
-  if up then error("the content server is running: these wait until it is stopped", 0) end
+  if up then
+    if #jobs == 0 then return out end
+    error("the content server is running: these wait until it is stopped", 0)
+  end
   local held = require("lulibre.calibre").running()
-  if held and held.gui then error("calibre's program has the library open: these wait until it is closed", 0) end
-  local cols = columns()
-  local opf_written = false
+  if held and held.gui then
+    -- the program keeps the opf files current itself
+    if #jobs == 0 then return out end
+    error("calibre's program has the library open: these wait until it is closed", 0)
+  end
+  local cols = columns() -- (waits for a server that is stopping to let go)
+  -- the books' opf files, by calibre: with the server stopped nothing else
+  -- writes them (backup_metadata option); before anything that changes the
+  -- database's shape, they must be
+  local opf_ok = lulibre.o.backup_metadata ~= "on"
+  if not opf_ok then
+    local ok, n = pcall(require("lulibre.backup").metadata)
+    if ok then out.opf, opf_ok = n, true else out.opf_error = tostring(n) end
+  end
   for _, job in ipairs(jobs) do
+    require("lulibre.calibre").wait_for_program("changes that wait for the server")
     local check = M.already[job.argv[1]]
     local done = check and check(job.argv, cols)
-    local r, err, held
-    if not done and M.STRUCTURAL[job.argv[1]] and lulibre.o.backup_metadata == "on" and not opf_written then
-      -- each book's metadata.opf brought up to date before calibre's database
-      -- changes shape; if that fails, the job waits for another time
-      local ok, e = pcall(require("lulibre.backup").metadata)
-      opf_written, held, err = ok, not ok, not ok and e or nil
+    local r, err
+    local hold = not done and M.STRUCTURAL[job.argv[1]] and not opf_ok
+    if hold then
+      err = "waits: the books' opf files could not be written first (" .. tostring(out.opf_error) .. ")"
+    elseif not done then
+      r, err = lulibre.system(direct(job.argv), { timeout = 600000 })
     end
-    if not done and not held then r, err = lulibre.system(direct(job.argv), { timeout = 600000 }) end
     local ok = done or (r and r.code == 0)
     lulibre.store("UPDATE offline SET status = ?, error = ?, done = ? WHERE id = ?", ok and "done" or "failed",
       not ok and M.why(r, err) or (done or nil), os.time(), job.id)
@@ -151,6 +164,10 @@ end
 function M.summary(r)
   local parts = {}
   if r.backup then parts[#parts + 1] = "calibre's database copied" end
+  if (r.opf or 0) > 0 then
+    parts[#parts + 1] = r.opf == 1 and "1 book's opf file written" or ("%d books' opf files written"):format(r.opf)
+  end
+  if r.opf_error then parts[#parts + 1] = "the opf files not written: " .. r.opf_error end
   if r.done > 0 then parts[#parts + 1] = ("%d done"):format(r.done) end
   if r.skipped > 0 then parts[#parts + 1] = ("%d done already"):format(r.skipped) end
   if #r.failed > 0 then

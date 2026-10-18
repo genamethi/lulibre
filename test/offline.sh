@@ -104,6 +104,28 @@ expect   "the staged file is a book now"  "arrived" "$(lua 'print(lulibre.books(
 contains "remove, directly"               "1" "$(lua 'print((require("lulibre.edit").remove { 2 }))')"
 expect   "the book is gone"               gone "$(field 2 title)"
 
+# ---- the opf files, written by calibre after a change straight to the folder;
+# and a change waits while calibre's program is open (its lock's name is
+# held here by a stand-in: an abstract socket of the namespace's own)
+opf1() { cat "$lib"/*/*"(1)"/metadata.opf 2>/dev/null; }
+lua "$(printf "$change" 'Knots, Written Through')" >/dev/null
+contains "a change straight to the folder has calibre write the book's opf file" \
+  "<dc:title>Knots, Written Through</dc:title>" "$(opf1)"
+python3 -c 'import socket, os, time
+s = socket.socket(socket.AF_UNIX); s.bind("\0calibre-singleinstance-%d-GUI" % os.geteuid()); time.sleep(3)' &
+gui=$!
+sleep 0.5
+began=$(date +%s)
+out=$(lua "$(printf "$change" 'Knots, After The Program')")
+waited=$(( $(date +%s) - began ))
+wait $gui 2>/dev/null
+contains "with calibre's program open, a change waits, then is made" "changed 1 book" "$out"
+contains "saying why it waited" "paused while calibre's program is open" "$out"
+expect   "until the program is closed" yes "$([ $waited -ge 2 ] && echo yes || echo no)"
+$cdb set_metadata 1 --field "title:Knots, Marked Only" >/dev/null 2>&1 # calibredb itself only marks the book
+contains "lulibre offline, with nothing queued, still has calibre write the opf files" "1 book's opf file written" "$(run offline 2>&1)"
+contains "so the book's file has its record" "<dc:title>Knots, Marked Only</dc:title>" "$(opf1)"
+
 # ---- changes that wait for the server to be stopped (lulibre.offline), and
 # the copies of calibre's database made before it starts (lulibre.backup)
 opts=

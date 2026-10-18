@@ -13,6 +13,11 @@
 --                          its status { pid=, opf_thread=, error=, calibre=, libraries= }, or nil
 --   calibre.opf()       -- who keeps the books' metadata.opf files current now:
 --                          { by = "program" | "server" | nil, behind = n, why = "..." }
+--   calibre.wait_for_program(what)
+--                          while calibre's program is open, wait (saying so); true if it
+--                          waited. Called before each step of something the program
+--                          could be doing too (a direct calibredb run, a file moved
+--                          out of a book's folder): pause while it is open, resume after.
 local M = {}
 
 local function uid()
@@ -78,6 +83,28 @@ function M.opf()
   end
   return { behind = behind, why = "nothing writes them while the server runs: `lulibre server-unit` sets it up; "
     .. "until then, at each stop (backup_metadata)" }
+end
+
+--- Pause while calibre's program is open; resume once it is gone. From a
+-- task (it sleeps); outside one it only says whether the program is open.
+function M.wait_for_program(what)
+  local r = M.running()
+  if not (r and r.gui) then return false end
+  if not lulibre.task_id() then return false end
+  local msg = ("%s: paused while calibre's program is open"):format(what or "lulibre")
+  lulibre.log(msg)
+  if lulibre.headless then io.stderr:write("lulibre: ", msg, "\n") end
+  while true do
+    if not lulibre.headless then
+      lulibre.progress(("%s: paused while calibre's program is open"):format(what or "lulibre"))
+    end
+    lulibre.sleep(1000)
+    r = M.running()
+    if not (r and r.gui) then break end
+  end
+  if not lulibre.headless then lulibre.progress(nil) end
+  lulibre.log(("%s: calibre's program is closed; going on"):format(what or "lulibre"))
+  return true
 end
 
 return M

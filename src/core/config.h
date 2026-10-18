@@ -59,7 +59,7 @@ struct config {
   int backup_keep;      /* copies kept */
   char *backup_too_old; /* warn | false */
   int backup_max_age;   /* days */
-  char *backup_metadata; /* on | off: backup_metadata before a column is added or removed */
+  char *backup_metadata; /* on | off: backup_metadata whenever the server is stopped, after direct writes */
   char *log_file;       /* every log entry is also appended here; empty = no file */
   char *pixi_deps;      /* off | on: programs features need may come from lulibre's own pixi environment */
   char *rocks_tree;     /* a luarocks tree whose modules scripts may require */
