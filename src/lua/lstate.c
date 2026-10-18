@@ -32,10 +32,22 @@ uv_loop_t *lapi_loop(lua_State *L) {
 }
 
 /* Prepend to package.path / package.cpath. */
+/* entries, then Lua's own, without those relative to the current directory
+ * (./?.lua): lulibre started in a folder must not load a module found there */
 static void prepend(lua_State *L, const char *field, const char *entries) {
   lua_getglobal(L, "package");
   lua_getfield(L, -1, field);
-  lua_pushfstring(L, "%s;%s", entries, lua_tostring(L, -1));
+  sbuf out = SBUF_INIT;
+  sb_puts(&out, entries);
+  const char *own = lua_tostring(L, -1);
+  for (const char *p = own ? own : ""; *p;) {
+    const char *end = strchr(p, ';');
+    size_t n = end ? (size_t)(end - p) : strlen(p);
+    if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, ";%.*s", (int)n, p);
+    p += n + (end ? 1 : 0);
+  }
+  lua_pushstring(L, out.s);
+  sb_free(&out);
   lua_setfield(L, -3, field);
   lua_pop(L, 2);
 }
@@ -75,9 +87,12 @@ char *lstate_tree_mismatch(void) {
                    LULIBRE_VERSION, tree_root, now);
 }
 
-/* Search order: the user's own modules, a source tree when running from one
- * (build/lulibre finds ./lua), the installed runtime, then the user's
- * luarocks tree so `luarocks install --local` rocks just work. */
+/* Search order: the user's own modules; the runtime, which is a source tree
+ * when running from one (build/lulibre finds ../lua) or LULIBRE_RUNTIME, and
+ * the installed one otherwise, never both (an installed module the tree has
+ * since renamed or removed would still be found, stale); then the user's
+ * luarocks tree so `luarocks install --local` rocks just work; then Lua's
+ * own places, less the current directory. */
 static void setup_paths(lua_State *L) {
   sbuf p = SBUF_INIT, c = SBUF_INIT;
   char *cfg = config_dir_path(&lapi_app(L)->cfg);
@@ -104,7 +119,7 @@ static void setup_paths(lua_State *L) {
   sb_printf(&p, "%s/lua/?.lua;%s/lua/?/init.lua", cfg, cfg);
   if (dev && dev[0]) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", dev, dev);
   if (tree) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", tree, tree);
-  sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", LULIBRE_DATADIR, LULIBRE_DATADIR);
+  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", LULIBRE_DATADIR, LULIBRE_DATADIR);
   sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", rocks, LULIBRE_LUA_VER,
             rocks, LULIBRE_LUA_VER);
   sb_printf(&c, "%s/lib/lua/%s/?.so", rocks, LULIBRE_LUA_VER);

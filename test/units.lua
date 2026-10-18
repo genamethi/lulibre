@@ -418,6 +418,17 @@ do
   end
 end
 
+-- where modules are looked for: one runtime, never the current directory
+do
+  local function has(list, entry) return (";" .. list .. ";"):find(";" .. entry .. ";", 1, true) ~= nil end
+  eq("no module is looked for in the current directory", { has(package.path, "./?.lua"), has(package.cpath, "./?.so") },
+    { false, false })
+  -- run from a build tree (as make unit does), the installed runtime is not searched as well
+  local from_tree = package.path:find("/build/../lua/?.lua", 1, true) ~= nil
+  local installed = has(package.path, lulibre.settings.paths().installed .. "/lua/?.lua")
+  eq("from a build tree, only the tree's runtime", { from_tree, installed }, { true, false })
+end
+
 -- settings
 do
   local S = lulibre.settings

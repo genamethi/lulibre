@@ -16,7 +16,8 @@
  *                                       group= (the heading it is under) }
  *   lulibre.settings.paths()            where things are: { config_dir=, init=,
  *                                       scripts=, modules=, data_dir=, index=,
- *                                       library= }
+ *                                       library=, installed= (where make install
+ *                                       put lulibre's own files) }
  *
  * Reads and writes go to the option registry in core/config.c, so a value
  * set here is identical to the same name given with -o on the command line.
@@ -32,6 +33,8 @@
 
 #include <lua.h>
 #include <lauxlib.h>
+
+#include <config.h> /* the generated one: LULIBRE_DATADIR (core/config.h is the options) */
 
 #include "app.h"
 #include "core/util.h"
@@ -188,7 +191,7 @@ static int s_paths_ui(lua_State *L) {
   char *dir = config_dir_path(c);
   const char *xdg = getenv("XDG_DATA_HOME");
   char *data = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.local/share/lulibre");
-  lua_createtable(L, 0, 7);
+  lua_createtable(L, 0, 8);
   lua_pushstring(L, dir);
   lua_setfield(L, -2, "config_dir");
   lua_pushfstring(L, "%s/init.lua", dir);
@@ -201,6 +204,8 @@ static int s_paths_ui(lua_State *L) {
   lua_setfield(L, -2, "data_dir");
   lua_pushstring(L, c->library);
   lua_setfield(L, -2, "library");
+  lua_pushstring(L, LULIBRE_DATADIR);
+  lua_setfield(L, -2, "installed");
   if (c->library[0]) {
     char *index = config_index_path(c);
     lua_pushstring(L, index);

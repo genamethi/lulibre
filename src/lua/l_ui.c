@@ -734,19 +734,26 @@ char **lapi_script_dirs(struct app *app) {
   char *cfg = config_dir_path(&app->cfg);
   dirs[n++] = xasprintf("%s/scripts", cfg);
   free(cfg);
+  /* the bundled scripts of one runtime only, as for modules (lstate.c): a
+   * build tree's (build/lulibre -> ../scripts), LULIBRE_RUNTIME's (its lua/
+   * folder's sibling), or the installed ones */
+  const char *rt = getenv("LULIBRE_RUNTIME");
+  if (rt && rt[0]) dirs[n++] = xasprintf("%s/../scripts", rt);
   char exe[4096];
-  ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
-  if (len > 0) { /* running from a build tree: build/lulibre -> ./scripts */
+  ssize_t len = n == 1 ? readlink("/proc/self/exe", exe, sizeof exe - 1) : -1;
+  if (len > 0) {
     exe[len] = '\0';
     char *slash = strrchr(exe, '/');
     if (slash) {
       *slash = '\0';
       char *dev = xasprintf("%s/../scripts", exe);
-      if (access(dev, R_OK) == 0) dirs[n++] = dev;
+      char *lua = xasprintf("%s/../lua", exe); /* a tree has both */
+      if (access(dev, R_OK) == 0 && access(lua, R_OK) == 0) dirs[n++] = dev;
       else free(dev);
+      free(lua);
     }
   }
-  dirs[n++] = xstrdup(LULIBRE_DATADIR "/scripts");
+  if (n == 1) dirs[n++] = xstrdup(LULIBRE_DATADIR "/scripts");
   return dirs;
 }
 
