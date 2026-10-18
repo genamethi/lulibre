@@ -14,8 +14,8 @@
 --   keys:own()                       --> every key the screen answers to
 --   keys:show("review")              --> the `?` overlay
 --
--- Moving within a panel (j k gg G, paging) and closing it (q, Esc) are the
--- same in every panel and are bound in one place, "panel" (src/tui/ctxkeys.c):
+-- Moving within a panel (j k gg G, paging), closing it (q) and leaving it
+-- (Esc) are the same in every panel and are bound in one place, "panel" (src/tui/ctxkeys.c):
 -- lulibre.map("panel", "n", "down"). A panel's movement keys come before a
 -- screen's own, so a key bound to both moves.
 local M = {}

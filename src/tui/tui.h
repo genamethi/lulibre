@@ -72,6 +72,8 @@ size_t dr_wrap(const char *s, size_t len, int maxw);
 /* <Leader> in a binding: whichever key the `leader` option names when the
  * key arrives, so changing the option moves every such binding at once */
 #define KEY_LEADER (1u << 28)
+/* Shift, kept only for keys it does not change the character of (<S-Tab>) */
+#define KEY_SHIFT (1u << 27)
 
 enum mode {
   MODE_NORMAL = 1,
@@ -136,7 +138,7 @@ void tui_setup(void);
 enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_N };
 enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END, SA_TOP, SA_BOTTOM, SA_MARK, SA_LINE,
        SA_COPY, SA_LEAVE };
-enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE };
+enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE, PA_BACK };
 enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PREV, LA_UP, LA_DOWN,
        LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
        LA_KILL_START, LA_KILL_END, LA_KILL_WORD };
@@ -315,8 +317,15 @@ void wm_close(struct tui *t);
 /* Close a given window; t->focus stays valid (see wm.c). */
 void wm_close_leaf(struct tui *t, struct node *n);
 void wm_only(struct tui *t);
+/* the windows: the list, the previews, the console; panels are passed over */
 void wm_focus_next(struct tui *t, int delta);
 void wm_focus_dir(struct tui *t, char dir); /* h j k l */
+/* the panels: from a window, the one last in; from a panel, the next */
+void wm_focus_panel(struct tui *t, int delta);
+/* from a panel, back to the window it was reached from */
+void wm_focus_back(struct tui *t);
+/* note which window or panel has the focus (render does, once a frame) */
+void wm_note_focus(struct tui *t);
 void wm_resize(struct tui *t, int delta);
 /* Move the line between the focused window and its neighbour: dir is h j k l
  * (left, down, up, right), cells how far. */
@@ -438,6 +447,9 @@ void panel_set_follow(struct panel *p, int follow);
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
 /* Report cursor movement to the event function as the key "<Move>". */
 void panel_set_moves(struct panel *p, int moves);
+/* A dialog (a form that asks something): Esc closes it, where in another
+ * panel it goes back to the window and leaves the panel open. */
+void panel_set_dialog(struct panel *p, int dialog);
 /* This panel is the bar's Configuration tab while it is open: the tab is
  * shown as the one in view, and going to the list's tabs closes it. */
 void panel_set_screen_tab(struct panel *p);
@@ -591,6 +603,10 @@ struct tui {
   int tab_x[4];         /* where the bar's tabs were drawn: columns of their edges */
   int tab_n;            /* how many tabs it has: library, [sync folder,] configuration */
   struct panel *screen_tab; /* the panel that is the bar's Configuration tab, while it is open */
+  /* the views last focused among the windows and among the panels, so that
+   * Tab and Esc go back to them (wm_focus_panel, wm_focus_back); found again
+   * by wm_leaf_of, so one that has closed is simply not found */
+  void *last_window, *last_panel;
   /* a terminal paste in progress (tui.c): keys held while they might be one
    * of its markers, and the text between the markers */
   struct ncinput held[6];

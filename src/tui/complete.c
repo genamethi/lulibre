@@ -134,7 +134,7 @@ void complete_refresh(struct tui *t) {
     else if (IS("mark")) add_words(&l, "toggle all none invert");
     else if (IS("yank")) add_words(&l, "bib key path title");
     else if (IS("preview")) add_words(&l, "graphic scroll page zoom pan");
-    else if (IS("focus")) add_words(&l, "next prev h j k l");
+    else if (IS("focus")) add_words(&l, "next prev h j k l panel back");
     else if (IS("console")) add_words(&l, "focus");
     else if (IS("index")) add_words(&l, "force");
 #undef IS

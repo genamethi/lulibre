@@ -52,6 +52,7 @@ function M.run(spec)
   end
   local p <close> = lulibre.panel {
     title = spec.title or "", help = spec.help or keys:hint("toggle", "change", "go"), height = spec.height or 0.7, keys = keys:own(),
+    dialog = true,
     columns = { { "", 4 }, { "", spec.label_width or 44 }, { "", -1 } }, rows = build(),
   }
   -- start on the first thing that can be changed

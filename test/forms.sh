@@ -149,6 +149,18 @@ shown "with the pages' verdict on it"         "verdict .*the pages"
 shown "books ordered by how far their pages bear them out" "best borne out first"
 k i
 shown "i gives the list its place back"       "all books"
+# panels and windows are reached by different keys
+k Escape "?"
+shown "Esc leaves review for the list"        "keys, by what they are for"
+k q
+shown "and review stays open"                 "review  3 pending"
+k C-w w C-w w "?"
+shown "<C-w>w goes round the windows, never into a panel" "keys, by what they are for"
+k q Tab "?"
+shown "Tab goes back into review"             "KEYS HERE"
+k q BTab "?"
+shown "and so does Shift-Tab, with one panel" "KEYS HERE"
+k q
 k i
 shown "and i brings it back"                  "about this proposal"
 k m

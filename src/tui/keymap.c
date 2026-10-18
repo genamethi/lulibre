@@ -24,6 +24,7 @@ uint32_t key_from_input(const struct ncinput *ni) {
     k |= KEY_CTRL;
   }
   if (ni->modifiers & NCKEY_MOD_ALT) k |= KEY_ALT;
+  if ((ni->modifiers & NCKEY_MOD_SHIFT) && ni->id == NCKEY_TAB) k |= KEY_SHIFT;
   return k;
 }
 
@@ -44,6 +45,7 @@ int key_parse(const char *spec, uint32_t out[KEYSEQ_MAX]) {
       while (p[0] && p[1] == '-' && p[2]) {
         if (p[0] == 'C' || p[0] == 'c') mods |= KEY_CTRL;
         else if (p[0] == 'M' || p[0] == 'A' || p[0] == 'm' || p[0] == 'a') mods |= KEY_ALT;
+        else if (p[0] == 'S' || p[0] == 's') mods |= KEY_SHIFT;
         else return 0;
         p += 2;
       }
@@ -74,11 +76,11 @@ void key_format(sbuf *out, const uint32_t *keys, int n) {
       key_format(out, &tui_keymap.leader, 1); /* shown as the key it is */
       continue;
     }
-    uint32_t k = keys[i] & ~(KEY_CTRL | KEY_ALT);
+    uint32_t k = keys[i] & ~(KEY_CTRL | KEY_ALT | KEY_SHIFT);
     const char *name = NULL;
     for (size_t j = 0; j < ARRAY_LEN(named); j++)
       if (named[j].key == k) { name = named[j].name; break; }
-    int mods = (keys[i] & (KEY_CTRL | KEY_ALT)) != 0;
+    int mods = (keys[i] & (KEY_CTRL | KEY_ALT | KEY_SHIFT)) != 0;
     if (!mods && !name) {
       char u[8];
       sb_putn(out, u, (size_t)utf8_encode(u, k));
@@ -87,6 +89,7 @@ void key_format(sbuf *out, const uint32_t *keys, int n) {
     sb_putc(out, '<');
     if (keys[i] & KEY_CTRL) sb_puts(out, "C-");
     if (keys[i] & KEY_ALT) sb_puts(out, "M-");
+    if (keys[i] & KEY_SHIFT) sb_puts(out, "S-");
     if (name) {
       sb_puts(out, name);
     } else {
@@ -274,8 +277,12 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL | MODE_VISUAL, "H", "preview pan -6"},
     {MODE_NORMAL | MODE_VISUAL, "L", "preview pan +6"},
     /* windows */
-    {MODE_NORMAL, "<Tab>", "focus next"},
+    /* panels and windows apart: Tab goes through the panels, <C-w> through
+     * the list, the previews and the console */
+    {MODE_NORMAL, "<Tab>", "focus panel"},
+    {MODE_NORMAL, "<S-Tab>", "focus panel prev"},
     {MODE_NORMAL, "<C-w>w", "focus next"},
+    {MODE_NORMAL, "<C-w>W", "focus prev"},
     {MODE_NORMAL, "<C-w>h", "focus h"},
     {MODE_NORMAL, "<C-w>j", "focus j"},
     {MODE_NORMAL, "<C-w>k", "focus k"},

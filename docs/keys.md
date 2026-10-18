@@ -53,9 +53,12 @@ command; `:` runs one by name.
 
 ## Windows
 
+The windows are the list, the previews and the console; panels (review, the
+edit form, the browse column ...) are reached with their own keys, below.
+
 | Key | |
 |---|---|
-| `<Tab>` `<C-w>w` | next window |
+| `<C-w>w` `<C-w>W` | next window, the window before (`:focus next`, `:focus prev`) |
 | `<C-w>h` `j` `k` `l` | window in that direction |
 | `<C-w>v` `<C-w>s` | split with another preview, side by side or stacked |
 | `<C-w>c` `<C-w>o` | close this window · close the others |
@@ -63,6 +66,15 @@ command; `:` runs one by name.
 | `<Leader>` then an arrow | the same |
 | `<C-w>>` `<C-w><` | grow or shrink the focused window |
 | `` ` `` | the log console, without moving the focus |
+
+## Panels
+
+| Key | |
+|---|---|
+| `<Tab>` | from a window, the panel last in; in a panel, the next one (`:focus panel`) |
+| `<S-Tab>` | the panel before (`:focus panel prev`) |
+| `Esc` | in a panel, back to the window it was reached from; the panel stays open. A dialog (the edit form, a form that asks something) closes |
+| `q` | close the panel |
 
 ## The mouse
 
@@ -148,8 +160,9 @@ and pasted with `<C-v>`.
 ## Inside a panel
 
 The edit form, review, capture, duplicates, orphans and the tree browser are
-panels. `j` `k` `gg` `G` and paging move within one; `q` or `Esc` closes it;
-`Tab`, `:` and `<C-w>` keep their meaning. The title bar shows a panel's
+panels. `j` `k` `gg` `G` and paging move within one; `q` closes it, and `Esc`
+goes back to the window it was reached from, leaving it open (a dialog
+closes); `Tab`, `:` and `<C-w>` keep their meaning. The title bar shows a panel's
 main keys, and `?` lists all of them with what each does.
 
 A panel's keys can be changed. Each has named actions (`?` lists them), and

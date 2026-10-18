@@ -5,6 +5,16 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Changed: panels and windows are reached by different keys. `Tab` goes to
+  the panels (review, the edit form, the browse column ...): from the list
+  or a preview, to the one last in, and in a panel to the next; `<S-Tab>`
+  the other way. `<C-w>w` (and the new `<C-w>W` back) and `<C-w>h` `j` `k`
+  `l` go through the windows only: the list, the previews, the console.
+  `Esc` in a panel goes back to the window it was reached from and leaves
+  the panel open; `q` closes it, and in a dialog (the edit form, a form
+  that asks something) `Esc` still closes. `:focus panel [prev]` and
+  `:focus back` are the commands; the panel action `back` can be rebound.
+
 - Mathematics in proposed titles is written in Unicode: SL₂(ℤ), GLₙ(ℚₚ),
   𝔽ₚ[T], ℤ/pᵃℤ, X³ − 5. The PDF reader marks each line's mathematics from
   its fonts and from type set smaller and higher or lower, so a title page

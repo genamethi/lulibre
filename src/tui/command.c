@@ -219,6 +219,8 @@ static void c_mark(struct tui *t, const char *args) {
 static void c_focus(struct tui *t, const char *args) {
   if (arg_is(args, "next") || !*args) wm_focus_next(t, 1);
   else if (arg_is(args, "prev")) wm_focus_next(t, -1);
+  else if (arg_is(args, "panel")) wm_focus_panel(t, arg_is(arg_rest(args), "prev") ? -1 : 1);
+  else if (arg_is(args, "back")) wm_focus_back(t);
   else wm_focus_dir(t, args[0]);
 }
 
@@ -513,7 +515,8 @@ void commands_builtin(void) {
   command_register("enter", c_enter, "open or close the heading under the cursor; on a book, edit it");
   command_register("mark", c_mark, "toggle | all | none | invert");
   command_register("visual", c_visual, "start or end a range selection");
-  command_register("focus", c_focus, "next | prev | h | j | k | l");
+  command_register("focus", c_focus,
+                   "next | prev | h | j | k | l: the windows (list, previews, console) · panel [prev]: the panels · back: from a panel to its window");
   command_register("split", c_split, "[v|h] [list|preview]  open another window");
   command_register("close", c_close, "close the focused window");
   command_register("only", c_only, "close every window but the focused one");

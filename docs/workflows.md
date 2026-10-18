@@ -1067,8 +1067,9 @@ library's list beside it. The list follows the file under the cursor: to
 the book that is the very same file, when the library holds it already
 (`= 26`), else narrowed to the books whose title, authors or tags hold the
 longest words of the file's title, so that a copy under another name is
-seen before it is added twice. The preview shows the waiting file; `Tab`
-crosses to the library's list, and the preview then shows the book there.
+seen before it is added twice. The preview shows the waiting file; `Esc`
+crosses to the library's list, and the preview then shows the book there
+(`Tab` comes back).
 
 | Key | |
 |---|---|
