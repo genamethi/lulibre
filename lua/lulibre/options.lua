@@ -124,6 +124,15 @@ end
 -- own say, beneath init.lua's unless opts.force) or "session".
 function M.set(ns, name, value, how, opts)
   local s = M.spec(ns, name)
+  if value == nil then
+    -- nil takes this source's value away: the next one down holds (init.lua's,
+    -- the script's, the default)
+    how = how or "session"
+    if how == "script" and opts and opts.force then how = "session" end
+    local t = how == "file" and file or how == "script" and script or session
+    if t[ns] then t[ns][name] = nil end
+    return
+  end
   if s then
     local v, why = M.check(s, value)
     if v == nil then error(("%s.%s takes %s"):format(ns, name, why), 3) end

@@ -183,7 +183,12 @@ name in place of the modes binds one of that panel's actions; see
 
 Scripts in `~/.config/lulibre/scripts/NAME.lua` run with `:run NAME` or
 `lulibre run NAME`; modules in `~/.config/lulibre/lua/` can be `require`d.
-See [the Lua API](api.md).
+Yours are found first: a script or module of yours named like one of
+lulibre's (`scripts/sync.lua`, `lua/lulibre/edit.lua`) is used instead of
+it. Then lulibre's own, from one place only: the source tree a build is run
+from, `$LULIBRE_RUNTIME`, or where `make install` put them; then the rocks
+of `~/.luarocks` and Lua's own places. Nothing is looked for in the current
+directory. See [the Lua API](api.md).
 
 ## Where things are kept
 

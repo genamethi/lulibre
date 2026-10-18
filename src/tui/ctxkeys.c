@@ -221,7 +221,7 @@ int ctx_bound(int ctx, uint32_t key) {
   return 0;
 }
 
-int ctx_key_of(int ctx, int action, sbuf *out) {
+static int ctx_key_of(int ctx, int action, sbuf *out) {
   for (int i = nbinds - 1; i >= 0; i--)
     if (binds[i].ctx == ctx && binds[i].action == action) {
       key_format(out, binds[i].keys, binds[i].nkeys);

@@ -135,11 +135,14 @@ static char *beside(const char *index, const char *what) {
   return xasprintf("%s.%s.db", index, what);
 }
 
-char *db_history_path(const char *index) {
+/* Where the history (the journal and the snapshots) of the index at `index`
+ * is kept. malloc'd. */
+static char *db_history_path(const char *index) {
   return beside(index, "history");
 }
 
-char *db_custom_path(const char *index) {
+/* Where the custom fields (#partof ...) of the index at `index` are kept. */
+static char *db_custom_path(const char *index) {
   return beside(index, "custom");
 }
 

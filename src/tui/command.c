@@ -16,6 +16,7 @@ static struct command {
   int lua_ref;
   char *help;
 } *cmds;
+static void command_help(struct tui *t);
 static int ncmds, capcmds;
 
 static void add(const char *name, command_fn *fn, int ref, const char *help) {
@@ -535,7 +536,7 @@ void commands_builtin(void) {
   command_register("help-plain", c_help, "keys and commands as one long page");
 }
 
-void command_help(struct tui *t) {
+static void command_help(struct tui *t) {
   sbuf h = SBUF_INIT;
   sb_puts(&h, "KEYS\n");
   for (int i = 0; i < t->km->n; i++) {

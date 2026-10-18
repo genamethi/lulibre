@@ -100,7 +100,7 @@ void key_format(sbuf *out, const uint32_t *keys, int n) {
   }
 }
 
-int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command) {
+static int keymap_bind(struct keymap *km, unsigned modes, const char *spec, const char *command) {
   return keymap_bind_as(km, modes, spec, command, NULL, 0);
 }
 

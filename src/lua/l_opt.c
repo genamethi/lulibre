@@ -1,6 +1,7 @@
 /* Settings.
  *
  *   lulibre.o.pages = 8                 read or write an option by name
+ *   lulibre.o.pages = nil               back to its default
  *
  *   lulibre.settings.get(name)          the same, as functions
  *   lulibre.settings.get()              every option: { name = value, ... }
@@ -15,7 +16,8 @@
  *                                       group= (the heading it is under) }
  *   lulibre.settings.paths()            where things are: { config_dir=, init=,
  *                                       scripts=, modules=, data_dir=, index=,
- *                                       library= }
+ *                                       library=, installed= (where make install
+ *                                       put lulibre's own files) }
  *
  * Reads and writes go to the option registry in core/config.c, so a value
  * set here is identical to the same name given with -o on the command line.
@@ -31,6 +33,8 @@
 
 #include <lua.h>
 #include <lauxlib.h>
+
+#include <config.h> /* the generated one: LULIBRE_DATADIR (core/config.h is the options) */
 
 #include "app.h"
 #include "core/util.h"
@@ -56,10 +60,14 @@ static const struct opt_def *check_option(lua_State *L, int idx) {
   return o;
 }
 
-/* name at idx, value at idx + 1 */
+/* name at idx, value at idx + 1; nil is the option's default */
 static void set_option(lua_State *L, int idx) {
   struct app *app = lapi_app(L);
   const struct opt_def *o = check_option(L, idx);
+  if (lua_isnoneornil(L, idx + 1)) {
+    lua_settop(L, idx);
+    lua_pushstring(L, o->def);
+  }
   const char *val = luaL_tolstring(L, idx + 1, NULL);
   char *err = NULL;
   if (config_set(&app->cfg, o->name, val, &err)) {
@@ -183,7 +191,7 @@ static int s_paths_ui(lua_State *L) {
   char *dir = config_dir_path(c);
   const char *xdg = getenv("XDG_DATA_HOME");
   char *data = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.local/share/lulibre");
-  lua_createtable(L, 0, 7);
+  lua_createtable(L, 0, 8);
   lua_pushstring(L, dir);
   lua_setfield(L, -2, "config_dir");
   lua_pushfstring(L, "%s/init.lua", dir);
@@ -196,6 +204,8 @@ static int s_paths_ui(lua_State *L) {
   lua_setfield(L, -2, "data_dir");
   lua_pushstring(L, c->library);
   lua_setfield(L, -2, "library");
+  lua_pushstring(L, LULIBRE_DATADIR);
+  lua_setfield(L, -2, "installed");
   if (c->library[0]) {
     char *index = config_index_path(c);
     lua_pushstring(L, index);

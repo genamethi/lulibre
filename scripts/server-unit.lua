@@ -45,13 +45,8 @@ end
 local function launcher()
   local here = debug.getinfo(1, "S").source:gsub("^@", ""):match("^(.*)/scripts/[^/]*$")
   here = here and (uv.fs_realpath(here) or here)
-  local installed = {}
-  for dir in package.path:gmatch("([^;]+)/lua/%?%.lua") do
-    installed[#installed + 1] = (uv.fs_realpath(dir) or dir) .. "/contrib/calibre-server-opf.py"
-  end
-  for _, p in ipairs(installed) do
-    if exists(p) and not (here and p:find(here, 1, true) == 1) then return p, false end
-  end
+  local installed = lulibre.settings.paths().installed .. "/contrib/calibre-server-opf.py"
+  if exists(installed) and not (here and installed:find(here, 1, true) == 1) then return installed, false end
   local p = here and (here .. "/contrib/calibre-server-opf.py")
   if p and exists(p) then return p, true end
   return nil

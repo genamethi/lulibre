@@ -194,7 +194,7 @@ The edit form and review can be opened for given books from a script:
 
 | | |
 |---|---|
-| `lulibre.o.name` | read or write an option; see [Configuration](configuration.md) |
+| `lulibre.o.name` | read or write an option (nil puts it back to its default); see [Configuration](configuration.md) |
 | `lulibre.settings.get(name)` | the same, as a function; with no name, every option as a table |
 | `lulibre.settings.set(name, value)` | or `set{ pages = 8, ocr = "auto" }` for several |
 | `lulibre.settings.reset(name)` | back to the default |
@@ -269,7 +269,7 @@ its own documentation.
 | `lulibre.notation` | `render(s)` ($…$ in Unicode), `notation(s)` (the glossary), `title(s, case)`, `unicode(tex)`, `subscript(s)`, `superscript(s)`, `has_math(s)`; the lists `glossary`, `groups` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
-| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another |
+| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another; `books_with(md5)` the books whose file has that hash (of the files hashed so far), `holders(path)` the books that already hold a file's bytes |
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |

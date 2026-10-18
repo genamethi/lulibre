@@ -264,7 +264,7 @@ void rows_regroup(struct tui *t) {
   r->n = 0;
   if (!r->group || r->source || r->nall == 0) {
     r->ids = xmalloc(((size_t)r->nall + 1) * sizeof *r->ids);
-    memcpy(r->ids, r->all, (size_t)r->nall * sizeof *r->ids);
+    if (r->nall) memcpy(r->ids, r->all, (size_t)r->nall * sizeof *r->ids); /* (r->all is NULL when nothing matched) */
     r->n = r->nall;
   } else {
     build(t);

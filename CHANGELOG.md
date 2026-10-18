@@ -5,6 +5,16 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.2)
 
+- Changed: an option set to nil (`lulibre.o.pages = nil`, or a script's
+  `lulibre.cfg.NS.NAME = nil`) goes back to its default instead of being an
+  error.
+- Changed: modules and scripts are not looked for in the current directory,
+  and a build run from its source tree no longer falls back on the
+  installed lulibre's files (a module renamed in the tree was found there,
+  out of date).
+- Fixed: undefined behaviour when the list was regrouped with a filter that
+  matched nothing.
+
 - Added: calibre's content server can keep each book's metadata.opf
   current while it runs, as calibre's program does: the launcher
   `contrib/calibre-server-opf.py` starts calibre's server with calibre's

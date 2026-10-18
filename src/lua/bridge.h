@@ -33,9 +33,6 @@ void bridge_start(struct app *app);
  * and take the Lua state back. */
 void bridge_stop(struct app *app);
 
-/* True when the caller may touch the interface directly. */
-int bridge_on_ui(const struct app *app);
-
 /* Run fn(arg) on the interface thread; returns when it has. */
 void bridge_ui(struct app *app, void (*fn)(void *), void *arg);
 /* Run a Lua C function on the interface thread with L's current arguments.

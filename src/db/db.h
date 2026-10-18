@@ -23,11 +23,6 @@ int db_open_reader(struct db *db, const char *path, char **err);
  * for a thread of its own. */
 int db_open_writer(struct db *db, const char *path, char **err);
 void db_close(struct db *db);
-/* Where the history (the journal and the snapshots) of the index at `index`
- * is kept. malloc'd. */
-char *db_history_path(const char *index);
-/* Where the custom fields (#partof ...) of the index at `index` are kept. */
-char *db_custom_path(const char *index);
 /* A path as an SQLite URI with ?mode= (ro, rw, rwc), the characters a URI
  * gives meaning to escaped. Free it. */
 char *db_uri(const char *path, const char *mode);
