@@ -1,0 +1,28 @@
+# calibre's own unit for its content server, from calibre's manual
+# (https://manual.calibre-ebook.com/server.html, "Installing the server on
+# Linux"), with one change: ExecStart runs calibre-server through
+# calibre-server-opf.py, with calibre's own Python (calibre-debug), so that
+# calibre's metadata backup runs in the server and keeps each book's
+# metadata.opf current, as calibre's program does. The arguments after `--`
+# are calibre-server's, as before. It relies on calibre's internals: after a
+# calibre update, see that the server's log says "calibre metadata backup
+# running" (docs/workflows.md, "The opf files").
+#
+# As in calibre's manual: set User, Group and the library, put this in
+# /etc/systemd/system/calibre-server.service, then
+#   sudo systemctl daemon-reload && sudo systemctl enable --now calibre-server
+# For a unit of your own (~/.config/systemd/user/, systemctl --user), drop
+# User= and Group= and use WantedBy=default.target. A unit you have already
+# is changed instead by `lulibre server-unit`.
+[Unit]
+Description=calibre Content server
+After=network.target
+
+[Service]
+Type=simple
+User=mylinuxuser
+Group=mylinuxgroup
+ExecStart=/opt/calibre/calibre-debug -e @DATADIR@/lulibre/contrib/calibre-server-opf.py -- "/path/to/calibre library folder"
+
+[Install]
+WantedBy=multi-user.target

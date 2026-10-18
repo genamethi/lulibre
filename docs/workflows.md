@@ -1044,6 +1044,63 @@ one in a popup (`backup_too_old = false`: no popup).
     :backup next               or always, never, DAYS: set backup_restart (and in init.lua)
     :backup prune [keep]
 
+### The opf files: `lulibre server-unit`
+
+calibre keeps a copy of each book's record in its folder, `metadata.opf`.
+It reads them when it rebuilds its database (`restore_database`) and when it
+brings a book back from its recycle bin, so they are worth keeping current.
+Only calibre's own code writes them, and only some of calibre's programs do:
+
+| What runs | Who writes the opf files |
+|---|---|
+| calibre's program | the program, a changed book every few seconds |
+| calibre's content server, started through lulibre's launcher | calibre's same writer, in the server |
+| calibre's content server, as calibre documents it | nothing while it runs: changes are only marked, and written when `backup_metadata` runs with the server stopped (lulibre runs it before a calibre column changes) |
+| nothing | calibredb, when asked (`backup_metadata`) |
+
+lulibre never writes one. Its launcher, `contrib/calibre-server-opf.py`
+(installed in `<prefix>/share/lulibre/contrib/`), starts calibre's content
+server with calibre's own Python and starts in it the thread calibre's
+program runs to write them: one process serves the library, renames its
+book folders and writes its opf files, as in the program. It takes the same
+arguments as `calibre-server`, after `--`:
+
+    /opt/calibre/calibre-debug -e /usr/local/share/lulibre/contrib/calibre-server-opf.py -- [calibre-server options] LIBRARY
+
+For a systemd unit that runs `calibre-server` (the one calibre's manual
+gives, at <https://manual.calibre-ebook.com/server.html>, or your own):
+
+    lulibre server-unit           what runs calibre-server, and what would change
+    lulibre server-unit apply     make the change
+    lulibre server-unit remove    take it back
+
+`apply` changes a unit of your own (`~/.config/systemd/user/`) by a drop-in
+beside it, `<unit>.d/lulibre-opf.conf`, which replaces its ExecStart with
+the launcher's; the unit's own file is left as it is. A unit of the
+system's (`/etc/systemd/system/`), or one with sandboxing or hardening
+settings (`ProtectSystem`, `ReadOnlyPaths`, `NoNewPrivileges` ...), is not
+changed: the drop-in to add, and the commands, are printed instead. With
+such settings the service must still be able to read the launcher and run
+`calibre-debug`; the status file below is optional. `lulibre` ships
+calibre's manual's unit so changed, in `<prefix>/share/lulibre/systemd/
+calibre-server.service`, for a new setup.
+
+Started some other way (an OpenRC or runit service, a script, a
+container's command)? Replace `calibre-server ARGS` with
+`calibre-debug -e <the launcher> -- ARGS`, using the calibre-debug of the
+same calibre.
+
+The launcher writes `~/.local/state/lulibre/calibre-server.json` while it
+runs: lulibre reads it to know that the files are being kept current, and
+`:backup` says who keeps them so and how many books' files are behind their
+record. **It relies on calibre's internals**, not on anything calibre
+promises: after a calibre update, see that the server's log has `lulibre
+opf: calibre metadata backup running`. If calibre has changed what it
+relies on, the server is started without the thread (the library stays
+reachable), the log and the status file say why, and `:backup` shows it; with
+`LULIBRE_OPF_REQUIRED=1` in the unit's environment the server does not start
+at all instead.
+
 ## What books cite: `:refs`
 
 The index holds each file's first pages; a bibliography is on its last.

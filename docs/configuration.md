@@ -193,6 +193,7 @@ See [the Lua API](api.md).
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. Derived from the library and rebuilt at will, except for what lulibre alone knows: the undo journal, proposals, staged files' metadata, saved capture rules, file hashes |
 | `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never dropped with it: the journal of changes, snapshots and the changes that wait for the server to be stopped; the custom fields |
 | `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
+| `~/.local/state/lulibre/calibre-server.json` | written by calibre's server while it runs through lulibre's launcher (`lulibre server-unit`) |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured.

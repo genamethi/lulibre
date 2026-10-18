@@ -14,7 +14,7 @@
 #include "db/db.h"
 
 /* Bump when the SQL below changes, so existing indexes re-copy. */
-#define MIRROR_VERSION "4"
+#define MIRROR_VERSION "5"
 
 /* calibre's books (in the database attached as `cal`) as the index keeps
  * them: one row each, list fields joined into text. calibre stores "no date"
@@ -199,6 +199,20 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
     sqlite3_finalize(cf);
     ok = ok && db_exec(db, files_sql2, err) == 0;
     ok = ok && mirror_custom(db, err) == 0;
+    /* books whose metadata.opf is behind their record (calibre marks them;
+     * a removed book's mark stays, so only books that are there count) */
+    if (ok) {
+      sqlite3_stmt *ds = NULL;
+      if (sqlite3_prepare_v2(db->h,
+                             "SELECT count(*) FROM cal.metadata_dirtied d JOIN cal.books b ON b.id = d.book", -1,
+                             &ds, NULL) == SQLITE_OK &&
+          sqlite3_step(ds) == SQLITE_ROW) {
+        char n[32];
+        snprintf(n, sizeof n, "%d", sqlite3_column_int(ds, 0));
+        db_meta_set(db, "calibre_opf_behind", n);
+      }
+      sqlite3_finalize(ds);
+    }
     /* the wholesale replace above took the staged files' rows with it */
     ok = ok && db_stage_refresh(db, 1, err) == 0;
     if (ok) {

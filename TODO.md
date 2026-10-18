@@ -19,16 +19,15 @@ to come:
   files are: they are written only by calibre's own program or
   `backup_metadata`).
 - **The opf files, and calibre's program beside lulibre** (high priority).
-  Every setup is supported: calibre's program open (it writes the opf files
-  itself, a dirty book every ~2 s), the content server alone (nothing writes
-  them), neither. lulibre keeps them current where calibre does not, never
-  in competition with the program: whatever lulibre does that the program
-  could also be doing (writing opf files, moving files in book folders, a
-  direct calibredb run) starts a watcher for the program
-  (`@calibre-singleinstance-<uid>-GUI` in `/proc/net/unix`, the book folder
-  by inotify) and stops when it appears. How the files are written (calibre's
-  `backup_metadata` while stopped, or calibre's own writer over a read-only
-  copy of the database) is still to be decided.
+  Done: calibre's server can keep them current itself
+  (`contrib/calibre-server-opf.py`, `lulibre server-unit`), and `:backup`
+  says who keeps them and how many are behind. Still to come: with a plain
+  calibre-server, `backup_metadata` at every stop and start of the server
+  (lulibre.service), not only before a column changes; with nothing
+  running, right after lulibre's own direct writes. And the watcher:
+  whatever lulibre does that calibre's program could also be doing (moving
+  files in book folders, a direct calibredb run) watches for the program
+  (`lulibre.calibre`) and pauses when it appears, resuming once it is gone.
 
 ## 0.2.1: dependencies, declared and installed
 
