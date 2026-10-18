@@ -285,7 +285,7 @@ if screen | grep -q "Author .*Title"; then
 else
   echo "ok    in the list's place"
 fi
-k j j j j j j Enter
+k j j j j j j j j Enter
 wait_for "pages = "
 k C-u 9 Enter
 shown "a value changed there takes effect"   "pages = 9, and written to init.lua"

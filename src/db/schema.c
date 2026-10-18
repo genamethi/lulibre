@@ -24,6 +24,13 @@ const char db_schema[] =
   "CREATE INDEX IF NOT EXISTS idents_book ON idents(book);"
   "CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5("
   " title, authors, tags, publisher, series, tokenize='trigram');"
+  /* calibre's custom columns, and their values, each as lulibre's custom
+   * fields spell one (lua/lulibre/custom.lua): a number as %.10g, a date
+   * as YYYY-MM-DD, a list one row per item in order */
+  "CREATE TABLE IF NOT EXISTS cal_columns("
+  " label TEXT PRIMARY KEY, name TEXT, datatype TEXT, multiple INTEGER);"
+  "CREATE TABLE IF NOT EXISTS cal_values(book INTEGER, label TEXT, ord INTEGER, value TEXT);"
+  "CREATE INDEX IF NOT EXISTS cal_values_label ON cal_values(label, book);"
 
   /* ---- the user's marked books; persists between sessions ---- */
   "CREATE TABLE IF NOT EXISTS marks(id INTEGER PRIMARY KEY);"

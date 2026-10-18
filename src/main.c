@@ -41,6 +41,8 @@ static const struct {
   {"verify", cmd_script, "the library held against its files: titles, authors and identifiers the pages bear out"},
   {"recheck", cmd_script, "go back over what lulibre wrote, with each book's file deciding"},
   {"snapshot", cmd_script, "points the library can be put back to: take, list, plan, rollback, import"},
+  {"columns", cmd_script, "calibre columns for lulibre's own fields (#partof, #part, #parts): an example of lulibre.offline"},
+  {"offline", cmd_script, "do the changes that wait for the content server to be stopped (lulibre.service runs it)"},
 };
 
 static void usage(FILE *f) {

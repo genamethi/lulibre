@@ -100,6 +100,13 @@ static const char history_schema[] =
   "CREATE TABLE IF NOT EXISTS history.snapshots("
   " id INTEGER PRIMARY KEY, name TEXT NOT NULL, ts INTEGER NOT NULL, upto INTEGER NOT NULL,"
   " auto INTEGER NOT NULL DEFAULT 0, retired INTEGER, note TEXT);"
+  /* changes calibre makes only while no calibre program has the library
+   * open (add_custom_column ...), waiting for the content server to be
+   * stopped (lua/lulibre/offline.lua). argv: calibredb's arguments after
+   * --with-library, as JSON; status waiting, done, failed or cancelled */
+  "CREATE TABLE IF NOT EXISTS history.offline("
+  " id INTEGER PRIMARY KEY, argv TEXT NOT NULL, label TEXT, ts INTEGER NOT NULL,"
+  " status TEXT NOT NULL DEFAULT 'waiting', error TEXT, done INTEGER);"
   /* for a snapshot made from a copy of calibre's database: the values in
    * which that copy differs from what the journal says the library was */
   "CREATE TABLE IF NOT EXISTS history.snapshot_values("

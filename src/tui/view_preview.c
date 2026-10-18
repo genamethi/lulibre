@@ -22,6 +22,7 @@ struct pstate {
 
   char *title, *authors, *tags, *pub, *idents, *year;
   char *custom; /* the custom fields (#partof ...), as one line; NULL when none */
+  char *unsynced; /* which of them calibre lacks or holds otherwise; NULL when none */
   sqlite3_int64 file;
   char *fpath, *fmt, *ferror, *etitle, *eauthor;
   int fstatus, npages, indexed;
@@ -85,7 +86,7 @@ static void drop_plane(struct pstate *ps) {
 
 static void clear_book(struct pstate *ps) {
   char **fields[] = {&ps->title, &ps->authors, &ps->tags, &ps->pub, &ps->idents, &ps->year, &ps->custom,
-                     &ps->fpath, &ps->fmt, &ps->ferror, &ps->etitle, &ps->eauthor, &ps->text,
+                     &ps->unsynced, &ps->fpath, &ps->fmt, &ps->ferror, &ps->etitle, &ps->eauthor, &ps->text,
                      &ps->job_error};
   for (size_t i = 0; i < ARRAY_LEN(fields); i++) {
     free(*fields[i]);
@@ -143,14 +144,25 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
     }
     sqlite3_finalize(st);
   }
-  /* (where the custom fields' database is not attached, there are none) */
+  /* (where the custom fields' database is not attached, there are none).
+   * Beside them, the ones calibre has no column for, or holds another value
+   * of (cal_columns, cal_values: db/mirror.c) */
   if (sqlite3_prepare_v2(h,
-                         "SELECT group_concat(field || ' ' || v, '  ·  ') FROM (SELECT field,"
-                         " group_concat(value, ', ') AS v FROM custom.data WHERE book = ?"
-                         " GROUP BY field ORDER BY field)",
+                         "SELECT group_concat(field || ' ' || v, '  ·  '),"
+                         " group_concat(CASE WHEN NOT col THEN field || ' (lulibre only)'"
+                         "                   WHEN v IS NOT cv THEN field || ' (calibre: ' || coalesce(cv, 'none') || ')' END,"
+                         "              ', ')"
+                         " FROM (SELECT d.field AS field, group_concat(d.value, ', ' ORDER BY d.ord) AS v,"
+                         "   EXISTS(SELECT 1 FROM cal_columns k WHERE '#' || k.label = d.field) AS col,"
+                         "   (SELECT group_concat(x.value, ', ' ORDER BY x.ord) FROM cal_values x"
+                         "     WHERE x.book = d.book AND '#' || x.label = d.field) AS cv"
+                         "   FROM custom.data d WHERE d.book = ? GROUP BY d.field ORDER BY d.field)",
                          -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, id);
-    if (sqlite3_step(st) == SQLITE_ROW) ps->custom = col(st, 0);
+    if (sqlite3_step(st) == SQLITE_ROW) {
+      ps->custom = col(st, 0);
+      if (id > 0) ps->unsynced = col(st, 1);
+    }
     sqlite3_finalize(st);
   }
   if (sqlite3_prepare_v2(h,
@@ -523,6 +535,12 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   if (ps->custom) {
     dr_style(n, theme.accent, C_DEFAULT, 0);
     dr_text(n, y++, x, w, ps->custom);
+  }
+  if (ps->unsynced) {
+    char *s = xasprintf("not in calibre: %s", ps->unsynced);
+    dr_style(n, theme.dim, C_DEFAULT, 0);
+    dr_text(n, y++, x, w, s);
+    free(s);
   }
 
   /* Settle the image question before drawing the rule, which reports it. */

@@ -13,6 +13,17 @@
 --   custom.get(id, "#partof")    -- its value as edits spell it ("" when none)
 --   custom.all(id)               -- { ["#partof"] = "...", ... }
 --   lulibre.apply{ { id = 12, field = "#partof", value = "Handbook of Algebra" } }   -- to change one
+--
+-- A field can be in calibre too, as a custom column of the same name. lulibre
+-- keeps its values as before (filters, the journal and undo use them), and
+-- every change is written to calibre's column as well. calibre adds a column
+-- only while the content server is stopped, so asking for one queues it
+-- (lulibre.offline); until it is there, and wherever calibre's values are
+-- not lulibre's, the preview says so.
+--   custom.to_calibre("#partof", { heading = "Part of" })   -- queue the column
+--   custom.state("#partof")      -- { state = "lulibre" | "waiting" | "calibre", differ = n }
+--   custom.differing("#partof")  -- { {book=, lulibre=, calibre=}, ... }
+--   custom.push("#partof")       -- copy lulibre's values into calibre's column
 local M = {}
 
 M.TYPES = { text = true, number = true, date = true, list = true }
@@ -141,6 +152,103 @@ end
 -- sync folder, a book brought back from the recycle bin).
 function M.move(from, to)
   lulibre.store("UPDATE custom.data SET book = ? WHERE book = ?", to, from)
+end
+
+-- ---- in calibre too ----
+
+-- calibre's type for each of lulibre's, as add_custom_column takes it
+M.DATATYPES = { text = { "text" }, number = { "float" }, date = { "datetime" }, list = { "text", "--is-multiple" } }
+
+--- calibre's label for a field: its name without the #.
+function M.label(name)
+  return norm(name):sub(2)
+end
+
+--- calibre's column for a field: { label=, name=, datatype=, multiple= }, or nil.
+function M.column(name)
+  return lulibre.sql("SELECT label, name, datatype, multiple FROM cal_columns WHERE label = ?", M.label(name))[1]
+end
+
+--- The books whose value of a field calibre's column does not hold:
+-- { {book=, lulibre=, calibre=}, ... } (values as M.get spells them; "" for none).
+function M.differing(name)
+  name = norm(name)
+  return lulibre.sql([[
+    WITH l AS (SELECT book, group_concat(value, ', ') AS v
+                 FROM (SELECT book, value FROM custom.data WHERE field = ?1 AND book > 0 ORDER BY book, ord) GROUP BY book),
+         c AS (SELECT book, group_concat(value, ', ') AS v
+                 FROM (SELECT book, value FROM cal_values WHERE label = ?2 ORDER BY book, ord) GROUP BY book)
+    SELECT b.id AS book, coalesce(l.v, '') AS lulibre, coalesce(c.v, '') AS calibre
+      FROM books b LEFT JOIN l ON l.book = b.id LEFT JOIN c ON c.book = b.id
+     WHERE (l.v IS NOT NULL OR c.v IS NOT NULL) AND l.v IS NOT c.v ORDER BY b.id]], name, M.label(name))
+end
+
+--- Where a field stands with calibre: { state = "lulibre" } (calibre has no
+-- column for it), { state = "waiting", job = id } (one is queued), or
+-- { state = "calibre", differ = n } (n books' values are not calibre's).
+function M.state(name)
+  name = norm(name)
+  if M.column(name) then return { state = "calibre", differ = #M.differing(name) } end
+  for _, j in ipairs(require("lulibre.offline").jobs()) do
+    if j.argv[1] == "add_custom_column" and j.argv[2] == M.label(name) then return { state = "waiting", job = j.id } end
+  end
+  return { state = "lulibre" }
+end
+
+--- Ask calibre for a column for a field. Queued: it is made the next time
+-- the content server is stopped (lulibre.offline). opts.heading: the
+-- column's heading in calibre (default: the name); opts.datatype: calibre's
+-- type when the field's own will not do (int for a chapter's number).
+-- Returns the job's id, or nil and why not.
+function M.to_calibre(name, opts)
+  opts = opts or {}
+  name = norm(name)
+  local label = M.label(name)
+  if not label:match("^%l[%l%d_]*$") then
+    return nil, ("calibre's column names are a letter, then letters, figures or _: %s will not do"):format(name)
+  end
+  local st = M.state(name)
+  if st.state == "calibre" then return nil, ("calibre has a column %s already"):format(name) end
+  if st.state == "waiting" then return st.job end
+  local spec = M.field(name) or { type = "text" }
+  local argv = { "add_custom_column", label, opts.heading or label }
+  if opts.datatype then
+    argv[#argv + 1] = opts.datatype
+  else
+    for _, a in ipairs(M.DATATYPES[spec.type]) do argv[#argv + 1] = a end
+  end
+  return require("lulibre.offline").queue(argv, ("the calibre column %s"):format(name))
+end
+
+--- calibredb's spelling of a field's value.
+function M.wire(name, value)
+  local spec = M.field(name) or { type = "text" }
+  -- noon UTC: the same day in calibre's local time, wherever it is (midnight
+  -- UTC shows as the evening before west of Greenwich), and in the mirror
+  if spec.type == "date" and value:match("^%d%d%d%d%-%d%d%-%d%d$") then return value .. "T12:00:00+00:00" end
+  return value
+end
+
+--- Copy a field's values into calibre's column, for the books where they
+-- differ (M.differing): lulibre's value wins. Waits. Returns
+-- { copied=, failed={ {id=, error=}, ... } }.
+function M.push(name)
+  name = norm(name)
+  if not M.column(name) then error(("calibre has no column %s yet"):format(name), 0) end
+  local edit = require "lulibre.edit"
+  local out = { copied = 0, failed = {} }
+  lulibre.each(M.differing(name), function(d)
+    local args = edit.calibredb()
+    for _, a in ipairs { "set_custom", M.label(name), tostring(d.book), M.wire(name, d.lulibre) } do args[#args + 1] = a end
+    local r, err = lulibre.system(args, { timeout = 120000 })
+    if r and r.code == 0 then
+      out.copied = out.copied + 1
+    else
+      out.failed[#out.failed + 1] = { id = d.book, error = edit.failure(r, err) }
+    end
+  end, { jobs = edit.write_jobs(), progress = "copying " .. name })
+  lulibre.reload()
+  return out
 end
 
 return M
