@@ -86,7 +86,7 @@ int le_key(struct lineedit *le, uint32_t key, const struct ncinput *ni) {
     }
   }
   /* printable: a real code point with no control or alt modifier */
-  if (!(key & (KEY_CTRL | KEY_ALT)) && key >= 0x20 && key <= 0x10ffff) {
+  if (!(key & (KEY_CTRL | KEY_ALT | KEY_SHIFT)) && key >= 0x20 && key <= 0x10ffff) {
     char u[8];
     insert(le, u, (size_t)utf8_encode(u, key));
     return 1;

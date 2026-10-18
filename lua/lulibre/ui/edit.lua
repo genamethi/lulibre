@@ -64,7 +64,7 @@ function M.run(args)
   local title = #books == 1 and ("edit  %d  %s"):format(ids[1], books[1].title or "")
     or ("edit  %d books"):format(#books)
   local p <close> = lulibre.panel {
-    title = title, help = keys:hint("edit", "suggest", "clear", "write"), height = 0.38,
+    title = title, help = keys:hint("edit", "suggest", "clear", "write"), height = 0.38, dialog = true,
     columns = { { "Field", 12 }, { "Now", -3 }, { "New", -3 }, { "From", 26 } },
     rows = rows(),
   }

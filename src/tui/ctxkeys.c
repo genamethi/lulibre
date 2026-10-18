@@ -27,7 +27,8 @@ static const struct action panel_actions[] = {
   {"half-up", "<C-u>", "half a page up"},
   {"page-down", "<C-f> <PageDown>", "a page down"},
   {"page-up", "<C-b> <PageUp>", "a page up"},
-  {"close", "q <Esc>", "close the panel"},
+  {"close", "q", "close the panel"},
+  {"back", "<Esc>", "back to the window this panel was reached from, leaving it open (a dialog closes)"},
 };
 static const struct action line_actions[] = {
   {"accept", "<CR>", "enter what was typed"},

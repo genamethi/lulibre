@@ -1050,6 +1050,7 @@ static void render(struct tui *t) {
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
   keymap_set_leader(t->km, t->app->cfg.leader);
+  wm_note_focus(t);
   if (t->peek && t->focus->cls != &view_panel) { /* the panel that was looking has lost the cursor */
     t->peek = 0;
     preview_book_changed(t);
