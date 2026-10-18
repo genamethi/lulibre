@@ -18,10 +18,58 @@ to come:
   `restore_database` from the books' metadata.opf files (as good as those
   files are: they are written only by calibre's own program or
   `backup_metadata`).
-- **check_library, read.** Run it while the server is stopped, read its CSV
-  (it exits 0 whatever it finds), and hand each kind of finding to what
-  can act on it: files with no record and records with no file to
-  `:orphans`, extra formats to adding them to their book, missing covers.
+- **The opf files, kept current.** calibre reads a book's metadata.opf in
+  three places only: `restore_database`, its recycle bin's list, and
+  bringing a book back from the bin (removing a book writes a fresh one
+  first, so that path is safe). Everything else reads the database. The
+  opf files are written by calibre's own code alone (its program's
+  background thread, `backup_metadata`, removal); lulibre never writes
+  one. With the web interface only, they fall behind (1060 of 1860 books
+  on 2026-10-18), so `restore_database` would lose those changes. Run
+  `backup_metadata` (calibre's own writer) whenever the server is stopped
+  for anything, not only before a column changes, and show how many are
+  behind (`metadata_dirtied` joined with `books`, read-only).
+
+## 0.2.1: dependencies, declared and installed
+
+Today a feature names the programs it needs (`lulibre.features`), says
+when one is missing, and can offer pixi (`pixi_deps`) or a rock
+(`rocks_install`). Nothing declares them as a whole, and nothing installs
+lulibre's own set.
+
+- **A rockspec** (or a manifest) for the Lua side: `luv` (needed), `lpeg`
+  (grammars). Installed with `luarocks --local` by default, the user's own
+  tree.
+- **A `pixi.toml`**, optional throughout and never used to build lulibre:
+  features and environments for the optional programs (conda-forge has
+  poppler, tesseract, ocrmypdf, djvulibre, and lua 5.5 with luarocks 3.13),
+  tasks for fetching datasets. pixi may also manage luarocks, the most
+  reproducible setup, and the docs say so; then "local" means pixi's
+  environment, not `~/.luarocks`. luarocks never depends on pixi.
+- **The installer** asks: luarocks (the default), pixi, or by hand; asks
+  before anything that needs sudo (calibre, notcurses and other system
+  packages), and says what it would run.
+
+## 0.3.0: the library checked against its folders
+
+calibre's `check_library`, done by lulibre: it is only the folders compared
+with the database (about 260 lines of calibre's Python), so lulibre can do
+it from the mirror and the folder while the server runs, with nothing
+stopped and the database not vacuumed. A report page first, summing each
+kind up in a line; acting on a kind where it fits what lulibre already does.
+
+- Already covered by `:orphans`: records whose file is gone, files no
+  record knows, stray folders; and more than calibre checks (broken links,
+  empty folders).
+- To add: folders not named as calibre names them (`Title (id)` under an
+  author), a folder whose case differs from its record's path, a format
+  whose file name's case differs, covers the database claims and the
+  folder lacks or the reverse (`has_cover` is to be mirrored), files of
+  unknown kinds in a book's folder, folders that cannot be read.
+- Acting: what is lulibre's already (`:orphans` verdicts); the rest
+  reported only until a feature fits it. Fixes calibre's own check offers
+  (dropping a missing format from the record, the cover flag) go through
+  calibredb like any change.
 
 ## 0.3.0: catalogues, and lulibre as a reference manager
 
