@@ -53,6 +53,9 @@ int sched_cancel(struct app *app, int id); /* 0 if there is no such task */
 void sched_cancel_all(struct app *app);
 int sched_live(const struct app *app);   /* tasks not yet finished */
 int sched_failed(const struct app *app); /* tasks that ended in an error */
+/* An error outside any task (a luv callback's) counts as a failure too:
+ * `lulibre run` then exits 1. */
+void sched_note_failure(struct app *app);
 
 /* Push an array of {id=, name=, state=} onto L. */
 void sched_push_tasks(struct lua_State *L);

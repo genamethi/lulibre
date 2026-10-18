@@ -111,6 +111,7 @@ lua 'require("lulibre.custom").declare("#volume", { type = "number" })
      lulibre.apply { { id = 1, field = "#volume", value = "4" } }' >/dev/null
 expect   "a column for a custom field waits"   waiting "$(lua 'local c = require "lulibre.custom"
   c.add_column("#volume", { heading = "Volume" }); print(c.state("#volume").state)')"
+contains "with nothing holding the library, it can be done now" "nothing has the library open" "$(lua 'require("lulibre.offline").ask()')"
 contains "lulibre offline makes it"            "1 done" "$(run offline 2>&1)"
 contains "in calibre"                          "volume (" "$($cdb custom_columns 2>&1)"
 contains "after a copy of calibre's database"  "before the content server started" "$(lua '

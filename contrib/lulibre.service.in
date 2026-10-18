@@ -15,6 +15,11 @@ Before=calibre-server.service
 [Service]
 Type=oneshot
 ExecStart=@BINDIR@/lulibre offline
+# A oneshot unit has no start timeout of its own, and the server waits for
+# this one: if lulibre never ended (a script of init.lua's leaving a timer
+# running, say), the server would never start. Writing every book's opf
+# file the first time can take minutes; this is far beyond that.
+TimeoutStartSec=30min
 
 [Install]
 WantedBy=calibre-server.service

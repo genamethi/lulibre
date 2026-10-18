@@ -1009,6 +1009,11 @@ stopped it:
   (`systemctl --user stop calibre-server`, `… start …`).
 - by hand, while the server is down: `lulibre offline`.
 
+What lulibre offers when a change is queued depends on what has the library
+open: nothing (no content server, or it is stopped) — do it now; calibre's
+program — it waits until the program is closed; the content server —
+restart it now, or not now.
+
       :offline                 what waits, and what failed
       :offline restart         restart the server for them now
       :offline cancel ID

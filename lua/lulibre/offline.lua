@@ -117,6 +117,8 @@ function M.run()
   if not up then out.backup = require("lulibre.backup").on_restart() end
   if #jobs == 0 then return out end
   if up then error("the content server is running: these wait until it is stopped", 0) end
+  local held = require("lulibre.calibre").running()
+  if held and held.gui then error("calibre's program has the library open: these wait until it is closed", 0) end
   local cols = columns()
   local opf_written = false
   for _, job in ipairs(jobs) do
@@ -196,23 +198,46 @@ function M.restart()
   return r
 end
 
---- Say what waits, and ask whether to restart the server for it now. A
--- replaceable function: the interface calls it after a job is queued.
+--- Say what waits, and offer what can be done now. A replaceable function:
+-- the interface calls it after a job is queued. What holds the library
+-- decides (lulibre.calibre): nothing (no server, or it is stopped) -- do it
+-- now; calibre's program -- it waits until the program is closed; the
+-- content server -- restart it now (server_stop, server_start), or later.
 function M.ask()
   local jobs = M.jobs()
   if #jobs == 0 then return end
   local what = #jobs == 1 and (jobs[1].label or jobs[1].argv[1]) or ("%d changes"):format(#jobs)
+  local held = require("lulibre.calibre").running()
+  local free = held and not held.db or (not held and not M.server_up())
+  local interactive = not lulibre.headless and lulibre.task_id()
+  local function say(msg, level)
+    if interactive then lulibre.notify(msg, level) else print(msg) end
+  end
+  local function now(how)
+    local ok, r = pcall(how)
+    say(ok and M.summary(r) or tostring(r), (not ok or #r.failed > 0) and "error" or nil)
+  end
+  if free then
+    -- nothing has the library open: nothing to stop
+    if not interactive then return say(("%s waits: `lulibre offline` does it (nothing has the library open)"):format(what)) end
+    local pick = lulibre.pick({ "do it now", "not now" }, { title = ("%s: nothing has the library open"):format(what) })
+    if pick == "do it now" then return now(M.run) end
+    return say(("%s waits (:offline run does it)"):format(what))
+  end
+  if held and held.gui then
+    return say(("%s waits until calibre's program is closed (then :offline run, or lulibre.service at the server's next start)")
+      :format(what))
+  end
   local later = ("%s waits for the content server's next restart (:offline restart does it now)"):format(what)
-  if lulibre.headless or not lulibre.task_id() then return print(later) end
+  if not interactive then return say(later) end
   if not M.can_restart() then
-    return lulibre.notify(("%s waits for the content server to be stopped (set server_stop and server_start to let lulibre restart it)")
+    return say(("%s waits for the content server to be stopped (set server_stop and server_start to let lulibre restart it)")
       :format(what))
   end
   local pick = lulibre.pick({ "restart now", "not now" },
     { title = ("calibre makes %s only while the content server is stopped"):format(what) })
-  if pick ~= "restart now" then return lulibre.notify(later) end
-  local ok, r = pcall(M.restart)
-  lulibre.notify(ok and M.summary(r) or tostring(r), (not ok or #r.failed > 0) and "error" or nil)
+  if pick ~= "restart now" then return say(later) end
+  now(M.restart)
 end
 
 return M
