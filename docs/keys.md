@@ -48,7 +48,7 @@ command; `:` runs one by name.
 | `P` | text ⇄ page image |
 | `+` `-` `=` | zoom the image in, out, reset |
 | `H` `L` | pan the image |
-| `a` | read the file as far as the page being shown, when it is past the pages that were indexed |
+| `a` | read the file as far as the page being shown, when it is past the pages that were indexed (`:addpages BOOK PAGE` does it for any book) |
 | `v` | select text with the keys: a cursor comes out in the page's text. `h` `j` `k` `l` and the arrows move it, `w` `b` by words, `0` `$` to the ends of the line, `gg` `G` of the page; `v` begins a selection (again lets go of it), `V` takes the line; `y` or Enter copies and leaves, `Esc` or `q` leaves. These are the keys of the place `select`: `lulibre.map("select", "n", "down")` |
 
 ## Windows
