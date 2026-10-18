@@ -55,6 +55,11 @@ struct config {
   char *write_via;      /* auto | server | direct: how changes reach calibre */
   char *server_stop;    /* shell command that stops the content server; empty = lulibre cannot */
   char *server_start;   /* and the one that starts it again */
+  char *backup_restart; /* always | next | never | N days: copy metadata.db before the server starts */
+  int backup_keep;      /* copies kept */
+  char *backup_too_old; /* warn | false */
+  int backup_max_age;   /* days */
+  char *backup_metadata; /* on | off: backup_metadata before a column is added or removed */
   char *log_file;       /* every log entry is also appended here; empty = no file */
   char *pixi_deps;      /* off | on: programs features need may come from lulibre's own pixi environment */
   char *rocks_tree;     /* a luarocks tree whose modules scripts may require */

@@ -14,6 +14,7 @@
  *   l_doc.c    text lines files extract           indexed text, extraction
  *   l_proc.c   system                             subprocesses
  *   l_hash.c   md5                                content hashes, cached
+ *   l_copy.c   copy_db                            copies of SQLite databases
  *   l_index.c  index                              run the indexer, and wait
  *   l_theme.c  theme                              colours
  *   l_match.c  fold fuzzy                         matching
@@ -66,6 +67,7 @@ void l_db_open(struct lua_State *L);
 void l_doc_open(struct lua_State *L);
 void l_proc_open(struct lua_State *L);
 void l_hash_open(struct lua_State *L);
+void l_copy_open(struct lua_State *L);
 void l_index_open(struct lua_State *L);
 void l_theme_open(struct lua_State *L);
 void l_match_open(struct lua_State *L);

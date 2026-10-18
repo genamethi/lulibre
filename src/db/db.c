@@ -162,8 +162,7 @@ static int attach_custom(struct db *db, const char *mode, char **err) {
   return rc;
 }
 
-static int attach(struct db *db, const char *path, const char *as, const char *mode, char **err) {
-  /* a URI, for the mode; the characters a URI gives meaning to are escaped */
+char *db_uri(const char *path, const char *mode) {
   size_t n = strlen(path);
   char *esc = xmalloc(3 * n + 1), *o = esc;
   for (const char *p = path; *p; p++) {
@@ -173,6 +172,11 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
   *o = 0;
   char *uri = xasprintf("file:%s?mode=%s", esc, mode);
   free(esc);
+  return uri;
+}
+
+static int attach(struct db *db, const char *path, const char *as, const char *mode, char **err) {
+  char *uri = db_uri(path, mode);
   char *sql = xasprintf("ATTACH DATABASE ?1 AS %s", as);
   sqlite3_stmt *st = NULL;
   int rc = db_prepare(db, sql, &st, err);

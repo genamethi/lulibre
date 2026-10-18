@@ -5,12 +5,25 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
-- Added: custom fields can be calibre columns too. `:custom calibre NAME`
-  asks calibre for the column; from then on every change to the field is
-  written to calibre as well, and `:custom push NAME` copies the values it
-  had. The preview says which of a book's custom fields calibre lacks or
-  holds otherwise, and `:custom` says it of each field. `:run columns` does
-  it for #partof, #part and #parts.
+- Added: custom fields can be calibre columns too. `:custom column add
+  NAME` asks calibre for the column; from then on every change to the field
+  is written to calibre as well, and `:custom push NAME` copies the values
+  it had. `:custom column remove NAME` takes any calibre column out again
+  (lulibre keeps its own values). The preview says which of a book's custom
+  fields calibre lacks or holds otherwise, and `:custom` says it of each
+  field. `:run columns` does it for #partof, #part and #parts.
+
+- Added: copies of calibre's database, kept with lulibre's data
+  (`~/.local/share/lulibre/backups/`), made before the content server
+  starts as the option `backup_restart` says: `always` (the default),
+  `next` (once, then not until set to `next` again), `never`, or a number
+  of days. `backup_keep` copies are kept (5). The first change of a
+  session offers one when the newest is older than `backup_max_age` days
+  (7; `backup_too_old = false` says nothing). Before a column is added or
+  removed, each changed book's metadata.opf is written (`backup_metadata`,
+  on): calibre's own program is the only one that writes them otherwise.
+  `:backup` lists the copies, `:backup now` makes one, `:backup next` (or
+  always, never, DAYS) says when.
 
 - Added: changes calibre makes only while the content server is stopped
   (a new column; calibredb's add_custom_column, remove_custom_column,

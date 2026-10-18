@@ -242,6 +242,9 @@ function M.check_secret(path)
 end
 
 function M.calibredb()
+  -- every change to the library starts here: the first says so when the
+  -- newest copy of calibre's database is too old (lulibre.backup)
+  require("lulibre.backup").warn()
   local o, a = lulibre.o, { "calibredb" }
   if M.route() == "server" then
     a[#a + 1] = "--with-library"

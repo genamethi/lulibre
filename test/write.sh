@@ -17,8 +17,11 @@ if [ -z "${LULIBRE_WRITE_NS:-}" ]; then
   unshare -rn true 2>/dev/null || { echo "write: cannot create a network namespace, skipping"; exit 0; }
   exec unshare -rn env LULIBRE_WRITE_NS=1 sh "$0" "$bin"
 fi
-"$bin" --clean run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1 || {
-  echo "write: the luv rock is not installed for this Lua version, skipping"; exit 0; }
+# skipped where luv is missing; any other failure to run a script is a failure
+probe=$("$bin" --clean run "$(dirname "$0")/luv_probe.lua" 2>&1) || case $probe in
+  *"module 'luv' not found"*) echo "write: the luv rock is not installed for this Lua version, skipping"; exit 0 ;;
+  *) echo "FAIL  write: lulibre could not run a script: $probe"; exit 1 ;;
+esac
 ip link set lo up 2>/dev/null || { echo "write: no loopback in the namespace, skipping"; exit 0; }
 
 t=$(mktemp -d)
