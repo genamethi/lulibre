@@ -16,18 +16,8 @@ to come:
   server may run), when a copy is made and when asked; a failure is the
   signal to restore. Then the choice: one of lulibre's copies, or calibre's
   `restore_database` from the books' metadata.opf files (as good as those
-  files are: they are written only by calibre's own program or
-  `backup_metadata`).
-- **The opf files, and calibre's program beside lulibre** (high priority).
-  Done: calibre's server can keep them current itself
-  (`contrib/calibre-server-opf.py`, `lulibre server-unit`), and `:backup`
-  says who keeps them and how many are behind. Still to come: with a plain
-  calibre-server, `backup_metadata` at every stop and start of the server
-  (lulibre.service), not only before a column changes; with nothing
-  running, right after lulibre's own direct writes. And the watcher:
-  whatever lulibre does that calibre's program could also be doing (moving
-  files in book folders, a direct calibredb run) watches for the program
-  (`lulibre.calibre`) and pauses when it appears, resuming once it is gone.
+  files are: see "The opf files" in docs/workflows.md for when calibre
+  writes them in each setup).
 
 ## 0.2.1: dependencies, declared and installed
 

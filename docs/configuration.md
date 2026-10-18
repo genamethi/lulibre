@@ -26,7 +26,7 @@ o.library = "~/calibre-library"
 | `backup_restart` | `always` | copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
 | `backup_keep` | `5` | copies kept |
 | `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session when the newest is older than that many days; `false`: do not |
-| `backup_metadata` | `on` | write each changed book's metadata.opf before a calibre column is added or removed |
+| `backup_metadata` | `on` | have calibre write each changed book's metadata.opf (`backup_metadata`) whenever nothing else can: each time the content server is stopped, and after lulibre changes the library straight in its folder; a calibre column changes only after it |
 | `index` | | index database (default under `~/.local/share/lulibre/`) |
 | `pages` | `6` | first pages of each file indexed as text |
 | `layout_pages` | `2` | of those, pages kept as lines tagged with font size |

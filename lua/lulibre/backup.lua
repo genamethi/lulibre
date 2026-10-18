@@ -188,10 +188,15 @@ end
 --- calibre writes a book's metadata.opf (in its folder) only from its own
 -- program; changes made through calibredb or the content server just mark
 -- the book. This writes those books' files. The server must be stopped.
+-- Returns how many books' files were written.
 function M.metadata()
+  require("lulibre.calibre").wait_for_program("writing the books' opf files")
   local r, err = lulibre.system({ "calibredb", "--with-library", lulibre.o.library, "backup_metadata" },
     { timeout = 3600000 })
   if not r or r.code ~= 0 then error("backup_metadata: " .. require("lulibre.offline").why(r, err), 0) end
+  local n = 0
+  for _ in r.stdout:gmatch("[^\n]*%%[^\n]*\n") do n = n + 1 end -- one progress line per book
+  return n
 end
 
 -- The first change to the library in a session, with the newest copy too

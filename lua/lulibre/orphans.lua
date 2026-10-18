@@ -264,6 +264,8 @@ end
 -- Take a file out of the library into the holding folder, keeping its path
 -- below the library so it can be put back by hand.
 local function set_aside(path, rel, holding)
+  -- out of a book's folder: not while calibre's program could be moving it
+  require("lulibre.calibre").wait_for_program("setting stray files aside")
   local to = holding .. "/" .. rel
   mkdir_p(to:match("^(.*)/[^/]*$"))
   local ok, err = uv.fs_rename(path, to)
@@ -346,6 +348,7 @@ function M.apply(found)
   elseif out.reattached + out.added > 0 then
     lulibre.reload()
   end
+  if out.reattached + out.added > 0 then edit.after_direct() end
   return out
 end
 

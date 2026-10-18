@@ -40,8 +40,10 @@ static const struct opt_def opts[] = {
       "warn, the first time the library is changed, when the last copy is older than backup_max_age", NULL),
   OPT(backup_max_age, OPT_INT, "7", NULL, "days after which a copy is too old", NULL),
   OPT(backup_metadata, OPT_STR, "on", "on|off",
-      "before a calibre column is added or removed, write every changed book's metadata.opf "
-      "(calibredb backup_metadata: only calibre's own program does it otherwise)",
+      "have calibre write each changed book's metadata.opf (calibredb backup_metadata) whenever "
+      "nothing else can: each time the content server is stopped (lulibre offline, lulibre.service), "
+      "and after lulibre changes the library straight in its folder; a calibre column is added or "
+      "removed only after it",
       NULL),
 
   OPT(pages, OPT_INT, "6", NULL, "first N pages of each file to index as text", "The index"),

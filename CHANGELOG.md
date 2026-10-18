@@ -16,6 +16,15 @@ written in `src/version.h`.
   The launcher relies on calibre's internals: after a calibre update, its
   log says whether the backup runs.
 
+- Added: with a plain content server, lulibre has calibre write the opf
+  files each time the server is stopped (`lulibre offline`, which
+  `lulibre.service` runs before each start), and right after lulibre
+  changes the library straight in its folder (option `backup_metadata`).
+- Added: while calibre's program is open, what lulibre would do that the
+  program could be doing too waits, and goes on once it is closed: a change
+  straight to the library's folder, a stray file set aside, the changes
+  queued for a stopped server. The status line says so.
+
 - Fixed: requests to an online service could go out two at a time when
   several tasks looked a book up together (two found the service free in
   the same moment); a key hint in a long message could show another
