@@ -28,7 +28,7 @@ to come:
   (`@calibre-singleinstance-<uid>-GUI` in `/proc/net/unix`, the book folder
   by inotify) and stops when it appears. How the files are written (calibre's
   `backup_metadata` while stopped, or calibre's own writer over a read-only
-  copy of the database) is being decided: the review board, item 19.
+  copy of the database) is still to be decided.
 
 ## 0.2.1: dependencies, declared and installed
 
