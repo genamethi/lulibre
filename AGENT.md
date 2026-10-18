@@ -18,6 +18,19 @@ problem in the program is the work; say what the library showed only as
 far as it explains the feature. Suggesting a way to do something with the
 program as it stands is fine.
 
+## Every setup is supported
+
+The user runs calibre's content server and its web interface only, but
+lulibre is not built for that setup alone. calibre's desktop program is
+supported as fully: a design that works because nothing else writes the
+library (or because the program is never open) is wrong. Before a feature
+is done, ask what it does with the program running, with the server only,
+with neither, and with the program running its own server; and whether it
+touches anything the program also writes (metadata.db, the opf files, the
+book folders, covers). What could compete with the program is watched while
+it happens, not assumed away. Do not frame a finding by the user's setup
+("redundancy in name only" was true of theirs, not of calibre's).
+
 ## Branches and versions
 
 - **The user's tree, `/media/servd/staging/lulibre`, is theirs.** They run
@@ -321,7 +334,12 @@ Facts found by testing, which the code relies on (calibre 9.15):
   backup_metadata (`no_remote`); direct access is refused while any
   calibre program has the library open. `check_library` is not read-only:
   it vacuums the database first, and it exits 0 whatever it finds.
-- A book's metadata.opf is written by calibre's own program only. A change
+- calibre's lock is an abstract unix socket per user, not a file:
+  `@calibre-singleinstance-<uid>-db` (the program, calibre-server, calibredb
+  opening a library directly) and `...-GUI` (the program). `/proc/net/unix`
+  shows them; binding the name would take the lock.
+- A book's metadata.opf is written by calibre's own code only (the
+  program's background thread, `backup_metadata`, removal). A change
   through calibredb or the content server marks the book in
   `metadata_dirtied`; `backup_metadata` writes them. A removed book's mark
   stays behind: count marks joined with `books`.
@@ -361,9 +379,9 @@ a change touches:
 - Can it be unified with something that exists, or simplified? Is
   anything left dead, or built but not exposed (no command, no key, no
   API)? Is an interface missing where code reaches into another's data?
-- Every setup: no content server at all (writes straight to the folder);
-  the desktop program in use (its locks, its own opf writing); the web
-  interface only (the user's); and the combinations.
+- Every setup (above): no content server at all (writes straight to the
+  folder); the desktop program in use (its lock, its own opf writing); the
+  content server only; and the combinations.
 - Memory: leaks and ownership, checked with the sanitizers, and the cost
   profiled rather than guessed.
 - Configuration: a missing, malformed or old init.lua; options a script
