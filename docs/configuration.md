@@ -23,6 +23,10 @@ o.library = "~/calibre-library"
 | `server` `user` `password_file` | | calibre content server, for changes |
 | `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
 | `server_stop` `server_start` | | shell commands that stop and start the content server, for the changes that wait for it to be stopped (`:offline`); empty: they wait for its next restart |
+| `backup_restart` | `always` | copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
+| `backup_keep` | `5` | copies kept |
+| `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session when the newest is older than that many days; `false`: do not |
+| `backup_metadata` | `on` | write each changed book's metadata.opf before a calibre column is added or removed |
 | `index` | | index database (default under `~/.local/share/lulibre/`) |
 | `pages` | `6` | first pages of each file indexed as text |
 | `layout_pages` | `2` | of those, pages kept as lines tagged with font size |
@@ -178,6 +182,8 @@ See [the Lua API](api.md).
 |---|---|
 | `~/.config/lulibre/` | `init.lua`, `scripts/`, `lua/`. Another directory: `lulibre -C DIR`, `$LULIBRE_CONFIG_DIR`, or the option `config_dir` |
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. Derived from the library and rebuilt at will, except for what lulibre alone knows: the undo journal, proposals, staged files' metadata, saved capture rules, file hashes |
+| `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never dropped with it: the journal of changes, snapshots and the changes that wait for the server to be stopped; the custom fields |
+| `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured.

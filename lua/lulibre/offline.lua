@@ -2,14 +2,16 @@
 -- calibredb refuses the content server for catalog, add_custom_column,
 -- remove_custom_column, restore_database, check_library and backup_metadata;
 -- queued here (in the history file beside the index), they wait until the
--- server is stopped, and M.run does them straight to the library folder.
+-- server is stopped, and M.run does them straight to the library folder
+-- (after a copy of calibre's database, as lulibre.o.backup_restart says:
+-- lulibre.backup).
 -- Whatever stops the server, it is M.run that does them: lulibre.service
 -- before each start of the server (`lulibre run offline`), M.restart when
 -- you say "restart now", or `lulibre run offline` by hand while it is down.
 --
 --   local offline = require "lulibre.offline"
 --   offline.queue({ "add_custom_column", "partof", "Part of", "text" }, "the column #partof")
---   offline.jobs()        -- the waiting ones: { {id=, argv=, label=, ts=}, ... }
+--   offline.jobs()        -- those still to do (waiting, or failed): { {id=, argv=, label=, ts=, status=, error=}, ... }
 --   offline.cancel(id)
 --   offline.run()         -- do them; the server must be stopped: { done=, failed={ {id=, error=}, ... } }
 --   offline.restart()     -- stop the server (lulibre.o.server_stop), run them, start it (server_start)
@@ -36,10 +38,12 @@ local function rows(sql, ...)
   return out
 end
 
---- The jobs waiting, oldest first. status: "waiting" (the default), "failed", "done" or "all".
+--- The jobs, oldest first. status: "pending" (the default: waiting, or
+-- failed and to be tried again), "waiting", "failed", "done" or "all".
 function M.jobs(status)
-  status = status or "waiting"
+  status = status or "pending"
   if status == "all" then return rows("SELECT * FROM offline ORDER BY id") end
+  if status == "pending" then return rows("SELECT * FROM offline WHERE status IN ('waiting', 'failed') ORDER BY id") end
   return rows("SELECT * FROM offline WHERE status = ? ORDER BY id", status)
 end
 
@@ -63,6 +67,9 @@ M.already = {
   add_custom_column = function(argv, columns) return columns[argv[2]] and "calibre has that column already" end,
   remove_custom_column = function(argv, columns) return not columns[argv[2]] and "calibre has no such column" end,
 }
+
+-- the commands that change the shape of calibre's database
+M.STRUCTURAL = { add_custom_column = true, remove_custom_column = true, restore_database = true }
 
 local function direct(argv)
   local a = { "calibredb", "--with-library", lulibre.o.library }
@@ -102,17 +109,27 @@ end
 -- otherwise). Returns { done=, skipped=, failed={ {id=, error=}, ... } }.
 function M.run()
   local out = { done = 0, skipped = 0, failed = {} }
-  local jobs = M.jobs()
+  -- those that failed are tried again (M.already keeps one that did its work from doing it twice)
+  local jobs = M.jobs("pending")
+  local up = M.server_up()
+  -- a copy of calibre's database first, as backup_restart says (it is made
+  -- whether or not anything waits: this is the server's start)
+  if not up then out.backup = require("lulibre.backup").on_restart() end
   if #jobs == 0 then return out end
-  if M.server_up() then error("the content server is running: these wait until it is stopped", 0) end
+  if up then error("the content server is running: these wait until it is stopped", 0) end
   local cols = columns()
+  local opf_written = false
   for _, job in ipairs(jobs) do
     local check = M.already[job.argv[1]]
     local done = check and check(job.argv, cols)
-    local r, err
-    if not done then
-      r, err = lulibre.system(direct(job.argv), { timeout = 600000 })
+    local r, err, held
+    if not done and M.STRUCTURAL[job.argv[1]] and lulibre.o.backup_metadata == "on" and not opf_written then
+      -- each book's metadata.opf brought up to date before calibre's database
+      -- changes shape; if that fails, the job waits for another time
+      local ok, e = pcall(require("lulibre.backup").metadata)
+      opf_written, held, err = ok, not ok, not ok and e or nil
     end
+    if not done and not held then r, err = lulibre.system(direct(job.argv), { timeout = 600000 }) end
     local ok = done or (r and r.code == 0)
     lulibre.store("UPDATE offline SET status = ?, error = ?, done = ? WHERE id = ?", ok and "done" or "failed",
       not ok and M.why(r, err) or (done or nil), os.time(), job.id)
@@ -131,12 +148,14 @@ end
 
 function M.summary(r)
   local parts = {}
+  if r.backup then parts[#parts + 1] = "calibre's database copied" end
   if r.done > 0 then parts[#parts + 1] = ("%d done"):format(r.done) end
   if r.skipped > 0 then parts[#parts + 1] = ("%d done already"):format(r.skipped) end
   if #r.failed > 0 then
     parts[#parts + 1] = ("%d failed: %s"):format(#r.failed, r.failed[1].error)
   end
-  return #parts > 0 and table.concat(parts, ", ") or "nothing was waiting"
+  if r.done + r.skipped + #r.failed == 0 then parts[#parts + 1] = "nothing was waiting" end
+  return table.concat(parts, ", ")
 end
 
 local function sh(cmd)

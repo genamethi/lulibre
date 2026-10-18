@@ -16,8 +16,11 @@ if [ -z "${LULIBRE_OFFLINE_NS:-}" ]; then
   unshare -rn true 2>/dev/null || { echo "offline: cannot create a network namespace, skipping"; exit 0; }
   exec unshare -rn env LULIBRE_OFFLINE_NS=1 sh "$0" "$bin"
 fi
-"$bin" --clean run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1 || {
-  echo "offline: the luv rock is not installed for this Lua version, skipping"; exit 0; }
+# skipped where luv is missing; any other failure to run a script is a failure
+probe=$("$bin" --clean run "$(dirname "$0")/luv_probe.lua" 2>&1) || case $probe in
+  *"module 'luv' not found"*) echo "offline: the luv rock is not installed for this Lua version, skipping"; exit 0 ;;
+  *) echo "FAIL  offline: lulibre could not run a script: $probe"; exit 1 ;;
+esac
 ip link set lo up 2>/dev/null || { echo "offline: no loopback in the namespace, skipping"; exit 0; }
 
 t=$(mktemp -d)
@@ -101,6 +104,35 @@ expect   "the staged file is a book now"  "arrived" "$(lua 'print(lulibre.books(
 contains "remove, directly"               "1" "$(lua 'print((require("lulibre.edit").remove { 2 }))')"
 expect   "the book is gone"               gone "$(field 2 title)"
 
+# ---- changes that wait for the server to be stopped (lulibre.offline), and
+# the copies of calibre's database made before it starts (lulibre.backup)
+opts=
+lua 'require("lulibre.custom").declare("#volume", { type = "number" })
+     lulibre.apply { { id = 1, field = "#volume", value = "4" } }' >/dev/null
+expect   "a column for a custom field waits"   waiting "$(lua 'local c = require "lulibre.custom"
+  c.add_column("#volume", { heading = "Volume" }); print(c.state("#volume").state)')"
+contains "lulibre offline makes it"            "1 done" "$(run offline 2>&1)"
+contains "in calibre"                          "volume (" "$($cdb custom_columns 2>&1)"
+contains "after a copy of calibre's database"  "before the content server started" "$(lua '
+  for _, b in ipairs(require("lulibre.backup").list()) do print(b.reason) end')"
+expect   "the copy is whole"                   ok "$(sqlite3 "$(lua 'print(require("lulibre.backup").last().path)')/metadata.db" 'pragma integrity_check')"
+expect   "the books' opf files were written first" 0 "$(sqlite3 "$lib/metadata.db" 'select count(*) from metadata_dirtied d join books b on b.id = d.book')"
+expect   "its value is not calibre's yet"      1 "$(lua 'print(require("lulibre.custom").state("#volume").differ)')"
+contains "push copies it"                      "volume" "$(lua 'require("lulibre.custom").push("#volume")'; $cdb list -f '*volume' 2>&1)"
+expect   "so they agree"                       0 "$(lua 'print(require("lulibre.custom").state("#volume").differ)')"
+contains "an edit goes to calibre's column too" "7" "$(lua 'lulibre.apply { { id = 1, field = "#volume", value = "7" } }'; $cdb list -f '*volume' 2>&1)"
+opts="-o backup_restart=next"
+run offline >/dev/null 2>&1
+contains "next is spent after one copy"        "nothing was waiting" "$(run offline 2>&1)"
+opts="-o backup_keep=2"
+run offline >/dev/null 2>&1
+expect   "backup_keep copies are kept"         2 "$(lua 'print(#require("lulibre.backup").list())')"
+opts=
+lua 'print(require("lulibre.custom").remove_column("#volume"))' >/dev/null
+run offline >/dev/null 2>&1
+expect   "a column's removal waits, then is done" "" "$($cdb custom_columns 2>&1 | grep volume)"
+expect   "and lulibre keeps its values"        7 "$(lua 'print(require("lulibre.custom").get(1, "#volume"))')"
+
 # ---- a server that is running: direct access must be refused with a reason,
 # and auto must find the server
 opts=
@@ -123,6 +155,9 @@ if [ -z "${srv_failed:-}" ]; then
     print(r.failed[1] and r.failed[1].error)')"
   opts="-o server=http://127.0.0.1:18099 -o user=tester -o password_file=$t/pw"
   expect   "auto finds the running server" server "$(lua 'print(require("lulibre.edit").route())')"
+  contains "jobs that need it stopped wait while it runs" "content server is running" "$(lua '
+    require("lulibre.offline").queue({ "check_library" }, "a check")
+    print(select(2, pcall(require("lulibre.offline").run)))')"
   contains "and writes through it"        "changed 1 book" "$(lua "$(printf "$change" 'Knots, Online')")"
   expect   "through the server"           "Knots, Online" "$(field 1 title)"
   chmod 644 "$t/pw"

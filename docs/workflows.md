@@ -964,8 +964,9 @@ A field can be a calibre custom column as well, of the same name. lulibre
 keeps its values as before, and every change to the field is written to
 calibre's column too.
 
-    :custom calibre NAME [heading]   ask calibre for the column
-    :custom push NAME                copy lulibre's values into it, where calibre's differ
+    :custom column add NAME [heading]   ask calibre for the column
+    :custom column remove NAME         take a column out of calibre (any of calibre's); lulibre keeps its values
+    :custom push NAME                  copy lulibre's values into it, where calibre's differ
     :run columns                     the columns for #partof, #part, #parts (an example script)
 
 calibre makes a column only while the content server is stopped, so the
@@ -985,9 +986,14 @@ library folder, while nothing else has it open.
 | `add_custom_column` | adds a column to calibre's database |
 | `remove_custom_column` | removes one, and its values |
 | `restore_database` | rebuilds `metadata.db` from the `metadata.opf` kept in each book's folder |
-| `check_library` | reports what disagrees between the database and the folders |
-| `backup_metadata` | writes each book's `metadata.opf` again from the database |
+| `check_library` | vacuums the database, then reports what disagrees between it and the folders |
+| `backup_metadata` | writes the `metadata.opf` of each book changed since its last one |
 | `catalog` | writes a catalogue of the library (CSV, BibTeX, EPUB …) |
+
+A book's `metadata.opf` is written by calibre's own program only: a change
+made through calibredb or the content server just marks the book. Before a
+column is added or removed, lulibre writes them (`backup_metadata`, on), so
+that `restore_database` would have them right.
 
 lulibre queues them (in the history file beside the index) and does them
 the next time the server is stopped. They are done the same way whatever
@@ -1007,6 +1013,31 @@ stopped it:
       :offline restart         restart the server for them now
       :offline cancel ID
       lulibre offline [list | cancel ID]
+
+A job that fails is tried again the next time; `:offline cancel` drops it.
+
+### Copies of calibre's database: `:backup`
+
+Before the server starts (whichever of the three above starts it), lulibre
+copies `metadata.db` and calibre's preferences beside it to
+`~/.local/share/lulibre/backups/<the index's name>/`, one folder per copy,
+as `backup_restart` says:
+
+| `backup_restart` | |
+|---|---|
+| `always` | every start (the default) |
+| `next` | the next start only; then not again until it is set to `next` again |
+| `never` | only when asked |
+| a number | when the newest copy is that many days old |
+
+The newest `backup_keep` (5) are kept. The first change to the library in a
+session, with the newest copy older than `backup_max_age` days (7), offers
+one in a popup (`backup_too_old = false`: no popup).
+
+    :backup                    the copies, and when they are made
+    :backup now [why]          one now (the server may be running)
+    :backup next               or always, never, DAYS: set backup_restart (and in init.lua)
+    :backup prune [keep]
 
 ## What books cite: `:refs`
 

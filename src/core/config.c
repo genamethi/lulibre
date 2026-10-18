@@ -30,6 +30,20 @@ static const struct opt_def opts[] = {
       "shell command that starts the content server again (systemctl --user start calibre-server)",
       NULL),
 
+  OPT(backup_restart, OPT_STR, "always", NULL,
+      "copy calibre's database before the content server starts (lulibre.service, :offline restart): "
+      "always, next (once, then not until set to next again), never, or a number: when the last copy "
+      "is that many days old",
+      "Backups"),
+  OPT(backup_keep, OPT_INT, "5", NULL, "copies of calibre's database kept; older ones are removed", NULL),
+  OPT(backup_too_old, OPT_STR, "warn", "warn|false",
+      "warn, the first time the library is changed, when the last copy is older than backup_max_age", NULL),
+  OPT(backup_max_age, OPT_INT, "7", NULL, "days after which a copy is too old", NULL),
+  OPT(backup_metadata, OPT_STR, "on", "on|off",
+      "before a calibre column is added or removed, write every changed book's metadata.opf "
+      "(calibredb backup_metadata: only calibre's own program does it otherwise)",
+      NULL),
+
   OPT(pages, OPT_INT, "6", NULL, "first N pages of each file to index as text", "The index"),
   OPT(layout_pages, OPT_INT, "2", NULL, "of those, pages kept as lines tagged with font size", NULL),
   OPT(jobs, OPT_INT, "0", NULL, "worker threads (0 = one per core)", NULL),

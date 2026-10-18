@@ -28,6 +28,9 @@ void db_close(struct db *db);
 char *db_history_path(const char *index);
 /* Where the custom fields (#partof ...) of the index at `index` are kept. */
 char *db_custom_path(const char *index);
+/* A path as an SQLite URI with ?mode= (ro, rw, rwc), the characters a URI
+ * gives meaning to escaped. Free it. */
+char *db_uri(const char *path, const char *mode);
 /* Rebuild the rows that show staged files (the `staged` table) as books
  * with negative ids. In its own transaction unless in_txn. */
 int db_stage_refresh(struct db *db, int in_txn, char **err);
