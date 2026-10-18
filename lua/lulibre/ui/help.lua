@@ -72,6 +72,7 @@ local ABOUT = {
   ["orphans"] = "records with no file, files with no record, broken links", ["good"] = "confirm records as right; they are learned from",
   ["noncatalog"] = "works no catalogue has a record of: no DOI or ISBN is looked for",
   ["verify"] = "the library held against its files: titles, authors and identifiers the pages bear out",
+  ["backup"] = "copies of calibre's database: list them, make one now, say when they are made",
   ["offline"] = "what waits for the content server to be stopped (a new calibre column); restart it for them now",
   ["snapshot"] = "take a snapshot of the library, or plan, import, retire one",
   ["custom"] = "fields of your own beside calibre's (#partof ...): list, declare, set",

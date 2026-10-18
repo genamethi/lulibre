@@ -114,6 +114,16 @@ says what it would do.
 makes a snapshot from an older copy of calibre's
 .IR metadata.db .
 .TP
+.BR offline " [" list " | " cancel " \fIid\fR]"
+Do the changes calibre makes only while the content server is stopped
+(adding or removing a custom column), after a copy of calibre's database;
+.I lulibre.service
+runs it before each start of the server.
+.TP
+.BR columns " [" push " | " remove ]
+calibre columns for lulibre's own fields (#partof, #part, #parts): queued
+for the next time the server is stopped; an example of the offline API.
+.TP
 .BR refs " [" \-\-force "] [\fIfilter\fR | " all ]
 Read what the books cite, from the bibliography at the end of each file.
 .TP

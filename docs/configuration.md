@@ -23,12 +23,19 @@ o.library = "~/calibre-library"
 | `server` `user` `password_file` | | calibre content server, for changes |
 | `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
 | `server_stop` `server_start` | | shell commands that stop and start the content server, for the changes that wait for it to be stopped (`:offline`); empty: they wait for its next restart |
+| `backup_restart` | `always` | copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
+| `backup_keep` | `5` | copies kept |
+| `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session when the newest is older than that many days; `false`: do not |
+| `backup_metadata` | `on` | write each changed book's metadata.opf before a calibre column is added or removed |
 | `index` | | index database (default under `~/.local/share/lulibre/`) |
 | `pages` | `6` | first pages of each file indexed as text |
 | `layout_pages` | `2` | of those, pages kept as lines tagged with font size |
 | `jobs` | `0` | worker threads; 0 is one per core |
 | `ocr` | `never` | `never` · `auto` · `always` |
 | `ocr_pages` `ocr_lang` | `3` `eng` | pages per file the OCR pass reads; tesseract language |
+| `ocr_write` | `off` | `off` · `replace` · `keep`: OCR also writes the text it read into the PDF (ocrmypdf); `keep` keeps the original in `ocr_originals` |
+| `ocr_originals` | | where `ocr_write = keep` puts the originals, outside the library (default `ocr-originals/` under the data folder) |
+| `text_fallback` | `auto` | `off` · `auto`: garbled pages are read again with pdftotext, when it is installed (`:run reread`) |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
 | `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
@@ -51,9 +58,15 @@ o.library = "~/calibre-library"
 | `blitter` | `auto` | `auto` · `pixel` · `sextant` · `quadrant` · `half`: how page images are drawn |
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
+| `review_rows` | `field` | `field` · `all`: one row per field with the surest proposal, or one per proposal |
+| `review_context` | `1` | `1`: review shows what the proposal under the cursor rests on (`i` hides it) |
+| `review_reject` | `once` | `once` · `always`: whether a rejected value may be proposed again by a later run |
 | `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review (best borne out by their pages first, surest, most disputed, by id) |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
+| `pixi_deps` | `off` | `on`: programs features need (pdftotext, tesseract, ocrmypdf) may come from a pixi environment lulibre keeps, and it offers to add a missing one |
+| `rocks_tree` | | a luarocks tree whose modules scripts may require |
+| `rocks_install` | `off` | `on`: lulibre offers to install a rock a script needs into `rocks_tree` |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |
 
 From Lua the same options are `lulibre.settings.get(name)` and
@@ -178,6 +191,8 @@ See [the Lua API](api.md).
 |---|---|
 | `~/.config/lulibre/` | `init.lua`, `scripts/`, `lua/`. Another directory: `lulibre -C DIR`, `$LULIBRE_CONFIG_DIR`, or the option `config_dir` |
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. Derived from the library and rebuilt at will, except for what lulibre alone knows: the undo journal, proposals, staged files' metadata, saved capture rules, file hashes |
+| `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never dropped with it: the journal of changes, snapshots and the changes that wait for the server to be stopped; the custom fields |
+| `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured.

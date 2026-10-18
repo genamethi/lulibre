@@ -16,8 +16,11 @@ if [ -z "${LULIBRE_FORMS_NS:-}" ]; then
   unshare -rn true 2>/dev/null || { echo "forms: cannot create a network namespace, skipping"; exit 0; }
   exec unshare -rn env LULIBRE_FORMS_NS=1 sh "$0" "$bin"
 fi
-"$bin" --clean run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1 || {
-  echo "forms: the luv rock is not installed for this Lua version, skipping"; exit 0; }
+# skipped where luv is missing; any other failure to run a script is a failure
+probe=$("$bin" --clean run "$(dirname "$0")/luv_probe.lua" 2>&1) || case $probe in
+  *"module 'luv' not found"*) echo "forms: the luv rock is not installed for this Lua version, skipping"; exit 0 ;;
+  *) echo "FAIL  forms: lulibre could not run a script: $probe"; exit 1 ;;
+esac
 
 t=$(mktemp -d)
 T="tmux -L lulibre-forms-$$"
@@ -102,6 +105,10 @@ expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2
 k "&"; lit "is:capstitle"; k Enter
 wait_for "1 of 5"
 k g T
+# the first change of the session, with no copy of calibre's database yet
+shown "the first change offers a backup"      "no copy of calibre's database yet"
+k Enter
+shown "back up now makes one"                 "calibre's database copied to"
 shown "gT rewrites it"                        "changed 1 book"
 expect "in title case, minor words small"     "Knots, a Second Copy" "$(field 5 title)"
 k g T
@@ -285,7 +292,7 @@ if screen | grep -q "Author .*Title"; then
 else
   echo "ok    in the list's place"
 fi
-k j j j j j j j j Enter
+k j j j j j j j j j j j j j j Enter  # to pages: the options above it, and their headings
 wait_for "pages = "
 k C-u 9 Enter
 shown "a value changed there takes effect"   "pages = 9, and written to init.lua"

@@ -28,10 +28,12 @@ program as it stands is fine.
   branch work happens in the second checkout,
   `/media/servd/staging/lulibre-0.2.0` (`git worktree list`). Their tree
   changes only by `git merge --no-ff` into the branch it is on, followed by
-  `make` there, and only when they have said they are not running it or
-  have asked for the update. Before any merge:
-  `git -C /media/servd/staging/lulibre branch --show-current`, and
-  `pgrep -a lulibre`. They do switch that tree themselves.
+  `make` there, and only when they have asked for the feature or the
+  update. The merge is gated, not merely preceded by a look (see the last
+  note under Verifying):
+  `if pgrep -x lulibre >/dev/null; then ...; elif [ -n "$(git status --short)" ]; then ...; else git merge --no-ff ... && make; fi`.
+  They do switch that tree themselves:
+  `git -C /media/servd/staging/lulibre branch --show-current` first.
 
 - `v0.1.0` is the first release; the branch `0.1` is kept at it for patches.
 - `main` is the 0.2.0 line, what the user runs. `0.2.0-dev` is where it is
@@ -72,8 +74,12 @@ being finished). Then, on a branch in the second checkout:
 
 After 0.2.0 is released, 0.2.1 is the patch line the user has set aside for
 optimization, quality of life and bug fixes: features wait for 0.3.0.
-- Commit only when asked. A fix goes with a test that fails without it.
-- Record user-visible changes in `CHANGELOG.md`.
+- Work is committed on its feature branch as it is finished; what the user
+  decides is when their tree changes. A fix goes with a test that fails
+  without it.
+- Record user-visible changes in `CHANGELOG.md`, and bring the docs to the
+  change in the same branch, before it is merged: a feature is not done
+  while its docs describe the one before it.
 
 ## What counts as a bug
 
@@ -107,10 +113,18 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
 
 ## Code rules that are easy to break
 
-- Two threads when the interface is up. A `lulibre.x` that touches the
-  interface, the options or the command and key tables runs through
-  `ui_call` (`ON_UI` in `src/lua/l_ui.c`); interface code never touches the
-  Lua state, it sends a message with `bridge_lua`.
+- Two threads own state when the interface is up, the interface's and
+  Lua's. A `lulibre.x` that touches the interface, the options or the
+  command and key tables runs through `ui_call` (`ON_UI` in
+  `src/lua/l_ui.c`); interface code never touches the Lua state, it sends a
+  message with `bridge_lua`. Besides them, worker threads run
+  `uv_queue_work` jobs (indexing, hashing, extracting, copying a database):
+  a job touches only what it was handed and what it opens itself, and its
+  answer is delivered in the after-callback, on the loop that queued it.
+- Lua at the prelude's top level runs before `-L` and `init.lua` are
+  applied. Anything there that opens the index (`lulibre.store`, `sql`)
+  ends lulibre with "no library" in every run without one, the test
+  probes included: put it in a task (`lulibre.spawn`), and check there.
 - Lua tasks are preempted between any two operations. Shared counters lose
   counts; use `lulibre.each`, `table.insert`, `table.remove`.
 - luv belongs to the main Lua state. It is loaded once at startup; never
@@ -148,9 +162,8 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
 
 - Anything that writes lulibre's own tables in bulk (`:learn`, confirming
   records) is tried on a **copy** of the user's index, never the index
-  itself: `cp ~/.local/share/lulibre/NAME.db scratch.db` and run with
-  `-o index=scratch.db`. The library is still read, nothing of the user's
-  is written.
+  itself, taken as the next note says, and run with `-o index=scratch.db`.
+  The library is still read, nothing of the user's is written.
 - When the user may have lulibre open, a plain `cp` of the index can give
   "database disk image is malformed": take the copy with
   `sqlite3 'file:NAME.db?mode=ro' ".backup scratch.db"`, and remove any
@@ -230,9 +243,14 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   it is called done, and that answer (cut down) becomes the test. One
   request is enough; if the service refuses it, say so and stop.
 
-- `make check` always; `make e2e` before a merge that touches writing.
-  A change to a form (edit, review, duplicates, orphans) gets a keystroke
-  check in `test/forms.sh`.
+- `make check` and `make e2e` before every merge (above). Read the e2e log
+  for `skipping` as well as `FAIL`: offline, write and forms skip
+  themselves when their tools are missing, and a probe that took any
+  failure for "luv is not installed" let a broken build pass with three
+  suites unrun. A skip must be for its stated reason only.
+- A change to a form (edit, review, duplicates, orphans) gets a keystroke
+  check in `test/forms.sh`. The configuration window's check counts rows
+  down to `pages` (`k j j ...`): an option added above it moves it.
 - In a test, Escape is sent alone and given a moment (`send-keys Escape`,
   `sleep 0.2`): with a key right behind it the terminal reads Alt and that
   key, and the program never sees an Escape.
@@ -293,3 +311,72 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   not build/lulibre), but a check that only prints is no check. Gate on it:
   `! pgrep -x lulibre >/dev/null && test -z "$(git status --short)" && git
   merge ...`, and stop and say so when it fails.
+
+## calibre, as measured
+
+Facts found by testing, which the code relies on (calibre 9.15):
+
+- calibredb refuses the content server for catalog, add_custom_column,
+  remove_custom_column, restore_database, check_library and
+  backup_metadata (`no_remote`); direct access is refused while any
+  calibre program has the library open. `check_library` is not read-only:
+  it vacuums the database first, and it exits 0 whatever it finds.
+- A book's metadata.opf is written by calibre's own program only. A change
+  through calibredb or the content server marks the book in
+  `metadata_dirtied`; `backup_metadata` writes them. A removed book's mark
+  stays behind: count marks joined with `books`.
+- A content server without `--enable-auth` is read-only unless started
+  with `--enable-local-write`; a test against one that is not proves
+  nothing about writing.
+- A stopped server closes its port before it lets go of the library: wait
+  for calibredb to be let in, not for the port.
+- A date given to calibre without a time is read as local midnight;
+  lulibre writes custom dates at noon UTC so that the day is the same
+  everywhere.
+- `set_metadata --field '#col:'` cannot empty a number or date column;
+  `set_custom COL ID ''` can.
+
+## Reporting
+
+- Answer what was asked. Merge, build and branch status are the agent's
+  bookkeeping: mention them when the user asked for that change, or must
+  act on it.
+- Test a concern before raising it, and never put a basic requirement to
+  the user as a choice ("search must work over titles" was not a question).
+- Check a fact about another program before stating it (`check_library`
+  was first called read-only).
+
+## Questions every change is held against
+
+The user's standing review questions. Ask them of new code, and of old code
+a change touches:
+
+- Reentrancy, strictly: no hidden static state where a parameter would do;
+  what a worker thread, a task or a callback may touch (above).
+- Separation of concerns: does the code sit in the unit its job belongs
+  to (the Lua API in its own translation units, the interface apart from
+  the data)?
+- Do the docs describe the program as it now is? Are the tests documented
+  (what each suite covers, what it needs, why it may skip)?
+- Can it be unified with something that exists, or simplified? Is
+  anything left dead, or built but not exposed (no command, no key, no
+  API)? Is an interface missing where code reaches into another's data?
+- Every setup: no content server at all (writes straight to the folder);
+  the desktop program in use (its locks, its own opf writing); the web
+  interface only (the user's); and the combinations.
+- Memory: leaks and ownership, checked with the sanitizers, and the cost
+  profiled rather than guessed.
+- Configuration: a missing, malformed or old init.lua; options a script
+  declares, added or changed in an update, or missing their values.
+- Names: can a shipped script or module shadow, or be shadowed by, a
+  standard or user module (`math.lua` would have)?
+- The Lua API: gaps a script runs into; errors crossing between Lua and C
+  in both directions, raised and reported with their cause.
+- luv and libuv: handles closed before their memory goes, callbacks after
+  their task or state is gone, the loop left with nothing pending at exit.
+- Missing runtime dependencies: a feature names the programs it needs
+  (`lulibre.features`), says so when one is missing, and offers to
+  install it (pixi, a rock) when allowed, so nothing is required up front.
+  How friendly is setting lulibre up, from `./configure` to the first
+  library?
+

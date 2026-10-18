@@ -20,8 +20,9 @@
 -- only while the content server is stopped, so asking for one queues it
 -- (lulibre.offline); until it is there, and wherever calibre's values are
 -- not lulibre's, the preview says so.
---   custom.to_calibre("#partof", { heading = "Part of" })   -- queue the column
---   custom.state("#partof")      -- { state = "lulibre" | "waiting" | "calibre", differ = n }
+--   custom.add_column("#partof", { heading = "Part of" })   -- queue the column
+--   custom.remove_column("#partof")   -- queue its removal (lulibre's values stay)
+--   custom.state("#partof")      -- { state = "lulibre" | "waiting" | "calibre", differ = n, removing = id }
 --   custom.differing("#partof")  -- { {book=, lulibre=, calibre=}, ... }
 --   custom.push("#partof")       -- copy lulibre's values into calibre's column
 local M = {}
@@ -183,15 +184,24 @@ function M.differing(name)
      WHERE (l.v IS NOT NULL OR c.v IS NOT NULL) AND l.v IS NOT c.v ORDER BY b.id]], name, M.label(name))
 end
 
+-- the queued job (lulibre.offline) that would run `command` on a field's column
+local function queued(command, name)
+  for _, j in ipairs(require("lulibre.offline").jobs()) do
+    if j.argv[1] == command and j.argv[2] == M.label(name) then return j.id end
+  end
+end
+
 --- Where a field stands with calibre: { state = "lulibre" } (calibre has no
 -- column for it), { state = "waiting", job = id } (one is queued), or
--- { state = "calibre", differ = n } (n books' values are not calibre's).
+-- { state = "calibre", differ = n } (n books' values are not calibre's;
+-- removing = id when the column's removal is queued).
 function M.state(name)
   name = norm(name)
-  if M.column(name) then return { state = "calibre", differ = #M.differing(name) } end
-  for _, j in ipairs(require("lulibre.offline").jobs()) do
-    if j.argv[1] == "add_custom_column" and j.argv[2] == M.label(name) then return { state = "waiting", job = j.id } end
+  if M.column(name) then
+    return { state = "calibre", differ = #M.differing(name), removing = queued("remove_custom_column", name) }
   end
+  local job = queued("add_custom_column", name)
+  if job then return { state = "waiting", job = job } end
   return { state = "lulibre" }
 end
 
@@ -200,7 +210,7 @@ end
 -- column's heading in calibre (default: the name); opts.datatype: calibre's
 -- type when the field's own will not do (int for a chapter's number).
 -- Returns the job's id, or nil and why not.
-function M.to_calibre(name, opts)
+function M.add_column(name, opts)
   opts = opts or {}
   name = norm(name)
   local label = M.label(name)
@@ -218,6 +228,30 @@ function M.to_calibre(name, opts)
     for _, a in ipairs(M.DATATYPES[spec.type]) do argv[#argv + 1] = a end
   end
   return require("lulibre.offline").queue(argv, ("the calibre column %s"):format(name))
+end
+
+--- Ask calibre to remove a column: any of calibre's, lulibre's field or
+-- not. calibre's values in it go with it; lulibre's own values of a field
+-- stay. Queued like adding one. Returns the job's id, or nil and why not.
+-- A column whose adding is still queued is not added instead: the id of
+-- that job, and "cancelled".
+function M.remove_column(name)
+  name = norm(name)
+  local offline = require "lulibre.offline"
+  local adding = queued("add_custom_column", name)
+  if adding then
+    offline.cancel(adding)
+    return adding, "cancelled"
+  end
+  if not M.column(name) then return nil, ("calibre has no column %s"):format(name) end
+  local job = queued("remove_custom_column", name)
+  if job then return job end
+  return offline.queue({ "remove_custom_column", M.label(name), "--force" }, ("removing the calibre column %s"):format(name))
+end
+
+--- How many books have a value in calibre's column for a field.
+function M.calibre_books(name)
+  return lulibre.sql("SELECT count(DISTINCT book) AS n FROM cal_values WHERE label = ?", M.label(name))[1].n
 end
 
 --- calibredb's spelling of a field's value.

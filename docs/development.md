@@ -78,7 +78,9 @@ committed. From Lua the number and commit are `lulibre.build.number` and
 The last three need calibre and `unshare`: they run inside a private network
 namespace against throwaway libraries, because calibre refuses direct access
 to any library while one of its servers runs on the machine. They skip where
-that is not possible. Nothing touches a real library.
+that is not possible, saying `skipping` and why: a missing tool, no
+namespace, no luv. Any other failure to start is a failure, not a skip, so
+read `make e2e`'s output for both. Nothing touches a real library.
 
 A sanitizer build should stay clean on all of them:
 
@@ -119,8 +121,10 @@ core is dumped. Frames read `lulibre(+0xOFFSET)`;
   touches the Lua state.
 - **The Lua thread** (when the interface is up) owns the Lua state, the task
   scheduler, a second loop and its own database connection.
-- **The libuv pool** does extraction, rendering, hashing and the list's
-  queries.
+- **The libuv pool** does extraction, rendering, hashing, copies of
+  databases (`lulibre.copy_db`) and the list's queries. A job touches only
+  what it was handed and what it opens itself; its answer arrives on the
+  loop that queued it.
 
 `src/lua/bridge.c` connects the first two. Lua calls into the interface with
 `ui_call`, which runs a C function on the interface thread while the Lua

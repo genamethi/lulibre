@@ -212,6 +212,31 @@ end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
 lulibre.command("verify", script("verify"),
   "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
+lulibre.command("backup", function(args)
+  local backup = require "lulibre.backup"
+  local verb, rest = (args or ""):match("^%s*(%S*)%s*(.-)%s*$")
+  if verb == "now" then
+    local ok, b = pcall(backup.take, rest ~= "" and rest or "asked for")
+    lulibre.notify(ok and ("calibre's database copied to %s"):format(b.path) or tostring(b), not ok and "error" or nil)
+  elseif verb == "prune" then
+    lulibre.notify(("%d copies removed"):format(backup.prune(tonumber(rest))))
+  elseif verb ~= "" then
+    local ok, err = pcall(backup.set, tonumber(verb) or verb)
+    lulibre.notify(ok and ("backup_restart = %s"):format(verb) or tostring(err), not ok and "error" or nil)
+  else
+    local out = {}
+    for _, b in ipairs(backup.list()) do
+      out[#out + 1] = ("%s  %5s books  %s"):format(os.date("%Y-%m-%d %H:%M", b.ts), tostring(b.books or "?"), b.reason or "")
+    end
+    if #out == 0 then out[1] = "no copies of calibre's database yet (:backup now makes one)" end
+    out[#out + 1] = ""
+    out[#out + 1] = ("before the server starts: %s%s;  kept: %d;  too old after %d days (%s)"):format(
+      tostring(lulibre.o.backup_restart), backup.policy() == "next" and (backup.due() and ", not yet spent" or ", spent") or "",
+      lulibre.o.backup_keep, lulibre.o.backup_max_age, tostring(lulibre.o.backup_too_old))
+    out[#out + 1] = ("in %s"):format(backup.dir())
+    lulibre.show(out, "copies of calibre's database")
+  end
+end, "[now [why] | always | next | never | DAYS | prune [keep]]  copies of calibre's database: list, make one, when to make them")
 lulibre.command("offline", script("offline"),
   "[restart | cancel ID]  the changes calibre makes only while the content server is stopped: what waits; restart the server for them now")
 lulibre.command("snapshot", script("snapshot"),
@@ -624,10 +649,24 @@ lulibre.command("custom", function(args)
     for _, id in ipairs(lulibre.selection()) do changes[#changes + 1] = { id = id, field = custom.norm(name), value = value } end
     local r = require("lulibre.edit").apply(changes, { label = "custom" })
     lulibre.notify(require("lulibre.edit").summary(r), #r.failed > 0 and "error" or nil)
-  elseif verb == "calibre" then
-    local name, heading = rest:match("^(%S+)%s*(.-)$")
-    if not name then return lulibre.notify(":custom calibre NAME [heading]  (a calibre column for the field)", "error") end
-    local id, err = custom.to_calibre(name, { heading = heading ~= "" and heading or nil })
+  elseif verb == "column" then
+    local how, name, heading = rest:match("^(%S*)%s*(%S*)%s*(.-)$")
+    if (how ~= "add" and how ~= "remove") or name == "" then
+      return lulibre.notify(":custom column add NAME [heading]  |  :custom column remove NAME", "error")
+    end
+    local id, err
+    if how == "add" then
+      id, err = custom.add_column(name, { heading = heading ~= "" and heading or nil })
+    else
+      local n = custom.column(name) and custom.calibre_books(name) or 0
+      local mine = custom.field(name) and "lulibre keeps its own values" or "they are calibre's only"
+      if n > 0 and not lulibre.confirm(("remove calibre's column %s? %d book%s lose their value in calibre (%s)"):format(
+          custom.norm(name), n, n == 1 and "" or "s", mine)) then
+        return
+      end
+      id, err = custom.remove_column(name)
+      if err == "cancelled" then return lulibre.notify(("the column %s will not be added after all"):format(custom.norm(name))) end
+    end
     if not id then return lulibre.notify(err, "error") end
     require("lulibre.offline").ask()
   elseif verb == "push" then
@@ -641,13 +680,23 @@ lulibre.command("custom", function(args)
     for _, f in ipairs(custom.fields()) do
       local st = custom.state(f.name)
       local where = st.state == "lulibre" and "lulibre only" or st.state == "waiting" and "waits for a restart"
-        or st.differ > 0 and ("calibre: %d differ"):format(st.differ) or "calibre too"
+        or st.removing and "removal waits" or st.differ > 0 and ("calibre: %d differ"):format(st.differ) or "calibre too"
       out[#out + 1] = ("%-14s %-7s %5d book%s  %-19s %s%s"):format(f.name, f.type, f.books, f.books == 1 and " " or "s", where,
         f.help or "", f.undeclared and "(not declared)" or "")
     end
     out[#out + 1] = ""
     out[#out + 1] = "filter by them: #partof:handbook  #part:none  has:#partof; :custom add NAME TYPE HELP; :custom set NAME VALUE"
-    out[#out + 1] = "in calibre too: :custom calibre NAME [heading] (a column; made while the server is stopped); :custom push NAME"
+    out[#out + 1] = "in calibre too: :custom column add NAME [heading]; :custom column remove NAME (made while the server is stopped); :custom push NAME"
     lulibre.show(out, "custom fields (kept beside calibre's, in lulibre's own database)")
   end
-end, "[add NAME [type] [help] | set NAME VALUE | calibre NAME [heading] | push NAME]  fields of your own beside calibre's (#partof ...): list, declare, set for the selection, put in calibre")
+end, "[add NAME [type] [help] | set NAME VALUE | column add|remove NAME [heading] | push NAME]  fields of your own beside calibre's (#partof ...): list, declare, set for the selection, put in calibre")
+
+-- backup_restart's "next" is spent until it is set to next again: note the
+-- value lulibre starts with (lulibre.backup), once the library is open
+-- (only with a library to open: looking would otherwise end lulibre. Asked
+-- in the task, once -L and init.lua have had their say)
+lulibre.spawn(function()
+  local here = io.open("metadata.db")
+  if here then here:close() end
+  if lulibre.o.library ~= "" or os.getenv("LULIBRE_LIBRARY") or here then pcall(require("lulibre.backup").observe) end
+end)
