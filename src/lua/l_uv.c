@@ -19,6 +19,7 @@
 #include "app.h"
 #include "core/util.h"
 #include "lua/lapi.h"
+#include "lua/sched.h"
 
 typedef int (*luv_pcall_fn)(lua_State *L, int nargs, int nresults, int flags);
 
@@ -39,6 +40,7 @@ static int callback_pcall(lua_State *L, int nargs, int nresults, int flags) {
   int ret = lua_pcall(L, nargs, nresults, errfunc);
   if (ret != LUA_OK) {
     lapi_report(lapi_app(L), 1, lua_tostring(L, -1));
+    sched_note_failure(lapi_app(L));
     lua_pop(L, 1);
     lua_remove(L, errfunc);
     return -ret;

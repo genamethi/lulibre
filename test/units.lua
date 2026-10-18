@@ -287,6 +287,33 @@ do
   eq("claimed by one task at a time, however they interleave", most, 1)
 end
 
+-- lulibre.calibre: calibre's programs told from /proc/net/unix
+do
+  local calibre = require "lulibre.calibre"
+  local ok, uv = pcall(require, "luv")
+  local id = ok and uv.os_get_passwd().uid
+  if id then
+    local path, real = os.tmpname(), calibre.SOCKETS
+    local function with(lines)
+      local f = assert(io.open(path, "w"))
+      f:write("Num       RefCount Protocol Flags    Type St Inode Path\n", lines)
+      f:close()
+      calibre.SOCKETS = path
+      local r = calibre.running()
+      calibre.SOCKETS = real
+      return r
+    end
+    eq("nothing of calibre's", with("0000: 00000002 00000000 00010000 0001 01 1 @/tmp/.X11-unix/X0\n"), { db = false, gui = false })
+    eq("the server", with(("0000: 00000002 00000000 00000000 0001 01 2 @calibre-singleinstance-%d-db\n"):format(id)),
+      { db = true, gui = false })
+    eq("the program", with(("0000: 00000002 00000000 00000000 0001 01 3 @calibre-singleinstance-%d-db\n"
+      .. "0000: 00000002 00000000 00000000 0001 01 4 @calibre-singleinstance-%d-GUI\n"):format(id, id)), { db = true, gui = true })
+    eq("another user's is not ours", with(("0000: 00000002 00000000 00000000 0001 01 5 @calibre-singleinstance-%d-db\n"):format(id + 1)),
+      { db = false, gui = false })
+    os.remove(path)
+  end
+end
+
 -- editing: typed values, series index
 do
   local edit = require "lulibre.edit"
