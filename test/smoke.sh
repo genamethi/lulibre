@@ -172,7 +172,7 @@ if command -v tmux >/dev/null; then
   }
   shown() { wait_for "$2" && echo "ok    $1" || { echo "FAIL  $1"; fails=$((fails + 1)); }; }
   $T new-session -d -s t -x 120 -y 30 \
-    "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib'; echo \$? > '$t/rc'"
+    "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' 2>'$t/err'; echo \$? > '$t/rc'"
   shown "tui starts"                 "NORMAL"
   shown "tui lists both books"       "1/2"
   shown "tui previews indexed text"  "A Note on Sieve Methods"
@@ -440,6 +440,8 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t q
   i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
+  # (where a sanitizer build reports, too: an error or a leak at exit)
+  expect "and writes nothing to stderr" "" "$(cat "$t/err" 2>/dev/null)"
 
   # keys from init.lua: a leader, a screen's own keys, and reading the file again
   mkdir -p "$t/conf3"
@@ -453,7 +455,7 @@ lulibre.map("line", "<C-g>", "cancel")
 lulibre.map("panel", "<C-x>", "close")
 LUA
   $T new-session -d -s t -x 120 -y 30 \
-    "XDG_DATA_HOME='$t/data' '$bin' -C '$t/conf3' -L '$lib'; echo \$? > '$t/rc3'"
+    "XDG_DATA_HOME='$t/data' '$bin' -C '$t/conf3' -L '$lib' 2>'$t/err3'; echo \$? > '$t/rc3'"
   shown "tui starts with a configuration"  "NORMAL"
   $T send-keys -t t , e
   shown "a <Leader> binding runs"          "^the leader works *$"
@@ -508,13 +510,14 @@ LUA
   $T send-keys -t t q
   i=0; while [ ! -s "$t/rc3" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   expect "and exits cleanly" 0 "$(cat "$t/rc3" 2>/dev/null)"
+  expect "writing nothing to stderr" "" "$(cat "$t/err3" 2>/dev/null)"
 
   # with a sync folder set, a tab line says which of the two the list shows
   if "$bin" --clean -L "$lib" run "$(dirname "$0")/luv_probe.lua" >/dev/null 2>&1; then
     mkdir -p "$t/incoming"
     printf 'A text file waiting to be added\n' > "$t/incoming/note.txt"
     $T new-session -d -s t -x 120 -y 30 \
-      "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never; echo \$? > '$t/rc2'"
+      "XDG_DATA_HOME='$t/data' '$bin' --clean -L '$lib' -o sync_dir='$t/incoming' -o sync_propose=never 2>'$t/err2'; echo \$? > '$t/rc2'"
     shown "source tabs appear"           " 1  Library  2 "
     $T send-keys -t t : ; $T send-keys -t t Up
     shown "history is kept between sessions" "^:echo but this"
@@ -560,6 +563,7 @@ LUA
     $T send-keys -t t q
     i=0; while [ ! -s "$t/rc2" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
     expect "and exits cleanly" 0 "$(cat "$t/rc2" 2>/dev/null)"
+    expect "writing nothing to stderr" "" "$(cat "$t/err2" 2>/dev/null)"
   else
     echo "skip  sync folder tabs (luv is not installed for this Lua version)"
   fi

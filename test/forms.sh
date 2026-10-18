@@ -292,7 +292,19 @@ if screen | grep -q "Author .*Title"; then
 else
   echo "ok    in the list's place"
 fi
-k j j j j j j j j j j j j j j Enter  # to pages: the options above it, and their headings
+# down to `pages`: as many rows as the options above it and their headings
+# (the window shows lulibre's options in order, a heading where a group
+# begins, the cursor on the first option), counted from lulibre itself
+steps=$(lua 'local n, group, row = 0, nil, 0
+  for _, name in ipairs(lulibre.settings.names()) do
+    local g = lulibre.settings.info(name).group or "lulibre"
+    if g ~= group then group, row = g, row + 1 end
+    row = row + 1
+    if name == "pages" then n = row - 2 break end
+  end
+  print(n)')
+for _ in $(seq "$steps"); do k j; done
+k Enter
 wait_for "pages = "
 k C-u 9 Enter
 shown "a value changed there takes effect"   "pages = 9, and written to init.lua"
