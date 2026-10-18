@@ -31,8 +31,9 @@ local catch_text, catch_extra
 function M.catchall(subject)
   local text = lulibre.o.subject_catchall or ""
   if text ~= catch_text then
-    catch_text, catch_extra = text, {}
-    for item in text:gmatch("[^,%s]+") do catch_extra[item:lower()] = true end
+    local set = {} -- built whole, then put in place (a task may be interrupted)
+    for item in text:gmatch("[^,%s]+") do set[item:lower()] = true end
+    catch_extra, catch_text = set, text
   end
   local last = (subject or ""):match("([^/]+)$") or ""
   return CATCHALL[last:lower()] or catch_extra[last:lower()] or catch_extra[(subject or ""):lower()] or false

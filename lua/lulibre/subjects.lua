@@ -74,13 +74,14 @@ M.lexicon = {
 -- term -> list of subjects it speaks for; built once
 local index
 local function build()
-  index = {}
+  local ix = {} -- built whole, then put in place (a task may be interrupted)
   for subject, terms in pairs(M.lexicon) do
     for _, term in ipairs(terms) do
-      index[term] = index[term] or {}
-      table.insert(index[term], subject)
+      ix[term] = ix[term] or {}
+      table.insert(ix[term], subject)
     end
   end
+  index = ix
 end
 
 --- Ranked { {subject=, score=}, ... } for a piece of text; best first.

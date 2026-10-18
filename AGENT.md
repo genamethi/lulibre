@@ -138,8 +138,14 @@ optimization, quality of life and bug fixes: features wait for 0.3.0.
   applied. Anything there that opens the index (`lulibre.store`, `sql`)
   ends lulibre with "no library" in every run without one, the test
   probes included: put it in a task (`lulibre.spawn`), and check there.
-- Lua tasks are preempted between any two operations. Shared counters lose
-  counts; use `lulibre.each`, `table.insert`, `table.remove`.
+- Lua tasks are preempted between any two operations (a count hook, once a
+  4 ms slice is spent). Shared counters lose counts; use `lulibre.each`,
+  `table.insert`, `table.remove`. A test followed by a set is two steps:
+  `while busy[s] do sleep end busy[s] = true` let all 8 tasks of a test in
+  at once; take it with `lulibre.claim(t, key)`, one C call. Build a table
+  that tasks share in a local and put it in place with one assignment, never
+  fill it where they can see it. A test of any of this holds what it tests
+  for longer than a slice, or it passes without the fix.
 - luv belongs to the main Lua state. It is loaded once at startup; never
   arrange for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.

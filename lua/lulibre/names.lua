@@ -69,11 +69,12 @@ local never_text, never_list
 local function never()
   local text = lulibre.o.never_authors or ""
   if text ~= never_text then
-    never_text, never_list = text, {}
+    local list = {} -- built whole, then put in place (a task may be interrupted)
     for item in text:gmatch("[^,]+") do
       local phrase = lulibre.fold(trim(item)):gsub("%s+", " ")
-      if phrase ~= "" then never_list[#never_list + 1] = " " .. phrase .. " " end
+      if phrase ~= "" then list[#list + 1] = " " .. phrase .. " " end
     end
+    never_list, never_text = list, text
   end
   return never_list
 end
