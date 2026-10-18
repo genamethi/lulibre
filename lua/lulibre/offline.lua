@@ -1,0 +1,199 @@
+-- Changes calibre makes only while no calibre program has the library open.
+-- calibredb refuses the content server for catalog, add_custom_column,
+-- remove_custom_column, restore_database, check_library and backup_metadata;
+-- queued here (in the history file beside the index), they wait until the
+-- server is stopped, and M.run does them straight to the library folder.
+-- Whatever stops the server, it is M.run that does them: lulibre.service
+-- before each start of the server (`lulibre run offline`), M.restart when
+-- you say "restart now", or `lulibre run offline` by hand while it is down.
+--
+--   local offline = require "lulibre.offline"
+--   offline.queue({ "add_custom_column", "partof", "Part of", "text" }, "the column #partof")
+--   offline.jobs()        -- the waiting ones: { {id=, argv=, label=, ts=}, ... }
+--   offline.cancel(id)
+--   offline.run()         -- do them; the server must be stopped: { done=, failed={ {id=, error=}, ... } }
+--   offline.restart()     -- stop the server (lulibre.o.server_stop), run them, start it (server_start)
+--   offline.ask()         -- "restart now" or "not now", in the interface
+local M = {}
+
+local json = require "lulibre.json"
+
+--- Queue a calibredb command: its arguments after --with-library. Returns the job's id.
+function M.queue(argv, label)
+  assert(type(argv) == "table" and type(argv[1]) == "string", "offline.queue takes calibredb's arguments: { command, ... }")
+  for _, a in ipairs(argv) do assert(type(a) == "string", "calibredb's arguments are strings") end
+  local _, _, id = lulibre.store("INSERT INTO offline(argv, label, ts) VALUES(?, ?, ?)", json.encode(argv), label,
+    os.time())
+  return id
+end
+
+local function rows(sql, ...)
+  local out = {}
+  for _, r in ipairs(lulibre.store(sql, ...)) do
+    r.argv = json.decode(r.argv)
+    out[#out + 1] = r
+  end
+  return out
+end
+
+--- The jobs waiting, oldest first. status: "waiting" (the default), "failed", "done" or "all".
+function M.jobs(status)
+  status = status or "waiting"
+  if status == "all" then return rows("SELECT * FROM offline ORDER BY id") end
+  return rows("SELECT * FROM offline WHERE status = ? ORDER BY id", status)
+end
+
+function M.cancel(id)
+  local _, n = lulibre.store("UPDATE offline SET status = 'cancelled', done = ? WHERE id = ? AND status IN ('waiting', 'failed')",
+    os.time(), id)
+  return n > 0
+end
+
+--- Is the content server answering? (nil when lulibre.o.server is not set)
+function M.server_up()
+  if lulibre.o.server == "" then return nil end
+  return require("lulibre.edit").server_up(lulibre.o.server)
+end
+
+-- Jobs that have nothing left to do, given calibre's columns as they are
+-- now ({ label = true }): asked before a job runs, so that one done
+-- already (by hand, or by a run that stopped half way) is not tried again.
+-- Replace or add to these as you like.
+M.already = {
+  add_custom_column = function(argv, columns) return columns[argv[2]] and "calibre has that column already" end,
+  remove_custom_column = function(argv, columns) return not columns[argv[2]] and "calibre has no such column" end,
+}
+
+local function direct(argv)
+  local a = { "calibredb", "--with-library", lulibre.o.library }
+  for _, x in ipairs(argv) do a[#a + 1] = x end
+  return a
+end
+
+--- What went wrong with a calibredb run, in a line.
+function M.why(r, err)
+  if not r then return err or "could not run calibredb" end
+  if r.timed_out then return "calibredb timed out" end
+  local msg = (r.stderr ~= "" and r.stderr or r.stdout):gsub("%s+$", "")
+  if msg:find("Another calibre program") then return "a calibre program has the library open" end
+  return msg:match("[^\n]*$") or ("calibredb exited with status " .. r.code)
+end
+
+-- calibre's columns as they are now ({ label = true }). Waits while another
+-- calibre program has the library: a server that has stopped answering
+-- can take a moment longer to let go of it.
+local function columns()
+  for _ = 1, 60 do -- 30 s
+    local r, err = lulibre.system(direct { "custom_columns" }, { timeout = 60000 })
+    if r and r.code == 0 then
+      local out = {}
+      for label in r.stdout:gmatch("([%w_]+) %(%d+%)") do out[label] = true end
+      return out
+    end
+    local msg = r and (r.stderr .. r.stdout) or ""
+    if not msg:find("Another calibre program") then error("calibredb custom_columns: " .. M.why(r, err), 0) end
+    lulibre.sleep(500)
+  end
+  error("a calibre program has the library open (the content server, or calibre itself)", 0)
+end
+
+--- Do the waiting jobs, in the order they were queued, straight to the
+-- library folder. The content server must be stopped (calibre refuses
+-- otherwise). Returns { done=, skipped=, failed={ {id=, error=}, ... } }.
+function M.run()
+  local out = { done = 0, skipped = 0, failed = {} }
+  local jobs = M.jobs()
+  if #jobs == 0 then return out end
+  if M.server_up() then error("the content server is running: these wait until it is stopped", 0) end
+  local cols = columns()
+  for _, job in ipairs(jobs) do
+    local check = M.already[job.argv[1]]
+    local done = check and check(job.argv, cols)
+    local r, err
+    if not done then
+      r, err = lulibre.system(direct(job.argv), { timeout = 600000 })
+    end
+    local ok = done or (r and r.code == 0)
+    lulibre.store("UPDATE offline SET status = ?, error = ?, done = ? WHERE id = ?", ok and "done" or "failed",
+      not ok and M.why(r, err) or (done or nil), os.time(), job.id)
+    if not ok then
+      out.failed[#out.failed + 1] = { id = job.id, label = job.label, error = M.why(r, err) }
+    elseif done then
+      out.skipped = out.skipped + 1
+    else
+      out.done = out.done + 1
+      if job.argv[1] == "add_custom_column" then cols[job.argv[2]] = true end
+      if job.argv[1] == "remove_custom_column" then cols[job.argv[2]] = nil end
+    end
+  end
+  return out
+end
+
+function M.summary(r)
+  local parts = {}
+  if r.done > 0 then parts[#parts + 1] = ("%d done"):format(r.done) end
+  if r.skipped > 0 then parts[#parts + 1] = ("%d done already"):format(r.skipped) end
+  if #r.failed > 0 then
+    parts[#parts + 1] = ("%d failed: %s"):format(#r.failed, r.failed[1].error)
+  end
+  return #parts > 0 and table.concat(parts, ", ") or "nothing was waiting"
+end
+
+local function sh(cmd)
+  local r, err = lulibre.system({ "sh", "-c", cmd }, { timeout = 120000 })
+  if not r or r.code ~= 0 then error(("%s: %s"):format(cmd, M.why(r, err)), 0) end
+end
+
+local function until_up(want)
+  for _ = 1, 300 do -- 30 s
+    if M.server_up() == want then return true end
+    lulibre.sleep(100)
+  end
+  return false
+end
+
+--- Can lulibre stop and start the content server itself?
+function M.can_restart()
+  return lulibre.o.server_stop ~= "" and lulibre.o.server_start ~= ""
+end
+
+--- Stop the content server, do the waiting jobs, start it again. The
+-- server is started again whatever happened to the jobs.
+function M.restart()
+  if not M.can_restart() then
+    error("lulibre cannot stop the content server: set lulibre.o.server_stop and server_start", 0)
+  end
+  sh(lulibre.o.server_stop)
+  if lulibre.o.server ~= "" and not until_up(false) then
+    sh(lulibre.o.server_start)
+    error("the content server was still answering after server_stop", 0)
+  end
+  local ok, r = pcall(M.run)
+  sh(lulibre.o.server_start)
+  local back = lulibre.o.server == "" or until_up(true)
+  lulibre.reload()
+  if not ok then error(r, 0) end
+  if not back then error(M.summary(r) .. "; but the content server does not answer since server_start", 0) end
+  return r
+end
+
+--- Say what waits, and ask whether to restart the server for it now. A
+-- replaceable function: the interface calls it after a job is queued.
+function M.ask()
+  local jobs = M.jobs()
+  if #jobs == 0 then return end
+  local what = #jobs == 1 and (jobs[1].label or jobs[1].argv[1]) or ("%d changes"):format(#jobs)
+  local later = ("%s waits for the content server's next restart (:offline restart does it now)"):format(what)
+  if lulibre.headless or not lulibre.task_id() then return print(later) end
+  if not M.can_restart() then
+    return lulibre.notify(("%s waits for the content server to be stopped (set server_stop and server_start to let lulibre restart it)")
+      :format(what))
+  end
+  local pick = lulibre.pick({ "restart now", "not now" },
+    { title = ("calibre makes %s only while the content server is stopped"):format(what) })
+  if pick ~= "restart now" then return lulibre.notify(later) end
+  local ok, r = pcall(M.restart)
+  lulibre.notify(ok and M.summary(r) or tostring(r), (not ok or #r.failed > 0) and "error" or nil)
+end
+
+return M

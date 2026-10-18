@@ -53,6 +53,8 @@ struct config {
   char *sync_dir;       /* a folder of files waiting to be added to the library */
   char *orphans_dir;    /* where stray files are set aside; empty = XDG data dir */
   char *write_via;      /* auto | server | direct: how changes reach calibre */
+  char *server_stop;    /* shell command that stops the content server; empty = lulibre cannot */
+  char *server_start;   /* and the one that starts it again */
   char *log_file;       /* every log entry is also appended here; empty = no file */
   char *pixi_deps;      /* off | on: programs features need may come from lulibre's own pixi environment */
   char *rocks_tree;     /* a luarocks tree whose modules scripts may require */

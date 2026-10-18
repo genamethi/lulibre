@@ -235,7 +235,7 @@ static int store_authorizer(void *ud, int action, const char *a, const char *b, 
                    !strcmp(a, "lookups") || !strcmp(a, "noncatalog") ||
                    /* (the custom fields' tables, in their own database only) */
                    ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")) || !strcmp(a, "snapshots") ||
-                   !strcmp(a, "snapshot_values") ||
+                   !strcmp(a, "snapshot_values") || !strcmp(a, "offline") ||
                    !strcmp(a, "mirror_prev"))
                ? SQLITE_OK : SQLITE_DENY;
     case SQLITE_SELECT:
@@ -258,7 +258,7 @@ static int run_sql(lua_State *L, int writable) {
   if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
   if (prc) {
     lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, snapshots, snapshot_values, kv, staged, good, terms, refs, lookups, noncatalog, mirror_prev, custom.fields, custom.data"
+                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, snapshots, snapshot_values, offline, kv, staged, good, terms, refs, lookups, noncatalog, mirror_prev, custom.fields, custom.data"
                         : err);
     free(err);
     return lua_error(L);

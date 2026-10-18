@@ -124,6 +124,9 @@ install: $(BIN)
 	  install -D -m 644 $$f $(DESTDIR)$(DATADIR)/lulibre/$$f || exit 1; \
 	done
 	install -D -m 644 man/lulibre.1 $(DESTDIR)$(DATADIR)/man/man1/lulibre.1
+	install -d $(DESTDIR)$(DATADIR)/lulibre/systemd
+	sed -e 's|@BINDIR@|$(BINDIR)|g' -e 's|@DATADIR@|$(DATADIR)|g' contrib/lulibre.service.in \
+	  > $(DESTDIR)$(DATADIR)/lulibre/systemd/lulibre.service
 	@echo "installed lulibre $(VERSION) ($(BUILD)) in $(DESTDIR)$(BINDIR)"
 	@echo "optional: 'lulibre datasets' (or 'make datasets') fetches databases for looking books up offline; it can be run again whenever"
 

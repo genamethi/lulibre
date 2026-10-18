@@ -5,6 +5,22 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.1)
 
+- Added: custom fields can be calibre columns too. `:custom calibre NAME`
+  asks calibre for the column; from then on every change to the field is
+  written to calibre as well, and `:custom push NAME` copies the values it
+  had. The preview says which of a book's custom fields calibre lacks or
+  holds otherwise, and `:custom` says it of each field. `:run columns` does
+  it for #partof, #part and #parts.
+
+- Added: changes calibre makes only while the content server is stopped
+  (a new column; calibredb's add_custom_column, remove_custom_column,
+  restore_database, check_library, backup_metadata, catalog) wait in a
+  queue, and lulibre asks: restart now, or not now. They are done before
+  the server's next start by `lulibre.service`, a systemd user unit
+  (installed under `share/lulibre/systemd/`), or now with the options
+  `server_stop` and `server_start`, or by hand with `lulibre offline`.
+  `:offline` shows what waits.
+
 - Changed: panels and windows are reached by different keys. `Tab` goes to
   the panels (review, the edit form, the browse column ...): from the list
   or a preview, to the one last in, and in a panel to the next; `<S-Tab>`

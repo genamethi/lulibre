@@ -22,6 +22,7 @@ o.library = "~/calibre-library"
 | `library` | | calibre library directory (else `$LULIBRE_LIBRARY`, else the current directory) |
 | `server` `user` `password_file` | | calibre content server, for changes |
 | `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
+| `server_stop` `server_start` | | shell commands that stop and start the content server, for the changes that wait for it to be stopped (`:offline`); empty: they wait for its next restart |
 | `index` | | index database (default under `~/.local/share/lulibre/`) |
 | `pages` | `6` | first pages of each file indexed as text |
 | `layout_pages` | `2` | of those, pages kept as lines tagged with font size |

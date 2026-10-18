@@ -22,6 +22,13 @@ static const struct opt_def opts[] = {
       "(calibre allows that only while no calibre program has the library open), or auto: the "
       "server when it answers, else directly",
       NULL),
+  OPT(server_stop, OPT_STR, "", NULL,
+      "shell command that stops the content server, for the changes calibre makes only while it "
+      "is stopped (systemctl --user stop calibre-server); empty: they wait for its next restart",
+      NULL),
+  OPT(server_start, OPT_STR, "", NULL,
+      "shell command that starts the content server again (systemctl --user start calibre-server)",
+      NULL),
 
   OPT(pages, OPT_INT, "6", NULL, "first N pages of each file to index as text", "The index"),
   OPT(layout_pages, OPT_INT, "2", NULL, "of those, pages kept as lines tagged with font size", NULL),
