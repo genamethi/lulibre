@@ -56,7 +56,8 @@ void bridge_init(struct app *app, int threaded) {
   }
 }
 
-int bridge_on_ui(const struct app *app) {
+/* True when the caller may touch the interface directly. */
+static int bridge_on_ui(const struct app *app) {
   if (!atomic_load(&B.running)) return 1;
   uv_thread_t self = uv_thread_self();
   return uv_thread_equal(&self, &B.ui_thread);

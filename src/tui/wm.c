@@ -8,7 +8,7 @@ static const struct view_class *const classes[] = {&view_list, &view_preview};
 
 static void close_node(struct tui *t, struct node *n);
 
-const struct view_class *wm_class(const char *name) {
+static const struct view_class *wm_class(const char *name) {
   for (size_t i = 0; i < ARRAY_LEN(classes); i++)
     if (strcmp(classes[i]->name, name) == 0) return classes[i];
   return NULL;

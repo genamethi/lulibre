@@ -269,7 +269,7 @@ its own documentation.
 | `lulibre.notation` | `render(s)` ($…$ in Unicode), `notation(s)` (the glossary), `title(s, case)`, `unicode(tex)`, `subscript(s)`, `superscript(s)`, `has_math(s)`; the lists `glossary`, `groups` |
 | `lulibre.template` | patterns to named fields and back |
 | `lulibre.bib` | BibTeX out and in; sidecar metadata |
-| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another |
+| `lulibre.dupes` | identical files; `pull(from, to)` proposes one book's values for another; `books_with(md5)` the books whose file has that hash (of the files hashed so far), `holders(path)` the books that already hold a file's bytes |
 | `lulibre.orphans` | records without files, files without records, broken links |
 | `lulibre.sync` | the sync folder: scan, add |
 | `lulibre.ui.keys` | the panels' key tables: `of(panel)` gives `:action(key)`, `:hint(...)`, `:show()`; `define(panel, list)` gives a script's own panel one |
