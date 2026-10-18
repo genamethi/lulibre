@@ -234,9 +234,14 @@ lulibre.command("backup", function(args)
       tostring(lulibre.o.backup_restart), backup.policy() == "next" and (backup.due() and ", not yet spent" or ", spent") or "",
       lulibre.o.backup_keep, lulibre.o.backup_max_age, tostring(lulibre.o.backup_too_old))
     out[#out + 1] = ("in %s"):format(backup.dir())
+    local opf = require("lulibre.calibre").opf()
+    out[#out + 1] = ("the books' metadata.opf files: %s%s"):format(opf.why,
+      opf.behind and (";  %d behind their record now"):format(opf.behind) or "")
     lulibre.show(out, "copies of calibre's database")
   end
 end, "[now [why] | always | next | never | DAYS | prune [keep]]  copies of calibre's database: list, make one, when to make them")
+lulibre.command("server-unit", script("server-unit"),
+  "[apply | remove]  calibre's content server with calibre's own opf backup: what runs it, and the change to its unit")
 lulibre.command("offline", script("offline"),
   "[restart | cancel ID]  the changes calibre makes only while the content server is stopped: what waits; restart the server for them now")
 lulibre.command("snapshot", script("snapshot"),

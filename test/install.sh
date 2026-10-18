@@ -55,6 +55,11 @@ data=$(dirname "$(find "$stage" -type f -path '*/lulibre/lua/lulibre/prelude.lua
 expect   "the runtime is installed"         yes "$([ -f "$data/prelude.lua" ] && echo yes || echo no)"
 expect   "every Lua module is installed"    "$(find "$src/lua" -name '*.lua' | wc -l)" "$(find "$stage" -path '*/lulibre/lua/*' -name '*.lua' | wc -l)"
 expect   "every script is installed"        "$(find "$src/scripts" -name '*.lua' | wc -l)" "$(find "$stage" -path '*/lulibre/scripts/*' -name '*.lua' | wc -l)"
+opf=$(find "$stage" -type f -path '*/lulibre/contrib/calibre-server-opf.py' | head -1)
+expect   "calibre's server launcher is installed" yes "$([ -n "$opf" ] && echo yes || echo no)"
+unit=$(find "$stage" -type f -path '*/lulibre/systemd/calibre-server.service' | head -1)
+contains "and calibre's unit, pointing at where it is installed" "-e ${opf#$stage}" "$(cat "$unit" 2>/dev/null)"
+contains "lulibre.service names the installed binary" "ExecStart=$(dirname "${installed#$stage}")/lulibre offline" "$(cat "$(find "$stage" -type f -path '*/lulibre/systemd/lulibre.service' | head -1)" 2>/dev/null)"
 # the installed binary with the installed runtime (LULIBRE_RUNTIME says where,
 # since the stage is not the prefix it was configured for)
 rt=$(dirname "$data")
