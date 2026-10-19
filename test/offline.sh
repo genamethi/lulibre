@@ -79,6 +79,8 @@ contains "a change is written"            "changed 2 books" "$(lua '
 expect   "title"                          "Knots and Links" "$(field 1 title)"
 expect   "authors"                        "Ann Lee" "$(field 1 authors)"
 expect   "date"                           "2004-01-01" "$(field 1 pubdate)"
+expect   "written at noon UTC, the same day in every time zone" "2004-01-01 12:00:00+00:00" \
+  "$(sqlite3 "$lib/metadata.db" 'select pubdate from books where id = 1')"
 expect   "the second book of the batch"   "Sieve Notes" "$(field 2 title)"
 contains "undo"                           "undid 2" "$(lua 'local r = require("lulibre.edit").undo() print("undid " .. r.applied)')"
 expect   "undo restores"                  "knots" "$(field 1 title)"

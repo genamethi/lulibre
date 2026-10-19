@@ -9,7 +9,9 @@ Scripts are Lua 5.4 or 5.5 and see one table, `lulibre`.
 
 A script's arguments arrive as `...`. `lulibre.headless` is true when there
 is no interface. Each C module is documented at the top of its
-`src/lua/l_*.c`; this page is the summary.
+`src/lua/l_*.c`; this page is the summary. A name that begins with `_`
+(`lulibre._place_map`) is lulibre's own plumbing, used by its Lua runtime,
+and may change without notice.
 
 ## How scripts run
 
@@ -46,6 +48,7 @@ exit 1, like a task's.
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index |
 | `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables (`proposals`, `journal`, `kv`, `staged`, `good`, `terms`, `refs`, `lookups`); returns rows, rows changed, last insert id |
 | `lulibre.reload()` | pick up changes calibre has made |
+| `lulibre.stage_refresh()` | after writing the `staged` table (the sync folder's files): rebuild the books, with negative ids, that stand for them |
 | `lulibre.source([name])` | what the list shows, `"library"` or `"sync"`; sets it when given |
 
 Filters are [the filter language](filters.md). A filter that does not say
@@ -66,6 +69,7 @@ Library books have positive ids; files staged from the sync folder negative ones
 | | |
 |---|---|
 | `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds |
+| `lulibre.text_measure(id)` | measure again the text the index holds for a book's files (characters, quality), as indexing would now: after the measure has changed, or text was put there by other means; how many files were measured |
 | `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=, math=}, ... }`; `math`: the line with its mathematics marked up as TeX, when it has any |
 | `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }` |
 | `lulibre.extract(path [, {pages=, layout_pages=, tail=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
@@ -102,6 +106,7 @@ field)`, `undo([batch])`, `history()`, `remove(ids)`, `route()`.
 | `lulibre.jump(id)` | move the cursor to a book |
 | `lulibre.exec(line)` | run a command line |
 | `lulibre.command(name, fn [, help])` | define a `:` command; `fn(args)` runs as a task |
+| `lulibre.commands()` | every command there is: `{ {name=, help=}, ... }`, built in and defined |
 | `lulibre.map(modes, keys, target [, about])` | bind keys to a command line or a function; `about` is what `?` shows for the key, `false` keeps it out. With a panel's name for `modes` (`"review"`), or a place's (`"panel"`, `"line"`, `"picker"`, `"pager"`, `"console"`), put a key on one of its actions |
 | `lulibre.key(command [, mode])` | the keys bound to a command line (`"gr"`), or nil |
 | `lulibre.hint(command)` | the same for a message: the keys, or `":command"` when there are none |

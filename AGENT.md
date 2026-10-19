@@ -183,7 +183,7 @@ on a branch:
   items read one by one before it is trusted.
 - A file somebody else made is opened before code is written for it.
 - Code that talks to another service is written from that service's own
-  terms, read first and linked in a comment. The rules (`net.lua`): one
+  terms, read first and linked in a comment. The rules (`net/core.lua`): one
   request at a time, no retry after 429/503 but a pause that outlives the
   run, no fallback that multiplies requests, an empty or broken answer not
   remembered as "no such record". A parser for its answers is checked

@@ -298,7 +298,7 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "<Leader><Right>", "resize right"},
     {MODE_NORMAL, "<Leader><Up>", "resize up"},
     {MODE_NORMAL, "<Leader><Down>", "resize down"},
-    /* changing things (these commands are defined in lua/lulibre/prelude.lua) */
+    /* changing things (these commands are defined in lua/lulibre/commands/) */
     {MODE_NORMAL | MODE_VISUAL, "e", "edit"},
     {MODE_NORMAL | MODE_VISUAL, "gc", "capture"},
     {MODE_NORMAL | MODE_VISUAL, "gT", "titlecase"},
