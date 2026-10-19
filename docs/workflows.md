@@ -1042,8 +1042,63 @@ one in a popup (`backup_too_old = false`: no popup).
 
     :backup                    the copies, and when they are made
     :backup now [why]          one now (the server may be running)
+    :backup check              calibre's database: is it whole?
+    :backup compare N          what putting copy N back would change (1 is the newest)
+    :backup restore N          put copy N back
     :backup next               or always, never, DAYS: set backup_restart (and in init.lua)
     :backup prune [keep]
+    lulibre backup ...         the same, with no interface (restore asks for --yes)
+
+**Is it whole?** `:backup check` is SQLite's integrity check of
+`metadata.db`, read only, so the server may run. Each copy is checked as it
+is made, and the list marks one that fails (`FAILED`). The copy is the
+database page for page, so a copy that fails means calibre's database
+fails too. When calibre's database is damaged, lulibre still starts: it
+warns, and goes on with the library as it last read it, so that a copy can
+be put back. Pruning never removes the newest copy that passed its check,
+so copying a damaged database again and again doesn't push out the last
+good copy.
+
+**Putting a copy back.** There are two ways back from a damaged database,
+or from a change you want undone across the whole library:
+
+- one of lulibre's copies (`:backup restore N`): everything calibre had at
+  that moment;
+- calibre's `restore_database`, which rebuilds the database from the books'
+  `metadata.opf` files: only as current as those files (see "The opf files"
+  below for who writes them in your setup).
+
+`:backup restore N` first shows what the copy differs in, against
+calibre's database as it is now:
+
+- **books removed since:** their records come back. Their files don't,
+  if calibre moved them to its trash. Bring those back with calibre's
+  program first: calibre can't once the copy has their records.
+- **books added since:** their records go, and their folders stay;
+  `:orphans` finds them.
+- **books changed since:** back as they were, with how many differ in each
+  field lulibre reads. calibre's last-modified time says which books changed,
+  so a book changed only in its comments, a custom column or its cover is
+  counted, but no field is named.
+- **folders renamed since:** a new title or author renames a book's folder.
+  The copy's record names the old folder, so the record is pointed at the
+  folder as it is now.
+
+Then it asks. The copy goes back once nothing has the library open, like a
+new column (`:offline`): restart the server now, or at its next start.
+Before anything is changed, calibre's database as it is goes into a copy
+of its own; put that one back to undo the restore. lulibre fits the copy,
+in a staged file of its own, to the library folder as it is now:
+
+- the renamed folders, as above;
+- each book that differs is marked, so that calibre writes its
+  `metadata.opf` again;
+- no book gets an ID that a book added since had (its folder, `Title (id)`,
+  is still there).
+
+Then the staged file goes in through SQLite's own backup. If the
+database is too damaged for that, the staged file takes its place.
+Nothing else in the library folder is touched.
 
 ### The opf files: `lulibre server-unit`
 

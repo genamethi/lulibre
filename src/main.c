@@ -43,6 +43,7 @@ static const struct {
   {"snapshot", cmd_script, "points the library can be put back to: take, list, plan, rollback, import"},
   {"columns", cmd_script, "calibre columns for lulibre's own fields (#partof, #part, #parts): an example of lulibre.offline"},
   {"server-unit", cmd_script, "run calibre's content server with calibre's own opf backup: show or change its systemd unit"},
+  {"backup", cmd_script, "copies of calibre's database: make one, check calibre's database, put a copy back"},
   {"offline", cmd_script, "do the changes that wait for the content server to be stopped (lulibre.service runs it)"},
 };
 

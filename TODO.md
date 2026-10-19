@@ -3,22 +3,6 @@
 Changes planned for a version, larger than a single fix. Each comes out of
 this file when it is done (the CHANGELOG says what was).
 
-## 0.2.0: the database's integrity, backups, restoring
-
-Copies of calibre's database are made (`lulibre.backup`, `:backup`). Still
-to come:
-
-- **Restoring a copy.** Put one of lulibre's copies of `metadata.db` back,
-  with the content server stopped (through `lulibre.offline`, like adding
-  a column), after a copy of the database as it is now. Say what the copy
-  differs in first: books, and fields, from the journal and the mirror.
-- **Integrity.** `PRAGMA integrity_check` of `metadata.db` (read-only, the
-  server may run), when a copy is made and when asked; a failure is the
-  signal to restore. Then the choice: one of lulibre's copies, or calibre's
-  `restore_database` from the books' metadata.opf files (as good as those
-  files are: see "The opf files" in docs/workflows.md for when calibre
-  writes them in each setup).
-
 ## 0.2.1: dependencies, declared and installed
 
 Today a feature names the programs it needs (`lulibre.features`), says

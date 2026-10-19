@@ -10,6 +10,8 @@ lulibre.command("verify", script("verify"),
   "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
 lulibre.command("server-unit", script("server-unit"),
   "[apply | remove]  calibre's content server with calibre's own opf backup: what runs it, and the change to its unit")
+lulibre.command("backup", script("backup"),
+  "[now [why] | check | compare N | restore N | always | next | never | DAYS | prune [keep]]  copies of calibre's database: list, make, check, put back")
 lulibre.command("offline", script("offline"),
   "[restart | cancel ID]  the changes calibre makes only while the content server is stopped: what waits; restart the server for them now")
 lulibre.command("snapshot", script("snapshot"),

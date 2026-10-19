@@ -33,34 +33,6 @@ lulibre.command("history", function()
   if #out == 0 then out[1] = "no changes have been made through lulibre yet" end
   lulibre.show(out, "history   (:undo N puts a batch back)")
 end, "changes made through lulibre, newest first")
-lulibre.command("backup", function(args)
-  local backup = require "lulibre.backup"
-  local verb, rest = (args or ""):match("^%s*(%S*)%s*(.-)%s*$")
-  if verb == "now" then
-    local ok, b = pcall(backup.take, rest ~= "" and rest or "asked for")
-    lulibre.notify(ok and ("calibre's database copied to %s"):format(b.path) or tostring(b), not ok and "error" or nil)
-  elseif verb == "prune" then
-    lulibre.notify(("%d copies removed"):format(backup.prune(tonumber(rest))))
-  elseif verb ~= "" then
-    local ok, err = pcall(backup.set, tonumber(verb) or verb)
-    lulibre.notify(ok and ("backup_restart = %s"):format(verb) or tostring(err), not ok and "error" or nil)
-  else
-    local out = {}
-    for _, b in ipairs(backup.list()) do
-      out[#out + 1] = ("%s  %5s books  %s"):format(os.date("%Y-%m-%d %H:%M", b.ts), tostring(b.books or "?"), b.reason or "")
-    end
-    if #out == 0 then out[1] = "no copies of calibre's database yet (:backup now makes one)" end
-    out[#out + 1] = ""
-    out[#out + 1] = ("before the server starts: %s%s;  kept: %d;  too old after %d days (%s)"):format(
-      tostring(lulibre.o.backup_restart), backup.policy() == "next" and (backup.due() and ", not yet spent" or ", spent") or "",
-      lulibre.o.backup_keep, lulibre.o.backup_max_age, tostring(lulibre.o.backup_too_old))
-    out[#out + 1] = ("in %s"):format(backup.dir())
-    local opf = require("lulibre.calibre").opf()
-    out[#out + 1] = ("the books' metadata.opf files: %s%s"):format(opf.why,
-      opf.behind and (";  %d behind their record now"):format(opf.behind) or "")
-    lulibre.show(out, "copies of calibre's database")
-  end
-end, "[now [why] | always | next | never | DAYS | prune [keep]]  copies of calibre's database: list, make one, when to make them")
 lulibre.command("addpages", function(args)
   -- read a file as far as a page: "addpages BOOK PAGE" (the preview's key for it gives both)
   local id, page = args:match("^(%-?%d+)%s+(%d+)$")

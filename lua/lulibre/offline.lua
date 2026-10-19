@@ -2,7 +2,9 @@
 -- calibredb refuses the content server for catalog, add_custom_column,
 -- remove_custom_column, restore_database, check_library and backup_metadata;
 -- queued here (in the history file beside the index), they wait until the
--- server is stopped, and M.run does them straight to the library folder
+-- server is stopped, and M.run does them straight to the library folder.
+-- So do lulibre's own of that kind (M.handlers: putting a copy of
+-- calibre's database back)
 -- (after a copy of calibre's database, as lulibre.o.backup_restart says:
 -- lulibre.backup).
 -- Whatever stops the server, it is M.run that does them: lulibre.service
@@ -71,6 +73,24 @@ M.already = {
 -- the commands that change the shape of calibre's database
 M.STRUCTURAL = { add_custom_column = true, remove_custom_column = true, restore_database = true }
 
+-- Jobs lulibre does itself rather than calibredb: argv[1] names the
+-- handler, which gets argv and returns its answer (M.summary says it).
+M.handlers = {
+  restore_copy = function(argv)
+    local backup = require "lulibre.backup"
+    local r = backup.put_back(argv[2])
+    -- the copy's books whose opf files are behind it are marked: written now, if they can be
+    if lulibre.o.backup_metadata == "on" then pcall(backup.metadata) end
+    return backup.put_back_summary(r)
+  end,
+}
+
+--- A job, in a line: its label and what it runs.
+function M.describe(j)
+  local how = M.handlers[j.argv[1]] and "lulibre: " or "calibredb "
+  return ("%s  (%s%s)"):format(j.label or "", how, table.concat(j.argv, " "))
+end
+
 local function direct(argv)
   local a = { "calibredb", "--with-library", lulibre.o.library }
   for _, x in ipairs(argv) do a[#a + 1] = x end
@@ -113,8 +133,15 @@ function M.run()
   local jobs = M.jobs("pending")
   local up = M.server_up()
   -- a copy of calibre's database first, as backup_restart says (it is made
-  -- whether or not anything waits: this is the server's start)
-  if not up then out.backup = require("lulibre.backup").on_restart() end
+  -- whether or not anything waits: this is the server's start); not when
+  -- a copy is to be put back, which makes its own. A copy that cannot be
+  -- made holds back what changes the database's shape, not the rest.
+  local restoring = false
+  for _, j in ipairs(jobs) do restoring = restoring or j.argv[1] == "restore_copy" end
+  if not up and not restoring then
+    local ok, b = pcall(require("lulibre.backup").on_restart)
+    if ok then out.backup = b else out.backup_error = tostring(b) end
+  end
   if up then
     if #jobs == 0 then return out end
     error("the content server is running: these wait until it is stopped", 0)
@@ -125,7 +152,10 @@ function M.run()
     if #jobs == 0 then return out end
     error("calibre's program has the library open: these wait until it is closed", 0)
   end
-  local cols = columns() -- (waits for a server that is stopping to let go)
+  -- (waits for a server that is stopping to let go); a database calibredb
+  -- cannot read fails calibredb's jobs, not lulibre's own (putting a copy back)
+  local cols_ok, cols = pcall(columns)
+  if not cols_ok then out.columns_error, cols = tostring(cols), nil end
   -- the books' opf files, by calibre: with the server stopped nothing else
   -- writes them (backup_metadata option); before anything that changes the
   -- database's shape, they must be
@@ -137,11 +167,24 @@ function M.run()
   for _, job in ipairs(jobs) do
     require("lulibre.calibre").wait_for_program("changes that wait for the server")
     local check = M.already[job.argv[1]]
-    local done = check and check(job.argv, cols)
+    local done = check and cols and check(job.argv, cols)
     local r, err
-    local hold = not done and M.STRUCTURAL[job.argv[1]] and not opf_ok
+    local hold = not done and M.STRUCTURAL[job.argv[1]] and (not opf_ok or out.backup_error)
+    local handler = M.handlers[job.argv[1]]
     if hold then
-      err = "waits: the books' opf files could not be written first (" .. tostring(out.opf_error) .. ")"
+      err = out.backup_error and ("waits: calibre's database could not be copied first (" .. out.backup_error .. ")")
+        or ("waits: the books' opf files could not be written first (" .. tostring(out.opf_error) .. ")")
+    elseif not done and handler then
+      local ok, said = pcall(handler, job.argv)
+      if ok then
+        r = { code = 0 }
+        out.said = out.said or {}
+        out.said[#out.said + 1] = said
+      else
+        err = tostring(said)
+      end
+    elseif not done and not cols then
+      err = out.columns_error
     elseif not done then
       r, err = lulibre.system(direct(job.argv), { timeout = 600000 })
     end
@@ -154,8 +197,8 @@ function M.run()
       out.skipped = out.skipped + 1
     else
       out.done = out.done + 1
-      if job.argv[1] == "add_custom_column" then cols[job.argv[2]] = true end
-      if job.argv[1] == "remove_custom_column" then cols[job.argv[2]] = nil end
+      if cols and job.argv[1] == "add_custom_column" then cols[job.argv[2]] = true end
+      if cols and job.argv[1] == "remove_custom_column" then cols[job.argv[2]] = nil end
     end
   end
   return out
@@ -163,7 +206,12 @@ end
 
 function M.summary(r)
   local parts = {}
-  if r.backup then parts[#parts + 1] = "calibre's database copied" end
+  if r.backup then
+    parts[#parts + 1] = r.backup.check == "failed" and "calibre's database copied, and the copy FAILS its integrity check"
+      or "calibre's database copied"
+  end
+  if r.backup_error then parts[#parts + 1] = "calibre's database not copied: " .. r.backup_error end
+  for _, said in ipairs(r.said or {}) do parts[#parts + 1] = said end
   if (r.opf or 0) > 0 then
     parts[#parts + 1] = r.opf == 1 and "1 book's opf file written" or ("%d books' opf files written"):format(r.opf)
   end

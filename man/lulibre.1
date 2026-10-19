@@ -120,6 +120,14 @@ Do the changes calibre makes only while the content server is stopped
 .I lulibre.service
 runs it before each start of the server.
 .TP
+.BR backup " [" now " [\fIwhy\fR] | " check " | " compare " \fIN\fR | " restore " \fIN\fR [" \-\-yes "] | " prune " [\fIkeep\fR]]"
+Copies of calibre's database: list them, make one, check calibre's
+database (SQLite's integrity check, read only), say what putting copy
+.I N
+back would change, put it back (queued like
+.BR offline ,
+after a copy of the database as it is), remove all but the newest.
+.TP
 .BR server\-unit " [" apply " | " remove ]
 calibre's content server run with calibre's own opf backup (the launcher
 .IR calibre-server-opf.py ):

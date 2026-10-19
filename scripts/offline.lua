@@ -17,8 +17,8 @@ local function list()
   local out = {}
   for _, status in ipairs { "waiting", "failed" } do
     for _, j in ipairs(offline.jobs(status)) do
-      out[#out + 1] = ("%4d  %-8s %s  %s%s"):format(j.id, status, os.date("%Y-%m-%d %H:%M", j.ts), j.label or "",
-        "  (calibredb " .. table.concat(j.argv, " ") .. ")" .. (j.error and ("  " .. j.error) or ""))
+      out[#out + 1] = ("%4d  %-8s %s  %s%s"):format(j.id, status, os.date("%Y-%m-%d %H:%M", j.ts), offline.describe(j),
+        j.error and ("  " .. j.error) or "")
     end
   end
   if #out == 0 then out[1] = "nothing waits for the content server to be stopped" end
