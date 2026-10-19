@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.2)
+## 0.2.0-alpha.3
 
 - Added: `:backup check` (and `lulibre backup check`) runs SQLite's
   integrity check of calibre's database, read only, with the server
