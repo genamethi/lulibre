@@ -62,7 +62,7 @@ const char db_schema[] =
   "CREATE TABLE IF NOT EXISTS refs("
   " book INTEGER NOT NULL, key TEXT NOT NULL, raw TEXT, PRIMARY KEY(book, key)) WITHOUT ROWID;"
   "CREATE INDEX IF NOT EXISTS refs_key ON refs(key);"
-  /* what metadata services answered (lua/lulibre/net.lua), so that each work
+  /* what metadata services answered (lua/lulibre/net/core.lua), so that each work
    * is asked about once; status 404 is "asked, and there is none" */
   "CREATE TABLE IF NOT EXISTS lookups("
   " service TEXT NOT NULL, key TEXT NOT NULL, at INTEGER, status INTEGER, body TEXT,"
