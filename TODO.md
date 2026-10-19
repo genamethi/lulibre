@@ -46,15 +46,9 @@ Nothing decided which belongs where.
 
 ## To decide, not yet placed in a version
 
-- **The license.** Leaning to Apache-2.0 WITH LLVM-exception (Apache 2.0,
-  with a way out of its patent and indemnity terms for whoever combines it
-  with GPLv2 code); the maintainer is reading up before it is settled.
-  Whatever lulibre's own files carry, a binary as built links MuPDF
-  (AGPL-3.0-or-later), so the binary as distributed is under the AGPL;
-  djvulibre is GPL-2.0-or-later, notcurses Apache-2.0, Lua, libuv MIT,
-  SQLite public domain, luv Apache-2.0. calibre (GPLv3) runs
-  `contrib/calibre-server-opf.py` in its own process. Then: a LICENSE
-  file, SPDX lines, and the README saying what a binary is under.
+- **SPDX lines.** The license is settled (LICENSE: Apache-2.0 WITH
+  LLVM-exception). Whether each source file also carries an
+  `SPDX-License-Identifier` line is still to decide.
 - **The docs website.** Read the Docs, built with Zensical from `docs/`
   (`zensical.toml`, `.readthedocs.yaml`): being tried. GitHub Pages is the
   alternative, decided after.
