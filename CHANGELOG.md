@@ -14,6 +14,9 @@ written in `src/version.h`.
   out of date).
 - Fixed: undefined behaviour when the list was regrouped with a filter that
   matched nothing.
+- Fixed: a publication date was written at midnight UTC, which calibre shows
+  as the day before west of Greenwich; it is written at noon UTC, the same
+  day everywhere. Dates written before are as they were.
 
 - Added: calibre's content server can keep each book's metadata.opf
   current while it runs, as calibre's program does: the launcher
