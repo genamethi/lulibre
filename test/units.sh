@@ -24,3 +24,16 @@ if "$bin" --clean -L "$t/lib" run "$src/luv_probe.lua" >/dev/null 2>&1; then
 else
   echo "skip  luv checks (luv is not installed for this Lua version)"
 fi
+# your own files used in place of lulibre's (lulibre.overrides): said once,
+# in the log, and not of a file of yours that replaces nothing
+mkdir -p "$t/cfg/lua/lulibre" "$t/cfg/scripts"
+echo 'return {}' > "$t/cfg/lua/lulibre/junk.lua"
+echo 'print("mine")' > "$t/cfg/scripts/offline.lua"
+echo 'print("mine")' > "$t/cfg/scripts/only-mine.lua"
+echo 'print("ran")' > "$t/p.lua"
+first=$("$bin" -C "$t/cfg" -L "$t/lib" run "$t/p.lua" 2>&1)
+again=$("$bin" -C "$t/cfg" -L "$t/lib" run "$t/p.lua" 2>&1)
+case $first in *"your module lulibre.junk"*"your script offline"*) echo "ok    a file of yours used in place of lulibre's is said" ;;
+  *) echo "FAIL  overrides not said: $first"; exit 1 ;; esac
+case $first in *only-mine*) echo "FAIL  a script of yours alone was said: $first"; exit 1 ;; esac
+[ "$again" = "ran" ] && echo "ok    and said once" || { echo "FAIL  said again: $again"; exit 1; }

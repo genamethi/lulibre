@@ -185,7 +185,9 @@ Scripts in `~/.config/lulibre/scripts/NAME.lua` run with `:run NAME` or
 `lulibre run NAME`; modules in `~/.config/lulibre/lua/` can be `require`d.
 Yours are found first: a script or module of yours named like one of
 lulibre's (`scripts/sync.lua`, `lua/lulibre/edit.lua`) is used instead of
-it. Then lulibre's own, from one place only: the source tree a build is run
+it. The console says so at start, once for each such file and again when
+lulibre's own changes, since yours may lack what an update fixed
+(`lulibre.overrides`). Then lulibre's own, from one place only: the source tree a build is run
 from, `$LULIBRE_RUNTIME`, or where `make install` put them; then the rocks
 of `~/.luarocks` and Lua's own places. Nothing is looked for in the current
 directory. See [the Lua API](api.md).
@@ -198,6 +200,7 @@ directory. See [the Lua API](api.md).
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. Derived from the library and rebuilt at will, except for what lulibre alone knows: the undo journal, proposals, staged files' metadata, saved capture rules, file hashes |
 | `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never dropped with it: the journal of changes, snapshots and the changes that wait for the server to be stopped; the custom fields |
 | `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
+| `~/.local/share/lulibre/overrides.json` | which of your files used in place of lulibre's the console has told you of |
 | `~/.local/state/lulibre/calibre-server.json` | written by calibre's server while it runs through lulibre's launcher (`lulibre server-unit`) |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 

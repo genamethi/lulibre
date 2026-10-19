@@ -62,6 +62,11 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
  * tree is now, so the mismatch can at least be named. */
 
 static char tree_root[4096]; /* the tree this binary runs from, or "" */
+static char runtime_lua[4096]; /* the bundled modules' directory in use (setup_paths) */
+
+const char *lstate_runtime_modules(void) {
+  return runtime_lua;
+}
 
 char *lstate_tree_mismatch(void) {
   if (!tree_root[0]) return NULL;
@@ -120,6 +125,7 @@ static void setup_paths(lua_State *L) {
   if (dev && dev[0]) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", dev, dev);
   if (tree) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", tree, tree);
   if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", LULIBRE_DATADIR, LULIBRE_DATADIR);
+  snprintf(runtime_lua, sizeof runtime_lua, "%s", dev && dev[0] ? dev : tree ? tree : LULIBRE_DATADIR "/lua");
   sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", rocks, LULIBRE_LUA_VER,
             rocks, LULIBRE_LUA_VER);
   sb_printf(&c, "%s/lib/lua/%s/?.so", rocks, LULIBRE_LUA_VER);

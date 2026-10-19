@@ -155,7 +155,10 @@ and pasted with `<C-v>`.
 | `set name[=value]` | show or change an option |
 | `bib [file]` | write the selection as BibTeX |
 | `propose` `enrich` `refs` `arxiv-fetch` `ocr` `onboard DIR` | shortcuts for `run` of those scripts |
-| `help` · `quit` | `?` · `q`, `ZZ` |
+| `backup` · `offline` · `custom` · `snapshot` · `server-unit` | copies of calibre's database, changes that wait for the server, fields of your own, points to go back to, calibre's server unit (docs/workflows.md) |
+| `move` `search` `prompt` `fold` `split` `only` `preview` `pick` `source` `yank` | what the keys above run, to bind your own (`:help` gives each one's arguments) |
+| `echo text` | show a message |
+| `help` · `help-plain` · `quit` | `?` · the keys and commands as one long page · `q`, `ZZ` |
 
 ## Inside a panel
 
