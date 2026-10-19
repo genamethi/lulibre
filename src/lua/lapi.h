@@ -14,7 +14,7 @@
  *   l_doc.c    text lines files extract           indexed text, extraction
  *   l_proc.c   system                             subprocesses
  *   l_hash.c   md5                                content hashes, cached
- *   l_copy.c   copy_db                            copies of SQLite databases
+ *   l_copy.c   copy_db check_db                   copies of SQLite databases, their integrity
  *   l_index.c  index                              run the indexer, and wait
  *   l_theme.c  theme                              colours
  *   l_match.c  fold fuzzy                         matching
