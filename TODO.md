@@ -33,7 +33,8 @@ Nothing decided which belongs where.
   Lua (profile it first: board item 11), what must not be replaced (the
   write path, the journal), what C already half does. Options for each
   part: C in the binary, a C module loaded with `require`, or Pallene
-  (typed Lua compiled to C; a 5.5 port, `pallene-55`, exists as a dev rock).
+  (typed Lua compiled to C), if the maintainer's port of it to 5.5 gets
+  there.
   The answer decides how much of lulibre a user can still replace.
 - **Your files apart from lulibre's.** Today a file of yours named like one
   of lulibre's replaces it whole (`~/.config/lulibre/lua/`, `scripts/`), and
@@ -45,20 +46,21 @@ Nothing decided which belongs where.
 
 ## To decide, not yet placed in a version
 
-- **The license.** Apache 2.0 is the leaning; GPLv2 compatibility to
-  consider: Apache-2.0 WITH LLVM-exception, or a dual license
-  (MIT OR Apache-2.0). Whatever lulibre's own files carry, a binary as
-  built links MuPDF (AGPL-3.0-or-later), so the binary as distributed is
-  under the AGPL; djvulibre is GPL-2.0-or-later, notcurses Apache-2.0, Lua,
-  libuv MIT, SQLite public domain, luv Apache-2.0. calibre (GPLv3) runs
-  `contrib/calibre-server-opf.py` in its own process.
-- **A website for the docs.** Read the Docs, built from `docs/` (MkDocs
-  reads the Markdown as it is), and kept up as the docs are; and a wiki on
-  GitHub (a repository of its own, written by hand) or GitHub Pages. Needs
-  a public repository first.
+- **The license.** Leaning to Apache-2.0 WITH LLVM-exception (Apache 2.0,
+  with a way out of its patent and indemnity terms for whoever combines it
+  with GPLv2 code); the maintainer is reading up before it is settled.
+  Whatever lulibre's own files carry, a binary as built links MuPDF
+  (AGPL-3.0-or-later), so the binary as distributed is under the AGPL;
+  djvulibre is GPL-2.0-or-later, notcurses Apache-2.0, Lua, libuv MIT,
+  SQLite public domain, luv Apache-2.0. calibre (GPLv3) runs
+  `contrib/calibre-server-opf.py` in its own process. Then: a LICENSE
+  file, SPDX lines, and the README saying what a binary is under.
+- **The docs website.** Read the Docs, built with Zensical from `docs/`
+  (`zensical.toml`, `.readthedocs.yaml`): being tried. GitHub Pages is the
+  alternative, decided after.
 - **A testing framework.** The suites are shell scripts and one Lua file of
-  checks; busted (2.3.0, in the user's `~/.luarocks`) is a candidate for the
-  Lua side.
+  checks; whether to move to a framework (busted, say, for the Lua side)
+  is put off for now.
 
 ## 0.3.0: the library checked against its folders
 
