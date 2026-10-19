@@ -99,19 +99,13 @@ on a branch:
   (indexing, hashing, extracting, copying a database): a job touches only
   what it was handed and what it opens itself, and its answer is delivered
   in the after-callback, on the loop that queued it.
-- No hidden shared state in C: no static buffers handed out (give each call
-  a buffer of the caller's, as `key_hint` and `errstr` do), no globals for
-  a comparator (`qsort_r`), no `strerror` (`errstr`).
+- Reentrancy is held to strictly, and the rules are in docs/development.md
+  ("Reentrancy"): read them before touching shared state in C or in Lua.
+  In short: no static buffers handed out, no globals for a comparator, no
+  `strerror`; in Lua, a test and a set in one step (`lulibre.claim`).
 - Lua at the prelude's top level runs before `-L` and `init.lua` are
   applied: anything there that opens the index ends lulibre with "no
   library" in a run without one. Put it in a task (`lulibre.spawn`).
-- Lua tasks are interrupted between any two operations (a count hook, once
-  a 4 ms slice is spent). Shared counters lose counts: use `lulibre.each`,
-  `table.insert`, `table.remove`. A test followed by a set is two steps:
-  take it with `lulibre.claim(t, key)`, one C call. A table tasks share is
-  built in a local and put in place with one assignment. A test of any of
-  this holds what it tests for longer than a slice, or it passes without
-  the fix.
 - luv belongs to the main Lua state, loaded once at startup; never arrange
   for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
@@ -254,8 +248,9 @@ Facts found by testing and in calibre's source, which the code relies on
 
 ## Questions every change is held against
 
-- Reentrancy, strictly: no hidden static state where a parameter would do;
-  what a worker thread, a task or a callback may touch.
+- Reentrancy, strictly (docs/development.md, "Reentrancy"): no hidden
+  static state where a parameter would do; what a worker thread, a task or
+  a callback may touch.
 - Separation of concerns: does the code sit in the unit its job belongs to
   (the Lua API in its own translation units, the interface apart from the
   data)?

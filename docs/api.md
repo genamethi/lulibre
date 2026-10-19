@@ -200,12 +200,13 @@ The edit form and review can be opened for given books from a script:
 | | |
 |---|---|
 | `lulibre.o.name` | read or write an option (nil puts it back to its default); see [Configuration](configuration.md) |
+| `lulibre.setup{ name = value, ... }` | set several options at once |
 | `lulibre.settings.get(name)` | the same, as a function; with no name, every option as a table |
 | `lulibre.settings.set(name, value)` | or `set{ pages = 8, ocr = "auto" }` for several |
 | `lulibre.settings.reset(name)` | back to the default |
 | `lulibre.settings.names()` | option names, in order |
 | `lulibre.settings.info(name)` | `{ name=, value=, default=, type=, choices=, help= }` |
-| `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library= }` |
+| `lulibre.settings.paths()` | `{ config_dir=, init=, scripts=, modules=, data_dir=, index=, library=, installed=, bundled = { modules=, scripts= } }` (`scripts`, `modules`: yours; `bundled`: lulibre's own, in the runtime in use) |
 | `lulibre.theme.name = "#rrggbb"` | colours; `lulibre.theme()` lists them |
 | `lulibre.version` | `"0.2.0-dev"` |
 | `lulibre.build` | `{ version=, major=, minor=, patch=, pre=, debug=, lua=, number=, commit= }`; `number` is this build's number among the builds of its version (`"007"`) |
@@ -252,6 +253,7 @@ its own documentation.
 | `lulibre.parts` | books that are parts of a whole (the custom fields #partof, #part, #parts): `set{ {id=, whole=, part=, parts=}, ... }` (one journaled change), `of(id)`, `wholes()` (parts in order, numbers missing) |
 | `lulibre.custom` | custom fields beside calibre's: `declare(name, {type=, help=})`, `field(name)`, `fields()`, `get(id, name)`, `all(id)`; set them with `lulibre.apply{ {id=, field="#name", value=} }`. In calibre too: `column(name)`, `state(name)` → `{state = "lulibre" \| "waiting" \| "calibre", differ=}`, `differing(name)`, `add_column(name, {heading=, datatype=})`, `remove_column(name)` (both queued: `lulibre.offline`), `calibre_books(name)`, `push(name)` |
 | `lulibre.backup` | copies of calibre's database: `take(reason)` (→ `{path=, ts=, check="ok"\|"failed", problems=}`), `list()`, `last()`, `find(N or name)`, `age()` (days), `too_old([days])`, `prune([keep])`, `policy()`, `due()`, `set(value)`, `on_restart()`, `metadata()` (calibredb backup_metadata), `check([path])` (→ true, or false and the problems), `compare(copy)` (what putting it back would change; writes nothing), `describe(copy, diff)`, `restore(copy)` (queued: `lulibre.offline`), `put_back(path)` (what the queued job does), `warn()` (replaceable: the popup) |
+| `lulibre.overrides` | your own modules and scripts used in place of lulibre's own: `find()`, `warn()` (said in the console at start, once per file and again when lulibre's changes; replaceable) |
 | `lulibre.copy_db(src, dst [, opts])` | an SQLite database copied whole (SQLite's backup, on a worker thread; from a task). `opts.amend`: SQL run on the copy afterwards, in one transaction, with `opts.attach` (`{name = path}`) attached read only, `?1` bound to `opts.value`, and `opts.stubs` (names of SQL functions only the database's own program has, for its triggers to compile; they fail if called) |
 | `lulibre.check_db(path)` | SQLite's integrity check, read only, on a worker thread: true; false and the problems (a list of lines); nil and a message |
 | `lulibre.calibre` | which of calibre's programs are running, seen from outside (`/proc/net/unix`; nothing is opened or locked): `running()` → `{db=, gui=}` (anything with a library open; calibre's program), or nil where it cannot be told; `holds()`; `server()` → the status of calibre's server started through `calibre-server-opf.py` (`{pid=, opf_thread=, error=, calibre=, libraries=}`), or nil; `opf()` → `{by = "program" \| "server" \| nil, behind=, why=}`: who keeps the books' metadata.opf current, and how many are behind |

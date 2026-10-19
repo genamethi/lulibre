@@ -25,7 +25,10 @@ and takes files from a sync folder into the library.
 .PP
 It never writes to the library itself. Every change goes to calibre through
 .BR calibredb (1),
-is recorded with the value it replaced, and can be undone.
+is recorded with the value it replaced, and can be undone. The one
+exception is putting back one of its copies of calibre's database
+.RB ( "backup restore" ),
+with nothing holding the library, after a copy of the database as it is.
 .PP
 With no
 .I command
