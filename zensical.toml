@@ -1,0 +1,17 @@
+# The documentation site (https://zensical.org), built from docs/ by Read
+# the Docs (.readthedocs.yaml). Locally: pip install zensical; zensical serve
+[project]
+site_name = "lulibre"
+site_description = "A terminal workbench for the metadata of a calibre library"
+site_url = "https://lulibre.readthedocs.io/"
+repo_url = "https://github.com/genamethi/lulibre"
+docs_dir = "docs"
+nav = [
+  { "Home" = "index.md" },
+  { "Workflows" = "workflows.md" },
+  { "Filters" = "filters.md" },
+  { "Keys and commands" = "keys.md" },
+  { "Configuration" = "configuration.md" },
+  { "Lua API" = "api.md" },
+  { "Development" = "development.md" },
+]

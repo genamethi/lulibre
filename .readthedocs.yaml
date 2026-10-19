@@ -1,0 +1,17 @@
+# Read the Docs: the site from docs/, built with Zensical (zensical.toml).
+# As Read the Docs documents it (docs.readthedocs.com, "Deploying Zensical").
+version: 2
+build:
+  os: ubuntu-26.04
+  tools:
+    python: latest
+  jobs:
+    install:
+      # pinned: Zensical is before 1.0; the version the site was last built with
+      - pip install zensical==0.0.71
+    build:
+      html:
+        - zensical build --strict
+    post_build:
+      - mkdir -p $READTHEDOCS_OUTPUT/html/
+      - cp --recursive site/* $READTHEDOCS_OUTPUT/html/

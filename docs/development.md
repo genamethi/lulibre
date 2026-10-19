@@ -115,6 +115,19 @@ server without the thread, the reason in its log and its status file) and
 hard with `LULIBRE_OPF_REQUIRED=1`. `scripts/server-unit.lua` only changes
 units; it does not depend on calibre's internals.
 
+## The documentation site
+
+`docs/` is also a site, built with [Zensical](https://zensical.org)
+(`zensical.toml`) by Read the Docs (`.readthedocs.yaml`, which pins the
+version). To see it before pushing:
+
+    pip install zensical==0.0.71
+    zensical serve          # http://localhost:8000; zensical build --strict writes site/
+
+A new page goes in `nav` in `zensical.toml`. Links between pages are
+relative (`[Keys](keys.md)`); a link to a file outside `docs/` (the README,
+the changelog) is written as its address on GitHub.
+
 ## Crashes
 
 A fatal signal appends the version and a backtrace to
