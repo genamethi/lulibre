@@ -5,6 +5,24 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.2)
 
+- Added: `:backup check` (and `lulibre backup check`) runs SQLite's
+  integrity check of calibre's database, read only, with the server
+  running. Each copy is checked as it is made, and the list marks one that
+  fails. Pruning keeps the newest copy that passed its check.
+- Added: `:backup restore N` puts a copy back. It first says what the copy
+  differs in: books removed and added since, books changed (with how many
+  in each field), and folders calibre renamed since. Then it asks. The copy
+  goes back once nothing has the library open (`:offline`), after a copy of
+  calibre's database as it is. Records are pointed at the folders as they
+  are now, each book that differs is marked for its metadata.opf to be
+  written again, and no ID of a book added since is given out again.
+  `:backup compare N` shows the differences alone.
+- Changed: when calibre's database can't be read (it is damaged), lulibre
+  warns and goes on with the library as it last read it, so that a copy can
+  be put back. Before, it would not start.
+- Changed: `:backup` is a bundled script now, so it runs with no interface
+  too (`lulibre backup`).
+
 - Changed: an option set to nil (`lulibre.o.pages = nil`, or a script's
   `lulibre.cfg.NS.NAME = nil`) goes back to its default instead of being an
   error.

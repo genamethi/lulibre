@@ -103,7 +103,8 @@ static const char history_schema[] =
   /* changes calibre makes only while no calibre program has the library
    * open (add_custom_column ...), waiting for the content server to be
    * stopped (lua/lulibre/offline.lua). argv: calibredb's arguments after
-   * --with-library, as JSON; status waiting, done, failed or cancelled */
+   * --with-library, or a job lulibre does itself (restore_copy PATH), as
+   * JSON; status waiting, done, failed or cancelled */
   "CREATE TABLE IF NOT EXISTS history.offline("
   " id INTEGER PRIMARY KEY, argv TEXT NOT NULL, label TEXT, ts INTEGER NOT NULL,"
   " status TEXT NOT NULL DEFAULT 'waiting', error TEXT, done INTEGER);"

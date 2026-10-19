@@ -153,6 +153,48 @@ opts="-o backup_keep=2"
 run offline >/dev/null 2>&1
 expect   "backup_keep copies are kept"         2 "$(lua 'print(#require("lulibre.backup").list())')"
 opts=
+
+# ---- calibre's database checked, and a copy of it put back
+contains "calibre's database is checked"        "passes SQLite's integrity check" "$(run backup check 2>&1)"
+contains "a copy is checked as it is made"      "ok      a point to go back to" "$(run backup now a point to go back to >/dev/null 2>&1; run backup 2>&1)"
+was=$(field 1 title)
+$cdb set_metadata 1 --field "title:Knots, Renamed Since" >/dev/null 2>&1 # calibre renames the book's folder
+run index >/dev/null 2>&1
+out=$(run backup compare 1 2>&1)
+contains "compare says what changed"            "1 book changed since, back as it was: title 1" "$out"
+contains "and that its folder was renamed"      "1 book's folder renamed since" "$out"
+contains "restore shows it and asks"            "(add --yes to do it)" "$(run backup restore 1 2>&1)"
+contains "with --yes it waits for the server"   "queued (offline job" "$(run backup restore 1 --yes 2>&1)"
+contains "lulibre offline puts it back"         "1 record pointed at the folder as renamed since" "$(run offline 2>&1)"
+expect   "the book is as it was"                "$was" "$(field 1 title)"
+expect   "its record names the folder that is there" yes \
+  "$([ -d "$lib/$(sqlite3 "$lib/metadata.db" 'select path from books where id = 1')" ] && echo yes || echo no)"
+expect   "and its file"                         yes "$([ -f "$lib/$(sqlite3 "$lib/metadata.db" "select b.path || '/' || d.name
+  || '.' || lower(d.format) from books b join data d on d.book = b.id where b.id = 1")" ] && echo yes || echo no)"
+out=$($cdb check_library -r invalid_titles,missing_formats 2>&1)
+contains "calibre's own check of the folders runs" "Missing book formats" "$out"
+expect   "and finds nothing wrong with the book" "" "$(printf '%s\n' "$out" | grep -i knots)"
+contains "what was there before is a copy too"  "before putting back the copy" "$(run backup 2>&1)"
+cp "$lib/metadata.db" "$t/good.db"
+# damaged: the page that starts books_tags_link no longer says what it is
+python3 -I -c 'import sqlite3, sys
+db = sys.argv[1]
+c = sqlite3.connect(db); root, = c.execute("select rootpage from sqlite_master where name = ?", ("books_tags_link",)).fetchone()
+size, = c.execute("pragma page_size").fetchone(); c.close()
+with open(db, "r+b") as f:
+    f.seek((root - 1) * size); f.write(b"\xff" * 8)' "$lib/metadata.db"
+out=$(run backup check 2>&1 || true)
+contains "a damaged database is found so"       "FAILS SQLite's integrity check" "$out"
+contains "and lulibre still starts"             "lulibre goes on with the library as it last read it" "$out"
+contains "a copy made of it says so"            "FAILED" "$(run backup now damaged >/dev/null 2>&1; run backup 2>&1)"
+contains "the last good copy outlasts damaged ones" "ok      before putting back" "$(
+  for i in 1 2 3; do run -o backup_keep=1 backup now again >/dev/null 2>&1; done
+  run backup 2>&1)"
+run backup restore 2 --yes >/dev/null 2>&1
+contains "the good copy goes back over it"      "the copy is put back" "$(run offline 2>&1 || true)"
+contains "and the database is whole"            "passes SQLite's integrity check" "$(run backup check 2>&1)"
+expect   "with what it held"                    "$(sqlite3 "$t/good.db" 'select group_concat(book || tag) from books_tags_link')" \
+  "$(sqlite3 "$lib/metadata.db" 'select group_concat(book || tag) from books_tags_link')"
 lua 'print(require("lulibre.custom").remove_column("#volume"))' >/dev/null
 run offline >/dev/null 2>&1
 expect   "a column's removal waits, then is done" "" "$($cdb custom_columns 2>&1 | grep volume)"
