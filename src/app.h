@@ -67,5 +67,6 @@ void lstate_close(struct app *app);
 /* When the binary runs from a source tree that has since become another
  * version: a sentence saying so (the caller frees it), else NULL. */
 char *lstate_tree_mismatch(void);
+const char *lstate_runtime_modules(void);
 
 #endif

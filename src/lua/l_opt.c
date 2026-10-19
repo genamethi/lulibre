@@ -17,7 +17,9 @@
  *   lulibre.settings.paths()            where things are: { config_dir=, init=,
  *                                       scripts=, modules=, data_dir=, index=,
  *                                       library=, installed= (where make install
- *                                       put lulibre's own files) }
+ *                                       put lulibre's own files), bundled=
+ *                                       { modules=, scripts= } (lulibre's own,
+ *                                       in the runtime in use) }
  *
  * Reads and writes go to the option registry in core/config.c, so a value
  * set here is identical to the same name given with -o on the command line.
@@ -206,6 +208,18 @@ static int s_paths_ui(lua_State *L) {
   lua_setfield(L, -2, "library");
   lua_pushstring(L, LULIBRE_DATADIR);
   lua_setfield(L, -2, "installed");
+  /* lulibre's own modules and scripts, in the one runtime searched */
+  lua_createtable(L, 0, 2);
+  lua_pushstring(L, lstate_runtime_modules());
+  lua_setfield(L, -2, "modules");
+  char **dirs = lapi_script_dirs(lapi_app(L)); /* yours, then the bundled */
+  if (dirs[1]) {
+    lua_pushstring(L, dirs[1]);
+    lua_setfield(L, -2, "scripts");
+  }
+  for (char **d = dirs; *d; d++) free(*d);
+  free(dirs);
+  lua_setfield(L, -2, "bundled");
   if (c->library[0]) {
     char *index = config_index_path(c);
     lua_pushstring(L, index);

@@ -163,18 +163,70 @@ for Lua. Two rules follow:
 - A function that waits calls `sched_begin_wait` on the Lua thread, then
   sets up through `ui_pcall`, then yields.
 
+## Reentrancy
+
+Code here runs on several threads (above) and, within the Lua thread, in
+tasks that are interrupted at any point. Code is held to this strictly, and
+the work goes on: new code is checked against it, and old code as it is
+touched. What a change must keep to:
+
+**C**
+
+- No hidden shared state. A function that hands out text writes into a
+  buffer of its caller's: `key_hint(c)` and `ctx_hint(p, a)` are macros
+  that give each call a buffer of its own (`key_hint_in(buf, n, c)` for one
+  you keep); `errstr(err)` in place of `strerror` (not thread-safe);
+  `qsort_r` with the state as its argument, never a global for a
+  comparator. A message built for a caller is allocated and freed by it
+  (`lstate_tree_mismatch`).
+- What stays global, on purpose: the command and key tables (the
+  interface thread's own; Lua reaches them only through `ui_call`), the
+  clipboard's last copy, the source tree a binary runs from. Anything added
+  to this list is argued for.
+- A worker job (`uv_queue_work`) touches only what it was handed and what it
+  opens itself, its own SQLite connections included; its answer is
+  delivered in the after-callback, on the loop that queued it, and the task
+  waiting for it is woken from there (`sched_end_wait`, `sched_wake`).
+
+**Lua**
+
+- Tasks are interrupted between any two VM instructions: a count hook every
+  1000 instructions yields once a 4 ms slice is spent. A read and a write of
+  shared state are two steps another task can come between.
+- A test followed by a set is taken in one step with `lulibre.claim(t,
+  key)`: a C call is a single step, so no task comes between. (net.lua's
+  one request at a time per service is a claim.)
+- A table tasks share is built in a local and put in place with one
+  assignment, never filled in place where another task may read it half
+  made (the caches in junk, names, quality, subjects, the C-module probes).
+- Counters and lists tasks share: `lulibre.each`, `table.insert`,
+  `table.remove` (one C call each), not `t[#t + 1] = v` (two steps).
+- A C function that calls back into Lua while the interface thread works
+  (`ui_call`) does so under `lua_pcall` there; the error is raised again on
+  the Lua thread, with the collector stopped meanwhile.
+
+**Testing it**
+
+A test of a race holds what it tests for longer than a slice (a loop of
+some 1.5 million iterations between the test and the set, in
+`test/units.lua`'s claim check), or it passes whether or not the fix is in.
+`./configure --sanitize=thread` builds with ThreadSanitizer for the C side.
+
 ## The index
 
 One SQLite file per library (WAL). Most of it mirrors calibre's
 `metadata.db` and is replaced wholesale when that changes, or holds extracted
 text. A few tables are lulibre's own and are never dropped: `proposals`,
-`journal`, `kv`, `hashes`, `staged`. Staged files are also given rows in the
-mirror tables under negative ids (`src/db/stage.c`), which is what lets the
-list, the filters and the API treat them as books.
+`kv`, `hashes`, `staged`, `good` (records confirmed as right), `terms` (the
+phrases learned for each subject), `refs` (what each book cites) and
+`lookups` (what metadata services answered). Two files beside the index
+hold what must outlive it (`src/db/db.c`): `<index>.history.db`, the
+journal of changes, snapshots and the changes waiting for the server
+(`offline`); `<index>.custom.db`, your own fields. Staged files are given
+rows in the mirror tables under negative ids (`src/db/stage.c`), which is
+what lets the list, the filters and the API treat them as books.
 
-A few tables are lulibre's own and are never dropped: `proposals`,
-`journal`, `kv`, `hashes`, `staged`, `good` (records confirmed as right),
-`terms` (the phrases learned for each subject), `refs` (what each book
-cites) and `lookups` (what metadata services answered).
-
-lulibre reads `metadata.db` read-only. Every change goes through `calibredb`.
+lulibre reads `metadata.db` read-only. Every change to a book goes through
+`calibredb`. The one exception is putting one of lulibre's copies of it
+back (`:backup restore`, `lua/lulibre/backup.lua`): with nothing holding the
+library, after a copy of it as it is, through SQLite's backup.

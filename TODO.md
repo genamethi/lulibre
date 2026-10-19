@@ -23,6 +23,43 @@ lulibre's own set.
   before anything that needs sudo (calibre, notcurses and other system
   packages), and says what it would run.
 
+## 0.3.0: the API, what is C and what is Lua; yours apart from lulibre's
+
+Much of lulibre's API is written in Lua (the prelude, `lua/lulibre/`),
+which makes it easy to change and to replace; the rest is C (`src/lua/l_*.c`).
+Nothing decided which belongs where.
+
+- **What should be C, or a C module.** Go through the API: what is slow in
+  Lua (profile it first: board item 11), what must not be replaced (the
+  write path, the journal), what C already half does. Options for each
+  part: C in the binary, a C module loaded with `require`, or Pallene
+  (typed Lua compiled to C; a 5.5 port, `pallene-55`, exists as a dev rock).
+  The answer decides how much of lulibre a user can still replace.
+- **Your files apart from lulibre's.** Today a file of yours named like one
+  of lulibre's replaces it whole (`~/.config/lulibre/lua/`, `scripts/`), and
+  `lulibre.overrides` warns of it. Better: say what is meant to be
+  replaced (replaceable functions, hooks: board items 8 and 14) and keep
+  your modules in a namespace of their own, so a name of yours can't
+  replace one of lulibre's by accident; and a replaced file that knows
+  which version of lulibre's it was made from.
+
+## To decide, not yet placed in a version
+
+- **The license.** Apache 2.0 is the leaning; GPLv2 compatibility to
+  consider: Apache-2.0 WITH LLVM-exception, or a dual license
+  (MIT OR Apache-2.0). Whatever lulibre's own files carry, a binary as
+  built links MuPDF (AGPL-3.0-or-later), so the binary as distributed is
+  under the AGPL; djvulibre is GPL-2.0-or-later, notcurses Apache-2.0, Lua,
+  libuv MIT, SQLite public domain, luv Apache-2.0. calibre (GPLv3) runs
+  `contrib/calibre-server-opf.py` in its own process.
+- **A website for the docs.** Read the Docs, built from `docs/` (MkDocs
+  reads the Markdown as it is), and kept up as the docs are; and a wiki on
+  GitHub (a repository of its own, written by hand) or GitHub Pages. Needs
+  a public repository first.
+- **A testing framework.** The suites are shell scripts and one Lua file of
+  checks; busted (2.3.0, in the user's `~/.luarocks`) is a candidate for the
+  Lua side.
+
 ## 0.3.0: the library checked against its folders
 
 calibre's `check_library`, done by lulibre: it is only the folders compared

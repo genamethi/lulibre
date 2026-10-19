@@ -268,6 +268,16 @@ function lulibre._after_init()
       if #items > 0 then pcall(cf.add, items) end
     end
   end
+  -- your files used in place of lulibre's own: said in the console, and
+  -- pointed to on the message line in the interface (lulibre.overrides)
+  lulibre.spawn(function()
+    local ok, new = pcall(require("lulibre.overrides").warn)
+    if not ok then return lulibre.log("checking for files of yours used in place of lulibre's: " .. tostring(new), "warn") end
+    if #new > 0 and not lulibre.headless then
+      lulibre.notify(#new == 1 and "1 file of yours is used in place of lulibre's own: the console (`) says which"
+        or ("%d files of yours are used in place of lulibre's own: the console (`) says which"):format(#new))
+    end
+  end)
 end
 -- the commands (lulibre/commands/*.lua)
 require "lulibre.commands.screens"

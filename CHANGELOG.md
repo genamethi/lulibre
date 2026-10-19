@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
+## In development (since 0.2.0-alpha.3)
+
+- Added: a file of yours used in place of one of lulibre's own (a module in
+  `~/.config/lulibre/lua/`, a script in `scripts/`, named like lulibre's)
+  is said in the console at start, with a pointer on the message line: once
+  for each file, and again whenever lulibre's own file changes (an update
+  may have fixed what yours lacks).
+
 ## 0.2.0-alpha.3
 
 - Added: `:backup check` (and `lulibre backup check`) runs SQLite's

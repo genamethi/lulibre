@@ -1,0 +1,116 @@
+-- Your own modules and scripts that are used in place of lulibre's own.
+-- Yours are looked for first, by design (~/.config/lulibre/lua/ and
+-- scripts/), so you can replace any part of lulibre that is written in
+-- Lua. But a copy of one of lulibre's files, changed and then forgotten,
+-- goes on being used after an update has fixed lulibre's. lulibre says so
+-- in the console at start: once for each such file, and again whenever
+-- lulibre's own file has changed since.
+--
+--   local overrides = require "lulibre.overrides"
+--   overrides.find()   -- { {kind="module"|"script", name=, yours=, bundled=, stamp=}, ... }
+--   overrides.warn()   -- say so of those not said of yet (lulibre does at each start); returns them
+local M = {}
+
+local uv = require "luv"
+local json = require "lulibre.json"
+
+-- the .lua files under dir, as paths relative to it
+local function walk(dir, rel, out)
+  local h = uv.fs_scandir(rel == "" and dir or dir .. "/" .. rel)
+  if not h then return out end
+  while true do
+    local name, kind = uv.fs_scandir_next(h)
+    if not name then break end
+    local r = rel == "" and name or rel .. "/" .. name
+    if kind ~= "file" and kind ~= "directory" then -- a link, say
+      local st = uv.fs_stat(dir .. "/" .. r)
+      kind = st and st.type
+    end
+    if kind == "directory" then walk(dir, r, out)
+    elseif kind == "file" and name:match("%.lua$") then out[#out + 1] = r end
+  end
+  return out
+end
+
+local function read(path)
+  local f = io.open(path, "rb")
+  if not f then return nil end
+  local s = f:read("a")
+  f:close()
+  return s
+end
+
+-- what lulibre's file holds, in a number (FNV-1a): it changes with the
+-- file's contents, not with its time (make install gives every file a new one)
+local function digest(path)
+  local s, h = read(path) or "", 2166136261
+  for i = 1, #s do h = ((h ~ s:byte(i)) * 16777619) & 0xffffffff end
+  return ("%d:%08x"):format(#s, h)
+end
+
+--- Your files that are used in place of lulibre's own, by path.
+function M.find()
+  local p = lulibre.settings.paths()
+  local bundled = p.bundled or {}
+  local out = {}
+  if p.modules and bundled.modules then
+    -- a module "a.b" is a/b.lua or a/b/init.lua, in either place
+    for _, rel in ipairs(walk(p.modules, "", {})) do
+      local base = rel:gsub("%.lua$", ""):gsub("/init$", "")
+      for _, form in ipairs { base .. ".lua", base .. "/init.lua" } do
+        if uv.fs_stat(bundled.modules .. "/" .. form) then
+          out[#out + 1] = { kind = "module", name = base:gsub("/", "."), yours = p.modules .. "/" .. rel,
+            bundled = bundled.modules .. "/" .. form }
+          break
+        end
+      end
+    end
+  end
+  if p.scripts and bundled.scripts then
+    for _, rel in ipairs(walk(p.scripts, "", {})) do
+      if uv.fs_stat(bundled.scripts .. "/" .. rel) then
+        out[#out + 1] = { kind = "script", name = rel:gsub("%.lua$", ""), yours = p.scripts .. "/" .. rel,
+          bundled = bundled.scripts .. "/" .. rel }
+      end
+    end
+  end
+  for _, o in ipairs(out) do o.stamp = digest(o.bundled) end
+  table.sort(out, function(a, b) return a.yours < b.yours end)
+  return out
+end
+
+local function seen_path()
+  return lulibre.settings.paths().data_dir .. "/overrides.json"
+end
+
+--- Say in the console which of your files are used in place of lulibre's
+-- own, of those not said of yet or whose lulibre file has changed since.
+-- Returns those. A replaceable function.
+function M.warn()
+  local found = M.find()
+  local ok, seen = pcall(json.decode, read(seen_path()) or "{}")
+  if not ok or type(seen) ~= "table" then seen = {} end
+  local now, new, changed = {}, {}, false
+  for _, o in ipairs(found) do
+    now[o.yours] = o.stamp
+    if seen[o.yours] ~= o.stamp then
+      new[#new + 1] = o
+      -- what to do first, the paths last: the console cuts a line at its width
+      lulibre.log(("your %s %s is used in place of lulibre's own%s, and may lack its fixes: remove or rename "
+        .. "yours to use lulibre's (yours: %s; lulibre's: %s; said again only when lulibre's changes)")
+        :format(o.kind, o.name, seen[o.yours] and ", which has changed since" or "", o.yours, o.bundled), "warn")
+    end
+  end
+  for k in pairs(seen) do changed = changed or now[k] == nil end
+  if #new > 0 or changed then
+    uv.fs_mkdir(lulibre.settings.paths().data_dir, 448) -- 0700; there already, most often
+    local f = io.open(seen_path(), "w")
+    if f then
+      f:write(json.encode(now))
+      f:close()
+    end
+  end
+  return new
+end
+
+return M
