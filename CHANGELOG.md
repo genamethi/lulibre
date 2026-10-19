@@ -5,6 +5,12 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Changed: arXiv's cs.CL (Computation and Language) is proposed as
+  `linguistics/computational`, not `cs/nlp`: computational linguistics is
+  not natural language processing. The words "computational linguistics"
+  on a book's pages point to `linguistics/computational` too. Tags already
+  in the library, and proposals already made, are as they were.
+
 - Added: a file of yours used in place of one of lulibre's own (a module in
   `~/.config/lulibre/lua/`, a script in `scripts/`, named like lulibre's)
   is said in the console at start, with a pointer on the message line: once

@@ -46,7 +46,10 @@ M.arxiv = {
   ["cs.LG"] = "cs/ml",
   ["stat.ML"] = "cs/ml",
   ["cs.AI"] = "cs/ai",
-  ["cs.CL"] = "cs/nlp",
+  -- arXiv's "Computation and Language": computational linguistics, which is
+  -- linguistics, not natural language processing (cs/nlp is what a book's
+  -- pages say of it, subjects.lua)
+  ["cs.CL"] = "linguistics/computational",
   ["cs.DC"] = "cs/distributed",
   ["cs.DS"] = "cs/algorithms",
   ["cs.IT"] = "cs/information-theory",

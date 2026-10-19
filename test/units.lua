@@ -925,6 +925,16 @@ QA9.AIL64 1991
   eq("classes to subjects", { taxonomy.from_lcc("QA247 .S47"), taxonomy.from_lcc("QA564.H25"), taxonomy.from_lcc("QA76.9"),
     taxonomy.from_lcc("P291"), taxonomy.from_lcc("ZZ1"), taxonomy.from_dewey("512'.7"), taxonomy.from_dewey("516.3/5"), taxonomy.from_dewey("x") },
     { "math/number-theory", "math/algebraic-geometry", "cs", "linguistics", nil, "math/number-theory", "math/algebraic-geometry" })
+  do
+    local says = {}
+    for subject, terms in pairs(require("lulibre.subjects").lexicon) do
+      for _, t in ipairs(terms) do
+        if t == "computational linguistics" then says[#says + 1] = subject end
+      end
+    end
+    eq("arXiv's Computation and Language is computational linguistics, not NLP",
+      { taxonomy.from_arxiv("cs.CL"), says }, { "linguistics/computational", { "linguistics/computational" } })
+  end
   layouts.add {
     name = "test memoirs", marks = { "memoirs of the", "test society" },
     fields = { series = "Memoirs of the Test Society", series_index = "Number%s+(%d+)", publisher = function() return "TS" end },
