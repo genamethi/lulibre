@@ -631,6 +631,7 @@ int tui_run(struct app *app);
  * path, and take it back when it exits. Returns the editor's exit status,
  * or -1 when none could be run. */
 int tui_edit_file(struct tui *t, const char *path);
+int tui_in_terminal(struct tui *t, char *const argv[]);
 void tui_dirty(struct tui *t);
 void tui_msg(struct tui *t, int error, const char *fmt, ...) PRINTF(3, 4);
 void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial);

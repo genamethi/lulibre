@@ -120,6 +120,9 @@ makes a snapshot from an older copy of calibre's
 .BR offline " [" list " | " cancel " \fIid\fR]"
 Do the changes calibre makes only while the content server is stopped
 (adding or removing a custom column), after a copy of calibre's database;
+with
+.B server_hook
+on,
 .I lulibre.service
 runs it before each start of the server.
 .TP
@@ -131,11 +134,17 @@ back would change, put it back (queued like
 .BR offline ,
 after a copy of the database as it is), remove all but the newest.
 .TP
-.BR server\-unit " [" apply " | " remove ]
-calibre's content server run with calibre's own opf backup (the launcher
-.IR calibre-server-opf.py ):
-what systemd unit runs calibre-server, and the change to it; a user unit is
-changed by a drop-in, a system or hardened unit is shown the change.
+.BR units " [" apply ]
+The systemd units the options
+.BR server_hook ,
+.B opf_writer
+and
+.B server_restart_at
+ask for, beside the unit that runs calibre-server: what would change, and
+with
+.B apply
+the change. A user unit's are made when the interface starts; a system
+unit's with sudo, after asking; a hardened unit is shown the drop-in.
 .TP
 .BR columns " [" push " | " remove ]
 calibre columns for lulibre's own fields (#partof, #part, #parts): queued

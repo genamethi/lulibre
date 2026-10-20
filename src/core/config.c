@@ -29,6 +29,20 @@ static const struct opt_def opts[] = {
   OPT(server_start, OPT_STR, "", NULL,
       "shell command that starts the content server again (systemctl --user start calibre-server)",
       NULL),
+  OPT(server_hook, OPT_STR, "off", "on|off",
+      "lulibre.service, run before each start of the content server's systemd unit: the copy of "
+      "calibre's database, the books' opf files, the changes that wait for the server to be "
+      "stopped. on: lulibre installs and enables it (`lulibre units`)",
+      NULL),
+  OPT(opf_writer, OPT_STR, "off", "off|server",
+      "server: the content server runs calibre's own opf writer, so each book's metadata.opf is "
+      "kept current while it runs; lulibre adds a drop-in to its systemd unit, "
+      "lulibre-opf-writer.conf (`lulibre units`). Relies on calibre's internals",
+      NULL),
+  OPT(server_restart_at, OPT_STR, "", NULL,
+      "HH:MM: restart the content server every day at that time (a systemd timer, "
+      "lulibre-restart.timer), so that what server_hook does is done at least daily; empty: never",
+      NULL),
 
   OPT(backup_restart, OPT_STR, "always", NULL,
       "copy calibre's database before the content server starts (lulibre.service, :offline restart): "

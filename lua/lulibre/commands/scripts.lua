@@ -8,8 +8,8 @@ end
 lulibre.command("bib", script("bib"), "[file]  write the selected books as BibTeX")
 lulibre.command("verify", script("verify"),
   "[--list title|authors|ids|unread] [filter]  the library held against its files: titles, authors and identifiers the pages bear out")
-lulibre.command("server-unit", script("server-unit"),
-  "[apply | remove]  calibre's content server with calibre's own opf backup: what runs it, and the change to its unit")
+lulibre.command("units", script("units"),
+  "[apply]  lulibre's systemd units around calibre's content server (server_hook, opf_writer, server_restart_at): what would change; make it")
 lulibre.command("backup", script("backup"),
   "[now [why] | check | compare N | restore N | always | next | never | DAYS | prune [keep]]  copies of calibre's database: list, make, check, put back")
 lulibre.command("offline", script("offline"),

@@ -1245,20 +1245,13 @@ static char *which(const char *name) {
   return NULL;
 }
 
-/* The editor is given the terminal whole. notcurses cannot simply step
- * aside (its input thread would take the editor's keys), so it is stopped
- * and started again around the editor; the planes it held go with it
- * (nc_gen tells the preview so), and everything is drawn afresh. */
-int tui_edit_file(struct tui *t, const char *path) {
-  const char *editor = getenv("VISUAL");
-  if (!editor || !*editor) editor = getenv("EDITOR");
-  char *fallback = NULL;
-  if (!editor || !*editor) {
-    fallback = which("vim");
-    if (!fallback) fallback = which("vi");
-    if (!fallback) return -1;
-    editor = fallback;
-  }
+/* A program given the terminal whole (the editor, sudo asking for a
+ * password). notcurses cannot simply step aside (its input thread would take
+ * the program's keys), so it is stopped and started again around it; the
+ * planes it held go with it (nc_gen tells the preview so), and everything is
+ * drawn afresh. argv[0] is looked for on $PATH. Returns its exit status;
+ * 127 when it could not be run, -1 when it did not exit. */
+int tui_in_terminal(struct tui *t, char *const argv[]) {
   input_unwatch(t);
   terminal_release(t);
   int status = -1;
@@ -1269,8 +1262,7 @@ int tui_edit_file(struct tui *t, const char *path) {
   if (pid == 0) {
     signal(SIGINT, SIG_DFL);
     signal(SIGQUIT, SIG_DFL);
-    /* through the shell, so that EDITOR="code --wait" works */
-    execl("/bin/sh", "sh", "-c", "exec $0 \"$1\"", editor, path, (char *)NULL);
+    execvp(argv[0], argv);
     _exit(127);
   } else if (pid > 0) {
     int st;
@@ -1280,11 +1272,28 @@ int tui_edit_file(struct tui *t, const char *path) {
   }
   sigaction(SIGINT, &old_int, NULL);
   sigaction(SIGQUIT, &old_quit, NULL);
-  free(fallback);
   terminal_start(t);
   input_watch(t);
   notcurses_refresh(t->nc, NULL, NULL);
   tui_dirty(t);
+  return status;
+}
+
+/* The editor ($VISUAL, $EDITOR, else vim or vi) on a file, in the terminal. */
+int tui_edit_file(struct tui *t, const char *path) {
+  const char *editor = getenv("VISUAL");
+  if (!editor || !*editor) editor = getenv("EDITOR");
+  char *fallback = NULL;
+  if (!editor || !*editor) {
+    fallback = which("vim");
+    if (!fallback) fallback = which("vi");
+    if (!fallback) return -1;
+    editor = fallback;
+  }
+  /* through the shell, so that EDITOR="code --wait" works */
+  char *argv[] = {"/bin/sh", "-c", "exec $0 \"$1\"", (char *)editor, (char *)path, NULL};
+  int status = tui_in_terminal(t, argv);
+  free(fallback);
   return status;
 }
 

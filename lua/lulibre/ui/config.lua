@@ -149,6 +149,15 @@ function M.run()
     cur = row or cur
     local it = shown[cur]
     local act = keys:action(key)
+    -- the options lulibre's systemd units follow (lulibre.units): changed
+    -- here, the units are changed now (asking before sudo, or a restart)
+    local function units_follow(name)
+      if it.ns or not (name == "server_hook" or name == "opf_writer" or name == "server_restart_at") then return end
+      local units = require "lulibre.units"
+      local ok, said = pcall(function() return units.apply(units.plan(), lulibre.confirm) end)
+      if not ok then lulibre.notify(tostring(said), "error")
+      elseif #said > 0 then lulibre.show(said, "calibre's server and lulibre's systemd units") end
+    end
     local function set(value)
       local ok, err = pcall(function()
         if it.ns then options.set(it.ns, it.name, value, "session")
@@ -161,6 +170,7 @@ function M.run()
       local v = it.ns and options.get(it.ns, it.name) or lulibre.settings.get(it.name)
       cf.write_value(it, v)
       lulibre.notify(("%s = %s, and written to init.lua"):format(it.name, show(v)))
+      units_follow(it.name)
     end
     if key == "<Move>" then
       about(cur)
@@ -174,6 +184,7 @@ function M.run()
       if it.ns then options.reset(it.ns, it.name) else lulibre.settings.reset(it.name) end
       cf.write_value(it, nil)
       lulibre.notify(("%s back to its default, %s (the line in init.lua is commented out)"):format(it.name, show(it.default)))
+      units_follow(it.name)
     elseif act == "editor" then
       local status, why = lulibre.edit_file(cf.path())
       if not status then lulibre.notify(why, "error")
