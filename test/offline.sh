@@ -154,6 +154,20 @@ run offline >/dev/null 2>&1
 expect   "backup_keep copies are kept"         2 "$(lua 'print(#require("lulibre.backup").list())')"
 opts=
 
+# "restart now" with lulibre.service installed: starting the server runs
+# lulibre offline again (server_start here does what systemd would do). One
+# restart makes one copy of calibre's database, not two.
+copies() { run -o backup_keep=50 backup 2>&1 | grep -c "before the content server started"; }
+before=$(copies)
+lua "lulibre.o.backup_keep = 50
+  lulibre.o.server_stop = 'true'
+  lulibre.o.server_start = '$bin --clean -L $lib -o backup_keep=50 offline > $t/service.log 2>&1'
+  local offline = require 'lulibre.offline'
+  print(offline.summary(offline.restart()))" >/dev/null
+expect   "one restart, one copy of calibre's database" 1 $(( $(copies) - before ))
+contains "the run the start set off leaves the copy to the restart" "left to the restart" "$(cat "$t/service.log")"
+contains "and a start of its own still makes one" "calibre's database copied" "$(run offline 2>&1)"
+
 # ---- calibre's database checked, and a copy of it put back
 contains "calibre's database is checked"        "passes SQLite's integrity check" "$(run backup check 2>&1)"
 contains "a copy is checked as it is made"      "ok      a point to go back to" "$(run backup now a point to go back to >/dev/null 2>&1; run backup 2>&1)"

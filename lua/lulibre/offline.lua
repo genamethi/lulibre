@@ -124,6 +124,20 @@ local function columns()
   error("a calibre program has the library open (the content server, or calibre itself)", 0)
 end
 
+-- "restart now" (M.restart) makes the copy of calibre's database and writes
+-- the opf files itself, then starts the server; lulibre.service, which that
+-- start sets off when it is installed, would do both again (two copies for
+-- one restart, pushing a real one out of the backup_keep kept). M.restart
+-- says in kv that it is starting the server; a run meanwhile leaves the two
+-- alone. Ten minutes at most: a mark left by a run that never ended does not
+-- keep a later start from its copy.
+local RESTARTING = "offline:restarting"
+
+local function restarting()
+  local r = lulibre.store("SELECT value FROM kv WHERE key = ?", RESTARTING)[1]
+  return r ~= nil and os.time() - (tonumber(r.value) or 0) < 600
+end
+
 --- Do the waiting jobs, in the order they were queued, straight to the
 -- library folder. The content server must be stopped (calibre refuses
 -- otherwise). Returns { done=, skipped=, failed={ {id=, error=}, ... } }.
@@ -138,7 +152,8 @@ function M.run()
   -- made holds back what changes the database's shape, not the rest.
   local restoring = false
   for _, j in ipairs(jobs) do restoring = restoring or j.argv[1] == "restore_copy" end
-  if not up and not restoring then
+  out.restarted = not up and restarting() -- (M.restart made the copy and wrote the files just before)
+  if not up and not restoring and not out.restarted then
     local ok, b = pcall(require("lulibre.backup").on_restart)
     if ok then out.backup = b else out.backup_error = tostring(b) end
   end
@@ -159,7 +174,7 @@ function M.run()
   -- the books' opf files, by calibre: with the server stopped nothing else
   -- writes them (backup_metadata option); before anything that changes the
   -- database's shape, they must be
-  local opf_ok = lulibre.o.backup_metadata ~= "on"
+  local opf_ok = lulibre.o.backup_metadata ~= "on" or out.restarted
   if not opf_ok then
     local ok, n = pcall(require("lulibre.backup").metadata)
     if ok then out.opf, opf_ok = n, true else out.opf_error = tostring(n) end
@@ -211,6 +226,7 @@ function M.summary(r)
       or "calibre's database copied"
   end
   if r.backup_error then parts[#parts + 1] = "calibre's database not copied: " .. r.backup_error end
+  if r.restarted then parts[#parts + 1] = "the copy and the opf files left to the restart that started the server" end
   for _, said in ipairs(r.said or {}) do parts[#parts + 1] = said end
   if (r.opf or 0) > 0 then
     parts[#parts + 1] = r.opf == 1 and "1 book's opf file written" or ("%d books' opf files written"):format(r.opf)
@@ -255,8 +271,13 @@ function M.restart()
     error("the content server was still answering after server_stop", 0)
   end
   local ok, r = pcall(M.run)
-  sh(lulibre.o.server_start)
-  local back = lulibre.o.server == "" or until_up(true)
+  -- lulibre.service, run by this start, leaves the copy and the opf files
+  -- to this run, when it went through (when it failed, the service tries)
+  if ok then lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", RESTARTING, tostring(os.time())) end
+  local started, err = pcall(sh, lulibre.o.server_start)
+  local back = started and (lulibre.o.server == "" or until_up(true))
+  lulibre.store("DELETE FROM kv WHERE key = ?", RESTARTING)
+  if not started then error(err, 0) end
   lulibre.reload()
   if not ok then error(r, 0) end
   if not back then error(M.summary(r) .. "; but the content server does not answer since server_start", 0) end
