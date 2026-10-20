@@ -247,10 +247,10 @@ end
 
 --- The subject shared references point to, as a candidate, or nil.
 function M.candidate(id)
-  if lulibre.o.subject_learned == "off" then return nil end
+  if lulibre.o.learned_tags == "off" then return nil end
   local subject, confidence, n = M.subject(id)
   if not subject then return nil end
-  return { field = "tags", value = subject, confidence = math.min(0.7, confidence),
+  return { field = "tags", value = subject, confidence = math.min(0.35, confidence / 2),
     source = ("shares references with %d books of that subject"):format(n) }
 end
 

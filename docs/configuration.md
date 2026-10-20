@@ -40,6 +40,8 @@ o.library = "~/calibre-library"
 | `ocr_originals` | | where `ocr_write = keep` puts the originals, outside the library (default `ocr-originals/` under the data folder) |
 | `text_fallback` | `auto` | `off` · `auto`: garbled pages are read again with pdftotext, when it is installed (`:run reread`) |
 | `write_jobs` | `6` | `calibredb` processes at once (direct writes run one at a time) |
+| `propose_min` | `60` | proposals under this confidence, in percent, are kept but not shown in review or counted as waiting; every summary says how many there are. Lower it to see them |
+| `propose_held` | `replace` | `replace` · `keep`: a proposal under `propose_min` is removed when another value is proposed for the same book and field, or all are kept |
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
 | `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
 | `arxiv_snapshot` | | a file of arXiv's records (its snapshot from Kaggle, or a hypergraph of arXiv; `.json` or the `.zip`). Empty: `arxiv-metadata-oai-snapshot.json`, `arxiv.json` or `arxiv.zip` in the data folder is used if there (the first of them; a link will do). `:enrich` reads papers from it and asks arXiv only about those newer than the file |
@@ -49,7 +51,8 @@ o.library = "~/calibre-library"
 | `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a title of one word is a title (`check`: a plain capitalised word is) |
 | `good_titles` | | titles, separated by commas, that are titles whatever they look like |
 | `never_titles` | | words and phrases, separated by commas, that mark a title as not one |
-| `subject_learned` | `suggest` | `off` · `suggest` · `propose`: what a subject worked out from the learned phrases is used for |
+| `learned_tags` | `off` | `off` · `suggest` · `propose`: subjects learned from the library (the phrases `:learn` finds, the references books share): `suggest` offers them in the edit form, `propose` also makes them proposals |
+| `learned_tags_min` | `20` | the confidence, in percent, a learned subject needs to be shown in review, in place of `propose_min` |
 | `subject_terms` | `20` | marking phrases `:learn` keeps for each subject |
 | `subject_catchall` | | subjects (or their last part), separated by commas, that file a book by form rather than topic |
 | `never_authors` | | words and phrases, separated by commas, never proposed as an author (added to the built-in ranks and roles) |
@@ -62,7 +65,7 @@ o.library = "~/calibre-library"
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
 | `review_rows` | `field` | `field` · `all`: one row per field with the surest proposal, or one per proposal |
-| `review_context` | `1` | `1`: review shows what the proposal under the cursor rests on (`i` hides it) |
+| `review_context` | `1` | `1`: where the list is, review shows what the proposal under the cursor rests on, duplicates the copies side by side, orphans the row in full, and the edit form what the pages say (`i` hides it) |
 | `review_reject` | `once` | `once` · `always`: whether a rejected value may be proposed again by a later run |
 | `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review (best borne out by their pages first, surest, most disputed, by id) |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |

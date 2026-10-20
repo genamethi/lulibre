@@ -94,8 +94,10 @@ function M.from_doc(doc)
     add("authors", join(people), "cover sheet", sure)
     if lab.title and not junk.title(lab.title) then add("title", lab.title, "cover sheet", sure) end
     if lab.year then add("pubdate", lab.year, "cover sheet", less) end
-    if lab.publisher then add("publisher", lab.publisher, "cover sheet", less) end
+    local publisher = lab.journal and require("lulibre.layouts").with_journal(lab.publisher, lab.journal) or lab.publisher
+    if publisher then add("publisher", publisher, "cover sheet", less) end
     if lab.jstor then add("identifiers", "jstor:" .. lab.jstor, "cover sheet", sure) end
+    if lab.doi then add("identifiers", "doi:" .. lab.doi, "cover sheet", sure) end
   end
 
   -- a thesis cover follows a template, which also survives OCR
@@ -165,7 +167,7 @@ function M.from_doc(doc)
     local ok, found = pcall(grammars.match, { id = doc.id, lines = doc.pages and doc.pages[1] or doc.lines, texts = doc.texts,
       pages = f and f.npages, idents = book and book.idents or {} })
     for _, m in ipairs(ok and found or {}) do
-      for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate" } do
+      for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "identifiers" } do
         local v = m.fields[field]
         if v and v ~= "" then add(field, tostring(v), "grammar: " .. m.grammar.name, m.grammar.confidence or 0.85) end
       end

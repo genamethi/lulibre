@@ -323,10 +323,23 @@ function M.cip(text)
   -- taken for less than that of a block that came as text.
   out.confidence = { title = 0.8, authors = 0.85 }
   local rest = table.concat(lines, "\n", math.min(i, #lines))
-  -- "(Graduate texts in mathematics; 105)" or "(... ; v. 27)"
-  local series, number = rest:match("%(([%a][^();]-)%s*;%s*[vVnNoO. ]*(%d+)%s*%)")
-  if not series then series = rest:match("%(([%a][^();]-)%)") end
-  if series and #series > 6 and not series:lower():find("ebook") and not series:lower():find("alk%. paper") then
+  -- "(Graduate texts in mathematics; 105)" or "(... ; v. 27)"; not what an
+  -- ISBN is followed by, the binding and the paper: "(pbk. : alk. paper)",
+  -- "(paperback : alkaline paper)", "(hardcover)", "(e-book)"
+  local function binding(s)
+    local low = s:lower()
+    for _, w in ipairs { "paper", "pbk", "hbk", "hardcover", "hardback", "softcover", "cloth", "acid", "alk%.",
+        "e%-?book", "electronic", "print", "online", "pdf", "epub", "spiral", "set%f[%A]" } do
+      if low:find(w) then return true end
+    end
+    return false
+  end
+  -- (and not in the subject headings, "1. Python (Computer program language)":
+  -- the series stands in the description, before them)
+  local desc = rest:sub(1, (rest:find("%f[%w]1%.%s+%u") or (#rest + 1)) - 1)
+  local series, number = desc:match("%(([%a][^();]-)%s*;%s*[vVnNoO. ]*(%d+)%s*%)")
+  if not series then series = desc:match("%(([%a][^();]-)%)") end
+  if series and #series > 6 and not binding(series) then
     -- the block writes a series in sentence case; give it as the series writes itself
     out.series = M.series_name(series:gsub("%s+", " "))
     out.series_index = number
@@ -357,6 +370,26 @@ M.add {
   confidence = 0.9,
 }
 
+-- The copyright line of a book or an article gives the year it came out:
+-- "© 2008 Elsevier Inc.", "Copyright (c) 1965, 1984 by ...". Where several
+-- years stand together the latest is the edition in hand.
+local function copyright_year(text)
+  -- the years after the sign: "1965, 1984", "1994–2023"
+  local YEARS = "([%d,%s%-\226\128\147\148]+)"
+  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS,
+    "%(c%)%s*" .. YEARS } do
+    for run in text:gmatch(pattern) do
+      local best
+      for digits in run:gmatch("%f[%d]%d%d%d%d%f[%D]") do
+        local year = tonumber(digits)
+        if year >= 1700 and year <= tonumber(os.date("%Y")) + 1 and (not best or year > best) then best = year end
+      end
+      if best then return best end
+    end
+  end
+  return nil
+end
+
 -- A book's series page or title-page verso: the series' name with the
 -- volume's number after it, and the year in the copyright line. Any series
 -- in M.series is known (add to it for more: { name, publisher }).
@@ -386,8 +419,9 @@ M.add {
       end
     end
     -- the year of the edition in hand: a reprint names the edition it reprints
-    out.pubdate = text:match("[Rr]eprint of the %a+ %d*%a* ?edition (%d%d%d%d)") or text:match("©%s*(%d%d%d%d)")
-      or text:match("[Cc]opyright%s*%(?[cC]?%)?%s*(%d%d%d%d)")
+    -- (of the years a copyright line gives, the latest: copyright_year)
+    local year = copyright_year(text)
+    out.pubdate = text:match("[Rr]eprint of the %a+ %d*%a* ?edition (%d%d%d%d)") or (year and tostring(year)) or nil
     return out
   end,
   confidence = 0.85,
@@ -779,26 +813,6 @@ M.add {
   end,
   confidence = 0.8,
 }
-
--- The copyright line of a book or an article gives the year it came out:
--- "© 2008 Elsevier Inc.", "Copyright (c) 1965, 1984 by ...". Where several
--- years stand together the latest is the edition in hand.
-local function copyright_year(text)
-  -- the years after the sign: "1965, 1984", "1994–2023"
-  local YEARS = "([%d,%s%-\226\128\147\148]+)"
-  for _, pattern in ipairs { "©%s*" .. YEARS, "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS, "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*" .. YEARS,
-    "%(c%)%s*" .. YEARS } do
-    for run in text:gmatch(pattern) do
-      local best
-      for digits in run:gmatch("%f[%d]%d%d%d%d%f[%D]") do
-        local year = tonumber(digits)
-        if year >= 1700 and year <= tonumber(os.date("%Y")) + 1 and (not best or year > best) then best = year end
-      end
-      if best then return best end
-    end
-  end
-  return nil
-end
 
 -- Whose copyright it is: on a book or a journal's article, the publisher.
 -- Houses are known by a word of their name and written one way (M.houses:

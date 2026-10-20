@@ -25,6 +25,11 @@ struct panel {
   int nrows, cap;
   int cur, top, page;
   int follow, moves, reloads;
+  /* what the preview shows while this panel is up, whatever its rows: a
+   * book, or a note in place of one (panel_set_preview) */
+  int pv_set;
+  sqlite3_int64 pv_id;
+  char *pv_note;
   int dialog; /* Esc closes it, as q does (panel_set_dialog) */
   uint32_t pending; /* the first key of a two-key binding such as gg */
   float size; /* its share of the screen, and the edge it is docked on */
@@ -71,6 +76,7 @@ void panel_unref(struct panel *p) {
   free_tabs(p);
   free(p->own);
   free(p->pass);
+  free(p->pv_note);
   free(p);
 }
 
@@ -130,6 +136,11 @@ void panel_close(struct panel *p) {
 static void destroy(struct tui *t, void *state) {
   struct panel *p = state;
   t->peek = 0;
+  if (t->preview_note) {
+    free(t->preview_note);
+    t->preview_note = NULL;
+  }
+  preview_book_changed(t);
   if (!p->hidden) gone(p);
 }
 
@@ -245,6 +256,14 @@ int panel_cursor(const struct panel *p) {
 }
 
 static void follow(struct panel *p) {
+  if (p->pv_set && p->open && !p->hidden) {
+    struct tui *t = p->t;
+    free(t->preview_note);
+    t->preview_note = p->pv_note ? xstrdup(p->pv_note) : NULL;
+    t->peek = p->pv_note ? 0 : p->pv_id;
+    preview_book_changed(t);
+    return;
+  }
   if (!p->follow || !p->open || p->hidden || p->cur < 0 || p->cur >= p->nrows) return;
   struct tui *t = p->t;
   sqlite3_int64 id = p->rows[p->cur].id; /* negative for a file staged from the sync folder */
@@ -271,6 +290,23 @@ void panel_set_cursor(struct panel *p, int row) {
   if (row < 0) row = 0;
   p->cur = row;
   follow(p);
+  tui_dirty(p->t);
+}
+
+void panel_set_preview(struct panel *p, int set, sqlite3_int64 id, const char *note) {
+  free(p->pv_note);
+  p->pv_set = set;
+  p->pv_id = id;
+  p->pv_note = set && note ? xstrdup(note) : NULL;
+  if (set) {
+    follow(p);
+  } else if (p->open && !p->hidden) {
+    free(p->t->preview_note);
+    p->t->preview_note = NULL;
+    p->t->peek = 0;
+    preview_book_changed(p->t);
+    follow(p);
+  }
   tui_dirty(p->t);
 }
 

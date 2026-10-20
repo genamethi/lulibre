@@ -501,6 +501,22 @@ do
   local two = titlepage.labelled { "A Long Title That Runs", "onto a Second Line", "Author(s): A. One and B. Two", "Source: J. Thing, 2001" }
   eq("labelled: wrapped title, two authors", { two.title, two.authors }, { "A Long Title That Runs onto a Second Line", { "A. One", "B. Two" } })
   eq("no author label, no cover sheet", titlepage.labelled { "A Title", "by Somebody", "Source: nowhere" }, nil)
+  local jst = titlepage.labelled { "Annals of Mathematics", "Cohomology Theory in Abstract Groups. I",
+    "Author(s): Samuel Eilenberg and Saunders MacLane",
+    "Source: Annals of Mathematics, Second Series, Vol. 48, No. 1 (Jan., 1947), pp. 51-78", "Published by: Annals of Mathematics" }
+  eq("labelled: the journal's name heading the sheet is not the title", jst.title, "Cohomology Theory in Abstract Groups. I")
+  local ua = titlepage.labelled { "Unifying Labeling under Minimal Search", "Item Type", "Article; text", "Authors",
+    "Epstein, Samuel D.; Kitahara, Hisatsugu", "Publisher", "University of Arizona Linguistics Circle (Tucson, Arizona)",
+    "Journal", "Coyote Papers", "Link to Item", "http://hdl.handle.net/10150/641481" }
+  eq("labels each on a line of their own, a repository's", { ua.title, ua.authors, ua.publisher, ua.journal },
+    { "Unifying Labeling under Minimal Search", { "Samuel D. Epstein", "Hisatsugu Kitahara" },
+      "University of Arizona Linguistics Circle", "Coyote Papers" })
+  local es = titlepage.labelled { "UC Davis", "UC Davis Previously Published Works", "Title", "Homeostatic and adaptive energetics:",
+    "beyond detailed balance", "Permalink", "https://escholarship.org/uc/item/9bq261qh", "Journal", "Physical Review E, 106(4)",
+    "Authors", "Semaan, Mikhael T", "Crutchfield, James P", "Publication Date", "2022-10-01", "DOI", "10.1103/physreve.106.044410" }
+  eq("a Title label wins over what stands above; values over several lines", { es.title, es.authors, es.journal, es.year, es.doi },
+    { "Homeostatic and adaptive energetics: beyond detailed balance", { "Mikhael T Semaan", "James P Crutchfield" },
+      "Physical Review E", "2022", "10.1103/physreve.106.044410" })
   local cands = require("lulibre.extract").from_doc { lines = {
     { text = "What is an Answer?", size = 11, x0 = 72, y0 = 100, x1 = 300, y1 = 112 },
     { text = "Author(s): Herbert S. Wilf", size = 11, x0 = 72, y0 = 114, x1 = 300, y1 = 126 },
@@ -887,6 +903,14 @@ LC record available at https://lccn.loc.gov/2016030743]]
   eq("the block as it is set out since 2015, read by its labels",
     { cip.title, cip.authors, cip.publisher, cip.pubdate, cip.series, cip.series_index, cip.identifiers },
     { "Agreement beyond Phi", "Shigeru Miyagawa", "The MIT Press", "2017", "Linguistic Inquiry Monographs", "75", "isbn:9780262035880" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Shaw, Zed.
+Learn Python the hard way : a very simple introduction / Zed A. Shaw.—Third edition.
+pages cm
+ISBN 978-0-321-88491-6 (paperback : alkaline paper)
+1. Python (Computer program language) 2. Computer programming
+QA76.73.P98S53 2014]]
+  eq("neither the binding nor a subject heading's qualifier is a series", cip.series, nil)
   cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
 Names: Friederici, Angela D., author. | Chomsky, Noam, writer of foreword.
 Title: Language in our brain : the origins of a uniquely human capacity / Angela D. Friederici.
@@ -1677,6 +1701,50 @@ do
   eq("lulibre.maps lists bindings", found and found.modes, "n")
 end
 
+-- propose_min: proposals under it are kept, not shown, and counted
+do
+  local proposals = require "lulibre.proposals"
+  lulibre.store("DELETE FROM proposals")
+  local id = lulibre.ids("")[1]
+  local was = { lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held }
+  lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held = 60, 20, "replace"
+  local ok, pid, held = proposals.add(id, "publisher", "Low Press", { source = "test", confidence = 0.5 })
+  eq("one under propose_min is kept, said to be held", { ok, pid ~= nil, held }, { false, true, "held" })
+  eq("it is not counted as waiting, nor listed", { proposals.count("pending"), #proposals.list(nil) }, { 0, 0 })
+  eq("held() lists it", #proposals.held(), 1)
+  eq("the summary says how many are not shown", proposals.to_review(),
+    "1 is under propose_min (60%) and not shown.")
+  eq("is:proposed leaves the book out", #lulibre.books("is:proposed"), 0)
+  lulibre.o.propose_min = 40
+  eq("lowered, the option shows it", { proposals.count("pending"), #proposals.held(), #lulibre.books("is:proposed") }, { 1, 0, 1 })
+  lulibre.o.propose_min = 60
+  ok = proposals.add(id, "publisher", "Low Press", { source = "surer", confidence = 0.7 })
+  eq("the same value from a surer source is shown", { ok, proposals.count("pending") }, { true, 1 })
+  lulibre.store("DELETE FROM proposals")
+  proposals.add(id, "series", "First Guess", { source = "test", confidence = 0.3 })
+  proposals.add(id, "series", "Second Guess", { source = "test", confidence = 0.4 })
+  local left = proposals.held()
+  eq("a held one gives way to the next for its field", { #left, left[1] and left[1].value }, { 1, "Second Guess" })
+  proposals.add(id, "series", "Shown Series", { source = "test", confidence = 0.9 })
+  eq("and to a shown one", { #proposals.held(), proposals.count("pending") }, { 0, 1 })
+  lulibre.o.propose_held = "keep"
+  proposals.add(id, "series", "Kept A", { source = "test", confidence = 0.3 })
+  proposals.add(id, "series", "Kept B", { source = "test", confidence = 0.4 })
+  eq("with propose_held = keep, all are kept", #proposals.held(), 2)
+  lulibre.store("DELETE FROM proposals")
+  ok = proposals.add(id, "tags", "math/learned", { source = "learned: a phrase, another", confidence = 0.25 })
+  eq("a learned subject is held to learned_tags_min instead", { ok, proposals.count("pending") }, { true, 1 })
+  proposals.add(id, "tags", "math/faint", { source = "learned: faint", confidence = 0.1 })
+  proposals.add(id, "tags", "math/fainter", { source = "learned: fainter", confidence = 0.1 })
+  eq("one subject does not take another's place", #proposals.held(), 2)
+  eq("under it, they are counted as learned subjects", proposals.to_review():match("2 learned subjects under learned_tags_min %(20%%%) not shown%."),
+    "2 learned subjects under learned_tags_min (20%) not shown.")
+  ok = proposals.add(id, "title", "Typed Title", { source = "typed" })
+  eq("a typed proposal is always shown", ok, true)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held = was[1], was[2], was[3]
+end
+
 -- runs: one go of proposing, remembered while its proposals wait
 do
   local runs = require "lulibre.runs"
@@ -1686,7 +1754,7 @@ do
   local heard = {}
   runs.on(function(event, run) heard[#heard + 1] = event .. ":" .. (run.step or "") end)
   local id = lulibre.ids("")[1]
-  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.5 })
+  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.65 })
   local run = runs.start { ids = { id }, steps = { "files", "records" } }
   eq("a run going on is listed, and is the one review opens on", { #runs.list(), runs.running() == run, runs.fresh() == run }, { 1, true, true })
   runs.step(run, "records")
@@ -2133,6 +2201,10 @@ do
     { "numbered-chapter", 7, "Characteristic Functions Distribution Functions and" })
   eq("a handbook chapter by its DOI", (G.match { lines = { L("Infinite Galois Theory", 15.4) }, idents = { doi = "10.1016/S1570-7954(96)80012-X" } })[1].fields.part_of,
     "Handbook of Algebra, Volume 1")
+  local foot = (G.match { lines = { L("Max Rings and V-rings", 15.6) },
+    texts = { "Max Rings and V-rings\nContents\nHANDBOOK OF ALGEBRA, VOL. 3\nEdited by M. Hazewinkel\n\239\191\1899 2003 Elsevier Science B.V. All rights reserved" } })[1]
+  eq("a handbook chapter by the foot of its first page", foot and { foot.fields.part_of, foot.fields.pubdate, foot.fields.publisher },
+    { "Handbook of Algebra, Volume 3", "2003", "Elsevier" })
   G.add { name = "unit-mine", lines = { G.line { pattern = "^Lecture (%d+)$", take = "series_index" }, G.skip(1), G.line { bold = true, take = "title" } } }
   local mine = G.match { lines = { L("Lecture 4"), L("a line between"), L("The Title", 12, true) } }
   local got

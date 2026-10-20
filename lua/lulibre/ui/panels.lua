@@ -21,15 +21,70 @@ function M.also()
   }
 end
 
+-- the "about" panel each screen has open (M.about), by the screen's panel
+local abouts = setmetatable({}, { __mode = "k" })
+
 --- Run fn(...) on top of panel p: p leaves the screen while fn's own panel is
 -- up, so the list and preview keep their room, and comes back afterwards
--- with the cursor where it was, whether fn returned or failed.
+-- with the cursor where it was, whether fn returned or failed. Its "about"
+-- panel goes and comes back with it.
 function M.over(p, fn, ...)
+  local about = abouts[p]
+  if about then about:hide() end
   p:hide()
   local r = table.pack(pcall(fn, ...))
   p:show()
+  if about then about:show() end
   if not r[1] then error(r[2], 0) end
   return table.unpack(r, 2, r.n)
+end
+
+--- What the row under the cursor of a screen's panel p is about, shown where
+-- the list is, as review shows what a proposal rests on: the list is
+-- covered while it is up and comes back when it goes. spec: title (the
+-- panel's, or a function of the row), columns ({ {name, width}, ... }, two
+-- by default), fill(row) -> rows (and a title). It opens at once when the
+-- option review_context is 1; the screen's "about" key (i) shows it or hides
+-- it. Returns a handle: :update(row), :toggle(row), :hide(), :show(),
+-- :close(), and :open() (is it up?). Close it with the screen, in a <close>
+-- variable.
+function M.about(p, spec, row)
+  local h = { spec = spec }
+  local ctx
+  local function hint() return require("lulibre.ui.keys").of(spec.keys or "review"):key("about") or "i" end
+  function h:update(r)
+    row = r or row
+    if not ctx then return end
+    if not ctx:is_open() then
+      ctx = nil
+      return
+    end
+    local ok, rows, title = pcall(spec.fill, row)
+    ctx:rows(ok and (rows or {}) or { { "", tostring(rows), style = "error" } })
+    ctx:title(("%s   %s hides"):format(ok and title or spec.title or "about this", hint()))
+  end
+  function h:toggle(r)
+    if ctx and ctx:is_open() then
+      ctx:close()
+      ctx = nil
+      return
+    end
+    ctx = lulibre.panel { side = "main", title = spec.title or "about this", columns = spec.columns or { { "", 14 }, { "", 0 } },
+      rows = {}, focus = false }
+    h:update(r)
+  end
+  function h:hide() if ctx and ctx:is_open() then ctx:hide() end end
+  function h:show() if ctx and ctx:is_open() then ctx:show() end end
+  function h:open() return ctx ~= nil and ctx:is_open() end
+  function h:close()
+    if ctx then pcall(ctx.close, ctx) end
+    ctx = nil
+    abouts[p] = nil
+  end
+  setmetatable(h, { __close = function(self) self:close() end })
+  abouts[p] = h
+  if lulibre.o.review_context ~= 0 then h:toggle(row) end
+  return h
 end
 
 --- A function that gives the preview room: it shrinks p to a few rows, and

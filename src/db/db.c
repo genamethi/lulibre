@@ -204,6 +204,8 @@ static int add_columns(struct db *db, char **err) {
   static const struct { const char *table, *column, *decl; } cols[] = {
     {"files", "garbled", "REAL"},
     {"lines", "math", "TEXT"},
+    /* 1: a proposal someone asked for (taking a copy's values), shown whatever propose_min says */
+    {"proposals", "asked", "INTEGER"},
   };
   for (size_t i = 0; i < ARRAY_LEN(cols); i++) {
     char *q = xasprintf("SELECT 1 FROM pragma_table_info('%s') WHERE name = '%s'", cols[i].table, cols[i].column);

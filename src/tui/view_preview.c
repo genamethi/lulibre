@@ -499,6 +499,22 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
 
   int y = r.y, x = r.x + 1, w = r.w - 2;
   if (w < 4) return;
+  if (t->preview_note) { /* a panel has the preview say something in place of a book */
+    drop_plane(ps);
+    dr_bar(n, r, focused);
+    dr_style(n, theme.accent, C_DEFAULT, 0);
+    const char *s = t->preview_note;
+    for (int row = y + 1; *s && row < r.y + r.h; row++) {
+      const char *e = strchr(s, '\n');
+      size_t len = e ? (size_t)(e - s) : strlen(s);
+      char *line = xstrndup(s, len);
+      dr_text(n, row, x, w, line);
+      free(line);
+      dr_style(n, theme.dim, C_DEFAULT, 0);
+      s += len + (e != NULL);
+    }
+    return;
+  }
   if (!ps->book) {
     drop_plane(ps);
     dr_bar(n, r, focused);

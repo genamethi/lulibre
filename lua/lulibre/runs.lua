@@ -104,8 +104,9 @@ end
 --- How many proposals wait for the run's books: to be decided, or written.
 function M.waiting(run)
   local n = 0
-  for _, pr in ipairs(lulibre.store("SELECT book, field, confidence, status FROM proposals WHERE status IN ('pending', 'accepted')")) do
-    if M.covers(run, pr) then n = n + 1 end
+  local proposals = require "lulibre.proposals"
+  for _, pr in ipairs(lulibre.store("SELECT book, field, confidence, source, status, asked FROM proposals WHERE status IN ('pending', 'accepted')")) do
+    if M.covers(run, pr) and proposals.shown(pr) then n = n + 1 end
   end
   return n
 end
@@ -118,7 +119,8 @@ function M.list(scope)
   local out = {}
   for _, run in ipairs(live) do out[#out + 1] = run end
   local kept, all = {}, stored()
-  local waiting = lulibre.store("SELECT book, field, confidence, status FROM proposals WHERE status IN ('pending', 'accepted')")
+  local waiting = lulibre.store("SELECT book, field, confidence, status FROM proposals WHERE status IN ('pending', 'accepted')"
+    .. require("lulibre.proposals").shown_sql())
   for _, run in ipairs(all) do
     revive(run)
     local any = false

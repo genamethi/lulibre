@@ -5,6 +5,48 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- New: `propose_min` (60% by default). A proposal under it is kept but not
+  shown in review, nor counted as waiting, nor found by `is:proposed`;
+  every summary says how many there are. Lowering it shows them. When
+  another value is proposed for a field, the ones not shown give way to it
+  (`propose_held = "keep"` keeps them).
+- Changed: subjects learned from the library are off by default, and much
+  less sure of themselves. `subject_learned` is now `learned_tags`
+  (`off` by default, was `suggest`), with `learned_tags_min` (20%) in place
+  of `propose_min` for them. A learned subject's confidence is halved, and
+  at most 0.3 (from phrases) or 0.35 (from shared references), down from
+  0.6 and 0.7.
+- Changed: `:enrich` leaves out a record whose year or publisher the book's
+  pages contradict, as read by rule (a cataloguing block, a copyright line,
+  a series page, a cover sheet, a journal header, a grammar): another
+  edition's or another work's record proposes nothing, and an ISBN the pages
+  do not print is proposed to be taken off. Of a copyright line's years the
+  latest is the edition's, the series page now included.
+- New: the Handbook of Algebra grammar knows a chapter without its DOI, by
+  the PII in the file's own title or the foot of its first page, and gives
+  its DOI, year and publisher. Cover sheets with each label on a line of its
+  own (a university's repository, eScholarship) are read: title, authors,
+  publisher or journal, date, DOI. A JSTOR sheet headed with its journal's
+  name no longer puts it in front of the title.
+- Fixed: a cataloguing block's series was taken from the binding note after
+  an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
+  heading's qualifier ("Rings (Algebra)").
+- Changed: duplicates, orphans and the edit form show, where the list is,
+  what the row is about, as review does (`i` hides it): the copies side by
+  side, a record beside the book that has its file, what the pages say for
+  each field, or for several books what they share and where they differ.
+- Fixed: the edit form opened from duplicates or orphans showed, in the
+  preview, the book under the list's cursor instead of the one being
+  edited. The preview now stays on the book a panel is about, also while
+  the cursor is in the preview; for several books it shows how many are
+  selected, not one of them. `i` in the edit form is now "about this"
+  (Enter and `e` still edit a field).
+- Fixed: the edit form for several books said "(N different values)", N
+  being the number of books, for every field they did not all share. It
+  now shows the values, the commonest first, with how many books hold each
+  ("Sam Poe (2) · Ann Lee (1)"), or how many values there are when there
+  are more than three.
+
 - Changed: what lulibre adds to the systemd unit that runs calibre's
   content server is now said by three options, and lulibre keeps the units
   as they say: `server_hook = "on"` installs and enables `lulibre.service`
