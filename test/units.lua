@@ -1677,6 +1677,50 @@ do
   eq("lulibre.maps lists bindings", found and found.modes, "n")
 end
 
+-- propose_min: proposals under it are kept, not shown, and counted
+do
+  local proposals = require "lulibre.proposals"
+  lulibre.store("DELETE FROM proposals")
+  local id = lulibre.ids("")[1]
+  local was = { lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held }
+  lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held = 60, 20, "replace"
+  local ok, pid, held = proposals.add(id, "publisher", "Low Press", { source = "test", confidence = 0.5 })
+  eq("one under propose_min is kept, said to be held", { ok, pid ~= nil, held }, { false, true, "held" })
+  eq("it is not counted as waiting, nor listed", { proposals.count("pending"), #proposals.list(nil) }, { 0, 0 })
+  eq("held() lists it", #proposals.held(), 1)
+  eq("the summary says how many are not shown", proposals.to_review(),
+    "1 is under propose_min (60%) and not shown.")
+  eq("is:proposed leaves the book out", #lulibre.books("is:proposed"), 0)
+  lulibre.o.propose_min = 40
+  eq("lowered, the option shows it", { proposals.count("pending"), #proposals.held(), #lulibre.books("is:proposed") }, { 1, 0, 1 })
+  lulibre.o.propose_min = 60
+  ok = proposals.add(id, "publisher", "Low Press", { source = "surer", confidence = 0.7 })
+  eq("the same value from a surer source is shown", { ok, proposals.count("pending") }, { true, 1 })
+  lulibre.store("DELETE FROM proposals")
+  proposals.add(id, "series", "First Guess", { source = "test", confidence = 0.3 })
+  proposals.add(id, "series", "Second Guess", { source = "test", confidence = 0.4 })
+  local left = proposals.held()
+  eq("a held one gives way to the next for its field", { #left, left[1] and left[1].value }, { 1, "Second Guess" })
+  proposals.add(id, "series", "Shown Series", { source = "test", confidence = 0.9 })
+  eq("and to a shown one", { #proposals.held(), proposals.count("pending") }, { 0, 1 })
+  lulibre.o.propose_held = "keep"
+  proposals.add(id, "series", "Kept A", { source = "test", confidence = 0.3 })
+  proposals.add(id, "series", "Kept B", { source = "test", confidence = 0.4 })
+  eq("with propose_held = keep, all are kept", #proposals.held(), 2)
+  lulibre.store("DELETE FROM proposals")
+  ok = proposals.add(id, "tags", "math/learned", { source = "learned: a phrase, another", confidence = 0.25 })
+  eq("a learned subject is held to learned_tags_min instead", { ok, proposals.count("pending") }, { true, 1 })
+  proposals.add(id, "tags", "math/faint", { source = "learned: faint", confidence = 0.1 })
+  proposals.add(id, "tags", "math/fainter", { source = "learned: fainter", confidence = 0.1 })
+  eq("one subject does not take another's place", #proposals.held(), 2)
+  eq("under it, they are counted as learned subjects", proposals.to_review():match("2 learned subjects under learned_tags_min %(20%%%) not shown%."),
+    "2 learned subjects under learned_tags_min (20%) not shown.")
+  ok = proposals.add(id, "title", "Typed Title", { source = "typed" })
+  eq("a typed proposal is always shown", ok, true)
+  lulibre.store("DELETE FROM proposals")
+  lulibre.o.propose_min, lulibre.o.learned_tags_min, lulibre.o.propose_held = was[1], was[2], was[3]
+end
+
 -- runs: one go of proposing, remembered while its proposals wait
 do
   local runs = require "lulibre.runs"
@@ -1686,7 +1730,7 @@ do
   local heard = {}
   runs.on(function(event, run) heard[#heard + 1] = event .. ":" .. (run.step or "") end)
   local id = lulibre.ids("")[1]
-  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.5 })
+  proposals.add(id, "publisher", "Waited Before", { source = "test", confidence = 0.65 })
   local run = runs.start { ids = { id }, steps = { "files", "records" } }
   eq("a run going on is listed, and is the one review opens on", { #runs.list(), runs.running() == run, runs.fresh() == run }, { 1, true, true })
   runs.step(run, "records")

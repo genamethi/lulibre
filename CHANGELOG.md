@@ -5,6 +5,23 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- New: `propose_min` (60% by default). A proposal under it is kept but not
+  shown in review, nor counted as waiting, nor found by `is:proposed`;
+  every summary says how many there are. Lowering it shows them. When
+  another value is proposed for a field, the ones not shown give way to it
+  (`propose_held = "keep"` keeps them).
+- Changed: subjects learned from the library are off by default, and much
+  less sure of themselves. `subject_learned` is now `learned_tags`
+  (`off` by default, was `suggest`), with `learned_tags_min` (20%) in place
+  of `propose_min` for them. A learned subject's confidence is halved, and
+  at most 0.3 (from phrases) or 0.35 (from shared references), down from
+  0.6 and 0.7.
+- Fixed: the edit form for several books said "(N different values)", N
+  being the number of books, for every field they did not all share. It
+  now shows the values, the commonest first, with how many books hold each
+  ("Sam Poe (2) · Ann Lee (1)"), or how many values there are when there
+  are more than three.
+
 - Changed: what lulibre adds to the systemd unit that runs calibre's
   content server is now said by three options, and lulibre keeps the units
   as they say: `server_hook = "on"` installs and enables `lulibre.service`

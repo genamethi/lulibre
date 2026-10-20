@@ -182,6 +182,14 @@ Notes"); the option `never_authors` adds words and phrases of your own:
     lulibre.o.never_authors = "visiting scholar, working group"
 Each proposal carries where it came from and how sure it is.
 
+A proposal under `propose_min` (60% by default) is kept but not shown:
+review leaves it out, the counts of what waits leave it out, and every
+summary ends by saying how many there are ("12 are under propose_min (60%)
+and not shown"). Lower the option, in the configuration window or
+init.lua, and they are shown at once. When another value is proposed for
+the same field of a book, the ones not shown give way to it
+(`propose_held = "keep"` keeps them all).
+
 A field that is empty always gets the file's best candidate. A field that
 already has a value is proposed for when the file is confident (0.8 or more)
 and says something different, so a slip made by hand is caught the next
@@ -562,12 +570,14 @@ those above it; a catch-all subject teaches only the ones above it.
 | `d` | show the dropped ones |
 | `L` | learn again |
 
-When a book's pages hold at least two of a subject's phrases, the edit form
-offers that subject for its tags, naming the phrases ("learned: modular
-forms, elliptic curves"), never as surer than 0.6. This is a judgement from
-a handful of phrases on a book's first pages and is often wrong; it is
-there to be looked at, not trusted. `subject_learned = "propose"` makes
-`:propose` use it too, `"off"` hides it.
+With `learned_tags = "suggest"`, when a book's pages hold at least two of a
+subject's phrases, the edit form offers that subject for its tags, naming
+the phrases ("learned: modular forms, elliptic curves"), never as surer
+than 0.3. This is a judgement from a handful of phrases on a book's first
+pages and has been wrong more often than right; it is off unless you turn
+it on. `learned_tags = "propose"` makes `:propose` use it too; such a
+proposal is shown when it reaches `learned_tags_min` (20%), in place of
+`propose_min`.
 
 `:run holdout` says how well this does on the library as it stands. The
 confirmed records are cut into five parts; each part in turn is left out,

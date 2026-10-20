@@ -235,7 +235,7 @@ function M.book(id, opts)
   if not book then return 0, 0 end
   local added, replacing = 0, 0
   local candidates = extract.candidates(id)
-  if lulibre.o.subject_learned == "propose" then
+  if lulibre.o.learned_tags == "propose" then
     -- after the file's own, so a stated subject (arXiv, MSC) is heard first
     candidates[#candidates + 1] = require("lulibre.learn").candidate(id)
     candidates[#candidates + 1] = require("lulibre.refs").candidate(id)

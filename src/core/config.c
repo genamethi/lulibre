@@ -100,6 +100,14 @@ static const struct opt_def opts[] = {
       "proposes when the file is confident (0.8 or more) and says something different; any "
       "proposes whenever the file's best candidate differs",
       NULL),
+  OPT(propose_min, OPT_INT, "60", NULL,
+      "proposals under this confidence, in percent, are kept but not shown in review or counted "
+      "as waiting; every summary says how many there are. Lower it to see them",
+      NULL),
+  OPT(propose_held, OPT_STR, "replace", "replace|keep",
+      "a proposal under propose_min is removed when another is made for the same book and field "
+      "(replace), or every one is kept (keep)",
+      NULL),
   OPT(one_word_titles, OPT_STR, "check", "check|ok|junk",
       "a title of one word: check takes a plain capitalised word (Algebra, Topology) for a title "
       "and what is left of a file name (infinite, E807en) for junk; ok takes any single word for "
@@ -118,9 +126,14 @@ static const struct opt_def opts[] = {
       NULL),
   OPT(refs_pages, OPT_INT, "14", NULL,
       "how many of a file's last pages :refs reads when looking for its bibliography", NULL),
-  OPT(subject_learned, OPT_STR, "suggest", "off|suggest|propose",
-      "what a subject worked out from the learned phrases is used for: suggest offers it in the "
-      "edit form, propose also makes it a proposal when :propose runs, off neither",
+  OPT(learned_tags, OPT_STR, "off", "off|suggest|propose",
+      "subjects learned from the library (the phrases :learn finds, the references books share): "
+      "suggest offers them in the edit form, propose also makes them proposals when :propose runs, "
+      "off neither",
+      NULL),
+  OPT(learned_tags_min, OPT_INT, "20", NULL,
+      "the confidence, in percent, a learned subject needs to be shown in review; it stands in for "
+      "propose_min for them",
       NULL),
   OPT(subject_terms, OPT_INT, "20", NULL,
       "how many marking phrases :learn keeps for each subject", NULL),
@@ -242,10 +255,19 @@ static int *int_slot(const struct config *c, const struct opt_def *o) {
   return (int *)((char *)c + o->off);
 }
 
+/* propose_min and learned_tags_min as last set, for the filter is:proposed
+ * (db/query.c), which has no config of its own to read them from */
+int config_propose_min = 60, config_learned_tags_min = 20;
+
+static void note_floor(const char *name, int v) {
+  if (!strcmp(name, "propose_min")) config_propose_min = v;
+  else if (!strcmp(name, "learned_tags_min")) config_learned_tags_min = v;
+}
+
 void config_init(struct config *c) {
   memset(c, 0, sizeof *c);
   for (size_t i = 0; i < ARRAY_LEN(opts); i++) {
-    if (opts[i].type == OPT_INT) *int_slot(c, &opts[i]) = atoi(opts[i].def);
+    if (opts[i].type == OPT_INT) note_floor(opts[i].name, *int_slot(c, &opts[i]) = atoi(opts[i].def));
     else *str_slot(c, &opts[i]) = xstrdup(opts[i].def);
   }
 }
@@ -271,6 +293,7 @@ int config_set(struct config *c, const char *name, const char *val, char **err) 
       return -1;
     }
     *int_slot(c, o) = (int)v;
+    note_floor(o->name, (int)v);
     return 0;
   }
   if (o->choices) {

@@ -5,6 +5,39 @@ local edit = require "lulibre.edit"
 
 local M = {}
 
+-- ---- what is shown: propose_min ----
+-- A proposal under the option propose_min (learned subjects: learned_tags_min)
+-- is kept but not shown: review leaves it out, nothing counts it as
+-- waiting, and the summaries say how many there are. Lowering the option
+-- shows them; a typed proposal, or one without a confidence, is always shown.
+
+--- Is the source that of a subject learned from the library?
+function M.learned(source)
+  source = source or ""
+  return source:find("^learned:") ~= nil or source:find("^shares references with ") ~= nil
+end
+
+--- The confidence a proposal from this source needs to be shown.
+function M.floor(source)
+  local pct = M.learned(source) and lulibre.o.learned_tags_min or lulibre.o.propose_min
+  return (tonumber(pct) or 0) / 100
+end
+
+--- Is the proposal (a row: confidence, source, status) shown?
+function M.shown(pr)
+  return pr.status == "accepted" or pr.confidence == nil or pr.source == "typed"
+    or pr.confidence >= M.floor(pr.source) - 1e-9
+end
+
+-- the same in SQL, for proposals' rows
+local function shown_sql()
+  local p = (tonumber(lulibre.o.propose_min) or 0) / 100
+  local l = (tonumber(lulibre.o.learned_tags_min) or 0) / 100
+  return ([[ AND (status = 'accepted' OR confidence IS NULL OR source = 'typed' OR confidence >= CASE
+    WHEN source LIKE 'learned:%%' OR source LIKE 'shares references with %%' THEN %.6f ELSE %.6f END - 1e-9)]]):format(l, p)
+end
+M.shown_sql = shown_sql
+
 --- Propose a change. opts: op ("set", "add", "remove"), source, confidence,
 -- note. A title that arrives in capitals is proposed in title case, as the
 -- option title_case allows, and with its mathematics in Unicode, as the
@@ -15,6 +48,11 @@ local M = {}
 -- typed or opts.again is set. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
+-- One under propose_min is kept, not shown: false, its id, and "held".
+-- Proposals that are not shown, for the same book and field, are removed
+-- when another value is proposed for it, unless propose_held is "keep"
+-- (not for subjects and identifiers, where each value is one more, not
+-- another choice).
 function M.add(id, field, value, opts)
   opts = opts or {}
   local op = opts.op or "set"
@@ -44,12 +82,25 @@ function M.add(id, field, value, opts)
     if opts.confidence and opts.confidence > (dup.confidence or 0) then
       lulibre.store("UPDATE proposals SET confidence = ?, source = ? WHERE id = ?", opts.confidence,
         opts.source or dup.source, dup.id)
-      return true, dup.id
+      if M.shown({ confidence = opts.confidence, source = opts.source or dup.source }) then
+        return true, dup.id
+      end
+      return false, dup.id, "held"
     end
     return false
   end
+  if lulibre.o.propose_held ~= "keep" and op == "set" and field ~= "tags" and field ~= "identifiers" then
+    -- the proposals for this field nobody is shown give way to the new one
+    local gone = {}
+    for _, q in ipairs(lulibre.store([[SELECT id, confidence, source, status FROM proposals
+      WHERE book = ? AND field = ? AND op = 'set' AND status = 'pending']], id, field)) do
+      if not M.shown(q) then gone[#gone + 1] = q.id end
+    end
+    if #gone > 0 then lulibre.store(("DELETE FROM proposals WHERE id IN (%s)"):format(table.concat(gone, ","))) end
+  end
   local _, _, pid = lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, created, note)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?)]], id, field, op, value, opts.source, opts.confidence, os.time(), opts.note)
+  if not M.shown({ confidence = opts.confidence, source = opts.source }) then return false, pid, "held" end
   return true, pid
 end
 
@@ -62,29 +113,60 @@ local function side(scope)
 end
 
 --- Proposals with the given status ("pending" and "accepted" when omitted),
--- by book, strongest first.
+-- by book, strongest first. Pending ones under propose_min are left out
+-- (M.held lists them).
 function M.list(status, scope)
   if status then
     return lulibre.store("SELECT * FROM proposals WHERE status = ?" .. side(scope) ..
-      " ORDER BY abs(book), field, confidence DESC, id", status)
+      (status == "pending" and shown_sql() or "") .. " ORDER BY abs(book), field, confidence DESC, id", status)
   end
   return lulibre.store("SELECT * FROM proposals WHERE status IN ('pending', 'accepted')" .. side(scope) ..
-    " ORDER BY abs(book), field, confidence DESC, id")
+    shown_sql() .. " ORDER BY abs(book), field, confidence DESC, id")
 end
 
+--- How many have the status ("pending" when omitted); pending ones under
+-- propose_min are not counted.
 function M.count(status, scope)
-  return lulibre.store("SELECT count(*) AS n FROM proposals WHERE status = ?" .. side(scope), status or "pending")[1].n
+  status = status or "pending"
+  return lulibre.store("SELECT count(*) AS n FROM proposals WHERE status = ?" .. side(scope) ..
+    (status == "pending" and shown_sql() or ""), status)[1].n
+end
+
+--- The pending proposals under propose_min (or learned_tags_min): kept, not shown.
+function M.held(scope)
+  local out = {}
+  for _, pr in ipairs(lulibre.store("SELECT * FROM proposals WHERE status = 'pending'" .. side(scope) ..
+      " ORDER BY abs(book), field, confidence DESC, id")) do
+    if not M.shown(pr) then out[#out + 1] = pr end
+  end
+  return out
 end
 
 --- What waits for review, and the key that goes there, as a sentence:
--- "300 proposals wait. Press gr to review." ("" when none wait), with
+-- "300 proposals wait. Press gr to review." ("" when none wait and none
+-- are held back), and how many are under propose_min and not shown, with
 -- prefix before it. Every script that proposes ends its summary with it.
 -- A replaceable function.
 function M.to_review(prefix)
-  local n = M.count("pending")
-  if n == 0 then return "" end
-  return (prefix or "") .. ("%d proposal%s wait%s. Press %s to review."):format(n, n == 1 and "" or "s",
-    n == 1 and "s" or "", lulibre.hint("review"))
+  local n, held, learned = M.count("pending"), 0, 0
+  for _, pr in ipairs(M.held()) do
+    if M.learned(pr.source) then learned = learned + 1 else held = held + 1 end
+  end
+  local out = {}
+  if n > 0 then
+    out[#out + 1] = ("%d proposal%s wait%s. Press %s to review."):format(n, n == 1 and "" or "s",
+      n == 1 and "s" or "", lulibre.hint("review"))
+  end
+  if held > 0 then
+    out[#out + 1] = ("%d %s under propose_min (%s%%) and not shown."):format(held, held == 1 and "is" or "are",
+      tostring(lulibre.o.propose_min))
+  end
+  if learned > 0 then
+    out[#out + 1] = ("%d learned subject%s under learned_tags_min (%s%%) not shown."):format(learned,
+      learned == 1 and "" or "s", tostring(lulibre.o.learned_tags_min))
+  end
+  if #out == 0 then return "" end
+  return (prefix or "") .. table.concat(out, " ")
 end
 
 function M.set_status(pid, status)

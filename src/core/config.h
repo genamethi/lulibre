@@ -34,12 +34,15 @@ struct config {
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *math_notation; /* unicode | off: mathematics in proposed titles (lulibre.notation) */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
+  int propose_min;     /* percent: proposals under it are kept, not shown */
+  char *propose_held;  /* replace | keep: what becomes of one under propose_min when another comes */
   char *one_word_titles; /* check | ok | junk: is a title of one word a title? */
   char *good_titles;   /* titles, comma-separated, that are titles whatever they look like */
   char *never_titles;  /* words and phrases that mark a title as not one */
   char *never_authors; /* words and phrases, comma-separated, that are never an author */
   int refs_pages;      /* closing pages of a file read when looking for its bibliography */
-  char *subject_learned; /* off | suggest | propose: what the learned phrases are used for */
+  char *learned_tags;  /* off | suggest | propose: what subjects learned from the library are used for */
+  int learned_tags_min; /* percent: the confidence a learned subject needs to be shown */
   int subject_terms;   /* marking phrases kept for each subject when learning */
   char *subject_catchall; /* subjects (or their last part) that say where a book was put, not what it is about */
   char *server;        /* calibre content server URL, used for writes */
@@ -93,6 +96,8 @@ void config_init(struct config *c);
 void config_free(struct config *c);
 /* 0 on success; on failure *err is a malloc'd message */
 int config_set(struct config *c, const char *name, const char *val, char **err);
+/* propose_min and learned_tags_min, in percent, as last set */
+extern int config_propose_min, config_learned_tags_min;
 const char *config_str(const struct config *c, const struct opt_def *o);
 int config_int(const struct config *c, const struct opt_def *o);
 
