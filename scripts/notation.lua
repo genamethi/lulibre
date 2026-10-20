@@ -54,5 +54,5 @@ for n, id in ipairs(ids) do
   if n % 25 == 0 then lulibre.progress(("notation %d/%d"):format(n, #ids)) end
 end
 lulibre.progress(nil)
-print(("%d title%s proposed with notation in Unicode (%d read from the title page); %s goes through them"):format(
-  added, added == 1 and "" or "s", read, lulibre.hint("review")))
+print(("%d title%s proposed with notation in Unicode (%d read from the title page).%s"):format(
+  added, added == 1 and "" or "s", read, require("lulibre.proposals").to_review(" ")))

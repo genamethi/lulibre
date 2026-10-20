@@ -135,8 +135,8 @@ local out = { ("%d book%s got a record from a search by title: %d hold under the
 if wrong > 0 then
   out[#out + 1] = table.concat(lines, "\n")
   if fix then
-    out[#out + 1] = ("%d waiting proposal%s withdrawn; putting back what the books said before is proposed for %d field%s: %s goes through them"):format(
-      withdrawn, withdrawn == 1 and "" or "s", back, back == 1 and "" or "s", lulibre.hint("review"))
+    out[#out + 1] = ("%d waiting proposal%s withdrawn; putting back what the books said before is proposed for %d field%s.%s"):format(
+      withdrawn, withdrawn == 1 and "" or "s", back, back == 1 and "" or "s", require("lulibre.proposals").to_review(" "))
   else
     out[#out + 1] = ("%d proposal%s from them still wait, and %d field%s were written. `unmatch --fix` withdraws the first and proposes putting the second back."):format(
       withdrawn, withdrawn == 1 and "" or "s", back, back == 1 and "" or "s")

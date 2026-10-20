@@ -137,9 +137,10 @@ local function default_of(item)
   return lulibre.settings.info(item.name).default
 end
 
---- Put options in init.lua, commented out with their defaults, under a
--- heading for lulibre's own and one for each script's namespace. items:
--- { {name=} or {ns=, name=}, ... }. Returns how many were put in.
+--- Put options in init.lua with their defaults, under a heading for
+-- lulibre's own and one for each script's namespace: commented out, or set,
+-- as the option config_add_as says. items: { {name=} or {ns=, name=}, ... }.
+-- Returns how many were put in.
 function M.add(items)
   if #items == 0 then return 0 end
   local text = M.read() or "-- lulibre configuration (see `lulibre config`)\nlocal o = lulibre.o\n"
@@ -160,7 +161,8 @@ function M.add(items)
     for _, it in ipairs(groups[key]) do
       out[#out + 1] = ""
       for _, l in ipairs(about(it)) do out[#out + 1] = l end
-      out[#out + 1] = ("-- %s = %s"):format(lhs(it, text), literal(default_of(it)))
+      out[#out + 1] = (lulibre.o.config_add_as == "set" and "%s = %s" or "-- %s = %s"):format(lhs(it, text),
+        literal(default_of(it)))
     end
   end
   write(text:gsub("\n*$", "\n") .. table.concat(out, "\n") .. "\n")

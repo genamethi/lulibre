@@ -66,6 +66,7 @@ struct config {
   char *rocks_install;  /* off | on: lulibre may install a rock a script needs into that tree (asking) */
   char *config_add_core;    /* auto | ask | never: put options missing from init.lua in it */
   char *config_add_scripts; /* auto | ask | never: the same for options scripts declare */
+  char *config_add_as;      /* commented | set: how an option added to init.lua is written */
   char *config_comments;    /* full | values | none: what is written above an option put in init.lua */
   char *config_dir;     /* where init.lua, scripts/ and lua/ are; empty = the XDG default */
 };

@@ -113,14 +113,18 @@ under the cursor does and what it takes.
 | `Enter` `e` | give it a value: it takes effect now and is written to its line in init.lua (the file is kept as `init.lua.bak` first) |
 | `d` | back to its default: the line is commented out, with the default |
 | `E` | open init.lua in your editor (`$VISUAL`, `$EDITOR`, else vim or vi). lulibre steps aside until you leave it, then reads init.lua again |
-| `a` | put the options init.lua does not mention in it, commented out with their defaults |
+| `a` | add the options that are not in init.lua, with their defaults: commented out, or set (`config_add_as`) |
 | `c` | what is written above such an option: `full` help, the `values` it takes, or `none` (`config_comments`) |
 | `f` | only the options that differ from their defaults |
 
-The first time it opens in a session it offers to put in the options init.lua
-does not mention yet. `config_add_core` and `config_add_scripts` say what
-happens to such options: `ask` (the offer), `auto` (put in when lulibre
-starts), `never`. An option with no help gets no comment, whatever the style.
+Options that are not in init.lua are added only when you ask, with `a`.
+`config_add_core` and `config_add_scripts` can have it done otherwise:
+`never` (the default), `ask` (offered the first time the window opens in a
+session), `auto` (added when lulibre starts). `config_add_as` says how an
+option is added: `commented` (the default) leaves it commented out with its
+default, so the default stays lulibre's and a later change to it reaches
+you; `set` writes it set to its default, and the value is yours from then
+on. An option with no help gets no comment, whatever the style.
 
 ### Options of scripts
 

@@ -133,8 +133,8 @@ end
 - Inside tmux the page-image preview (`P`) is drawn with block characters;
   tmux does not pass graphics through. Run directly in a terminal with the
   kitty graphics protocol, such as ghostty, lulibre asks notcurses for real
-  pixels. That path has not been tested yet; `lulibre.o.blitter = "sextant"`
-  forces block characters if it misbehaves.
+  pixels (tested in ghostty); `lulibre.o.blitter = "sextant"` forces block
+  characters if it misbehaves.
 
 ## Documentation
 

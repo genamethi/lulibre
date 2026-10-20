@@ -467,10 +467,11 @@ end
 if from_snapshot and from_snapshot > 0 then
   print(("%d paper%s read from arXiv's snapshot, without asking arXiv"):format(from_snapshot, from_snapshot == 1 and "" or "s"))
 end
-print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already kept; %d proposal%s%s; %s goes through them"):format(
+print(("%d book%s: a record for %d (%s); %d request%s made, %d answers already kept; %d new proposal%s%s.%s"):format(
   #books, #books == 1 and "" or "s", found, #said > 0 and table.concat(said, ", ") or "none",
   net.stats.asked, net.stats.asked == 1 and "" or "s", net.stats.kept, added, added == 1 and "" or "s",
-  replacing > 0 and (", %d for a field that has a value"):format(replacing) or "", lulibre.hint("review")))
+  replacing > 0 and (", %d would replace a value the book has"):format(replacing) or "",
+  require("lulibre.proposals").to_review(" ")))
 if cited > 0 then
   print(("%d record%s left out: the identifier is in the file's pages, but the record's title is not the book's (a work it cites)"):format(
     cited, cited == 1 and "" or "s"))

@@ -73,6 +73,8 @@ table.sort(lines)
 local out = { ("%d books looked for among %.1f million papers: %d found by title and borne out by their pages; %d same-titled papers left (their people are not on the book's pages)")
   :format(n, passed / 1e6, proposed, refused) }
 for _, l in ipairs(lines) do out[#out + 1] = l end
-if proposed > 0 then out[#out + 1] = ("%s goes through them; :enrich --offline then proposes what the records say"):format(lulibre.hint("review")) end
+if proposed > 0 then
+  out[#out + 1] = require("lulibre.proposals").to_review() .. " Then :enrich --offline proposes what the records say."
+end
 print(table.concat(out, "\n"))
 local _ = edit
