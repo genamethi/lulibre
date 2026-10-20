@@ -400,6 +400,19 @@ shown "one undo takes it back"                "undid"
 expect "from every book"                      0 "$(run query -c tag:from-the-dialog 2>/dev/null)"
 k '\\' Space
 
+# ---- the edit form for several books: where they differ, what they hold
+k "&"; lit "id:1,3,4"; k Enter
+shown "the filter narrows the list to three" "3 of 4"
+k :; lit "mark all"; k Enter
+k e
+shown "the edit form opens for the marked books" "edit  3 books"
+shown "a field they differ in shows each value and how many hold it" "Sam Poe (2) · Ann Lee (1)"
+k Escape
+sleep 0.2
+k '\\' Space
+k BSpace
+wait_for "all books"
+
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
 expect "the interface exits cleanly"          0 "$(cat "$t/rc" 2>/dev/null)"

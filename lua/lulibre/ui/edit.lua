@@ -35,6 +35,21 @@ function M.run(args)
     return first
   end
 
+  -- what the books hold where they differ: the values, the commonest first,
+  -- with how many books have each; "(N values)" when there are many
+  local function differing(field)
+    local count, order = {}, {}
+    for _, b in ipairs(books) do
+      local v = edit.current(b, field)
+      if not count[v] then order[#order + 1] = v end
+      count[v] = (count[v] or 0) + 1
+    end
+    if #order > 3 then return ("(%d values)"):format(#order) end
+    table.sort(order, function(a, b) return count[a] > count[b] or (count[a] == count[b] and a < b) end)
+    for i, v in ipairs(order) do order[i] = ("%s (%d)"):format(v == "" and "empty" or v, count[v]) end
+    return table.concat(order, " · ")
+  end
+
   -- calibre's fields, then the custom ones (#partof ...: lulibre.custom)
   local custom = require "lulibre.custom"
   local fields = {}
@@ -55,7 +70,7 @@ function M.run(args)
     local out = {}
     for i, field in ipairs(fields) do
       local cur = now(field)
-      out[i] = { field, cur == nil and ("(%d different values)"):format(#books) or cur,
+      out[i] = { field, cur == nil and differing(field) or cur,
         new[field] == "" and edit.BLANK or new[field] or "", from[field] or "", style = new[field] and "ok" or nil }
     end
     return out
