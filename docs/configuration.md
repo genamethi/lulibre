@@ -23,6 +23,9 @@ o.library = "~/calibre-library"
 | `server` `user` `password_file` | | calibre content server, for changes |
 | `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
 | `server_stop` `server_start` | | shell commands that stop and start the content server, for the changes that wait for it to be stopped (`:offline`); empty: they wait for its next restart |
+| `server_hook` | `off` | `on`: `lulibre.service`, which runs `lulibre offline`, before each start of the server's systemd unit (workflows: "lulibre's systemd units") |
+| `opf_writer` | `off` | `server`: the server's unit started through lulibre's launcher, so that calibre's own writer keeps the books' metadata.opf current while it runs |
+| `server_restart_at` | | a time of day, `HH:MM`: the server restarted daily at that time (`lulibre-restart.timer`); empty: never |
 | `backup_restart` | `always` | copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
 | `backup_keep` | `5` | copies kept |
 | `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session when the newest is older than that many days; `false`: do not |
@@ -205,7 +208,7 @@ directory. See [the Lua API](api.md).
 | `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never dropped with it: the journal of changes, snapshots and the changes that wait for the server to be stopped; the custom fields |
 | `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
 | `~/.local/share/lulibre/overrides.json` | which of your files used in place of lulibre's the console has told you of |
-| `~/.local/state/lulibre/calibre-server.json` | written by calibre's server while it runs through lulibre's launcher (`lulibre server-unit`) |
+| `~/.local/state/lulibre/calibre-server.json` | written by calibre's server while it runs through lulibre's launcher (`opf_writer = "server"`) |
 | `~/.local/share/lulibre/orphans/` | stray files set aside |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured.

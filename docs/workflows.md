@@ -1000,15 +1000,17 @@ lulibre queues them (in the history file beside the index) and does them
 the next time the server is stopped. They are done the same way whatever
 stopped it:
 
-- `lulibre.service`, a systemd user unit that runs before each start of the
-  server. `make install` puts it in `<prefix>/share/lulibre/systemd/`; copy
-  it to `~/.config/systemd/user/`, name your server's unit in it if that is
-  not `calibre-server.service`, then `systemctl --user daemon-reload` and
-  `systemctl --user enable lulibre.service`.
+- `lulibre.service`, run before each start of the server's systemd unit:
+  set `server_hook = "on"` and lulibre installs and enables it for the unit
+  that runs your server (see "lulibre's systemd units" below).
 - "restart now": lulibre stops the server with the option `server_stop`,
   does them, and starts it with `server_start`
   (`systemctl --user stop calibre-server`, `… start …`).
 - by hand, while the server is down: `lulibre offline`.
+
+With `server_restart_at = "03:30"` (a time of day), lulibre also has
+systemd restart the server every day at that time, so that what
+`lulibre.service` does is done at least daily.
 
 With both `lulibre.service` and the "restart now" options set up, a
 restart from lulibre makes one copy of calibre's database, not two: the
@@ -1105,7 +1107,7 @@ Then the staged file goes in through SQLite's own backup. If the
 database is too damaged for that, the staged file takes its place.
 Nothing else in the library folder is touched.
 
-### The opf files: `lulibre server-unit`
+### The opf files
 
 calibre keeps a copy of each book's record in its folder, `metadata.opf`.
 It reads them when it rebuilds its database (`restore_database`) and when it
@@ -1137,22 +1139,16 @@ arguments as `calibre-server`, after `--`:
     /opt/calibre/calibre-debug -e /usr/local/share/lulibre/contrib/calibre-server-opf.py -- [calibre-server options] LIBRARY
 
 For a systemd unit that runs `calibre-server` (the one calibre's manual
-gives, at <https://manual.calibre-ebook.com/server.html>, or your own):
-
-    lulibre server-unit           what runs calibre-server, and what would change
-    lulibre server-unit apply     make the change
-    lulibre server-unit remove    take it back
-
-`apply` changes a unit of your own (`~/.config/systemd/user/`) by a drop-in
-beside it, `<unit>.d/lulibre-opf.conf`, which replaces its ExecStart with
-the launcher's; the unit's own file is left as it is. A unit of the
-system's (`/etc/systemd/system/`), or one with sandboxing or hardening
-settings (`ProtectSystem`, `ReadOnlyPaths`, `NoNewPrivileges` ...), is not
-changed: the drop-in to add, and the commands, are printed instead. With
-such settings the service must still be able to read the launcher and run
-`calibre-debug`; the status file below is optional. `lulibre` ships
-calibre's manual's unit so changed, in `<prefix>/share/lulibre/systemd/
-calibre-server.service`, for a new setup.
+gives, at <https://manual.calibre-ebook.com/server.html>, or your own),
+set `opf_writer = "server"`: lulibre adds a drop-in to the unit,
+`<unit>.d/lulibre-opf-writer.conf`, which replaces its ExecStart with the
+launcher's; the unit's own file is left as it is (see "lulibre's systemd
+units" below). A unit with sandboxing or hardening settings
+(`ProtectSystem`, `ReadOnlyPaths`, `NoNewPrivileges` ...) is not given it:
+the drop-in is shown instead. With such settings the service must still be
+able to read the launcher and run `calibre-debug`; the status file below is
+optional. `lulibre` ships calibre's manual's unit so changed, in
+`<prefix>/share/lulibre/systemd/calibre-server.service`, for a new setup.
 
 Started some other way (an OpenRC or runit service, a script, a
 container's command)? Replace `calibre-server ARGS` with
@@ -1169,6 +1165,38 @@ relies on, the server is started without the thread (the library stays
 reachable), the log and the status file say why, and `:backup` shows it; with
 `LULIBRE_OPF_REQUIRED=1` in the unit's environment the server does not start
 at all instead.
+
+### lulibre's systemd units
+
+Three options say what lulibre adds around the systemd unit that runs
+calibre's content server, and lulibre keeps the units as they say:
+
+| Option | What lulibre installs |
+|---|---|
+| `server_hook = "on"` | `lulibre.service`, run before each start of the server's unit (`lulibre offline`), enabled for it |
+| `opf_writer = "server"` | the drop-in `<unit>.d/lulibre-opf-writer.conf`: the server started through the launcher, with calibre's opf writer in it |
+| `server_restart_at = "HH:MM"` | `lulibre-restart.timer` and `lulibre-restart.service`: the server restarted every day at that time |
+
+Set one off (or back to its default) and what it installed goes. The unit
+is found from the calibre-server running now, else from the unit files
+that start one (`~/.config/systemd/user/`, `~/.local/share/systemd/user/`,
+`/etc/systemd/system/`).
+
+- A user unit: lulibre writes the files and runs `systemctl --user` itself,
+  when the interface starts and when one of the options is changed in the
+  configuration window (it offers to restart the server when the drop-in
+  changed).
+- A system unit: lulibre writes the files with sudo, in the terminal, after
+  asking: when one of the options is changed in the configuration window,
+  or with `lulibre units apply`. `lulibre.service` then runs as the
+  server's `User=` (or yours).
+- Started some other way (an OpenRC or runit service, a script, a
+  container)? Nothing is installed: run `lulibre offline` before each start
+  of the server, and start the server through the launcher as above.
+
+      lulibre units            what the options ask for, and what would change
+      lulibre units apply      make it
+      :units [apply]
 
 ## What books cite: `:refs`
 

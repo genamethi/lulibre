@@ -81,7 +81,7 @@ function M.opf()
     return { behind = behind, why = ("calibre's server runs through calibre-server-opf.py, but without the thread: %s")
       :format(st.error or "?") }
   end
-  return { behind = behind, why = "nothing writes them while the server runs: `lulibre server-unit` sets it up; "
+  return { behind = behind, why = "nothing writes them while the server runs (opf_writer = server does); "
     .. "until then, at each stop (backup_metadata)" }
 end
 

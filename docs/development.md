@@ -120,7 +120,7 @@ calibre: a title changed through the server must reach the book's
 metadata.opf within 15 s. When it fails, read those files of the new calibre
 and bring the launcher to them. The launcher fails soft at run time (the
 server without the thread, the reason in its log and its status file) and
-hard with `LULIBRE_OPF_REQUIRED=1`. `scripts/server-unit.lua` only changes
+hard with `LULIBRE_OPF_REQUIRED=1`. `lua/lulibre/units.lua` only writes
 units; it does not depend on calibre's internals.
 
 ## The documentation site

@@ -59,7 +59,6 @@ opf=$(find "$stage" -type f -path '*/lulibre/contrib/calibre-server-opf.py' | he
 expect   "calibre's server launcher is installed" yes "$([ -n "$opf" ] && echo yes || echo no)"
 unit=$(find "$stage" -type f -path '*/lulibre/systemd/calibre-server.service' | head -1)
 contains "and calibre's unit, pointing at where it is installed" "-e ${opf#$stage}" "$(cat "$unit" 2>/dev/null)"
-contains "lulibre.service names the installed binary" "ExecStart=$(dirname "${installed#$stage}")/lulibre offline" "$(cat "$(find "$stage" -type f -path '*/lulibre/systemd/lulibre.service' | head -1)" 2>/dev/null)"
 # the installed binary with the installed runtime (LULIBRE_RUNTIME says where,
 # since the stage is not the prefix it was configured for)
 rt=$(dirname "$data")

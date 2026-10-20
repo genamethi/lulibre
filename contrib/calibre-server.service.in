@@ -13,7 +13,8 @@
 #   sudo systemctl daemon-reload && sudo systemctl enable --now calibre-server
 # For a unit of your own (~/.config/systemd/user/, systemctl --user), drop
 # User= and Group= and use WantedBy=default.target. A unit you have already
-# is changed instead by `lulibre server-unit`.
+# is changed instead by lulibre itself, with the option opf_writer = server
+# (`lulibre units`).
 [Unit]
 Description=calibre Content server
 After=network.target

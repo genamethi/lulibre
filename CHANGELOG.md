@@ -5,6 +5,17 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Changed: what lulibre adds to the systemd unit that runs calibre's
+  content server is now said by three options, and lulibre keeps the units
+  as they say: `server_hook = "on"` installs and enables `lulibre.service`
+  (no copying it by hand); `opf_writer = "server"` adds the launcher's
+  drop-in, now `lulibre-opf-writer.conf` (the old `lulibre-opf.conf` is
+  replaced); `server_restart_at = "HH:MM"` restarts the server daily. A
+  user unit's are made when the interface starts and when an option is
+  changed in the configuration window; a system unit's with sudo, in the
+  terminal, after asking. `lulibre server-unit` is now `lulibre units
+  [apply]` (`:units`). New: `lulibre.in_terminal(argv)`.
+
 - Fixed: "restart now" (`:offline restart`) with `lulibre.service`
   installed made two copies of calibre's database for one restart (one by
   the restart, one by the service its start set off), pushing a real copy

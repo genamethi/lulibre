@@ -127,8 +127,6 @@ install: $(BIN)
 	done
 	install -D -m 644 man/lulibre.1 $(DESTDIR)$(DATADIR)/man/man1/lulibre.1
 	install -d $(DESTDIR)$(DATADIR)/lulibre/systemd
-	sed -e 's|@BINDIR@|$(BINDIR)|g' -e 's|@DATADIR@|$(DATADIR)|g' contrib/lulibre.service.in \
-	  > $(DESTDIR)$(DATADIR)/lulibre/systemd/lulibre.service
 	sed -e 's|@DATADIR@|$(DATADIR)|g' contrib/calibre-server.service.in \
 	  > $(DESTDIR)$(DATADIR)/lulibre/systemd/calibre-server.service
 	install -D -m 644 contrib/calibre-server-opf.py $(DESTDIR)$(DATADIR)/lulibre/contrib/calibre-server-opf.py

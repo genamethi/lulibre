@@ -278,9 +278,11 @@ else
   echo "offline: no calibre-debug beside calibre-server, skipping the launcher's checks"
 fi
 
-# ---- lulibre server-unit, on a unit of a home of the test's own: systemctl is
-# a stand-in that reads the unit's files there, and the checks run in a pid
-# namespace of their own, so no calibre-server of the machine's is seen
+# ---- lulibre units: lulibre's systemd units as server_hook, opf_writer and
+# server_restart_at ask, on a unit in a home of the test's own: systemctl is
+# a stand-in that reads the unit's files there and logs what it is asked, and
+# the checks run in a pid namespace of their own, so no calibre-server of the
+# machine's is seen
 home=$t/home
 units=$home/.config/systemd/user
 mkdir -p "$units" "$t/bin"
@@ -294,7 +296,7 @@ case $1 in
     echo "# $f"; cat "$f"
     for d in "$f.d"/*.conf; do [ -f "$d" ] && { echo; echo "# $d"; cat "$d"; }; done
     exit 0 ;;
-  daemon-reload|restart) echo "$*" >> "$HOME/systemctl.log"; exit 0 ;;
+  daemon-reload|restart|enable|disable) echo "$*" >> "$HOME/systemctl.log"; exit 0 ;;
 esac
 exit 1
 SC
@@ -304,26 +306,60 @@ plain() { # a user unit as calibre's manual writes it, plus what is given
   printf '[Unit]\nDescription=calibre Content server\nAfter=network.target\n\n[Service]\nType=simple\n%sExecStart=%s --listen-on 127.0.0.1 "%s"\n\n[Install]\nWantedBy=default.target\n' \
     "$1" "$server" "$lib" > "$units/calibre-server.service"
 }
-su() { # lulibre server-unit ARGS, answering yes
-  yes | unshare --pid --fork --mount-proc env HOME="$home" PATH="$t/bin:$PATH" "$bin" --clean -L "$lib" server-unit "$@" 2>&1
+un() { # lulibre units ARGS, with options OPTS, answering yes
+  yes | unshare --pid --fork --mount-proc env HOME="$home" PATH="$t/bin:$PATH" "$bin" --clean -L "$lib" $uopts units "$@" 2>&1
 }
+log() { cat "$home/systemctl.log" 2>/dev/null; }
 plain ""
-contains "server-unit finds the unit that starts calibre-server" "calibre-server.service (a user unit" "$(su)"
-contains "and says what its ExecStart would be" "would: ExecStart=$debug -e " "$(su)"
-su apply >/dev/null
-dropin=$units/calibre-server.service.d/lulibre-opf.conf
-contains "apply writes a drop-in that replaces ExecStart" "ExecStart=
+uopts=
+contains "with the options off, nothing is asked for" "nothing to change" "$(un)"
+uopts="-o server_hook=on -o opf_writer=server -o server_restart_at=03:30"
+contains "units finds the unit that starts calibre-server" "calibre-server.service (a user unit" "$(un)"
+contains "and says what it would write" "write $units/calibre-server.service.d/lulibre-opf-writer.conf" "$(un)"
+un apply >/dev/null
+dropin=$units/calibre-server.service.d/lulibre-opf-writer.conf
+contains "opf_writer = server: a drop-in that replaces ExecStart" "ExecStart=
 ExecStart=$debug -e " "$(cat "$dropin" 2>/dev/null)"
 contains "with the unit's own arguments after --" "-- --listen-on 127.0.0.1 \"$lib\"" "$(cat "$dropin" 2>/dev/null)"
 expect   "and leaves the unit's file as it was" no "$(grep -q calibre-debug "$units/calibre-server.service" && echo yes || echo no)"
-contains "then reloads systemd" "daemon-reload" "$(cat "$home/systemctl.log" 2>/dev/null)"
-contains "a second look sees it done" "through calibre-server-opf.py already" "$(su)"
-su remove >/dev/null
-expect   "remove takes the drop-in away" no "$([ -e "$dropin" ] && echo yes || echo no)"
+contains "server_hook = on: lulibre.service, before the server's unit" "Before=calibre-server.service" "$(cat "$units/lulibre.service" 2>/dev/null)"
+contains "running lulibre offline" "offline" "$(grep '^ExecStart=' "$units/lulibre.service" 2>/dev/null)"
+contains "and enabled for it" "enable lulibre.service" "$(log)"
+contains "server_restart_at: a timer at that time" "OnCalendar=*-*-* 03:30:00" "$(cat "$units/lulibre-restart.timer" 2>/dev/null)"
+contains "that restarts the server's unit" "restart calibre-server.service" "$(cat "$units/lulibre-restart.service" 2>/dev/null)"
+contains "started now" "enable --now lulibre-restart.timer" "$(log)"
+contains "systemd is reloaded" "daemon-reload" "$(log)"
+contains "a second look finds nothing to change" "nothing to change" "$(un)"
+uopts="-o server_hook=on -o opf_writer=server -o server_restart_at=04:15"
+un apply >/dev/null
+contains "a new time is written over the old" "OnCalendar=*-*-* 04:15:00" "$(cat "$units/lulibre-restart.timer" 2>/dev/null)"
+: > "$home/systemctl.log"
+uopts=
+un apply >/dev/null
+expect   "the options off: the drop-in goes" no "$([ -e "$dropin" ] && echo yes || echo no)"
+expect   "lulibre.service goes" no "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
+expect   "the timer goes" no "$([ -e "$units/lulibre-restart.timer" ] && echo yes || echo no)"
+contains "each disabled first" "disable lulibre.service" "$(log)"
+contains "the timer stopped" "disable --now lulibre-restart.timer" "$(log)"
+# the drop-in under its old name (lulibre server-unit's) is taken for lulibre's
+mkdir -p "$units/calibre-server.service.d"
+printf '[Service]\nExecStart=\nExecStart=%s -e x -- y\n' "$debug" > "$units/calibre-server.service.d/lulibre-opf.conf"
+uopts="-o opf_writer=server"
+un apply >/dev/null
+expect   "the old drop-in is replaced by the new" "no yes" \
+  "$([ -e "$units/calibre-server.service.d/lulibre-opf.conf" ] && echo yes || echo no) $([ -e "$dropin" ] && echo yes || echo no)"
+uopts=
+un apply >/dev/null
 plain "ProtectSystem=strict
 "
-contains "a hardened unit is not changed" "Not changed by lulibre: it has sandboxing or hardening settings (ProtectSystem)" "$(su apply)"
+uopts="-o server_hook=on -o opf_writer=server"
+out=$(un apply)
+contains "a hardened unit is not given the drop-in" "the opf writer: not made (it has sandboxing or hardening settings (ProtectSystem)" "$out"
 expect   "nothing is written for it" no "$([ -e "$dropin" ] && echo yes || echo no)"
-contains "what to add is shown instead" "ExecStart=$debug -e " "$(su)"
+expect   "lulibre.service, a unit of its own, still is" yes "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
+uopts="-o opf_writer=server"
+contains "what to add is shown instead" "ExecStart=$debug -e " "$(un)"
+uopts=
+un apply >/dev/null
 
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
