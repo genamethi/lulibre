@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "db/db.h"
 #include "doc/doc.h"
 #include "match/fold.h"
 #include "tui/tui.h"
@@ -168,7 +169,7 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
   if (sqlite3_prepare_v2(h,
                          "SELECT f.id, f.path, f.format, f.status, f.error, f.npages,"
                          " (SELECT count(*) FROM pages p WHERE p.file = f.id), f.emb_title,"
-                         " f.emb_author FROM files f WHERE f.book = ? ORDER BY f.id LIMIT 1",
+                         " f.emb_author FROM files f WHERE f.book = ? ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1",
                          -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, id);
     if (sqlite3_step(st) == SQLITE_ROW) {
