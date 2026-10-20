@@ -238,6 +238,8 @@ its own documentation.
 | `lulibre.ui.context` | what a proposal rests on, for review's context panel: `rows(pr, others)`, `record_of(pr)` (the kept record a proposal came from or an identifier leads to), `source_class(src)` |
 | `net.kept_record(kind, value)` | the record kept for a doi, isbn or arXiv number, asking nobody; `net.arxiv_by_title(path, {[net.title_key(t)]=true})` looks papers up by title in arXiv's snapshot |
 | `lulibre.panel{ side = "main" }` | a panel in the list's window for a while, the list coming back when it closes; the focus stays where it was |
+| `lulibre.panel{ preview = id or text }`, `p:preview(v)` | what the preview shows while the panel is up, whatever row the cursor is on: a book, or a note in place of one; `nil` gives it back to the rows |
+| `require("lulibre.ui.panels").about(p, {fill=, columns=, title=, keys=}, row)` | a screen's "about this" panel where the list is, as review's: `fill(row)` returns its rows and title; `:update(row)`, `:toggle(row)`; it steps aside with `panels.over` |
 | `lulibre.option(ns, { name = { default=, type=, choices=, help= } })` | declare a script's options; returns the namespace to read them from. `lulibre.cfg.NS.NAME` reads or sets one; `require "lulibre.options"`: `declare`, `get`, `set(ns, name, v, "file"|"script"|"session")`, `reset`, `from`, `list`, `namespaces` |
 | `lulibre.config_file` | init.lua as lulibre writes it: `missing()`, `add(items)`, `write_value(item, v)` (nil: back to the default), `line_of(item)` |
 | `lulibre.features` | the programs features need: `find(program)`, `status(f)`, `need(name)` (may offer pixi), `declare{ name=, programs=, used_for=, packages=, pixi= }` |

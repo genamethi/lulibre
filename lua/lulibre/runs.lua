@@ -105,7 +105,7 @@ end
 function M.waiting(run)
   local n = 0
   local proposals = require "lulibre.proposals"
-  for _, pr in ipairs(lulibre.store("SELECT book, field, confidence, source, status FROM proposals WHERE status IN ('pending', 'accepted')")) do
+  for _, pr in ipairs(lulibre.store("SELECT book, field, confidence, source, status, asked FROM proposals WHERE status IN ('pending', 'accepted')")) do
     if M.covers(run, pr) and proposals.shown(pr) then n = n + 1 end
   end
   return n

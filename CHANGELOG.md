@@ -31,6 +31,16 @@ written in `src/version.h`.
 - Fixed: a cataloguing block's series was taken from the binding note after
   an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
   heading's qualifier ("Rings (Algebra)").
+- Changed: duplicates, orphans and the edit form show, where the list is,
+  what the row is about, as review does (`i` hides it): the copies side by
+  side, a record beside the book that has its file, what the pages say for
+  each field, or for several books what they share and where they differ.
+- Fixed: the edit form opened from duplicates or orphans showed, in the
+  preview, the book under the list's cursor instead of the one being
+  edited. The preview now stays on the book a panel is about, also while
+  the cursor is in the preview; for several books it shows how many are
+  selected, not one of them. `i` in the edit form is now "about this"
+  (Enter and `e` still edit a field).
 - Fixed: the edit form for several books said "(N different values)", N
   being the number of books, for every field they did not all share. It
   now shows the values, the commonest first, with how many books hold each

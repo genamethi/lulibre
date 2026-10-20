@@ -65,7 +65,7 @@ o.library = "~/calibre-library"
 | `mouse` | `1` | clicks and the wheel |
 | `review_open` | `0` | `1`: review starts with every book's other fields shown |
 | `review_rows` | `field` | `field` · `all`: one row per field with the surest proposal, or one per proposal |
-| `review_context` | `1` | `1`: review shows what the proposal under the cursor rests on (`i` hides it) |
+| `review_context` | `1` | `1`: where the list is, review shows what the proposal under the cursor rests on, duplicates the copies side by side, orphans the row in full, and the edit form what the pages say (`i` hides it) |
 | `review_reject` | `once` | `once` · `always`: whether a rejected value may be proposed again by a later run |
 | `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review (best borne out by their pages first, surest, most disputed, by id) |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |

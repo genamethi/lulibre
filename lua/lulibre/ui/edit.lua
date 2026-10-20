@@ -78,11 +78,54 @@ function M.run(args)
 
   local title = #books == 1 and ("edit  %d  %s"):format(ids[1], books[1].title or "")
     or ("edit  %d books"):format(#books)
+  -- The preview shows the book being edited, wherever the list's cursor is;
+  -- for several, none of them, so that nothing is copied from the wrong one.
   local p <close> = lulibre.panel {
-    title = title, help = keys:hint("edit", "suggest", "clear", "write"), height = 0.38, dialog = true,
+    title = title, help = keys:hint("edit", "suggest", "clear", "about", "write"), height = 0.38, dialog = true,
     columns = { { "Field", 12 }, { "Now", -3 }, { "New", -3 }, { "From", 26 } },
     rows = rows(),
+    preview = #ids == 1 and ids[1] or ("%d books selected\n\n%s shows, where the list is, what they share and where they differ"):format(
+      #ids, keys:key("about") or "i"),
   }
+
+  -- where the list is: what the file's pages say for each field, or for
+  -- several books, which fields they share and which they differ in
+  local said -- field -> { candidate, ... }, read once
+  local about <close> = require("lulibre.ui.panels").about(p, {
+    keys = "edit", columns = { { "Field", 12 }, { "", -3 }, { "", 26 } },
+    fill = function()
+      local out = {}
+      if #books == 1 then
+        if not said then
+          said = {}
+          local ok, cands = pcall(require("lulibre.extract").candidates, ids[1])
+          for _, c in ipairs(ok and cands or {}) do
+            said[c.field] = said[c.field] or {}
+            table.insert(said[c.field], c)
+          end
+        end
+        for _, field in ipairs(fields) do
+          for i, c in ipairs(said[field] or {}) do
+            out[#out + 1] = { i == 1 and field or "", c.value, ("%s %.2f"):format(c.source or "", c.confidence or 0) }
+          end
+        end
+        if #out == 0 then out[1] = { "", "the file's pages suggest nothing", "", style = "dim" } end
+        return out, ("what the pages of book %d say"):format(ids[1])
+      end
+      for _, field in ipairs(fields) do
+        local cur = now(field)
+        if cur ~= nil then
+          out[#out + 1] = { field, cur == "" and "empty in all" or cur, "the same in all", style = "dim" }
+        else
+          out[#out + 1] = { field, differing(field), "differs", style = "warn" }
+        end
+      end
+      out[#out + 1] = { "", "", "" }
+      out[#out + 1] = { "books", ("%d selected"):format(#books), "", style = "head" }
+      for _, b in ipairs(books) do out[#out + 1] = { tostring(b.id), b.title or "", edit.current(b, "authors") } end
+      return out, ("%d books: what they share and where they differ"):format(#books)
+    end,
+  })
 
   while true do
     local key, row = p:wait()
@@ -90,7 +133,9 @@ function M.run(args)
     local field = fields[row]
     local act = keys:action(key)
     if act == "write" then break end
-    if act == "help" then
+    if act == "about" then
+      about:toggle()
+    elseif act == "help" then
       keys:show("edit")
     elseif field and act == "edit" then
       local list = edit.separator[field] or (custom.is(field) and (custom.field(field) or {}).type == "list" and ", ") or nil

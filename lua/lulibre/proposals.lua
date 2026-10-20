@@ -9,7 +9,8 @@ local M = {}
 -- A proposal under the option propose_min (learned subjects: learned_tags_min)
 -- is kept but not shown: review leaves it out, nothing counts it as
 -- waiting, and the summaries say how many there are. Lowering the option
--- shows them; a typed proposal, or one without a confidence, is always shown.
+-- shows them; a typed proposal, one without a confidence, and one asked for
+-- (opts.asked: taking a copy's values) are always shown.
 
 --- Is the source that of a subject learned from the library?
 function M.learned(source)
@@ -25,7 +26,7 @@ end
 
 --- Is the proposal (a row: confidence, source, status) shown?
 function M.shown(pr)
-  return pr.status == "accepted" or pr.confidence == nil or pr.source == "typed"
+  return pr.status == "accepted" or pr.confidence == nil or pr.source == "typed" or pr.asked == 1
     or pr.confidence >= M.floor(pr.source) - 1e-9
 end
 
@@ -33,7 +34,7 @@ end
 local function shown_sql()
   local p = (tonumber(lulibre.o.propose_min) or 0) / 100
   local l = (tonumber(lulibre.o.learned_tags_min) or 0) / 100
-  return ([[ AND (status = 'accepted' OR confidence IS NULL OR source = 'typed' OR confidence >= CASE
+  return ([[ AND (status = 'accepted' OR confidence IS NULL OR source = 'typed' OR asked = 1 OR confidence >= CASE
     WHEN source LIKE 'learned:%%' OR source LIKE 'shares references with %%' THEN %.6f ELSE %.6f END - 1e-9)]]):format(l, p)
 end
 M.shown_sql = shown_sql
@@ -45,7 +46,8 @@ M.shown_sql = shown_sql
 -- (source "typed") or opts.as_is is set. A value that was proposed for this book and field and
 -- barred (N in review: never again) is not proposed again, nor one that
 -- was rejected when the option review_reject is "always"; unless it is
--- typed or opts.again is set. Returns true and the proposal's id, or false if the book already
+-- typed or opts.again is set. opts.asked: the proposal was asked for, and is
+-- shown whatever propose_min says. Returns true and the proposal's id, or false if the book already
 -- has that value or the same proposal is already waiting (when this source
 -- is surer than the one it came from, the waiting proposal is upgraded).
 -- One under propose_min is kept, not shown: false, its id, and "held".
@@ -69,13 +71,18 @@ function M.add(id, field, value, opts)
   local ok, new = pcall(edit.resolve, book, field, op, value)
   if not ok then error(new, 2) end
   if new == edit.current(book, field) then return false end
-  local dup = lulibre.store([[SELECT id, confidence, source FROM proposals WHERE book = ? AND field = ? AND op = ?
+  local dup = lulibre.store([[SELECT id, confidence, source, asked FROM proposals WHERE book = ? AND field = ? AND op = ?
     AND value = ? AND status IN ('pending', 'accepted')]], id, field, op, value)[1]
   if not dup and not opts.again and opts.source ~= "typed" then
     local barred = lulibre.o.review_reject == "always" and "('barred', 'rejected')" or "('barred')"
     local said_no = lulibre.store([[SELECT 1 AS x FROM proposals WHERE book = ? AND field = ? AND op = ?
       AND value = ? AND status IN ]] .. barred .. " LIMIT 1", id, field, op, value)[1]
     if said_no then return false end
+  end
+  if dup and opts.asked and dup.asked ~= 1 then
+    -- asked for now: shown from here on
+    lulibre.store("UPDATE proposals SET asked = 1 WHERE id = ?", dup.id)
+    return true, dup.id
   end
   if dup then
     -- the same value from a surer source: the proposal takes that source's word
@@ -92,15 +99,18 @@ function M.add(id, field, value, opts)
   if lulibre.o.propose_held ~= "keep" and op == "set" and field ~= "tags" and field ~= "identifiers" then
     -- the proposals for this field nobody is shown give way to the new one
     local gone = {}
-    for _, q in ipairs(lulibre.store([[SELECT id, confidence, source, status FROM proposals
+    for _, q in ipairs(lulibre.store([[SELECT id, confidence, source, status, asked FROM proposals
       WHERE book = ? AND field = ? AND op = 'set' AND status = 'pending']], id, field)) do
       if not M.shown(q) then gone[#gone + 1] = q.id end
     end
     if #gone > 0 then lulibre.store(("DELETE FROM proposals WHERE id IN (%s)"):format(table.concat(gone, ","))) end
   end
-  local _, _, pid = lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, created, note)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?)]], id, field, op, value, opts.source, opts.confidence, os.time(), opts.note)
-  if not M.shown({ confidence = opts.confidence, source = opts.source }) then return false, pid, "held" end
+  local _, _, pid = lulibre.store([[INSERT INTO proposals(book, field, op, value, source, confidence, created, note, asked)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)]], id, field, op, value, opts.source, opts.confidence, os.time(), opts.note,
+    opts.asked and 1 or nil)
+  if not M.shown({ confidence = opts.confidence, source = opts.source, asked = opts.asked and 1 or nil }) then
+    return false, pid, "held"
+  end
   return true, pid
 end
 

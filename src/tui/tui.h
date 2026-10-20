@@ -447,6 +447,10 @@ void panel_set_help(struct panel *p, const char *help);
 #define PANEL_TABS 12
 void panel_set_tabs(struct panel *p, int n, const char *const *names, int current);
 void panel_set_follow(struct panel *p, int follow);
+/* What the preview shows while the panel is up, whatever row the cursor is
+ * on: the book id, or (note not NULL) that note in place of a book; set 0
+ * gives the preview back to the rows (or the list). */
+void panel_set_preview(struct panel *p, int set, sqlite3_int64 id, const char *note);
 /* For a panel that follows: 1, and the book its cursor row stands for (0
  * when that row is not a book). 0 for a panel that does not follow. */
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
@@ -601,6 +605,7 @@ struct tui {
   } sel;
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
+  char *preview_note;   /* shown by the preview in place of any book (panel_set_preview) */
   /* whoever asked to be told when the indexing run ends (tui_index) */
   void (*ix_hook[8])(const struct index_stats *st, void *ud);
   void *ix_hook_ud[8];

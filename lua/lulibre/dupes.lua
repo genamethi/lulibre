@@ -154,7 +154,8 @@ function M.pull(from, to)
     if theirs ~= "" and theirs ~= mine and (field ~= "series_index" or from.series) then
       local op = (field == "tags" or field == "identifiers") and "add" or "set"
       local ok, added = pcall(proposals.add, to.id, field, theirs,
-        { op = op, source = ("book %d"):format(from.id), confidence = mine == "" and 0.9 or 0.5, again = true, as_is = true })
+        { op = op, source = ("book %d"):format(from.id), confidence = mine == "" and 0.9 or 0.5, again = true, as_is = true,
+          asked = true })
       if ok and added then n = n + 1 end
     end
   end

@@ -88,13 +88,48 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("action", "expand", "edit", "write"), follow = true, height = 0.5,
-    keys = keys:own(), pass = panels.PASS, reloads = true,
+    title = title(), help = keys:hint("action", "expand", "edit", "about", "write"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
   }
   p:cursor(2)
   local peek = panels.peeker(p, 0.5)
+  -- where the list is: a record beside the book that has its file, a stray
+  -- file beside the book that holds the same bytes, a link and its target
+  local about <close> = panels.about(p, {
+    keys = "orphans", columns = { { "", 12 }, { "", -1 }, { "", -1 } },
+    fill = function(r)
+      local item, out = at[r], {}
+      if not item then return out end
+      local function fields(a, b)
+        for _, field in ipairs(edit.fields) do
+          local va, vb = a and edit.current(a, field) or "", b and edit.current(b, field) or ""
+          out[#out + 1] = { field, va, b and vb or "", style = (b and va ~= vb) and "warn" or "dim" }
+        end
+      end
+      local twin = type(item.twin) == "table" and item.twin or (type(item.twin) == "number" and lulibre.book(item.twin)) or nil
+      if type(item.book) == "table" then
+        out[#out + 1] = { "", ("record %d, no file"):format(item.book.id), twin and ("book %d, with its file"):format(twin.id) or "", style = "head" }
+        fields(item.book, twin)
+        out[#out + 1] = { "verdict", item.verdict or "", "" }
+        out[#out + 1] = { "action", WORD[item.action] or item.action or "", "" }
+        return out, twin and "the record beside the copy that has its file" or "the record"
+      end
+      out[#out + 1] = { "path", item.rel or "", "" }
+      if item.target then out[#out + 1] = { "points at", item.target, "" } end
+      if item.to then out[#out + 1] = { "would point", item.to, "" } end
+      if item.size then out[#out + 1] = { "size", require("lulibre.dupes").human(item.size), "" } end
+      out[#out + 1] = { "verdict", item.verdict or "", "" }
+      out[#out + 1] = { "action", WORD[item.action] or item.action or "", "" }
+      if twin then
+        out[#out + 1] = { "", "", "" }
+        out[#out + 1] = { "", ("book %d"):format(twin.id), "", style = "head" }
+        for _, field in ipairs(edit.fields) do out[#out + 1] = { field, edit.current(twin, field), "" } end
+      end
+      return out, item.target and "the link" or "the file"
+    end,
+  }, 2)
   -- after something may have changed the books: read the records again, and
   -- let go of those whose book is no longer there
   local function refresh()
@@ -112,7 +147,11 @@ function M.run()
     local id = item and (type(item.book) == "table" and item.book.id or item.book or item.twin)
     if type(id) == "table" then id = id.id end
     local act = keys:action(key)
-    if key == "<Reload>" then
+    if key == "<Move>" then
+      about:update(row)
+    elseif act == "about" then
+      about:toggle(row)
+    elseif key == "<Reload>" then
       refresh() -- the library changed under us
     elseif act == "help" then
       keys:show("orphans", panels.also())
@@ -191,6 +230,7 @@ function M.run()
     end
     p:rows(build())
     p:title(title())
+    about:update(row)
   end
 end
 

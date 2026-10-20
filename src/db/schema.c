@@ -41,7 +41,7 @@ const char db_schema[] =
   "CREATE TABLE IF NOT EXISTS proposals("
   " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL,"
   " op TEXT NOT NULL DEFAULT 'set', value TEXT NOT NULL, source TEXT, confidence REAL,"
-  " status TEXT NOT NULL DEFAULT 'pending', created INTEGER, note TEXT);"
+  " status TEXT NOT NULL DEFAULT 'pending', created INTEGER, note TEXT, asked INTEGER);"
   "CREATE INDEX IF NOT EXISTS proposals_status ON proposals(status, book);"
   /* the journal of changes lives in the history file beside the index
    * (db.c, history_schema), so that nothing done to the index loses it */

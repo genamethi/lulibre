@@ -184,8 +184,9 @@ static const struct opt_def opts[] = {
       "next source, O takes that source for the field in every book, m switches), or all: every "
       "proposal a row of its own", NULL),
   OPT(review_context, OPT_INT, "1", NULL,
-      "1: review shows, where the list is, what the proposal under the cursor rests on: the record "
-      "it came from, what the book's pages say of it, the other sources for the field (i hides it)", NULL),
+      "1: where the list is, review shows what the proposal under the cursor rests on (the record it "
+      "came from, what the book's pages say of it, the other sources for the field), duplicates the "
+      "copies side by side, orphans the row in full, the edit form what the pages say (i hides it)", NULL),
   OPT(review_reject, OPT_STR, "once", "once|always",
       "once: rejecting a proposal decides that proposal only, and a later run may propose the value "
       "again (N in review is the key that says never again); always: a rejected value is not proposed "

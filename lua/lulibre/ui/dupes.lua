@@ -45,13 +45,49 @@ function M.run()
   end
 
   local p <close> = lulibre.panel {
-    title = title(), help = keys:hint("keep", "edit", "peek", "remove"), follow = true, height = 0.5,
-    keys = keys:own(), pass = panels.PASS, reloads = true,
+    title = title(), help = keys:hint("keep", "edit", "about", "remove"), follow = true, height = 0.5,
+    keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
   }
   p:cursor(2)
   local peek = panels.peeker(p, 0.5)
+  -- where the list is: the group's copies side by side, field by field
+  local SHOWN = 3
+  local about <close> = panels.about(p, {
+    keys = "dupes", columns = { { "", 12 }, { "", -1 }, { "", -1 }, { "", -1 } },
+    fill = function(r)
+      local g, b = at[r] and at[r][1], at[r] and at[r][2]
+      if not g then return {} end
+      local copies = {}
+      for i = 1, math.min(SHOWN, #g.books) do copies[i] = g.books[i] end
+      local head = { "copy", style = "ok" }
+      for i, c in ipairs(copies) do
+        head[i + 1] = ("%s%d%s"):format(c.id == g.keep and "✓ " or "", c.id, b and c.id == b.id and "  ←" or "")
+      end
+      local out = { head }
+      for _, field in ipairs(edit.fields) do
+        local row, first, same = { field }, nil, true
+        for i, c in ipairs(copies) do
+          local v = edit.current(c, field)
+          row[i + 1] = v
+          if i == 1 then first = v elseif v ~= first then same = false end
+        end
+        row.style = same and "dim" or "warn"
+        out[#out + 1] = row
+      end
+      local folder, formats = { "folder" }, { "formats" }
+      for i, c in ipairs(copies) do
+        folder[i + 1], formats[i + 1] = c.dir or "", table.concat(c.formats or {}, ", ")
+      end
+      out[#out + 1] = formats
+      out[#out + 1] = folder
+      if #g.books > SHOWN then
+        out[#out + 1] = { "", ("and %d more copies, not shown here"):format(#g.books - SHOWN), style = "dim" }
+      end
+      return out, ("the %d copies, field by field (differing fields in colour)"):format(#g.books)
+    end,
+  }, 2)
   -- after something may have changed the books: read them again, and let go
   -- of copies that are no longer there and of groups left with one
   local function refresh()
@@ -71,7 +107,11 @@ function M.run()
     local g, b = at[row] and at[row][1], at[row] and at[row][2]
     local id = b and b.id or g and g.keep -- the book the row stands for
     local act = keys:action(key)
-    if key == "<Reload>" then
+    if key == "<Move>" then
+      about:update(row)
+    elseif act == "about" then
+      about:toggle(row)
+    elseif key == "<Reload>" then
       refresh() -- the library changed under us
     elseif act == "help" then
       keys:show("duplicates", panels.also())
@@ -135,6 +175,7 @@ function M.run()
     end
     p:rows(build())
     p:title(title())
+    about:update(row)
   end
 end
 

@@ -52,12 +52,23 @@ sessions.
 
 ## Editing: `e`
 
-A form with one row per field for the selected book or books.
+A form with one row per field for the selected book or books. While it is
+open the preview shows the book being edited, wherever the list's cursor
+is (opened from duplicates or orphans, the row's book). For several books
+the preview shows none of them, only how many are selected, so that
+nothing is copied from the wrong one.
+
+Where the list was, `i` shows what the file's pages say for each field,
+source and confidence beside each value; for several books, which fields
+they share and which they differ in, with the values and how many hold
+each, and the books themselves. It opens with the form when
+`review_context = 1`.
 
 | Key | |
 |---|---|
 | `Enter` | type a value; a popup ranks suggestions and `Tab` takes the highlighted one |
 | `Space` | step through what the file itself and related books suggest |
+| `i` | what the pages say, where the list is; again to hide it |
 | `a` | fill every empty field with the best suggestion from the file |
 | `c` | clear: blank the field |
 | `t` | title case |
@@ -1259,6 +1270,15 @@ one does not becomes proposals for the kept one.
 its proposals; the duplicates panel steps aside while they are open and
 comes back up to date. `p` gives the preview more room.
 
+Where the list was, the group's copies stand side by side, field by field,
+the fields they differ in in colour, with their formats and folders (`i`
+hides it, and brings it back). The preview shows the copy under the
+cursor, even one the list's filter leaves out, and stays on it in the edit
+form.
+
+`t` (take from this copy) proposes what it asks for whatever `propose_min`
+says: those proposals are always shown.
+
 `t` takes from the copy under the cursor: every field where its record says
 something the kept copy's does not is proposed for the kept copy, and review
 opens on those proposals, each marked with the book it came from. Accept
@@ -1273,7 +1293,10 @@ what is wanted and `w` writes it; nothing is removed.
 | a file in one of calibre's folders that calibre does not know | move it out, if a book already holds the same bytes |
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
-`Space` changes a row's action, `w` carries them out. `e` and `r` open the
+Where the list was, the row is shown in full: a record with no file beside
+the book that has its file, field by field; a stray file or a link with
+what it leads to (`i` hides it, and brings it back). `Space` changes a
+row's action, `w` carries them out. `e` and `r` open the
 edit form and the review for the row's book, as in duplicates, and `t` on a
 record whose file is gone offers what it says to the book that is the same
 work and has the file. `x` opens the row
