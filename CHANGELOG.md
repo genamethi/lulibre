@@ -5,6 +5,11 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Fixed: in a terminal with the kitty keyboard protocol (ghostty, kitty;
+  not inside tmux), shifted symbols did nothing or the wrong thing: `:`
+  arrived as `;`, `?` as `/`, `&` as `7`, so the command line would not
+  open and typed text lost its symbols. A key is now what it types.
+
 - Changed: arXiv's cs.CL (Computation and Language) is proposed as
   `linguistics/computational`, not `cs/nlp`: computational linguistics is
   not natural language processing. The words "computational linguistics"
