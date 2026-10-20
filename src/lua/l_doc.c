@@ -29,8 +29,11 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <uv.h>
+
 #include "app.h"
 #include "core/util.h"
+#include "db/db.h"
 #include "doc/doc.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -48,10 +51,53 @@ static sqlite3_stmt *prep(lua_State *L, const char *sql) {
   return st;
 }
 
+/* doc_metadata on a worker: the file is opened (MuPDF, a context of the
+ * call's own) away from the Lua thread, and the task waits */
+struct mjob {
+  uv_work_t req;
+  struct task *task;
+  char *path, *text, *err;
+};
+
+static void m_work(uv_work_t *req) {
+  struct mjob *j = req->data;
+  j->text = doc_metadata(j->path, &j->err);
+}
+
+static void m_after(uv_work_t *req, int status) {
+  (void)status;
+  struct mjob *j = req->data;
+  lua_State *L = sched_end_wait(j->task);
+  if (L) {
+    if (j->text) {
+      lua_pushstring(L, j->text);
+      sched_wake(j->task, 1);
+    } else {
+      lua_pushnil(L);
+      lua_pushstring(L, j->err ? j->err : "cannot read");
+      sched_wake(j->task, 2);
+    }
+  }
+  free(j->path);
+  free(j->text);
+  free(j->err);
+  free(j);
+}
+
 /* lulibre.doc_metadata(path): the metadata a file carries beside its pages,
- * as text (doc_metadata); nil and why when it cannot be opened */
+ * as text (doc_metadata); nil and why when it cannot be opened. In a task
+ * it waits while a worker reads the file; called outside one (code the
+ * interface runs directly) it reads the file there and then. */
 static int l_doc_metadata(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
+  if (sched_current_id(L) && lua_isyieldable(L)) {
+    struct mjob *j = xcalloc(1, sizeof *j);
+    j->path = xstrdup(path);
+    j->req.data = j;
+    j->task = sched_begin_wait(L);
+    uv_queue_work(lapi_loop(L), &j->req, m_work, m_after);
+    return lua_yield(L, 0);
+  }
   char *err = NULL;
   char *text = doc_metadata(path, &err);
   if (!text) {
@@ -70,7 +116,7 @@ static int l_text(lua_State *L) {
   int page = (int)luaL_optinteger(L, 2, 0);
   sqlite3_stmt *st = prep(L,
     "SELECT p.text FROM pages p WHERE p.file ="
-    " (SELECT f.id FROM files f WHERE f.book = ?1 ORDER BY f.id LIMIT 1)"
+    " (SELECT f.id FROM files f WHERE f.book = ?1 ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1)"
     " AND (?2 = 0 OR p.page = ?2) ORDER BY p.page");
   sqlite3_bind_int64(st, 1, id);
   sqlite3_bind_int(st, 2, page);
@@ -121,7 +167,7 @@ static int l_lines(lua_State *L) {
   int page = (int)luaL_optinteger(L, 2, 1);
   sqlite3_stmt *st = prep(L,
     "SELECT text, size, flags, x0, y0, x1, y1, math FROM lines WHERE file ="
-    " (SELECT f.id FROM files f WHERE f.book = ?1 ORDER BY f.id LIMIT 1)"
+    " (SELECT f.id FROM files f WHERE f.book = ?1 ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1)"
     " AND page = ?2 ORDER BY n");
   sqlite3_bind_int64(st, 1, id);
   sqlite3_bind_int(st, 2, page);
@@ -146,7 +192,7 @@ static int l_files(lua_State *L) {
   sqlite3_stmt *st = prep(L,
     "SELECT path, format, error, emb_title, emb_author, emb_subject, emb_keywords,"
     " emb_creator, emb_producer, status, npages, nchars, quality"
-    " FROM files WHERE book = ? ORDER BY id");
+    " FROM files WHERE book = ? ORDER BY " DB_BOOK_FILE_ORDER(""));
   sqlite3_bind_int64(st, 1, id);
   lua_newtable(L);
   int i = 0;
@@ -341,7 +387,7 @@ static int l_page_put(lua_State *L) {
   sqlite3_stmt *st;
 
   sqlite3_int64 file = 0;
-  if (sqlite3_prepare_v2(h, "SELECT id FROM files WHERE book = ? ORDER BY id LIMIT 1", -1, &st, NULL) == SQLITE_OK) {
+  if (sqlite3_prepare_v2(h, "SELECT id FROM files WHERE book = ? ORDER BY " DB_BOOK_FILE_ORDER("") " LIMIT 1", -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, id);
     if (sqlite3_step(st) == SQLITE_ROW) file = sqlite3_column_int64(st, 0);
     sqlite3_finalize(st);

@@ -68,13 +68,13 @@ Library books have positive ids; files staged from the sync folder negative ones
 
 | | |
 |---|---|
-| `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds |
+| `lulibre.text(id [, page])` | indexed text of one page, or of all indexed pages joined by form feeds, from the book's file (the one read best, a PDF first: the same file `text`, `lines`, `page_put`, the preview and verify's evidence read) |
 | `lulibre.text_measure(id)` | measure again the text the index holds for a book's files (characters, quality), as indexing would now: after the measure has changed, or text was put there by other means; how many files were measured |
 | `lulibre.lines(id [, page])` | the page as lines: `{ {text=, size=, bold=, italic=, super=, rotated=, mono=, block=, x0=, y0=, x1=, y1=, math=}, ... }`; `math`: the line with its mathematics marked up as TeX, when it has any |
-| `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }` |
+| `lulibre.files(id)` | `{ {path=, format=, status=, pages=, chars=, quality=, error=, title=, author=, ...}, ... }`, the book's file first |
 | `lulibre.extract(path [, {pages=, layout_pages=, tail=}])` | *waits.* Read any file now: `{ pages=, chars=, quality=, meta={...}, page={ {text=, lines=}, ... } }` or nil, error |
 | `lulibre.render(path, page [, width])` | *waits.* The page as a greyscale PGM string |
-| `lulibre.page_put(id, page, {text=, lines=, src=})` | replace a page's indexed text, as OCR does |
+| `lulibre.page_put(id, page, {text=, lines=, src=})` | replace a page's indexed text in the book's file, as OCR does |
 | `lulibre.md5(path)` | *waits* the first time. Content hash, remembered in the index |
 | `lulibre.index([{filter=, force=, retry=}])` | *waits.* Extract text from new or changed files (all of them with `force`, only matching books with `filter`): `{ files=, queued=, ok=, failed=, missing=, seconds= }` |
 
@@ -234,7 +234,7 @@ its own documentation.
 | `lulibre.quality` | a record's score, and the confirmed ones: `score(book)`, `ranked(opts)`, `set_good(ids, on)`, `is_good(id)`, `good_ids()`, `catchall(subject)` |
 | `lulibre.learn` | what marks a subject: `run()`, `terms(subject)`, `set(subject, phrase, state)`, `classify(text [, model])`, `suggest(text [, model])`, `candidate(id)`; without keeping the result: `census()`, `work{from=, census=}`, `model(got)`; `FURNITURE` (phrases never learned) |
 | `lulibre.verify` | the file decides: `evidence(id)` (the opening pages, or nil and why they cannot be read), `title(ev, t)` → shown/partly/absent/unknown and share, `phrase(ev, t)` (share standing in order), `headline(ev, t)` (in the largest type), `authors(ev, names)` → verdict, shown, named, `ident(ev, "doi:...")` → own/front/inside/cited/absent/unknown, `size(ev, rec)` → part/whole/larger, `record(ev, rec)` → `{title=, authors=, another=, part=, unread=}`, `book(id)` |
-| `lulibre.doc_metadata(path)` | a PDF's XMP packet and Info dictionary, or an EPUB's package, as text; `require("lulibre.ids").from_metadata(text)` → `{ {kind=, value=, where=} }` |
+| `lulibre.doc_metadata(path)` | *waits* in a task (a worker reads the file). A PDF's XMP packet and Info dictionary, or an EPUB's package, as text; `require("lulibre.ids").from_metadata(text)` → `{ {kind=, value=, where=} }` |
 | `lulibre.ui.context` | what a proposal rests on, for review's context panel: `rows(pr, others)`, `record_of(pr)` (the kept record a proposal came from or an identifier leads to), `source_class(src)` |
 | `net.kept_record(kind, value)` | the record kept for a doi, isbn or arXiv number, asking nobody; `net.arxiv_by_title(path, {[net.title_key(t)]=true})` looks papers up by title in arXiv's snapshot |
 | `lulibre.panel{ side = "main" }` | a panel in the list's window for a while, the list coming back when it closes; the focus stays where it was |

@@ -104,6 +104,8 @@ local cache, whys = {}, {}
 -- can be read.
 function M.evidence(id)
   if cache[id] ~= nil then return cache[id] or nil, whys[id] end
+  -- the book's file, as lulibre.text and lulibre.lines take it (db.h's
+  -- DB_BOOK_FILE_ORDER), when it has been read
   local f = lulibre.sql([[SELECT id, path, npages, nchars, quality FROM files WHERE book = ? AND status = 1
     ORDER BY (format = 'PDF') DESC, id LIMIT 1]], id)[1]
   local why
@@ -159,22 +161,30 @@ function M.phrase(ev, title)
     if not STOP[w] then want[#want + 1] = w end
   end)
   if #want == 0 then return nil end
-  if not ev.seq then
-    ev.seq, ev.at = {}, {}
+  -- the text's words in order, built once and kept with the evidence: made
+  -- whole in locals and put in place with one assignment, since another
+  -- task may ask while this one is interrupted (a table filled in place
+  -- would show it half made)
+  local order = ev.order
+  if not order then
+    local seq, at = {}, {}
     each_word(ev.text, function(w)
       if not STOP[w] and not w:match("^%d+$") then
-        ev.seq[#ev.seq + 1] = w
-        ev.at[w] = ev.at[w] or {}
-        table.insert(ev.at[w], #ev.seq)
+        seq[#seq + 1] = w
+        at[w] = at[w] or {}
+        table.insert(at[w], #seq)
       end
     end)
     -- (each_word gives the figures after the words: they are left out of the order)
+    order = { seq = seq, at = at }
+    ev.order = order
   end
+  local seq, at = order.seq, order.at
   local best = 0
   for i = 1, #want do
-    for _, pos in ipairs(ev.at[want[i]] or {}) do
+    for _, pos in ipairs(at[want[i]] or {}) do
       local k = 1
-      while i + k <= #want and ev.seq[pos + k] == want[i + k] do k = k + 1 end
+      while i + k <= #want and seq[pos + k] == want[i + k] do k = k + 1 end
       if k > best then best = k end
     end
     if best >= #want - i + 1 then break end
@@ -256,9 +266,12 @@ function M.ident(ev, ident)
   if not kind then return "unknown" end
   kind = kind:lower()
   -- the file's own metadata names it (lulibre.doc_metadata): its own
+  -- read once, made whole, then kept with one assignment (as in M.phrase):
+  -- reading the file waits, so another task can ask meanwhile
   if ev.path and ev.meta == nil then
-    ev.meta = {}
-    for _, m in ipairs(ids.from_metadata(lulibre.doc_metadata(ev.path))) do ev.meta[m.kind .. ":" .. m.value:lower()] = true end
+    local meta = {}
+    for _, m in ipairs(ids.from_metadata(lulibre.doc_metadata(ev.path))) do meta[m.kind .. ":" .. m.value:lower()] = true end
+    ev.meta = meta
   end
   local norm = kind == "isbn" and ids.isbn13(value) or value
   if ev.meta and norm and ev.meta[kind .. ":" .. norm:lower()] then return "own" end
