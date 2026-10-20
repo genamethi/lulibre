@@ -123,6 +123,7 @@ expect   "and nothing was written"        "sieve" "$(field 2 title)"
 contains "propose reads the title pages"  "proposals" "$(run run propose 2>&1)"
 contains "accepted proposals are written" "changed" "$(lua '
   local proposals = require "lulibre.proposals"
+  lulibre.o.propose_min = 0 -- a title from a title page is offered at 0.55, under the default
   for _, q in ipairs(proposals.list("pending")) do
     if q.field == "title" and q.book == 2 then proposals.accept(q) end
   end
