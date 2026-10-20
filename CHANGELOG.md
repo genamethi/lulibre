@@ -16,6 +16,21 @@ written in `src/version.h`.
   of `propose_min` for them. A learned subject's confidence is halved, and
   at most 0.3 (from phrases) or 0.35 (from shared references), down from
   0.6 and 0.7.
+- Changed: `:enrich` leaves out a record whose year or publisher the book's
+  pages contradict, as read by rule (a cataloguing block, a copyright line,
+  a series page, a cover sheet, a journal header, a grammar): another
+  edition's or another work's record proposes nothing, and an ISBN the pages
+  do not print is proposed to be taken off. Of a copyright line's years the
+  latest is the edition's, the series page now included.
+- New: the Handbook of Algebra grammar knows a chapter without its DOI, by
+  the PII in the file's own title or the foot of its first page, and gives
+  its DOI, year and publisher. Cover sheets with each label on a line of its
+  own (a university's repository, eScholarship) are read: title, authors,
+  publisher or journal, date, DOI. A JSTOR sheet headed with its journal's
+  name no longer puts it in front of the title.
+- Fixed: a cataloguing block's series was taken from the binding note after
+  an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
+  heading's qualifier ("Rings (Algebra)").
 - Fixed: the edit form for several books said "(N different values)", N
   being the number of books, for every field they did not all share. It
   now shows the values, the commonest first, with how many books hold each

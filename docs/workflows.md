@@ -644,6 +644,7 @@ whether the identifier was read from the file or the library holds it:
 | is only like it (a title cut short, most of the words) | is the book's unless the authors differ: a review "..., by Sutton and Barto" is not the book |
 | has another title, but an author in common | is taken, without its title being pressed (0.5): another form of the title, or the volume this is part of |
 | has another title and no author in common | is left out; what it proposed before is withdrawn; and if the library holds the identifier, taking it off is proposed (0.6) |
+| says what the book's pages contradict, as read by rule (a cataloguing block, a copyright line, a series page, a cover sheet, a journal header, an arXiv stamp, a grammar): a year earlier than the one they print, or a publisher that is not theirs nor its imprint nor its journal | is left out, the same way, and says why; an ISBN the pages do not print is proposed to be taken off. Where the pages state nothing of the kind, the record is not held to them |
 
 What was left out is listed in the log (`:messages`), and on the terminal
 by `lulibre enrich`. Even from a record that is the book's, a value that

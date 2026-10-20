@@ -501,6 +501,22 @@ do
   local two = titlepage.labelled { "A Long Title That Runs", "onto a Second Line", "Author(s): A. One and B. Two", "Source: J. Thing, 2001" }
   eq("labelled: wrapped title, two authors", { two.title, two.authors }, { "A Long Title That Runs onto a Second Line", { "A. One", "B. Two" } })
   eq("no author label, no cover sheet", titlepage.labelled { "A Title", "by Somebody", "Source: nowhere" }, nil)
+  local jst = titlepage.labelled { "Annals of Mathematics", "Cohomology Theory in Abstract Groups. I",
+    "Author(s): Samuel Eilenberg and Saunders MacLane",
+    "Source: Annals of Mathematics, Second Series, Vol. 48, No. 1 (Jan., 1947), pp. 51-78", "Published by: Annals of Mathematics" }
+  eq("labelled: the journal's name heading the sheet is not the title", jst.title, "Cohomology Theory in Abstract Groups. I")
+  local ua = titlepage.labelled { "Unifying Labeling under Minimal Search", "Item Type", "Article; text", "Authors",
+    "Epstein, Samuel D.; Kitahara, Hisatsugu", "Publisher", "University of Arizona Linguistics Circle (Tucson, Arizona)",
+    "Journal", "Coyote Papers", "Link to Item", "http://hdl.handle.net/10150/641481" }
+  eq("labels each on a line of their own, a repository's", { ua.title, ua.authors, ua.publisher, ua.journal },
+    { "Unifying Labeling under Minimal Search", { "Samuel D. Epstein", "Hisatsugu Kitahara" },
+      "University of Arizona Linguistics Circle", "Coyote Papers" })
+  local es = titlepage.labelled { "UC Davis", "UC Davis Previously Published Works", "Title", "Homeostatic and adaptive energetics:",
+    "beyond detailed balance", "Permalink", "https://escholarship.org/uc/item/9bq261qh", "Journal", "Physical Review E, 106(4)",
+    "Authors", "Semaan, Mikhael T", "Crutchfield, James P", "Publication Date", "2022-10-01", "DOI", "10.1103/physreve.106.044410" }
+  eq("a Title label wins over what stands above; values over several lines", { es.title, es.authors, es.journal, es.year, es.doi },
+    { "Homeostatic and adaptive energetics: beyond detailed balance", { "Mikhael T Semaan", "James P Crutchfield" },
+      "Physical Review E", "2022", "10.1103/physreve.106.044410" })
   local cands = require("lulibre.extract").from_doc { lines = {
     { text = "What is an Answer?", size = 11, x0 = 72, y0 = 100, x1 = 300, y1 = 112 },
     { text = "Author(s): Herbert S. Wilf", size = 11, x0 = 72, y0 = 114, x1 = 300, y1 = 126 },
@@ -887,6 +903,14 @@ LC record available at https://lccn.loc.gov/2016030743]]
   eq("the block as it is set out since 2015, read by its labels",
     { cip.title, cip.authors, cip.publisher, cip.pubdate, cip.series, cip.series_index, cip.identifiers },
     { "Agreement beyond Phi", "Shigeru Miyagawa", "The MIT Press", "2017", "Linguistic Inquiry Monographs", "75", "isbn:9780262035880" })
+  cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
+Shaw, Zed.
+Learn Python the hard way : a very simple introduction / Zed A. Shaw.—Third edition.
+pages cm
+ISBN 978-0-321-88491-6 (paperback : alkaline paper)
+1. Python (Computer program language) 2. Computer programming
+QA76.73.P98S53 2014]]
+  eq("neither the binding nor a subject heading's qualifier is a series", cip.series, nil)
   cip = layouts.cip [[Library of Congress Cataloging-in-Publication Data
 Names: Friederici, Angela D., author. | Chomsky, Noam, writer of foreword.
 Title: Language in our brain : the origins of a uniquely human capacity / Angela D. Friederici.
@@ -2177,6 +2201,10 @@ do
     { "numbered-chapter", 7, "Characteristic Functions Distribution Functions and" })
   eq("a handbook chapter by its DOI", (G.match { lines = { L("Infinite Galois Theory", 15.4) }, idents = { doi = "10.1016/S1570-7954(96)80012-X" } })[1].fields.part_of,
     "Handbook of Algebra, Volume 1")
+  local foot = (G.match { lines = { L("Max Rings and V-rings", 15.6) },
+    texts = { "Max Rings and V-rings\nContents\nHANDBOOK OF ALGEBRA, VOL. 3\nEdited by M. Hazewinkel\n\239\191\1899 2003 Elsevier Science B.V. All rights reserved" } })[1]
+  eq("a handbook chapter by the foot of its first page", foot and { foot.fields.part_of, foot.fields.pubdate, foot.fields.publisher },
+    { "Handbook of Algebra, Volume 3", "2003", "Elsevier" })
   G.add { name = "unit-mine", lines = { G.line { pattern = "^Lecture (%d+)$", take = "series_index" }, G.skip(1), G.line { bold = true, take = "title" } } }
   local mine = G.match { lines = { L("Lecture 4"), L("a line between"), L("The Title", 12, true) } }
   local got
