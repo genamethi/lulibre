@@ -44,14 +44,66 @@ Nothing decided which belongs where.
   replace one of lulibre's by accident; and a replaced file that knows
   which version of lulibre's it was made from.
 
+## 0.3.0: settings, one registry, named by module
+
+Today the core options are one flat list in C (`lulibre.settings`,
+`lulibre.o`), and a script's options live under a namespace of its own
+(`lulibre.option(ns, …)`, `lulibre.cfg.ns.name`). One registry instead,
+where every setting is named by the module it belongs to (`review.sort`,
+`verify.shown`, `enrich.batch`), the same whether that module is C,
+lulibre's Lua, or a plugin. On it:
+
+- **Registered but not in init.lua**, worked out in one place, and used by
+  two actions in the configuration window: put those settings in init.lua
+  with their defaults; put every setting back to its default. Nothing asks
+  at the start of a session (the `config_add_*` prompt goes). To weigh:
+  writing a default into init.lua fixes it there, so a later change of
+  lulibre's default no longer reaches that user; commented-out lines
+  avoided that.
+- verify's thresholds (`SHOWN`, `FRONT`, `MIN_CHARS` …) become settings
+  rather than fields of the module; board items 21 and 22 are the same
+  question for the rest of the API.
+
+## 0.3.0: every message a user sees, in one place
+
+About 480 places in the C and the Lua show the user something
+(`lulibre.notify` 140, `error` 168, `print` 68, `tui_msg` 49, `confirm` 25,
+`show` 22, `pick` 7), each with its own wording. Register them, so that
+they can be read as one table, reviewed for what they actually tell the
+person reading them, and translated (a "language API", to be designed with
+the settings above). First an inventory; then the rules the review holds
+them to (name the thing, no "it" or "them" pointing back; a key given as
+an instruction, "press gr to review"; numbers only where they mean
+something to the reader).
+
+## 0.3.0: a scratch pad, and reading a book in Neovim
+
+- **A scratch pad** in lulibre: text kept across sessions, to collect
+  what is copied from books while editing records.
+- **A Neovim helper** (a Lua plugin, launched from lulibre): a book's
+  text as the index holds it, page by page, scrolled a page at a time or
+  continuously, with a key to read more pages (the next, a range, all)
+  into the index and the buffer as it goes; and a buffer shared with
+  lulibre's scratch pad, so what is copied in one is there in the other.
+
 ## To decide, not yet placed in a version
+
+- **The library as links.** A second tree of the books, as symbolic links
+  on the same filesystem, laid out by a template
+  (`~/library/<subject>/<author>/<title> - <year>.<ext>`) and made again
+  from the mirror when the library changes. One way only: the links point
+  into calibre's folder, nothing in calibre's folder points out, and
+  nothing in it is renamed or moved.
 
 - **SPDX lines.** The license is settled (LICENSE: Apache-2.0 WITH
   LLVM-exception). Whether each source file also carries an
   `SPDX-License-Identifier` line is still to decide.
 - **The docs website.** Read the Docs, built with Zensical from `docs/`
-  (`zensical.toml`, `.readthedocs.yaml`): being tried. GitHub Pages is the
-  alternative, decided after.
+  (`zensical.toml`, `.readthedocs.yaml`), is live and kept up. Zensical
+  suits the guides; to try for the API reference: LDoc (MIT), which needs
+  its tags (`@param`, `@return`, `@module`) in the doc comments. The two
+  compared side by side first (lulibre-dev-support), then perhaps both, the
+  API pages under the guides. GitHub Pages remains the alternative host.
 - **A testing framework.** The suites are shell scripts and one Lua file of
   checks; whether to move to a framework (busted, say, for the Lua side)
   is put off for now.
