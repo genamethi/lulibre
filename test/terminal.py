@@ -50,7 +50,11 @@ if pid == 0:
     os.execve(bin_, [bin_, "--clean", "-L", lib], env)
 
 
+out = b""
+
+
 def pump(secs):
+    global out
     end = time.time() + secs
     while time.time() < end:
         r, _, _ = select.select([fd], [], [], 0.05)
@@ -60,6 +64,7 @@ def pump(secs):
             data = os.read(fd, 65536)
         except OSError:
             return
+        out += data
         # notcurses' questions end with the primary device attributes (CSI c):
         # answer that one last, after what else the terminal would say
         if b"\x1b[c" in data:
@@ -95,4 +100,12 @@ if status is None:
     os.waitpid(pid, 0)
     print("lulibre did not quit on :q")
     sys.exit(1)
+# the keyboard flags pushed on the alternate screen are popped before
+# leaving it: the protocol keeps a stack for each screen and nothing else
+# resets the alternate one, so what runs there next would get escape codes
+pushed, popped, left = out.find(b"\x1b[>u"), out.rfind(b"\x1b[<u"), out.rfind(b"\x1b[?1049l")
+if pushed >= 0 and not (pushed < popped < left):
+    print("the keyboard flags are left on the alternate screen (pushed at %d, popped at %d, left at %d)"
+          % (pushed, popped, left))
+    sys.exit(3)
 sys.exit(status)

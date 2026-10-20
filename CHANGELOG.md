@@ -5,6 +5,14 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Fixed: in a terminal with the kitty keyboard protocol (kitty, foot,
+  ghostty, alacritty, WezTerm and others; not inside tmux), lulibre left
+  the protocol's flags set on the alternate screen when it handed the
+  terminal over: the next program there (the editor `E` opens, or `less`,
+  `vi`, `nano` after lulibre ended) could be sent every key as an escape
+  code, unless it set flags of its own. They are taken back before the
+  terminal is handed over.
+
 - Fixed: two tasks asking verify about the same book at once could see a
   memo half made: the second found a title's phrase missing from the pages
   (`verify.phrase`) or an identifier the file's metadata names as not its
