@@ -69,7 +69,7 @@ local DEFAULTS = {
     { "remove", { "D" }, "remove the rest", "remove the surplus copies (to calibre's recycle bin)" },
   },
   orphans = {
-    { "action", { "<Space>", "<CR>" }, "action", "change what will be done about this row" },
+    { "action", { "<Space>", "<CR>" }, "action", "change what will be done about this row; on a heading, about every row under it" },
     { "expand", { "x" }, "details", "show what the columns cut short: the verdict in full, the whole path" },
     { "expand_all", { "X" }, "all", "show, or hide, every row's details" },
     { "mark", { "m" }, "mark", "mark the records set to be removed" },
