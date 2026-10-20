@@ -278,6 +278,10 @@ else
 fi
 k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
+k gg Space
+shown "Space on a heading sets every row under it" "1 of 1 rows set to keep"
+k Space
+shown "and again, to the next action"         "1 of 1 rows set to remove record"
 k q
 
 # ---- the configuration window (a configuration of the test's own: $XDG_CONFIG_HOME)

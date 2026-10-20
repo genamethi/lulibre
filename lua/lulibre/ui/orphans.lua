@@ -22,12 +22,14 @@ function M.run()
   end
 
   local at -- row -> the record, stray or link it shows
+  local section -- heading's row -> the records, strays or links under it
   local open = {} -- item -> its details are shown beneath it
   local function build()
     local rows = {}
-    at = {}
-    local function head(text, id)
+    at, section = {}, {}
+    local function head(text, id, items)
       rows[#rows + 1] = { text, id = id, style = "head" }
+      section[#rows] = items
     end
     -- beneath an opened row: each line across the whole width
     local function details(item, id, lines)
@@ -40,7 +42,7 @@ function M.run()
       end
     end
     if #found.records > 0 then
-      head(("Records with no file  (%d)"):format(#found.records), found.records[1].book.id)
+      head(("Records with no file  (%d)"):format(#found.records), found.records[1].book.id, found.records)
       for _, r in ipairs(found.records) do
         local b = r.book
         rows[#rows + 1] = { SIGN[r.action], WORD[r.action], b.id, b.title or "",
@@ -53,7 +55,7 @@ function M.run()
       end
     end
     if #found.strays > 0 then
-      head(("Files with no record  (%d)"):format(#found.strays))
+      head(("Files with no record  (%d)"):format(#found.strays), nil, found.strays)
       for _, s in ipairs(found.strays) do
         rows[#rows + 1] = { SIGN[s.action], WORD[s.action], "", s.rel, dupes.human(s.size), s.verdict,
           id = s.twin, style = s.action == "move" and "warn" or (s.action == "add" and "ok" or nil) }
@@ -62,7 +64,7 @@ function M.run()
       end
     end
     if #found.links > 0 then
-      head(("Links that lead nowhere  (%d)"):format(#found.links), found.links[1].book)
+      head(("Links that lead nowhere  (%d)"):format(#found.links), found.links[1].book, found.links)
       for _, l in ipairs(found.links) do
         rows[#rows + 1] = { SIGN[l.action], WORD[l.action], l.book or "", l.rel, "", l.verdict,
           id = l.book, style = l.action == "relink" and "ok" or (l.action == "unlink" and "warn" or nil) }
@@ -177,6 +179,23 @@ function M.run()
         panels.over(p, require(act == "edit" and "lulibre.ui.edit" or "lulibre.ui.review").run, { ids = { id } })
         refresh()
       end
+    elseif section[row] and act == "action" then
+      -- on a heading: every row under it takes the next action of its first
+      local items = section[row]
+      local first, i = items[1], 1
+      for k, a in ipairs(first.actions) do
+        if a == first.action then i = k end
+      end
+      local to, n = first.actions[i % #first.actions + 1], 0
+      for _, it in ipairs(items) do
+        for _, a in ipairs(it.actions) do
+          if a == to then
+            it.action, n = to, n + 1
+            break
+          end
+        end
+      end
+      lulibre.notify(("%d of %d rows set to %s"):format(n, #items, WORD[to] or to))
     elseif item and act == "action" then
       local i = 1
       for k, a in ipairs(item.actions) do

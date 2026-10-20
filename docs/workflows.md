@@ -1296,7 +1296,8 @@ what is wanted and `w` writes it; nothing is removed.
 Where the list was, the row is shown in full: a record with no file beside
 the book that has its file, field by field; a stray file or a link with
 what it leads to (`i` hides it, and brings it back). `Space` changes a
-row's action, `w` carries them out. `e` and `r` open the
+row's action; on a heading ("Records with no file"), every row under it at
+once. `w` carries them out. `e` and `r` open the
 edit form and the review for the row's book, as in duplicates, and `t` on a
 record whose file is gone offers what it says to the book that is the same
 work and has the file. `x` opens the row

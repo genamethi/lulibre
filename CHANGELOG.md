@@ -31,6 +31,8 @@ written in `src/version.h`.
 - Fixed: a cataloguing block's series was taken from the binding note after
   an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
   heading's qualifier ("Rings (Algebra)").
+- New: in orphans, `Space` on a heading changes the action of every row
+  under it at once: all records with no file set to be removed, say.
 - Changed: duplicates, orphans and the edit form show, where the list is,
   what the row is about, as review does (`i` hides it): the copies side by
   side, a record beside the book that has its file, what the pages say for
