@@ -236,7 +236,7 @@ elseif mode == "propose" then
     end
   end
   run:done()
-  line("%d proposals; %s goes through them", added, lulibre.hint("review"))
+  line("%d new proposals.%s", added, require("lulibre.proposals").to_review(" "))
 else
   if #changes > 0 then
     local snap = snapshots.take("before recheck")

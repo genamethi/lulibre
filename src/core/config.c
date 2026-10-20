@@ -191,12 +191,18 @@ static const struct opt_def opts[] = {
       "on: when a script needs a rock that is not there, lulibre offers to install it into rocks_tree. "
       "Off by default: it means running what luarocks fetches",
       NULL),
-  OPT(config_add_core, OPT_STR, "ask", POLICY,
-      "options of lulibre's own that init.lua does not mention yet are put in it, commented out with "
-      "their defaults (ask: the config window, :config, offers to)",
+  OPT(config_add_core, OPT_STR, "never", POLICY,
+      "options of lulibre's own that are not in init.lua are added to it, with their defaults "
+      "(config_add_as says how): at the start (auto), when the configuration window first opens "
+      "(ask), or only when asked there with a (never)",
       "The configuration file"),
-  OPT(config_add_scripts, OPT_STR, "ask", POLICY,
+  OPT(config_add_scripts, OPT_STR, "never", POLICY,
       "the same for the options scripts declare (lulibre.option), each script's under its own name", NULL),
+  OPT(config_add_as, OPT_STR, "commented", "commented|set",
+      "how an option added to init.lua is written: commented out, with its default (the default stays "
+      "lulibre's, so a later change to it reaches you), or set to its default (from then on the value "
+      "is yours)",
+      NULL),
   OPT(config_comments, OPT_STR, "full", "full|values|none",
       "what is written above an option put in init.lua: its help in full, only the values it takes, or "
       "nothing (an option with no help gets none either way)",

@@ -220,7 +220,7 @@ function M.run(args)
             n = n + 1
           end
         end
-        lulibre.notify(("%d proposals added; %s goes through them"):format(n, lulibre.hint("review")))
+        lulibre.notify(("%d proposals added.%s"):format(n, require("lulibre.proposals").to_review(" ")))
       else
         p:close()
         local r = edit.apply(changes, { label = "capture: " .. spec })

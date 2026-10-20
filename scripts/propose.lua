@@ -55,6 +55,15 @@ for n, id in ipairs(ids) do
 end
 lulibre.progress(nil)
 run:done()
-print(("%d proposal%s for %d of %d book%s%s; %s goes through them"):format(added, added == 1 and "" or "s", books, #ids,
-  #ids == 1 and "" or "s",
-  replacing > 0 and (", %d of them for a field that has a value"):format(replacing) or "", lulibre.hint("review")))
+-- what this run added, then what waits in all: "of" only where some of the
+-- selected books got proposals and some did not
+local selected = #ids == 1 and "the selected book" or ("the %d selected books"):format(#ids)
+local said
+if added == 0 then
+  said = ("No new proposals for %s."):format(selected)
+else
+  said = ("%d new proposal%s for %s%s."):format(added, added == 1 and "" or "s",
+    books == #ids and selected or ("%d of %s"):format(books, selected),
+    replacing > 0 and ("; %d would replace a value the book has"):format(replacing) or "")
+end
+print(said .. require("lulibre.proposals").to_review(" "))

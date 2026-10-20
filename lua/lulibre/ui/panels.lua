@@ -3,8 +3,9 @@ local M = {}
 
 -- The global commands whose keys still work with the cursor in a screen that
 -- follows the list: paging and scrolling the preview, the page as an image
--- (P), copying (yy, yb ...), the console.
-M.PASS = "preview yank console"
+-- (P), copying (yy, yb ...), the console, and the tabs along the top (1 2 3:
+-- source, config), so a screen left open is there again on coming back.
+M.PASS = "preview yank console source config"
 
 --- Lines for a screen's ? overlay saying which of the list's keys work there
 -- too, by the keys they are on now.

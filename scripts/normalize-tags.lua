@@ -16,4 +16,4 @@ for old, canonical in pairs(taxonomy.alias) do
     end
   end
 end
-print(("%d proposals for %d books; :review goes through them"):format(added, books))
+print(("%d new proposals for %d books.%s"):format(added, books, require("lulibre.proposals").to_review(" ")))

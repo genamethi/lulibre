@@ -19,4 +19,4 @@ for _, id in ipairs(ids) do
     added = added + 1
   end
 end
-print(("%d author lists to split, out of %d books; :review goes through them"):format(added, #ids))
+print(("%d author lists to split, out of %d books.%s"):format(added, #ids, require("lulibre.proposals").to_review(" ")))
