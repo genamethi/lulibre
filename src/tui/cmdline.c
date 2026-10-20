@@ -30,6 +30,37 @@ static size_t next_cp(const struct lineedit *le, size_t i) {
   return i;
 }
 
+/* What a word is, as in vim: a run of letters, digits and underscores (any
+ * byte of a character beyond ASCII counts as a letter), or a run of other
+ * characters that are not blanks. 0 blank, 1 word, 2 other. */
+static int cls(const struct lineedit *le, size_t i) {
+  unsigned char c = (unsigned char)le->text.s[i];
+  if (c == ' ' || c == '\t') return 0;
+  if (c >= 0x80 || c == '_' || (c >= '0' && c <= '9') || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) return 1;
+  return 2;
+}
+
+/* w: past the rest of this word, then past blanks */
+static size_t word_right(const struct lineedit *le, size_t i) {
+  size_t n = le->text.len;
+  if (i < n) {
+    int k = cls(le, i);
+    if (k) while (i < n && cls(le, i) == k) i++;
+  }
+  while (i < n && cls(le, i) == 0) i++;
+  return i;
+}
+
+/* b: back over blanks, then to the start of the word before */
+static size_t word_left(const struct lineedit *le, size_t i) {
+  while (i > 0 && cls(le, i - 1) == 0) i--;
+  if (i > 0) {
+    int k = cls(le, i - 1);
+    while (i > 0 && cls(le, i - 1) == k) i--;
+  }
+  return i;
+}
+
 static void erase(struct lineedit *le, size_t from, size_t to) {
   if (from >= to) return;
   memmove(le->text.s + from, le->text.s + to, le->text.len - to + 1);
@@ -64,6 +95,12 @@ int le_key(struct lineedit *le, uint32_t key, const struct ncinput *ni) {
       return 1;
     case LA_RIGHT:
       le->cur = next_cp(le, le->cur);
+      return 1;
+    case LA_WORD_LEFT:
+      le->cur = word_left(le, le->cur);
+      return 1;
+    case LA_WORD_RIGHT:
+      le->cur = word_right(le, le->cur);
       return 1;
     case LA_HOME:
       le->cur = 0;

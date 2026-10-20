@@ -109,6 +109,7 @@ In the command line, a filter, a search, or a field of the edit form:
 | `Tab` | take the highlighted suggestion or completion |
 | `<C-n>` `<C-p>` | move through the completions |
 | `<C-a>` `<C-e>` `<C-u>` `<C-k>` `<C-w>` | start, end, delete to start, to end, a word back |
+| `<C-Left>` `<C-Right>` (or with Alt) | a word back, a word on, as `b` and `w` |
 | `<Up>` `<Down>` | history: entries that start with what has been typed (in a field: the suggestion list) |
 | `Enter` · `Esc` | accept · cancel |
 
@@ -194,7 +195,7 @@ lulibre.map("line", "<C-k>", "")         -- unbind
 | Place | Actions |
 |---|---|
 | `panel` | `down` `up` `top` `bottom` `half-down` `half-up` `page-down` `page-up` `close` |
-| `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` |
+| `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` `word-left` `word-right` |
 | `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
 | `pager` | `down` `up` `page-down` `page-up` `top` (any other key closes it) |
 | `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |

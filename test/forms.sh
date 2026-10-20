@@ -100,6 +100,15 @@ shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
 
+# ---- while typing, Ctrl and Alt with the arrows move a word at a time
+k :; lit "echo one two"; k C-Left; lit "X"
+shown "C-Left goes back a word"               ":echo one Xtwo"
+k M-Left M-Left; lit "Y"
+shown "M-Left goes back a word too"           ":echo Yone Xtwo"
+k C-Right; lit "Z"
+shown "C-Right goes to the next word"         ":echo Yone ZXtwo"
+k Escape
+
 # ---- a title in capitals, put in title case
 expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2>/dev/null)"
 k "&"; lit "is:capstitle"; k Enter

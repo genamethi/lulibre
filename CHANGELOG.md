@@ -31,6 +31,8 @@ written in `src/version.h`.
 - Fixed: a cataloguing block's series was taken from the binding note after
   an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
   heading's qualifier ("Rings (Algebra)").
+- New: while typing (a field, the `:` and `/` prompts, the pickers),
+  Ctrl or Alt with Left and Right moves a word at a time, as `b` and `w`.
 - New: in orphans, `Space` on a heading changes the action of every row
   under it at once: all records with no file set to be removed, say.
 - Changed: duplicates, orphans and the edit form show, where the list is,
