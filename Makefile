@@ -98,6 +98,7 @@ unit: $(BIN) $(UNIT)
 
 check: unit
 	sh test/smoke.sh $(BIN)
+	sh test/terminal.sh $(BIN)
 
 check-offline: $(BIN)
 	sh test/offline.sh $(BIN)
@@ -110,6 +111,7 @@ check-forms: $(BIN)
 
 e2e: $(BIN)
 	sh test/smoke.sh $(BIN)
+	sh test/terminal.sh $(BIN)
 	sh test/install.sh $(BIN) $(VERSION)
 	sh test/offline.sh $(BIN)
 	sh test/write.sh $(BIN)

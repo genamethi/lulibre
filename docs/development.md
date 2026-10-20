@@ -71,7 +71,7 @@ committed. From Lua the number and commit are `lulibre.build.number` and
 | | |
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/units.lua` (the Lua runtime and API) |
-| `make check` | those, and `test/smoke.sh`: the command line and the interface, driven through tmux, on a generated library |
+| `make check` | those, `test/smoke.sh` (the command line and the interface, driven through tmux, on a generated library) and `test/terminal.sh` (keys as a terminal sends them, outside tmux) |
 | `make e2e` | every end-to-end test: smoke; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server); `forms.sh` (the edit form, review, removal and orphans, typed into the interface) |
 | `make check-offline` · `make check-write` · `make check-forms` | one of the last three |
 
@@ -81,6 +81,14 @@ to any library while one of its servers runs on the machine. They skip where
 that is not possible, saying `skipping` and why: a missing tool, no
 namespace, no luv. Any other failure to start is a failure, not a skip, so
 read `make e2e`'s output for both. Nothing touches a real library.
+
+tmux sends keys plainly, so the tests driven through it never see what a
+terminal with the kitty keyboard protocol sends (ghostty, kitty): there a
+shifted key comes as the key and Shift with the text it types, ":" as ";"
+with Shift. `test/terminal.py` runs lulibre on a pseudo-terminal of its own
+and types as ghostty does, byte for byte (captured from it with notcurses'
+flags), and plainly as tmux does; `test/terminal.sh` holds both to the same
+checks. A key that works in tmux and not in a terminal is tested there.
 
 A sanitizer build should stay clean on all of them:
 

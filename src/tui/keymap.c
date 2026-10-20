@@ -17,6 +17,17 @@ static const struct { const char *name; uint32_t key; } named[] = {
 
 uint32_t key_from_input(const struct ncinput *ni) {
   uint32_t k = ni->id;
+#ifdef NCINPUT_MAX_EFF_TEXT_CODEPOINTS
+  /* In the kitty keyboard protocol (ghostty, kitty; not through tmux) a
+   * shifted key comes as the key and Shift, with the text it types beside
+   * it: ':' is ';' with Shift and the text ':'. The key is what it types
+   * (as it is anyway from a terminal that sends the text alone). Not with
+   * Ctrl or Alt held, which name the key itself (<C-w>, <M-j>). */
+  uint32_t typed = ni->eff_text[0];
+  if (!(ni->modifiers & (NCKEY_MOD_CTRL | NCKEY_MOD_ALT)) && !nckey_synthesized_p(k) && typed >= 0x20 &&
+      typed != 0x7f && typed <= 0x10ffff && ni->eff_text[1] == 0)
+    k = typed;
+#endif
   if (k == '\r' || k == '\n') k = NCKEY_ENTER;
   if (k == 0x7f) k = NCKEY_BACKSPACE;
   if (ni->modifiers & NCKEY_MOD_CTRL) {
