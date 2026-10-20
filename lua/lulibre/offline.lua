@@ -1,28 +1,32 @@
--- Changes calibre makes only while no calibre program has the library open.
+--- Changes calibre makes only while no calibre program has the library open.
 -- calibredb refuses the content server for catalog, add_custom_column,
--- remove_custom_column, restore_database, check_library and backup_metadata;
--- queued here (in the history file beside the index), they wait until the
--- server is stopped, and M.run does them straight to the library folder.
--- So do lulibre's own of that kind (M.handlers: putting a copy of
--- calibre's database back)
--- (after a copy of calibre's database, as lulibre.o.backup_restart says:
--- lulibre.backup).
--- Whatever stops the server, it is M.run that does them: lulibre.service
--- before each start of the server (`lulibre run offline`), M.restart when
--- you say "restart now", or `lulibre run offline` by hand while it is down.
+-- remove_custom_column, restore_database, check_library and
+-- backup_metadata. Queued here (in the history file beside the index),
+-- they wait until the server is stopped, and `run` does them straight to
+-- the library folder, after a copy of calibre's database as
+-- `backup_restart` says (`lulibre.backup`). lulibre's own changes of that
+-- kind wait the same way (`handlers`: putting a copy of calibre's database
+-- back).
 --
---   local offline = require "lulibre.offline"
---   offline.queue({ "add_custom_column", "partof", "Part of", "text" }, "the column #partof")
---   offline.jobs()        -- those still to do (waiting, or failed): { {id=, argv=, label=, ts=, status=, error=}, ... }
---   offline.cancel(id)
---   offline.run()         -- do them; the server must be stopped: { done=, failed={ {id=, error=}, ... } }
---   offline.restart()     -- stop the server (lulibre.o.server_stop), run them, start it (server_start)
---   offline.ask()         -- "restart now" or "not now", in the interface
+-- Whatever stops the server, `run` is what does them: lulibre.service
+-- before each start of the server (`lulibre offline`), `restart` when you
+-- say "restart now", or `lulibre offline` by hand while it is down.
+--
+-- @module lulibre.offline
+-- @usage
+-- local offline = require "lulibre.offline"
+-- offline.queue({ "add_custom_column", "partof", "Part of", "text" }, "the column #partof")
+-- offline.jobs()     --> those still to do
+-- offline.run()      --> { done=, skipped=, failed={...} }; the server must be stopped
+-- offline.ask()      -- "restart now" or "not now", in the interface
 local M = {}
 
 local json = require "lulibre.json"
 
---- Queue a calibredb command: its arguments after --with-library. Returns the job's id.
+--- Queue a calibredb command, or a job of lulibre's own (`handlers`).
+-- @tparam {string,...} argv calibredb's arguments after `--with-library`
+-- @tparam[opt] string label what it is, as the list shows it
+-- @treturn integer the job's id
 function M.queue(argv, label)
   assert(type(argv) == "table" and type(argv[1]) == "string", "offline.queue takes calibredb's arguments: { command, ... }")
   for _, a in ipairs(argv) do assert(type(a) == "string", "calibredb's arguments are strings") end
@@ -40,8 +44,10 @@ local function rows(sql, ...)
   return out
 end
 
---- The jobs, oldest first. status: "pending" (the default: waiting, or
--- failed and to be tried again), "waiting", "failed", "done" or "all".
+--- The jobs, oldest first.
+-- @tparam[opt] string status "pending" (the default: waiting, or failed and
+-- to be tried again), "waiting", "failed", "done" or "all"
+-- @treturn {table,...} each `{ id=, argv=, label=, ts=, status=, error= }`
 function M.jobs(status)
   status = status or "pending"
   if status == "all" then return rows("SELECT * FROM offline ORDER BY id") end
@@ -49,32 +55,39 @@ function M.jobs(status)
   return rows("SELECT * FROM offline WHERE status = ? ORDER BY id", status)
 end
 
+--- Drop a job that waits or failed.
+-- @tparam integer id
+-- @treturn boolean whether there was one to drop
 function M.cancel(id)
   local _, n = lulibre.store("UPDATE offline SET status = 'cancelled', done = ? WHERE id = ? AND status IN ('waiting', 'failed')",
     os.time(), id)
   return n > 0
 end
 
---- Is the content server answering? (nil when lulibre.o.server is not set)
+--- Is the content server answering?
+-- @treturn boolean|nil nil when `server` is not set
 function M.server_up()
   if lulibre.o.server == "" then return nil end
   return require("lulibre.edit").server_up(lulibre.o.server)
 end
 
--- Jobs that have nothing left to do, given calibre's columns as they are
--- now ({ label = true }): asked before a job runs, so that one done
--- already (by hand, or by a run that stopped half way) is not tried again.
--- Replace or add to these as you like.
+--- Jobs that have nothing left to do, by calibredb command: each is given
+-- the job's argv and calibre's columns as they are now (`{ label = true }`)
+-- and returns why there is nothing to do, or nil. Asked before a job runs,
+-- so that one done already (by hand, or by a run that stopped half way) is
+-- not tried again. Replace or add to these as you like.
 M.already = {
   add_custom_column = function(argv, columns) return columns[argv[2]] and "calibre has that column already" end,
   remove_custom_column = function(argv, columns) return not columns[argv[2]] and "calibre has no such column" end,
 }
 
--- the commands that change the shape of calibre's database
+--- The calibredb commands that change the shape of calibre's database:
+-- held back when the books' metadata.opf files could not be written first.
 M.STRUCTURAL = { add_custom_column = true, remove_custom_column = true, restore_database = true }
 
--- Jobs lulibre does itself rather than calibredb: argv[1] names the
--- handler, which gets argv and returns its answer (M.summary says it).
+--- Jobs lulibre does itself rather than calibredb: `argv[1]` names the
+-- handler, which gets argv and returns its answer in a line (`summary`
+-- says it).
 M.handlers = {
   restore_copy = function(argv)
     local backup = require "lulibre.backup"
@@ -86,6 +99,8 @@ M.handlers = {
 }
 
 --- A job, in a line: its label and what it runs.
+-- @tparam table j a job (`jobs`)
+-- @treturn string
 function M.describe(j)
   local how = M.handlers[j.argv[1]] and "lulibre: " or "calibredb "
   return ("%s  (%s%s)"):format(j.label or "", how, table.concat(j.argv, " "))
@@ -98,6 +113,9 @@ local function direct(argv)
 end
 
 --- What went wrong with a calibredb run, in a line.
+-- @tparam table|nil r what `lulibre.system` returned
+-- @tparam[opt] string err its error, when there is no `r`
+-- @treturn string
 function M.why(r, err)
   if not r then return err or "could not run calibredb" end
   if r.timed_out then return "calibredb timed out" end
@@ -126,7 +144,10 @@ end
 
 --- Do the waiting jobs, in the order they were queued, straight to the
 -- library folder. The content server must be stopped (calibre refuses
--- otherwise). Returns { done=, skipped=, failed={ {id=, error=}, ... } }.
+-- otherwise); calibre's program must be closed (its jobs wait until it is).
+-- A job whose work is done already is passed over (`already`).
+-- @treturn table `{ done=, skipped=, failed = { {id=, label=, error=}, ... },
+-- backup=, opf= }`
 function M.run()
   local out = { done = 0, skipped = 0, failed = {} }
   -- those that failed are tried again (M.already keeps one that did its work from doing it twice)
@@ -204,6 +225,9 @@ function M.run()
   return out
 end
 
+--- `run`'s answer, in a line.
+-- @tparam table r what `run` returned
+-- @treturn string
 function M.summary(r)
   local parts = {}
   if r.backup then
@@ -238,13 +262,16 @@ local function until_up(want)
   return false
 end
 
---- Can lulibre stop and start the content server itself?
+--- Can lulibre stop and start the content server itself (`server_stop`,
+-- `server_start`)?
+-- @treturn boolean
 function M.can_restart()
   return lulibre.o.server_stop ~= "" and lulibre.o.server_start ~= ""
 end
 
 --- Stop the content server, do the waiting jobs, start it again. The
 -- server is started again whatever happened to the jobs.
+-- @treturn table what `run` returned
 function M.restart()
   if not M.can_restart() then
     error("lulibre cannot stop the content server: set lulibre.o.server_stop and server_start", 0)
@@ -263,11 +290,11 @@ function M.restart()
   return r
 end
 
---- Say what waits, and offer what can be done now. A replaceable function:
--- the interface calls it after a job is queued. What holds the library
--- decides (lulibre.calibre): nothing (no server, or it is stopped) -- do it
--- now; calibre's program -- it waits until the program is closed; the
--- content server -- restart it now (server_stop, server_start), or later.
+--- Say what waits, and offer what can be done now. A replaceable
+-- function: the interface calls it after a job is queued. What holds the
+-- library decides (`lulibre.calibre`): nothing (no server, or it is
+-- stopped): do it now; calibre's program: it waits until the program is
+-- closed; the content server: restart it now, or later.
 function M.ask()
   local jobs = M.jobs()
   if #jobs == 0 then return end

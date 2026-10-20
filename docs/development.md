@@ -123,6 +123,19 @@ server without the thread, the reason in its log and its status file) and
 hard with `LULIBRE_OPF_REQUIRED=1`. `scripts/server-unit.lua` only changes
 units; it does not depend on calibre's internals.
 
+## The API reference
+
+The modules' doc comments are written for LDoc (`config.ld`), which makes
+the API reference from them: `make api` writes it to `build/api` (LDoc from
+`luarocks --local install ldoc`, or `make api LDOC='lua path/to/ldoc.lua'`).
+A module's opening comment starts with `---`, says what it is, and ends
+with `@module lulibre.NAME` and an `@usage` example; each function a module
+exports has a `---` comment with `@tparam`, `@treturn` (and `[opt]`,
+`[1]`/`[2]` for optional arguments and alternative returns). A setting or
+list a module exports (`M.SHOWN`, `M.STOP`) gets a `---` line of its own.
+Done so far: `lulibre.verify`, `lulibre.backup`, `lulibre.offline`; the
+others are listed in `config.ld` as they are done.
+
 ## The documentation site
 
 `docs/` is also a site, built with [Zensical](https://zensical.org)
