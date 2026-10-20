@@ -2238,5 +2238,61 @@ do
     { true, true })
 end
 
+-- verify's memos with the evidence, asked by two tasks at once: neither
+-- sees one half made (each made in locals, then put in place whole). The
+-- first task is held past a slice: building the index of 60000 words, and
+-- reading the file's metadata on a worker.
+do
+  local verify = require "lulibre.verify"
+  local words = {}
+  for i = 1, 60000 do words[i] = "filler" .. (i % 97) end
+  local ev = { text = table.concat(words, " ") .. " Modal Predicate Logic" }
+  local got = {}
+  for k = 1, 2 do lulibre.spawn(function() got[k] = verify.phrase(ev, "Modal Predicate Logic") end) end
+  while not (got[1] and got[2]) do lulibre.sleep(10) end
+  eq("a phrase asked by two tasks at once is found by both", got, { 1.0, 1.0 })
+
+  local pdf = os.tmpname() .. ".pdf"
+  local f = assert(io.open(pdf, "w"))
+  f:write("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n",
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n",
+    "4 0 obj<</Title(A Test)/Subject(doi:10.1000/own.test)>>endobj\n",
+    "trailer<</Root 1 0 R/Info 4 0 R/Size 5>>\n%%EOF\n")
+  f:close()
+  local own = { text = "nothing here", all = "nothing here", refs = "", path = pdf }
+  local where = {}
+  for k = 1, 2 do lulibre.spawn(function() where[k] = verify.ident(own, "doi:10.1000/own.test") end) end
+  while not (where[1] and where[2]) do lulibre.sleep(10) end
+  os.remove(pdf)
+  eq("an identifier the file's metadata names is its own, for two tasks at once", where, { "own", "own" })
+end
+
+-- a book's file is the one read best, a PDF first, for everything that reads
+-- a book's text (lulibre.text, lulibre.lines, lulibre.files' order) as for
+-- verify's evidence: book 2 is given a PDF beside its text file, read, then
+-- taken back
+do
+  local lib = lulibre.o.library
+  local dir = lib .. "/Paul Erdos/Notes (2)"
+  local f = assert(io.open(dir .. "/Notes - Paul Erdos.pdf", "w"))
+  f:write("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n",
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R",
+    "/Resources<</Font<</F1 5 0 R>>>>>>endobj\n",
+    "4 0 obj<</Length 60>>stream\nBT /F1 24 Tf 72 700 Td (Notes in the PDF) Tj ET\nendstream\nendobj\n",
+    "5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R/Size 6>>\n%%EOF\n")
+  f:close()
+  local function calibre(sql) assert(lulibre.system({ "sqlite3", lib .. "/metadata.db", sql }).code == 0) end
+  calibre("INSERT INTO data VALUES (3, 2, 'PDF', 0, 'Notes - Paul Erdos')")
+  lulibre.reload()
+  lulibre.index { filter = "id:2" }
+  local files = lulibre.files(2)
+  eq("the book's file is the one read, a PDF first", { #files, files[1].format, files[2].format,
+    (lulibre.text(2) or ""):find("Notes in the PDF", 1, true) ~= nil, #lulibre.lines(2, 1) > 0 },
+    { 2, "PDF", "TXT", true, true })
+  calibre("DELETE FROM data WHERE id = 3")
+  os.remove(dir .. "/Notes - Paul Erdos.pdf")
+  lulibre.reload()
+end
+
 print(("%d checks, %d failed"):format(count, fails))
 if fails > 0 then error("unit checks failed", 0) end

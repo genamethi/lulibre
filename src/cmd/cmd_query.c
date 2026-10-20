@@ -2,12 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "db/db.h"
 #include "app.h"
 #include "cmd/cmd.h"
 #include "core/util.h"
 #include "db/query.h"
 
-#define FIRST_FILE(col) "(SELECT f." col " FROM files f WHERE f.book = b.id ORDER BY f.id LIMIT 1)"
+/* the book's file (DB_BOOK_FILE_ORDER) */
+#define FIRST_FILE(col) "(SELECT f." col " FROM files f WHERE f.book = b.id ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1)"
 
 static const struct { const char *name, *sql; } columns[] = {
   {"id", "b.id"},

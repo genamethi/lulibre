@@ -5,6 +5,18 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Fixed: two tasks asking verify about the same book at once could see a
+  memo half made: the second found a title's phrase missing from the pages
+  (`verify.phrase`) or an identifier the file's metadata names as not its
+  own (`verify.ident`). Each is now made whole before it is kept.
+- Fixed: a book with several files was read from different ones: verify's
+  evidence from the file read best (a PDF first), its lines (the type sizes
+  `verify.headline` judges by), `lulibre.text`, OCR's pages and the preview
+  from the file with the lowest id. All now take the same one
+  (`DB_BOOK_FILE_ORDER`), and `lulibre.files` lists it first.
+- Changed: `lulibre.doc_metadata` reads the file on a worker when called
+  from a task, instead of opening it with MuPDF on the Lua thread.
+
 - Fixed: in review (and every other screen built on panels), the tab keys
   `1` `2` `3` did nothing. They now go to the library, the sync folder or
   the configuration, and the screen left open is there again on coming
