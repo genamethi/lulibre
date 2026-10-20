@@ -268,6 +268,9 @@ function lulibre._after_init()
       if #items > 0 then pcall(cf.add, items) end
     end
   end
+  -- lulibre's systemd units, as server_hook, opf_writer and server_restart_at
+  -- ask (lulibre.units): a user unit's are made now, in the interface only
+  if not lulibre.headless then lulibre.spawn(function() pcall(require("lulibre.units").on_start) end) end
   -- your files used in place of lulibre's own: said in the console, and
   -- pointed to on the message line in the interface (lulibre.overrides)
   lulibre.spawn(function()

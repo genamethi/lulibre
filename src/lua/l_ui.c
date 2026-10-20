@@ -668,6 +668,47 @@ static int l_edit_file_ui(lua_State *L) {
 }
 ON_UI(l_edit_file)
 
+/* lulibre.in_terminal(argv): a program with the terminal handed over until
+ * it exits (sudo asking for a password, say); argv[1] is looked for on
+ * $PATH. Without the interface it runs in the terminal lulibre runs in.
+ * Returns its exit status, or nil and why when it could not be run. */
+static int l_in_terminal_ui(lua_State *L) {
+  struct app *app = lapi_app(L);
+  luaL_checktype(L, 1, LUA_TTABLE);
+  int n = (int)lua_rawlen(L, 1);
+  if (n < 1) return luaL_error(L, "in_terminal: { program, arguments... }");
+  char **argv = xcalloc((size_t)n + 1, sizeof *argv);
+  for (int i = 1; i <= n; i++) {
+    lua_rawgeti(L, 1, i);
+    argv[i - 1] = (char *)luaL_checkstring(L, -1); /* (the table keeps the string) */
+    lua_pop(L, 1);
+  }
+  int status = -1;
+  if (app->tui && app->tui->nc) {
+    status = tui_in_terminal(app->tui, argv);
+  } else {
+    pid_t pid = fork();
+    if (pid == 0) {
+      execvp(argv[0], argv);
+      _exit(127);
+    } else if (pid > 0) {
+      int st;
+      while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {
+      }
+      status = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+    }
+  }
+  free(argv);
+  if (status == 127 || status < 0) {
+    lua_pushnil(L);
+    lua_pushstring(L, status == 127 ? "could not be run" : "did not exit");
+    return 2;
+  }
+  lua_pushinteger(L, status);
+  return 1;
+}
+ON_UI(l_in_terminal)
+
 static int l_progress_ui(lua_State *L) {
   struct app *app = lapi_app(L);
   const char *text = lua_isnoneornil(L, 1) ? NULL : luaL_tolstring(L, 1, NULL);
@@ -1073,7 +1114,7 @@ void l_ui_open(lua_State *L) {
     {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
-    {"status", l_status}, {"edit_file", l_edit_file},
+    {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},
     {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
     {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},

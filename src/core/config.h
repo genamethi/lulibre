@@ -55,6 +55,9 @@ struct config {
   char *write_via;      /* auto | server | direct: how changes reach calibre */
   char *server_stop;    /* shell command that stops the content server; empty = lulibre cannot */
   char *server_start;   /* and the one that starts it again */
+  char *server_hook;    /* on | off: lulibre.service before each start of the server */
+  char *opf_writer;     /* off | server: calibre's opf writer in the server (a drop-in) */
+  char *server_restart_at; /* HH:MM: a daily restart of the server (lulibre-restart.timer); "" none */
   char *backup_restart; /* always | next | never | N days: copy metadata.db before the server starts */
   int backup_keep;      /* copies kept */
   char *backup_too_old; /* warn | false */

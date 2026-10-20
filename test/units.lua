@@ -2238,6 +2238,11 @@ do
     { true, true })
 end
 
+-- a program run in the terminal (lulibre.in_terminal: sudo asking for its
+-- password), here with no interface: its exit status, or nil and why
+eq("a program in the terminal: its exit status", { lulibre.in_terminal { "true" }, lulibre.in_terminal { "false" },
+  (lulibre.in_terminal { "lulibre-no-such-program" }) }, { 0, 1, nil })
+
 -- verify's memos with the evidence, asked by two tasks at once: neither
 -- sees one half made (each made in locals, then put in place whole). The
 -- first task is held past a slice: building the index of 60000 words, and
