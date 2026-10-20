@@ -51,6 +51,8 @@ static const struct action line_actions[] = {
   {"kill-start", "<C-u>", "delete back to the start"},
   {"kill-end", "<C-k>", "delete to the end"},
   {"kill-word", "<C-w>", "delete a word back"},
+  {"word-left", "<C-Left> <M-Left>", "to the start of the word, or of the one before (as b)"},
+  {"word-right", "<C-Right> <M-Right>", "to the start of the next word (as w)"},
 };
 static const struct action picker_actions[] = {
   {"accept", "<CR>", "take the highlighted entry"},

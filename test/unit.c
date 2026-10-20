@@ -353,6 +353,38 @@ static void test_reentrant(void) {
   eq(two, "No such file or directory / Permission denied", "errstr: two in one statement");
 }
 
+/* while typing: Ctrl or Alt with an arrow moves a word, as b and w */
+static void test_words(void) {
+  ctx_defaults();
+  struct lineedit le = {0};
+  uint32_t k[KEYSEQ_MAX];
+  le_set(&le, "foo.bar  baz");
+  size_t back[4], fwd[4];
+  key_parse("<C-Left>", k);
+  for (int i = 0; i < 4; i++) {
+    le_key(&le, k[0], NULL);
+    back[i] = le.cur;
+  }
+  ok(back[0] == 9 && back[1] == 4 && back[2] == 3 && back[3] == 0, "C-Left: to each word's start, punctuation a word of its own");
+  key_parse("<C-Right>", k);
+  for (int i = 0; i < 4; i++) {
+    le_key(&le, k[0], NULL);
+    fwd[i] = le.cur;
+  }
+  ok(fwd[0] == 3 && fwd[1] == 4 && fwd[2] == 9 && fwd[3] == 12, "C-Right: to the next word's start, past blanks, then the end");
+  le.cur = 0;
+  key_parse("<M-Right>", k);
+  le_key(&le, k[0], NULL);
+  ok(le.cur == 3, "and with Alt the same");
+  le_set(&le, "\xc3\xa9t\xc3\xa9 x");
+  le.cur = 0;
+  key_parse("<C-Right>", k);
+  le_key(&le, k[0], NULL);
+  ok(le.cur == 6, "an accented letter is part of the word");
+  le_free(&le);
+  ctx_free();
+}
+
 int main(void) {
   test_version();
   test_util();
@@ -363,6 +395,7 @@ int main(void) {
   test_log();
   test_quality();
   test_reentrant();
+  test_words();
   printf("C unit tests: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }
