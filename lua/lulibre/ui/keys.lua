@@ -137,7 +137,7 @@ local DEFAULTS = {
     { "edit", { "<CR>", "e" }, "change", "give the option a value: it takes effect now and is written to init.lua" },
     { "default", { "d" }, "default", "put the option back to its default (its line in init.lua is commented out)" },
     { "editor", { "E" }, "edit init.lua", "open init.lua in your editor; what you write is read again when you leave it" },
-    { "add", { "a" }, "add missing", "put the options init.lua does not mention in it, commented out with their defaults" },
+    { "add", { "a" }, "add missing", "add the options that are not in init.lua, with their defaults (commented out, or set: config_add_as)" },
     { "comments", { "c" }, "comments", "what is written above an option put in init.lua: its help, the values it takes, or nothing" },
     { "changed", { "f" }, "changed only", "show only the options that differ from their defaults, or all" },
   },

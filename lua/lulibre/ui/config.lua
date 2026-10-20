@@ -74,18 +74,20 @@ function M.run()
     text = cf.read() or ""
   end
   load()
-  -- options init.lua does not mention yet: offered once a session (the options config_add_*)
+  -- options that are not in init.lua: offered once a session, if config_add_* says ask
   if not asked then
     asked = true
     local missing = cf.missing()
     local core = lulibre.o.config_add_core == "ask" and #missing.core or 0
     local scripts = lulibre.o.config_add_scripts == "ask" and #missing.scripts or 0
-    if core + scripts > 0 and lulibre.confirm(("init.lua does not mention %d of lulibre's options%s; put them in, commented out with their defaults? (%s does it later)")
-        :format(core, scripts > 0 and (" and %d of the scripts'"):format(scripts) or "", keys:key("add") or "a")) then
+    if core + scripts > 0 and lulibre.confirm(("%d of lulibre's options%s are not in init.lua. Add them %s? (Press %s in this window to add them later.)")
+        :format(core, scripts > 0 and (" and %d of the scripts' options"):format(scripts) or "",
+          lulibre.o.config_add_as == "set" and "set to their defaults" or "commented out, with their defaults",
+          keys:key("add") or "a")) then
       local add = {}
       for _, n in ipairs(core > 0 and missing.core or {}) do add[#add + 1] = { name = n } end
       for _, it in ipairs(scripts > 0 and missing.scripts or {}) do add[#add + 1] = it end
-      lulibre.notify(("put %d options in %s"):format(cf.add(add), cf.path()))
+      lulibre.notify(("Added %d options to %s."):format(cf.add(add), cf.path()))
       load()
     end
   end
@@ -118,7 +120,7 @@ function M.run()
   -- the bar's Configuration tab: in the list's place, until the list's tabs are chosen
   local p <close> = lulibre.panel {
     title = title(), help = keys:hint("edit", "default", "editor", "add", "changed"), side = "main", moves = true,
-    screen_tab = true, keys = keys:own(), pass = panels.PASS .. " source sync config", rows = rows(),
+    screen_tab = true, keys = keys:own(), pass = panels.PASS .. " sync", rows = rows(),
     columns = { { "option", 30 }, { "value", -2 }, { "default", -1 }, { "set in", 16 } },
   }
   open_now = p
@@ -185,9 +187,10 @@ function M.run()
       local add = {}
       for _, n in ipairs(missing.core) do add[#add + 1] = { name = n } end
       for _, x in ipairs(missing.scripts) do add[#add + 1] = x end
-      if #add == 0 then lulibre.notify("init.lua mentions every option already")
-      elseif lulibre.confirm(("put %d options in init.lua, commented out with their defaults?"):format(#add)) then
-        lulibre.notify(("put %d options in %s"):format(cf.add(add), cf.path()))
+      if #add == 0 then lulibre.notify("Every option is in init.lua already.")
+      elseif lulibre.confirm(("Add %d options to init.lua, %s?"):format(#add,
+          lulibre.o.config_add_as == "set" and "set to their defaults" or "commented out, with their defaults")) then
+        lulibre.notify(("Added %d options to %s."):format(cf.add(add), cf.path()))
       end
     elseif act == "comments" then
       local nxt = { full = "values", values = "none", none = "full" }

@@ -5,6 +5,19 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Fixed: in review (and every other screen built on panels), the tab keys
+  `1` `2` `3` did nothing. They now go to the library, the sync folder or
+  the configuration, and the screen left open is there again on coming
+  back.
+- Changed: the summaries of the scripts that propose say what happened and
+  what to do, in sentences: "No new proposals for the selected book. 300
+  proposals wait. Press gr to review." (`proposals.to_review`, replaceable).
+  Before: "0 proposals for 0 of 1 book; gr goes through them".
+- Changed: options that are not in init.lua are no longer offered when the
+  configuration window opens; `a` there adds them (`config_add_core`,
+  `config_add_scripts` default to `never`). New option `config_add_as`:
+  added commented out with their defaults (the default), or set to them.
+
 - Fixed: in a terminal with the kitty keyboard protocol (ghostty, kitty;
   not inside tmux), shifted symbols did nothing or the wrong thing: `:`
   arrived as `;`, `?` as `/`, `&` as `7`, so the command line would not

@@ -72,6 +72,25 @@ on a branch:
   with synthetic mouse events in tmux, not with a pointer in a terminal" is
   a result; "mouse works" is not).
 
+## What the person reading sees
+
+Every message, prompt, hint and help line is read by someone in the middle
+of their work. Each is held to this, and the existing ones are brought to
+it as they are touched:
+
+- Name the thing. No "it", "them" or "this" pointing back at something the
+  reader has to reconstruct.
+- A key or command to use is an instruction: "Press gr to review", not "gr
+  goes through them".
+- Say what happened, then what to do. A number is there only if it tells
+  the reader something; "N of M" only where both mean something to them,
+  and the empty case said plainly ("No new proposals for the selected
+  book"), not as "0 of 1".
+- Sentences, with the verb that is meant ("is not in init.lua", not "does
+  not mention").
+- A question asked unprompted is asked once at most, and only when the
+  answer changes what happens next.
+
 ## Before believing a report is a code bug
 
 - Read the reporter's `init.lua` first; read it, never edit it (defaults

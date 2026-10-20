@@ -93,7 +93,7 @@ for how, n in pairs(by_how) do hows[#hows + 1] = ("%d by %s"):format(n, (how:gsu
 table.sort(hows)
 print(("%d entries, %d matched to books%s, %s %d proposals%s"):format(#entries, matched,
   #hows > 0 and " (" .. table.concat(hows, ", ") .. ")" or "", dry and "would make" or "made", added,
-  dry and "" or "; :review goes through them"))
+  dry and "" or ("." .. require("lulibre.proposals").to_review(" "))))
 if #absent > 0 then
   print(("%d entries name files that are not in the library%s"):format(#absent,
     #absent <= 8 and (": " .. table.concat(absent, ", "):gsub("[^, ]*/", "")) or "; :run onboard adds such files"))

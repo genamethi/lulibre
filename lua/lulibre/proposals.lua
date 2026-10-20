@@ -76,6 +76,17 @@ function M.count(status, scope)
   return lulibre.store("SELECT count(*) AS n FROM proposals WHERE status = ?" .. side(scope), status or "pending")[1].n
 end
 
+--- What waits for review, and the key that goes there, as a sentence:
+-- "300 proposals wait. Press gr to review." ("" when none wait), with
+-- prefix before it. Every script that proposes ends its summary with it.
+-- A replaceable function.
+function M.to_review(prefix)
+  local n = M.count("pending")
+  if n == 0 then return "" end
+  return (prefix or "") .. ("%d proposal%s wait%s. Press %s to review."):format(n, n == 1 and "" or "s",
+    n == 1 and "s" or "", lulibre.hint("review"))
+end
+
 function M.set_status(pid, status)
   lulibre.store("UPDATE proposals SET status = ? WHERE id = ?", status, pid)
 end

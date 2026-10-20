@@ -1993,6 +1993,12 @@ do
   cf.add { { name = "mouse" } }
   eq("values only", cf.read():find("-- (number)\n-- o.mouse = 1", 1, true) ~= nil, true)
   lulibre.settings.reset("config_comments")
+  eq("nothing is offered unasked", { lulibre.o.config_add_core, lulibre.o.config_add_scripts }, { "never", "never" })
+  lulibre.settings.set("config_add_as", "set")
+  cf.add { { name = "blitter" } }
+  eq("config_add_as = set: added set to its default, not commented out",
+    { cf.read():find("\no.blitter = ", 1, true) ~= nil, cf.read():find("\n-- o.blitter = ", 1, true) ~= nil }, { true, false })
+  lulibre.settings.reset("config_add_as")
   os.remove(init)
   os.remove(init .. ".bak")
 end
@@ -2211,6 +2217,25 @@ do
   lulibre.store("DELETE FROM journal")
   lulibre.store("DELETE FROM snapshots")
   local _ = edit
+end
+
+-- what waits for review, as the scripts that propose end their summaries:
+-- a sentence naming the key, nothing when nothing waits
+do
+  local proposals = require "lulibre.proposals"
+  local count = proposals.count
+  local said = {}
+  for _, n in ipairs { 0, 1, 300 } do
+    proposals.count = function() return n end
+    said[#said + 1] = proposals.to_review(" ")
+  end
+  proposals.count = count
+  local key = lulibre.hint("review")
+  eq("what waits for review", said, { "", (" 1 proposal waits. Press %s to review."):format(key),
+    (" 300 proposals wait. Press %s to review."):format(key) })
+  local pass = require("lulibre.ui.panels").PASS
+  eq("the tabs along the top work from every panel", { pass:find("%f[%w]source%f[%W]") ~= nil, pass:find("%f[%w]config%f[%W]") ~= nil },
+    { true, true })
 end
 
 print(("%d checks, %d failed"):format(count, fails))
