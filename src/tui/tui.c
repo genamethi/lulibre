@@ -739,6 +739,24 @@ static void bracketed_paste(int on) {
   fclose(tty);
 }
 
+/* Handing the terminal back (to an editor, or at the end). notcurses pushes
+ * the kitty keyboard protocol's flags on the alternate screen when it
+ * starts (CSI > u, then CSI = 27 u) and does not pop them when it stops; the
+ * protocol keeps the alternate screen's stack apart from the main screen's
+ * and nothing resets it on leaving, so the next program on the alternate
+ * screen (an editor, less) would be sent every key as an escape code. They
+ * are popped here, while the alternate screen is still the one shown. */
+static void terminal_release(struct tui *t) {
+  bracketed_paste(0);
+  FILE *tty = fopen("/dev/tty", "w");
+  if (tty) {
+    fputs("\033[<u", tty);
+    fclose(tty);
+  }
+  notcurses_stop(t->nc);
+  t->nc = NULL;
+}
+
 static void paste_done(struct tui *t) {
   if (t->mode == MODE_PROMPT) prompt_insert_flat(t, t->paste.s ? t->paste.s : "");
   else if (t->paste.len) tui_msg(t, 0, "pasted text goes into a field: open one first (:, &, /, or e)");
@@ -1242,9 +1260,7 @@ int tui_edit_file(struct tui *t, const char *path) {
     editor = fallback;
   }
   input_unwatch(t);
-  bracketed_paste(0);
-  notcurses_stop(t->nc);
-  t->nc = NULL;
+  terminal_release(t);
   int status = -1;
   struct sigaction ign = {.sa_handler = SIG_IGN}, old_int, old_quit;
   sigaction(SIGINT, &ign, &old_int);
@@ -1336,9 +1352,7 @@ int tui_run(struct app *app) {
   bridge_stop(app); /* scripts stop with the interface; their thread ends */
   log_on_entry(NULL, NULL);
   wm_free(t);
-  bracketed_paste(0);
-  notcurses_stop(t->nc);
-  t->nc = NULL;
+  terminal_release(t);
   log_to_stderr(1);
   if (t->ix) indexer_cancel(t->ix);
   input_unwatch(t);
