@@ -5,6 +5,12 @@ written in `src/version.h`.
 
 ## In development (since 0.2.0-alpha.3)
 
+- Fixed: "restart now" (`:offline restart`) with `lulibre.service`
+  installed made two copies of calibre's database for one restart (one by
+  the restart, one by the service its start set off), pushing a real copy
+  out of the `backup_keep` kept, and had calibre write the opf files twice.
+  The service now leaves both to the restart that started the server.
+
 - Fixed: in a terminal with the kitty keyboard protocol (kitty, foot,
   ghostty, alacritty, WezTerm and others; not inside tmux), lulibre left
   the protocol's flags set on the alternate screen when it handed the

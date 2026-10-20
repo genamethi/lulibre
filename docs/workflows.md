@@ -1010,6 +1010,11 @@ stopped it:
   (`systemctl --user stop calibre-server`, `… start …`).
 - by hand, while the server is down: `lulibre offline`.
 
+With both `lulibre.service` and the "restart now" options set up, a
+restart from lulibre makes one copy of calibre's database, not two: the
+service, set off by the restart's start of the server, leaves the copy and
+the opf files to the restart.
+
 What lulibre offers when a change is queued depends on what has the library
 open: nothing (no content server, or it is stopped) — do it now; calibre's
 program — it waits until the program is closed; the content server —
