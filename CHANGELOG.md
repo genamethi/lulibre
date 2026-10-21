@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.3)
+## 0.2.0-beta.1
 
 - New: `propose_min` (60% by default). A proposal under it is kept but not
   shown in review, nor counted as waiting, nor found by `is:proposed`;
