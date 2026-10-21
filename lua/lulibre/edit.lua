@@ -281,7 +281,7 @@ end
 -- of the books changed, as nothing else will (backup_metadata option).
 -- Errors are logged, not raised: the change itself is made.
 function M.after_direct()
-  if lulibre.o.backup_metadata ~= "on" or M.route() ~= "direct" then return end
+  if not lulibre.o.backup_metadata or M.route() ~= "direct" then return end
   local ok, err = pcall(require("lulibre.backup").metadata)
   if not ok then lulibre.log("the books' opf files were not written: " .. tostring(err), "warn") end
 end

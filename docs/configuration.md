@@ -23,13 +23,13 @@ o.library = "~/calibre-library"
 | `server` `user` `password_file` | | calibre content server, for changes |
 | `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
 | `server_stop` `server_start` | | shell commands that stop and start the content server, for the changes that wait for it to be stopped (`:offline`); empty: they wait for its next restart |
-| `server_hook` | `off` | `on`: `lulibre.service`, which runs `lulibre offline`, before each start of the server's systemd unit (workflows: "lulibre's systemd units") |
+| `server_hook` | `false` | `true`: `lulibre.service`, which runs `lulibre offline`, before each start of the server's systemd unit (workflows: "lulibre's systemd units") |
 | `opf_writer` | `off` | `server`: the server's unit started through lulibre's launcher, so that calibre's own writer keeps the books' metadata.opf current while it runs |
 | `server_restart_at` | | a time of day, `HH:MM`: the server restarted daily at that time (`lulibre-restart.timer`); empty: never |
 | `backup_restart` | `always` | copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
 | `backup_keep` | `5` | copies kept |
 | `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session when the newest is older than that many days; `false`: do not |
-| `backup_metadata` | `on` | have calibre write each changed book's metadata.opf (`backup_metadata`) whenever nothing else can: each time the content server is stopped, and after lulibre changes the library straight in its folder; a calibre column changes only after it |
+| `backup_metadata` | `true` | have calibre write each changed book's metadata.opf (`backup_metadata`) whenever nothing else can: each time the content server is stopped, and after lulibre changes the library straight in its folder; a calibre column changes only after it |
 | `index` | | index database (default under `~/.local/share/lulibre/`) |
 | `pages` | `6` | first pages of each file indexed as text |
 | `layout_pages` | `2` | of those, pages kept as lines tagged with font size |
@@ -45,7 +45,7 @@ o.library = "~/calibre-library"
 | `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value; see [Workflows](workflows.md) |
 | `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
 | `arxiv_snapshot` | | a file of arXiv's records (its snapshot from Kaggle, or a hypergraph of arXiv; `.json` or the `.zip`). Empty: `arxiv-metadata-oai-snapshot.json`, `arxiv.json` or `arxiv.zip` in the data folder is used if there (the first of them; a link will do). `:enrich` reads papers from it and asks arXiv only about those newer than the file |
-| `weigh_sources` | `off` | `on`: a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right in this library (`:weigh`, `:weights`) |
+| `weigh_sources` | `false` | `true`: a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right in this library (`:weigh`, `:weights`) |
 | `contact_email` | | an address sent to those services with each request; nothing is sent while it is empty |
 | `refs_pages` | `14` | closing pages of a file read when looking for its bibliography |
 | `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a title of one word is a title (`check`: a plain capitalised word is) |
@@ -70,9 +70,9 @@ o.library = "~/calibre-library"
 | `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review (best borne out by their pages first, surest, most disputed, by id) |
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | also append the log to this file (`$LULIBRE_LOG` does the same) |
-| `pixi_deps` | `off` | `on`: programs features need (pdftotext, tesseract, ocrmypdf) may come from a pixi environment lulibre keeps, and it offers to add a missing one |
+| `pixi_deps` | `false` | `true`: programs features need (pdftotext, tesseract, ocrmypdf) may come from a pixi environment lulibre keeps, and it offers to add a missing one |
 | `rocks_tree` | | a luarocks tree whose modules scripts may require |
-| `rocks_install` | `off` | `on`: lulibre offers to install a rock a script needs into `rocks_tree` |
+| `rocks_install` | `false` | `true`: lulibre offers to install a rock a script needs into `rocks_tree` |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for; reads as the directory in effect |
 
 From Lua the same options are `lulibre.settings.get(name)` and

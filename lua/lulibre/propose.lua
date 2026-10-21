@@ -245,7 +245,7 @@ function M.book(id, opts)
   -- confidence is what the agreeing sources come to, each taken for what it
   -- has been measured to be worth here.
   local consensus = require "lulibre.consensus"
-  local weigh = lulibre.o.weigh_sources == "on" and consensus.ready()
+  local weigh = lulibre.o.weigh_sources and consensus.ready()
   local fused = {}
   for _, w in ipairs(M.wanted(book, candidates, opts)) do
     local confidence, note = w.confidence, nil

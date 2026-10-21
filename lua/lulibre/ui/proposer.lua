@@ -79,7 +79,7 @@ function M.run()
           off = not has_refs and "no bibliography has been read: tick the line above, or :refs" or nil },
         { id = "learned", kind = "check", label = "subjects from learned phrases", value = false,
           off = not learn.ready() and "nothing learned yet: confirm records with gk, then :learn" or nil },
-        { id = "weigh", kind = "check", label = "weigh each source by how often it has been right here", value = lulibre.o.weigh_sources == "on",
+        { id = "weigh", kind = "check", label = "weigh each source by how often it has been right here", value = lulibre.o.weigh_sources,
           off = not consensus.ready() and "not measured yet: :weigh" or nil },
       } },
       { title = "Which fields", items = fields },
@@ -147,7 +147,7 @@ function M.run()
       runs.finish(run, "cancelled") -- does nothing when the run got to its end
     end })
     if v.shared or v.learned then lulibre.o.learned_tags = "propose" end
-    lulibre.o.weigh_sources = v.weigh and "on" or "off"
+    lulibre.o.weigh_sources = v.weigh and true or false
     local ok, err = pcall(function()
       if v.refs then
         runs.step(run, "bibliographies")

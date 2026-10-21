@@ -313,7 +313,7 @@ log() { cat "$home/systemctl.log" 2>/dev/null; }
 plain ""
 uopts=
 contains "with the options off, nothing is asked for" "nothing to change" "$(un)"
-uopts="-o server_hook=on -o opf_writer=server -o server_restart_at=03:30"
+uopts="-o server_hook=true -o opf_writer=server -o server_restart_at=03:30"
 contains "units finds the unit that starts calibre-server" "calibre-server.service (a user unit" "$(un)"
 contains "and says what it would write" "write $units/calibre-server.service.d/lulibre-opf-writer.conf" "$(un)"
 un apply >/dev/null
@@ -322,7 +322,7 @@ contains "opf_writer = server: a drop-in that replaces ExecStart" "ExecStart=
 ExecStart=$debug -e " "$(cat "$dropin" 2>/dev/null)"
 contains "with the unit's own arguments after --" "-- --listen-on 127.0.0.1 \"$lib\"" "$(cat "$dropin" 2>/dev/null)"
 expect   "and leaves the unit's file as it was" no "$(grep -q calibre-debug "$units/calibre-server.service" && echo yes || echo no)"
-contains "server_hook = on: lulibre.service, before the server's unit" "Before=calibre-server.service" "$(cat "$units/lulibre.service" 2>/dev/null)"
+contains "server_hook = true: lulibre.service, before the server's unit" "Before=calibre-server.service" "$(cat "$units/lulibre.service" 2>/dev/null)"
 contains "running lulibre offline" "offline" "$(grep '^ExecStart=' "$units/lulibre.service" 2>/dev/null)"
 contains "and enabled for it" "enable lulibre.service" "$(log)"
 contains "with an [Install] section, so that enabling it ties it to the server" "[Install]
@@ -332,7 +332,7 @@ contains "that restarts the server's unit" "restart calibre-server.service" "$(c
 contains "started now" "enable --now lulibre-restart.timer" "$(log)"
 contains "systemd is reloaded" "daemon-reload" "$(log)"
 contains "a second look finds nothing to change" "nothing to change" "$(un)"
-uopts="-o server_hook=on -o opf_writer=server -o server_restart_at=04:15"
+uopts="-o server_hook=true -o opf_writer=server -o server_restart_at=04:15"
 un apply >/dev/null
 contains "a new time is written over the old" "OnCalendar=*-*-* 04:15:00" "$(cat "$units/lulibre-restart.timer" 2>/dev/null)"
 : > "$home/systemctl.log"
@@ -354,7 +354,7 @@ uopts=
 un apply >/dev/null
 plain "ProtectSystem=strict
 "
-uopts="-o server_hook=on -o opf_writer=server"
+uopts="-o server_hook=true -o opf_writer=server"
 out=$(un apply)
 contains "a hardened unit is not given the drop-in" "the opf writer: not made (it has sandboxing or hardening settings (ProtectSystem)" "$out"
 expect   "nothing is written for it" no "$([ -e "$dropin" ] && echo yes || echo no)"
@@ -366,12 +366,12 @@ un apply >/dev/null
 # a command makes no unit and takes none away, whatever its init.lua says:
 # only the interface does, as it starts (lulibre offline runs from one of them)
 mkdir -p "$t/ucfg"
-printf 'lulibre.o.server_hook = "on"\n' > "$t/ucfg/init.lua"
+printf 'lulibre.o.server_hook = true\n' > "$t/ucfg/init.lua"
 printf 'print("ran")\n' > "$t/u.lua"
 cmd() { unshare --pid --fork --mount-proc env HOME="$home" PATH="$t/bin:$PATH" "$bin" -C "$t/ucfg" -L "$lib" run "$t/u.lua" 2>&1; }
-contains "a command with server_hook on in its init.lua runs" "ran" "$(cmd)"
+contains "a command with server_hook true in its init.lua runs" "ran" "$(cmd)"
 expect   "and does not make lulibre.service" no "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
-uopts="-o server_hook=on"
+uopts="-o server_hook=true"
 un apply >/dev/null
 : > "$t/ucfg/init.lua"
 cmd >/dev/null
