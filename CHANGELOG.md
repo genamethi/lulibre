@@ -37,6 +37,10 @@ written in `src/version.h`.
   orphans, the edit form, help, any screen) while it is open goes to the
   open one and says so, instead of opening a second beside it and another
   "about" panel with it; `:new review` opens another when that is wanted.
+- Fixed: `3` (or `gC`) with the configuration window open, then `q`
+  quickly, could open the window again after it closed: whether it was open
+  was looked at only when the script got to it, after the `q`. It is now
+  decided as the key is read (`source config`).
 - Fixed: `:split` with a panel focused crashed lulibre; it now says a
   panel is not split.
 - Changed: the options with two values are `true` or `false`, read in Lua
