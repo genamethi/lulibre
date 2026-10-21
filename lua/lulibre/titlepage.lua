@@ -1,11 +1,12 @@
---- Read a title page the way a person does: by the role of each line. Works on
--- the tagged lines the index keeps (text, font size, superscript, rotation).
+--- Reads a title page the way a person does: by the role of each line.
+-- titlepage works on the tagged lines the index keeps (text, font size,
+-- superscript, rotation).
 --
---   subject   the arXiv class in the margin stamp, else the MSC footnote
---   title     the run of largest-font lines above the authors; title_math,
---             the same with its mathematics marked up, when it has any
---   authors   the lines under the title that read as names, up to the
---             abstract or the first affiliation
+-- - `subject`: the arXiv class in the margin stamp, or else the MSC footnote
+-- - `title`: the largest-font lines above the authors. `title_math` is the
+--   same, with its mathematics marked up, if it has any.
+-- - `authors`: the lines under the title that are names, up to the abstract
+--   or the first affiliation
 --
 -- @module lulibre.titlepage
 -- @usage
@@ -85,10 +86,10 @@ local function uninvert(s)
   return table.concat(out, "; ")
 end
 
---- Is the line a by-line? Returns the names on it ("by A. Name" gives
--- "A. Name"), "" for "by" standing alone above the names, or nil. A
--- sentence that happens to begin with "by" is told apart by its length, its
--- lower-case words, and brackets or figures in it.
+--- Reads a by-line. Returns the names on it ("by A. Name" gives "A. Name"),
+-- "" for "by" alone on a line above the names, or nil if the line is not a
+-- by-line. A sentence that happens to begin with "by" is recognised by its
+-- length, its lower-case words, and brackets or digits in it.
 -- @tparam string text
 -- @treturn string|nil
 function M.byline(text)
@@ -110,13 +111,12 @@ function M.byline(text)
   return uninvert(rest)
 end
 
---- lines: as from lulibre.lines(id). Returns
--- { arxiv=, class=, subject=, title=, authors={...}, subject_source=,
---   byline=, name_first= } (byline: the authors were named by a "by" line,
--- which is the page's own word for it; name_first: the page opens with the
--- author's name and has its title further down).
--- @tparam {table,...} lines
--- @treturn table
+--- Reads a title page's lines by their roles.
+-- @tparam {table,...} lines as `lulibre.lines(id)` gives them
+-- @treturn table `{ arxiv=, class=, subject=, title=, authors={...}, subject_source=, byline=,
+-- name_first= }`. `byline` is true if a "by" line named the authors, which is the page's
+-- own statement. `name_first` is true if the page starts with the author's name and has
+-- the title further down.
 function M.classify(lines)
   local r = { authors = {} }
 
@@ -302,9 +302,9 @@ function M.classify(lines)
   return r
 end
 
---- The same, trying each of several pages in turn (scanned books often open
--- on a blank or a cover): the first page that yields a title wins, and the
--- subject may come from any of them.
+--- Does what `classify` does, trying several pages in turn, since scanned
+-- books often start with a blank page or a cover. The first page with a
+-- title wins, and the subject may come from any page.
 -- @tparam {{table,...},...} pages each page's lines
 -- @treturn table as `classify`
 function M.classify_pages(pages)
@@ -379,33 +379,32 @@ local function stacked(text)
   return out
 end
 
---- What a cover sheet states outright, in "Label: value" lines, as the
--- sheets JSTOR and other archives put in front of an article do:
+--- Reads a cover sheet's labelled facts. JSTOR and other archives put
+-- "Label: value" lines in front of an article:
 --
---   What is an Answer?
---   Author(s): Herbert S. Wilf
---   Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292
---   Published by: Mathematical Association of America
---   Stable URL: http://www.jstor.org/stable/2321713
+--    What is an Answer?
+--    Author(s): Herbert S. Wilf
+--    Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292
+--    Published by: Mathematical Association of America
+--    Stable URL: http://www.jstor.org/stable/2321713
 --
--- or with each label on a line of its own and its value under it, as a
--- university's repository puts in front of what it holds:
+-- A university's repository puts each label on its own line, with the
+-- value below it:
 --
---   Unifying Labeling under Minimal Search ...
---   Item Type
---   Article; text
---   Authors
---   Epstein, Samuel D.; Kitahara, Hisatsugu; Seely, T. Daniel
---   Publisher
---   University of Arizona Linguistics Circle (Tucson, Arizona)
---   Journal
---   Coyote Papers
+--    Unifying Labeling under Minimal Search ...
+--    Item Type
+--    Article; text
+--    Authors
+--    Epstein, Samuel D.; Kitahara, Hisatsugu; Seely, T. Daniel
+--    Publisher
+--    University of Arizona Linguistics Circle (Tucson, Arizona)
+--    Journal
+--    Coyote Papers
 --
--- Returns nil when the page has no author label, else { title=, authors=,
--- year=, source=, publisher=, journal=, url=, jstor=, labels= } with whatever
--- was found; labels counts the labelled lines, which is how sure one can be.
--- @tparam {table|string,...} lines a page's lines, `lulibre.lines` or text
--- @treturn table|nil
+-- @tparam {table|string,...} lines a page's lines, from `lulibre.lines` or as text
+-- @treturn table|nil nil if the page has no author label. Otherwise `{ title=, authors=, year=,
+-- source=, publisher=, journal=, url=, jstor=, labels= }` with what was found. `labels` counts
+-- the labelled lines, which shows how reliable the result is.
 function M.labelled(lines)
   local text = {}
   for i, l in ipairs(lines or {}) do
@@ -461,26 +460,24 @@ function M.labelled(lines)
   return out
 end
 
---- A thesis or dissertation cover page, read by rule: the approach of
--- Choudhury, Wu, Ingram and Fox, "A Heuristic Baseline Method for Metadata
--- Extraction from Scanned Electronic Theses and Dissertations" (JCDL 2020,
--- doi:10.1145/3383583.3398590). Such covers follow a template, so plain
--- patterns on the text do well, and they need no font sizes, which a page
+--- Reads a thesis or dissertation cover page by rule, following Choudhury,
+-- Wu, Ingram and Fox, "A Heuristic Baseline Method for Metadata Extraction
+-- from Scanned Electronic Theses and Dissertations" (JCDL 2020,
+-- doi:10.1145/3383583.3398590). Thesis covers follow a template, so plain
+-- text patterns work well. The patterns need no font sizes, which a page
 -- read by OCR does not have:
 --
---   title        the lines above "by"
---   author       what follows "by", on that line or the next
---   degree       after "degree of"
---   program      after "department of", or "in" after the degree
---   institution  after "at the" or "faculty of (the)", else the line naming
---                a university, institute or college
---   year         four digits, preferring a line that names a month
---   advisor      after "certified by", "approved", "supervisor", "advisor"
+-- - `title`: the lines above "by"
+-- - `author`: what follows "by", on that line or the next
+-- - `degree`: after "degree of"
+-- - `program`: after "department of", or "in" after the degree
+-- - `institution`: after "at the" or "faculty of (the)", or else the line
+--   naming a university, institute or college
+-- - `year`: four digits, preferring a line that names a month
+-- - `advisor`: after "certified by", "approved", "supervisor" or "advisor"
 --
--- Returns nil unless the page reads like a thesis cover, else a table with
--- whichever of those were found.
 -- @tparam {table|string,...} lines
--- @treturn table|nil
+-- @treturn table|nil the fields found, or nil if the page is not a thesis cover
 function M.thesis(lines)
   local text, low = {}, {}
   for _, l in ipairs(lines or {}) do

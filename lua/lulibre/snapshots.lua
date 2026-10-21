@@ -1,36 +1,43 @@
---- Snapshots: points in the history of the library that it can be put back to.
+--- Marks points in the library's history and puts the library back to them.
 --
--- The history (a file of its own beside the index, attached as `history`)
--- is the journal of every change: each field lulibre wrote, with what it
--- was before; each book removed, added from the sync folder, put back or
--- dropped; and the changes made to calibre by other means (its own window,
--- the content server, another program), which are found by comparing the
--- books with what they were the last time anyone looked, and logged as one
--- batch labelled "outside" when the next change is logged. A snapshot is no
--- more than a place in that journal: no copy of the library is kept.
+-- The history is a file of its own beside the index, attached as
+-- `history`. The history is the journal of every change:
 --
--- Putting the library back to a snapshot (rollback) works out, for every
--- field changed since, what it was then, and writes it through calibre like
--- any other change (so it is journaled, and undone like one):
---   * a field lulibre changed goes back to what it was;
---   * a field changed outside lulibre is left as it is, unless `exact`;
---   * a field changed again since by means the journal did not see (it
---     is not what lulibre last wrote) is left alone and counted;
---   * a book added from the sync folder since goes back to how it was when
---     it was added (what was done to it in the library is what is undone),
---     or, with `unsync`, out of the library, its files moved to the sync
---     folder's unsynced/ folder;
---   * a book removed since comes back out of calibre's recycle bin, and a
---     book put back since goes again.
--- Before it writes anything a rollback takes a snapshot of its own, so going
--- back to that one is rolling forward again. Books nothing has touched since
--- are not looked at, and a second rollback to the same snapshot changes
--- nothing.
+-- - each field lulibre wrote, with the old value;
+-- - each book removed, added from the sync folder, restored or dropped;
+-- - changes made to calibre by other means (calibre's own window, the
+--   content server, another program). lulibre finds these changes by
+--   comparing the books with their state at the last look, and logs them as
+--   one batch labelled "outside" when the next change is logged.
 --
--- A snapshot made from a calibre database kept from before (`import`) also
--- carries the few values where that database differs from what the journal
--- says the library was at that time: changes nobody logged. Those count as
--- changes made outside lulibre.
+-- A snapshot is only a position in the journal. No copy of the library is
+-- kept.
+--
+-- A rollback puts the library back to a snapshot. For every field changed
+-- since the snapshot, the rollback works out the old value and writes it
+-- through calibre like any other change, so the journal records the change
+-- and undo can reverse it:
+--
+-- - a field lulibre changed goes back to its old value;
+-- - a field changed outside lulibre stays as it is, unless `exact` is set;
+-- - a field changed again by means the journal did not see (its value is
+--   not what lulibre last wrote) is left alone and counted;
+-- - a book added from the sync folder since the snapshot goes back to how
+--   it was when it was added, which undoes what was done to it in the
+--   library. With `unsync`, the book leaves the library instead, and its
+--   files move to the sync folder's unsynced/ folder;
+-- - a book removed since the snapshot comes back from calibre's recycle
+--   bin, and a book restored since the snapshot is removed again.
+--
+-- Before writing anything, a rollback takes its own snapshot, so rolling
+-- back to that snapshot rolls forward again. A rollback skips the books
+-- nothing has changed since the snapshot, so a second rollback to the same
+-- snapshot changes nothing.
+--
+-- `import` makes a snapshot from an older calibre database. An imported
+-- snapshot also holds the few values where the older database differs from
+-- what the journal says the library was at that time: changes nobody
+-- logged. These values count as changes made outside lulibre.
 --
 -- @module lulibre.snapshots
 -- @usage
@@ -53,7 +60,7 @@ local M = {}
 M.fields = edit.fields
 -- the journal's names for what happened to a whole book
 M.ADDED, M.REMOVED, M.RESTORED, M.DROPPED = "(added)", "(removed)", "(restored)", "(dropped)"
---- The folder under the sync folder that books taken back out of the library go to.
+--- The folder under the sync folder where books taken out of the library go.
 M.UNSYNCED = "unsynced"
 
 local function kv(key)
@@ -74,10 +81,9 @@ local function last_row()
   return lulibre.sql("SELECT coalesce(max(id), 0) AS n FROM journal")[1].n
 end
 
---- A row of the books table (or of mirror_prev, or of another calibre
--- database) as the values the journal keeps, field by field: the same
--- spelling edit.current gives.
--- @tparam table row
+--- Returns a row's values in the form the journal keeps, field by field,
+-- written as `edit.current` writes them.
+-- @tparam table row a row of the books table, of mirror_prev, or of another calibre database
 -- @treturn table `{ [field] = value }`
 function M.values(row)
   local series = row.series or ""
@@ -94,7 +100,7 @@ function M.values(row)
   }
 end
 
---- What the journal keeps of a whole book: its values, title and formats.
+--- Returns what the journal keeps of a whole book: its values, title and formats.
 -- @function state
 -- @tparam table row
 -- @treturn table
@@ -108,12 +114,11 @@ M.state = state
 
 local BOOK_COLS = "id, title, authors, tags, series, series_index, publisher, pubdate, languages, idents, formats, path"
 
---- Log the changes made to calibre by other means since the last look, as
--- one batch labelled "outside". Changes lulibre made itself in the meantime
--- are in the journal already and are told apart by it. Returns how many
--- fields (and books) were logged.
--- @treturn integer fields
--- @treturn integer books
+--- Logs the changes made to calibre by other means since the last look, as
+-- one batch labelled "outside". lulibre's own changes in the meantime are
+-- already in the journal, so the journal tells the two apart.
+-- @treturn integer how many fields were logged
+-- @treturn integer how many books were logged
 function M.observe()
   pcall(lulibre.reload) -- picks up a changed metadata.db; nothing when it has not changed
   if not kv("history:pending") then return 0 end
@@ -170,14 +175,14 @@ function M.observe()
   return #rows
 end
 
---- Log that a book was added to the library by lulibre (from the sync
--- folder, the orphans, onboard): call it as soon as calibre has added it,
--- before anything else looks. from: where its file came from; label names
--- the batch. What it came with is noted now if the index has it already,
--- else the next look (observe) notes it.
+--- Logs that lulibre added a book to the library (from the sync folder, the
+-- orphans, or onboard). Call `added` as soon as calibre has added the book,
+-- before anything else looks at the library. If the index already has the
+-- book's values, they are recorded now; otherwise the next `observe`
+-- records them.
 -- @tparam integer id
--- @tparam string from
--- @tparam[opt] string label
+-- @tparam string from where the book's file came from
+-- @tparam[opt] string label the batch's name
 -- @tparam[opt] integer batch
 function M.added(id, from, label, batch)
   local row = lulibre.sql("SELECT * FROM books WHERE id = ?", id)[1]
@@ -190,7 +195,7 @@ function M.added(id, from, label, batch)
   return batch
 end
 
---- Take a snapshot: the library as it is now. Returns its row.
+--- Takes a snapshot of the library as it is now.
 -- @tparam[opt] string name
 -- @tparam[opt] table opts
 -- @treturn table the row
@@ -204,9 +209,9 @@ function M.take(name, opts)
   return lulibre.sql("SELECT * FROM snapshots WHERE id = ?", id)[1]
 end
 
---- The snapshots, newest first, each with how many books and fields have
--- changed since. opts.all: the retired ones too.
--- @tparam[opt] table opts `all`
+--- Returns the snapshots, newest first, each with how many books and
+-- fields have changed since the snapshot.
+-- @tparam[opt] table opts `all` includes the retired snapshots
 -- @treturn {table,...} `{ id=, name=, ts=, upto=, auto=, retired=, books=, changes= }`
 function M.list(opts)
   opts = opts or {}
@@ -216,8 +221,7 @@ function M.list(opts)
     FROM snapshots s WHERE ? OR s.retired IS NULL ORDER BY s.upto DESC, s.id DESC]], opts.all and 1 or 0)
 end
 
---- A snapshot by number or name (the newest of that name). Returns the row,
--- or nil and why not.
+--- Finds a snapshot by number or by name (the newest with that name).
 -- @tparam string|integer what
 -- @treturn[1] table the row
 -- @treturn[2] nil
@@ -231,10 +235,10 @@ function M.find(what)
   return row
 end
 
---- Retire a snapshot (on = false brings it back). Nothing is lost: the
--- journal stays, and a retired snapshot is still listed with all = true.
+--- Retires a snapshot, or brings a retired one back. Nothing is lost: the
+-- journal stays, and `list{ all = true }` still lists a retired snapshot.
 -- @tparam integer id
--- @tparam[opt] boolean on
+-- @tparam[opt] boolean on false brings the snapshot back
 function M.retire(id, on)
   local _, n = lulibre.store("UPDATE snapshots SET retired = ? WHERE id = ?", on ~= false and os.time() or nil, id)
   return n > 0
@@ -244,8 +248,9 @@ end
 
 local function key(book, field) return book .. "\0" .. field end
 
---- Do two values of a field say the same? Authors and tags compare without case,
--- as calibre keeps one spelling of each whatever its case.
+--- Returns true if two values of a field are the same. Authors and tags are
+-- compared without case, since calibre keeps one spelling of each, whatever
+-- its case.
 -- @function same
 -- @tparam string field
 -- @tparam string a
@@ -257,16 +262,15 @@ local function same(field, a, b)
 end
 M.same = same
 
---- What putting the library back to snapshot `id` would do. Writes nothing.
--- opts.exact: put back changes made outside lulibre too. opts.unsync: take
--- books added since out of the library instead of back to how they came.
--- opts.fields: fields only; no book is brought back, removed or taken out.
--- Returns { snap=, changes = { {id=, field=, value=, op="set"} }, restore = { journal rows },
---   remove = { ids }, unsync = { ids }, undrop = { journal rows },
---   kept = { outside=, since=, unknown_added = { ids }, gone = { ids } }, books= }
+--- Returns what putting the library back to snapshot `id` would do.
+-- Writes nothing.
 -- @tparam integer|string|table id
--- @tparam[opt] table opts `exact`, `unsync`, `fields`
--- @treturn table
+-- @tparam[opt] table opts `exact` also reverts changes made outside lulibre; `unsync` takes
+-- books added since out of the library instead of back to how they came; `fields` reverts
+-- fields only, and brings back, removes or takes out no book
+-- @treturn table `{ snap=, changes = { {id=, field=, value=, op="set"} }, restore = { journal rows },
+-- remove = { ids }, unsync = { ids }, undrop = { journal rows },
+-- kept = { outside=, since=, unknown_added = { ids }, gone = { ids } }, books= }`
 function M.plan(id, opts)
   opts = opts or {}
   local snap = type(id) == "table" and id or assert(M.find(id))
@@ -392,7 +396,7 @@ function M.plan(id, opts)
   return plan
 end
 
---- A few lines on what a plan would do.
+--- Returns a few lines about what a plan would do.
 -- @tparam table plan
 -- @treturn {string,...}
 function M.describe(plan)
@@ -456,13 +460,11 @@ local function unsync_files(book, from)
   return true
 end
 
---- Put the library back to snapshot `id` (number, name or row). Takes a
--- snapshot first, so that going back to it rolls forward. opts as for plan,
--- and opts.dry: only say what would be done. Returns { before=, plan=,
--- applied=, failed = { {id=, error=} }, restored=, removed=, unsynced= }.
--- @tparam integer|string|table id
--- @tparam[opt] table opts
--- @treturn table
+--- Puts the library back to snapshot `id`. First takes a new snapshot, so
+-- going back to the new snapshot rolls forward.
+-- @tparam integer|string|table id a number, name or row
+-- @tparam[opt] table opts as for `plan`, plus `dry`, which only reports what would be done
+-- @treturn table `{ before=, plan=, applied=, failed = { {id=, error=} }, restored=, removed=, unsynced= }`
 function M.rollback(id, opts)
   opts = opts or {}
   local snap, why = type(id) == "table" and id or M.find(id)
@@ -519,7 +521,7 @@ function M.rollback(id, opts)
   return out
 end
 
---- One line about what rollback() did.
+--- Returns one line about what `rollback` did.
 -- @tparam table out `rollback`'s result
 -- @treturn string
 function M.summary(out)
@@ -536,11 +538,11 @@ end
 
 -- ---- a snapshot from a copy of calibre's database ----
 
---- A snapshot from another copy of calibre's metadata.db (one kept from
--- before lulibre, say). It is placed in the journal where that copy's
--- time falls (its newest change); where the copy differs from what the
--- journal says the library was then, those values go with the snapshot.
--- Returns the snapshot's row and { values=, gone=, since= } counts.
+--- Makes a snapshot from another copy of calibre's metadata.db, such as one
+-- kept from before lulibre. The snapshot is placed in the journal at the
+-- copy's time (the copy's newest change). Where the copy differs from what
+-- the journal says the library was at that time, the copy's values go with
+-- the snapshot.
 -- @tparam string path a metadata.db
 -- @tparam[opt] string name
 -- @treturn table the row

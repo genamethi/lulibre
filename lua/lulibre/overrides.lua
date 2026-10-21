@@ -1,10 +1,10 @@
---- Your own modules and scripts that are used in place of lulibre's own.
--- Yours are looked for first, by design (~/.config/lulibre/lua/ and
--- scripts/), so you can replace any part of lulibre that is written in
--- Lua. But a copy of one of lulibre's files, changed and then forgotten,
--- goes on being used after an update has fixed lulibre's. lulibre says so
--- in the console at start: once for each such file, and again whenever
--- lulibre's own file has changed since.
+--- Finds your own modules and scripts that replace lulibre's, and warns
+-- about them.
+-- lulibre looks for your files first (~/.config/lulibre/lua/ and scripts/),
+-- so you can replace any part of lulibre that is written in Lua. But a
+-- changed copy of one of lulibre's files stays in use after an update fixes
+-- lulibre's own file. So at start, lulibre lists each replacing file in the
+-- console once, and again whenever lulibre's own file has changed since.
 --
 -- @module lulibre.overrides
 -- @usage
@@ -50,7 +50,7 @@ local function digest(path)
   return ("%d:%08x"):format(#s, h)
 end
 
---- Your files that are used in place of lulibre's own, by path.
+--- Returns your files that replace lulibre's own, sorted by path.
 -- @treturn {table,...} `{ kind=, name=, yours=, bundled=, stamp= }`
 function M.find()
   local p = lulibre.settings.paths()
@@ -86,10 +86,10 @@ local function seen_path()
   return lulibre.settings.paths().data_dir .. "/overrides.json"
 end
 
---- Say in the console which of your files are used in place of lulibre's
--- own, of those not said of yet or whose lulibre file has changed since.
--- Returns those. A replaceable function.
--- @treturn {table,...}
+--- Lists in the console your files that replace lulibre's own: the files
+-- not listed before, and the files whose lulibre counterpart has changed
+-- since. A replaceable function.
+-- @treturn {table,...} the files listed
 function M.warn()
   local found = M.find()
   local ok, seen = pcall(json.decode, read(seen_path()) or "{}")

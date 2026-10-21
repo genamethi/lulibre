@@ -1,6 +1,6 @@
---- Titles and authors that are artefacts, not metadata: build file names,
--- download error pages, the name of the program that made the PDF.
--- All patterns are matched against the lower-cased value.
+--- Recognises titles and authors that are artefacts, not metadata: build
+-- file names, download error pages, the name of the program that made the
+-- PDF. Every pattern is matched against the value in lower case.
 --
 -- @module lulibre.junk
 -- @usage
@@ -73,19 +73,20 @@ local function good_titles()
   return good_set
 end
 
---- Is the title one the user has listed as fine (the option good_titles)?
+--- Returns true if you listed the title as fine in the option `good_titles`.
 -- @tparam string t
 -- @treturn boolean
 function M.vouched(t)
   return good_titles()[(t or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")] == true
 end
 
---- Is a title unlikely to be one? Junk as M.title has it; or mostly figures;
--- or a single word that is not plainly a word. "Algebra" and "Topology" are
--- titles; "infinite", "E807en" and "tensorprod" are what is left of a file
--- name. The option one_word_titles says how single words are taken: "check"
--- (the default) keeps a capitalised word of letters, "ok" keeps any, "junk"
--- none. A title listed in good_titles is never unlikely.
+--- Returns true if a title is unlikely to be a real title: junk by `title`,
+-- mostly digits, or a single word that is not clearly a word. "Algebra" and
+-- "Topology" are titles; "infinite", "E807en" and "tensorprod" are left over
+-- from file names. The option `one_word_titles` sets how single words are
+-- judged: "check" (the default) accepts a capitalised word of letters, "ok"
+-- accepts any word, and "junk" accepts none. A title listed in
+-- `good_titles` is never unlikely.
 -- @tparam string t
 -- @treturn boolean
 function M.unlikely_title(t)
@@ -107,8 +108,8 @@ function M.unlikely_title(t)
   return false
 end
 
---- Is the title an artefact (a file name, an error page, a generic heading),
--- or nothing? One listed in good_titles never is.
+--- Returns true if the title is empty or an artefact (a file name, an
+-- error page, a generic heading). A title listed in `good_titles` never is.
 -- @tparam string|nil t
 -- @treturn boolean
 function M.title(t)
@@ -123,7 +124,8 @@ function M.title(t)
   return generic[low] or low:find("^list of") ~= nil or not low:find("%a") or any(low, title_patterns)
 end
 
---- Is the author an artefact (the program that made the file, a web site), or nothing?
+--- Returns true if the author is empty or an artefact (the program that
+-- made the file, a web site).
 -- @tparam string|nil a
 -- @treturn boolean
 function M.author(a)

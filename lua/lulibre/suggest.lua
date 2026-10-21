@@ -1,6 +1,6 @@
---- Ranked values for a field, as the edit form offers them: what the file
--- itself suggests, what related books have, then what the library already
--- uses, most used first.
+--- Ranks the values the edit form offers for a field. Values found in the
+-- book's file come first, then values of related books, then values the
+-- library already uses, most used first.
 --
 -- @module lulibre.suggest
 -- @usage
@@ -19,8 +19,8 @@ local function words_prefix(title)
   if a and #a + #b >= 6 then return a .. " " .. b end
 end
 
---- Books that plausibly belong with this one: the same leading words in
--- the title, or an author in common.
+--- Returns the books that probably belong with this one: books whose titles
+-- start with the same words, or that share an author.
 -- @tparam table book from `lulibre.book(id)`
 -- @treturn {integer,...} at most 200 ids
 function M.related(book)
@@ -43,10 +43,10 @@ function M.related(book)
   return out
 end
 
---- The values to offer for one field of the given books, each once.
+--- Returns the values to offer for one field of the given books, without repeats.
 -- @tparam string field
 -- @tparam {integer,...} ids the books (the files of the first 8 are read)
--- @treturn {table,...} `{ text=, detail=, kind= }`, kind "candidate" (from the file), "related" or "library"
+-- @treturn {table,...} `{ text=, detail=, kind= }`, where kind is "candidate" (from the file), "related" or "library"
 function M.for_field(field, ids)
   local out, seen = {}, {}
   local function add(text, detail, kind)

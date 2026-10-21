@@ -1,31 +1,34 @@
---- Metadata services: what arXiv, CrossRef, zbMATH Open, Open Library and
--- OpenAlex say about a work that has an identifier. None of them needs an
--- account or a key.
+--- Asks metadata services what they know about a work with an identifier:
+-- arXiv, CrossRef, zbMATH Open, Open Library and OpenAlex. None of the
+-- services needs an account or a key.
 --
--- Everything that is fetched is kept (the table `lookups`), so a work is
--- asked about once: a later run, or the same question from another book, is
--- answered from what was kept, and with M.offline set nothing is asked at
--- all.
+-- net stores every answer in the table `lookups`, so each work is asked
+-- about once. A later run, or the same question from another book, gets the
+-- stored answer. With `offline` set, net asks nothing at all.
 --
--- These services are other people's, and free. Each is asked one thing at a
--- time and no faster than M.PACE, whatever else is going on; many works go
--- in one request where the service takes them (arXiv, CrossRef, Open
--- Library); one that says it is asked too much is left alone (M.HOLD) and
--- nothing is retried; and no failure is answered by asking more.
+-- These services are free and run by other people, so net asks politely:
 --
--- Every function here waits, so call them from a task. Each gives a record
+-- - one request at a time to each service, and no faster than `PACE`,
+--   whatever else is going on;
+-- - many works in one request, where the service accepts that (arXiv,
+--   CrossRef, Open Library);
+-- - a service that says it is asked too much is left alone (`HOLD`), and
+--   nothing is retried;
+-- - a failure is never answered with more requests.
 --
---   { title=, authors={...}, year=, date="YYYY-MM-DD", publisher=, series=, series_index=,
---     subjects={ {tag=, confidence=, why=}, ... }, ids={ doi=, isbn=, arxiv=, zbl= }, type=, source= }
+-- Every function here waits, so call them from a task. Each returns a record
 --
--- with whatever the service knows, or nil and why not.
+--    { title=, authors={...}, year=, date="YYYY-MM-DD", publisher=, series=, series_index=,
+--      subjects={ {tag=, confidence=, why=}, ... }, ids={ doi=, isbn=, arxiv=, zbl= }, type=, source= }
 --
--- The option contact_email, when set, is sent with each request (in the
--- User-Agent, and as CrossRef's `mailto`): CrossRef and Open Library give
--- more room to callers they can reach. It is empty unless you set it.
+-- with whatever the service knows, or nil and the reason.
 --
--- The services are each in a module of their own (lulibre/net/*.lua), which
--- adds its functions to this one table; what they share is in net/core.lua.
+-- The option contact_email, if set, is sent with each request (in the
+-- User-Agent, and as CrossRef's `mailto`). CrossRef and Open Library give
+-- more room to callers they can reach. The option is empty unless you set it.
+--
+-- Each service has its own module (lulibre/net/*.lua), which adds its
+-- functions to this table. The shared code is in net/core.lua.
 --
 -- @module lulibre.net
 -- @usage

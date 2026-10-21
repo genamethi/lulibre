@@ -1,6 +1,7 @@
---- The snapshot browser (:snapshots, gz): the snapshots along the bottom, and
--- where the list is, what going back to the one under the cursor would do.
--- Going back asks first; the flags it would go back with are in the title.
+--- Shows the snapshot browser (:snapshots, gz): the snapshots along the
+-- bottom, and in place of the list, what going back to the snapshot under
+-- the cursor would do. Going back asks first. The title shows the flags
+-- the rollback would use.
 --
 -- @module lulibre.ui.snapshots
 -- @usage
@@ -14,8 +15,9 @@ local keys = require("lulibre.ui.keys").of("snapshots")
 
 local function when(ts) return os.date("%Y-%m-%d %H:%M", ts) end
 
---- What the panel where the list is shows for a snapshot: rows of
--- { label, text, style = }. Replace it in init.lua to show it your way.
+--- Returns what the panel in place of the list shows for a snapshot, as
+-- rows of `{ label, text, style = }`. Replace this function in init.lua to
+-- change the panel.
 function M.context(snap, plan)
   local rows = { { ("snapshot %d"):format(snap.id), snap.name, style = "head" },
     { "taken", when(snap.ts) .. (snap.auto == 1 and "   (by a rollback: going back to it rolls forward)" or "") } }
@@ -40,7 +42,7 @@ function M.context(snap, plan)
   return rows
 end
 
---- Open the browser.
+--- Opens the browser.
 function M.run()
   local flags = { exact = false, unsync = false, fields = false }
   local all = false

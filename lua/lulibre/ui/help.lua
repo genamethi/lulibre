@@ -1,11 +1,11 @@
---- Help: the keys, by what they are for, under headings that open and close,
--- with a search over all of them; and the guides, by topic.
+--- Shows help: the keys, grouped by purpose under headings that open and
+-- close, with a search over all of them; and the guides, by topic.
 --
---   ?              the keys: Enter opens a heading, / searches, K (or Enter on
---                  a key) shows what the guides say about it
---   :help          the same
---   :help TOPIC    the part of the guides about a word: `:help enrich`,
---                  `:help filters`, `:help group`
+-- - `?` shows the keys. Enter opens a heading, / searches, and K (or Enter
+--   on a key) shows what the guides say about the key.
+-- - `:help` does the same.
+-- - `:help TOPIC` shows the part of the guides about a word: `:help enrich`,
+--   `:help filters`, `:help group`.
 --
 -- The guides are the files of docs/, installed beside lulibre's Lua code.
 --
@@ -111,7 +111,8 @@ local function start()
   }
 end
 
---- The folder the guides are in, or nil: docs/ beside the lua/ this file is under.
+--- Returns the folder the guides are in: docs/ beside the lua/ folder that
+-- holds this file. Returns nil if there is no such folder.
 -- @treturn string|nil
 function M.docs_dir()
   local src = debug.getinfo(1, "S").source:gsub("^@", "")
@@ -132,8 +133,8 @@ M.guides = { { "workflows", "what lulibre does and how: editing, proposals, revi
   { "configuration", "the options, init.lua, themes" }, { "api", "the Lua API, for scripts and init.lua" },
   { "development", "building, testing, how the code is laid out" } }
 
---- Markdown as plain lines for the pager: links as their text, tables as
--- columns, fences dropped.
+--- Converts Markdown to plain lines for the pager. Links become their text,
+-- tables become columns, and code fences are removed.
 -- @tparam string text
 -- @treturn {string,...}
 function M.plain(text)
@@ -215,10 +216,10 @@ local function read(name)
   return text
 end
 
---- What the guides say about a word: the parts whose heading holds it, the
--- nearest first. Returns { {guide=, title=, text=}, ... }.
+--- Returns what the guides say about a word: the sections whose heading
+-- contains the word, closest match first.
 -- @tparam string word
--- @treturn {table,...}
+-- @treturn {table,...} `{ {guide=, title=, text=}, ... }`
 function M.find(word)
   local want = lulibre.fold(word)
   local found = {}
@@ -238,7 +239,8 @@ function M.find(word)
   return found
 end
 
---- Show what the guides say about a word (a guide's own name shows all of it).
+--- Shows what the guides say about a word. A guide's own name shows the
+-- whole guide.
 -- @tparam string word
 function M.topic(word)
   word = (word or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("^:", "")
@@ -345,8 +347,8 @@ local function gather()
   return sections
 end
 
---- Open help, or the guides on a word.
--- @tparam[opt] string args a word: what the guides say about it
+--- Opens help, or what the guides say about a word.
+-- @tparam[opt] string args a word to look up in the guides
 function M.run(args)
   if type(args) == "string" and args:match("%S") then return M.topic(args) end
   local sections = gather()

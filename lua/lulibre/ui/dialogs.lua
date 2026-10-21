@@ -1,10 +1,10 @@
---- Dialogs over things lulibre already does, each one a pane of boxes and
--- choices (lulibre.ui.form) that says what will happen before it does:
+--- Opens dialogs for things lulibre already does. Each dialog is a form
+-- (lulibre.ui.form) that says what will happen before it happens:
 --
---   M.enrich()     look books up: what would be asked of whom, which services, then go
---   M.change()     one change to every selected book: add or remove a subject, set a field
---   M.datasets()   the databases kept on this machine: tick which to fetch
---   M.sync()       the waiting files that are selected: add, add and remove, or drop
+-- - `enrich`: look books up. Shows what would be asked of which services, then runs.
+-- - `change`: one change to every selected book: add or remove a subject, or set a field.
+-- - `datasets`: the databases kept on this machine. Choose which to fetch.
+-- - `sync`: the selected waiting files. Add them, add and remove them, or drop them.
 --
 -- @module lulibre.ui.dialogs
 -- @usage
@@ -48,8 +48,9 @@ local function plural(n, word)
   return ("%d %s%s"):format(n, word, n == 1 and "" or "s")
 end
 
---- Look books up by their identifiers: first what a run would ask of whom
--- (nothing is asked to find that out), then which services, then go.
+--- Looks books up by their identifiers. The dialog first shows what a run
+-- would ask of which services (nothing is asked to find this out), then
+-- lets you choose the services, then runs.
 function M.enrich()
   local scope = lulibre.source()
   local ids = lulibre.selection()
@@ -111,9 +112,9 @@ function M.enrich()
   require("lulibre.ui.review").run { ids = ids }
 end
 
---- One change to every selected book, said once: add or remove a subject,
--- set the authors, the series, the publisher, the date or the language. The
--- change is written like any other, and one undo takes it all back.
+--- Makes one change to every selected book: add or remove a subject, or
+-- set the authors, series, publisher, date or language. The change is
+-- written like any other, and one undo reverses all of it.
 function M.change()
   local edit = require "lulibre.edit"
   local ids = lulibre.selection()
@@ -166,8 +167,8 @@ function M.change()
   lulibre.notify(edit.summary(r), #r.failed > 0 and "error" or nil)
 end
 
---- The databases kept on this machine: what there is, what is here, and
--- boxes for which to fetch now.
+--- Shows the databases lulibre can keep on this machine and which are
+-- here, and lets you choose which to fetch now.
 function M.datasets()
   local datasets = require "lulibre.datasets"
   local items = {}
@@ -203,8 +204,8 @@ function M.datasets()
   lulibre.notify(done > 0 and ("%s seen to: :enrich reads from what is here before it asks anybody"):format(plural(done, "dataset")) or "nothing was ticked")
 end
 
---- The waiting files that are selected in the sync folder: what would
--- happen to each, and a choice of what to do.
+--- Shows what would happen to each selected waiting file in the sync
+-- folder, and lets you choose what to do.
 function M.sync()
   local sync = require "lulibre.sync"
   if lulibre.source() ~= "sync" then

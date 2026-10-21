@@ -1,7 +1,7 @@
---- The one place subject names are decided. The Python scripts kept six maps
--- that disagreed (math.AG was "math/geometry/algebraic" in one and
--- "math/algebraic-geometry" in another, and both ended up in the library);
--- everything that needs a subject now asks here.
+--- Decides subject names, in one place. Everything that needs a subject
+-- asks taxonomy. (The Python scripts kept six maps that disagreed: math.AG
+-- was "math/geometry/algebraic" in one and "math/algebraic-geometry" in
+-- another, and both ended up in the library.)
 --
 -- @module lulibre.taxonomy
 -- @usage
@@ -11,7 +11,7 @@
 -- taxonomy.canonical(tag)          --> the tag, or the one it is an alias of
 local M = {}
 
---- arXiv primary class -> subject tag
+--- The subject tag for each arXiv primary class.
 M.arxiv = {
   ["math.NT"] = "math/number-theory",
   ["math.AG"] = "math/algebraic-geometry",
@@ -85,7 +85,8 @@ local archive = {
   econ = "economics",
 }
 
---- The subject an arXiv class stands for ("math.AG"), or its archive's.
+--- Returns the subject for an arXiv class such as "math.AG", or the
+-- subject for the class's archive.
 -- @tparam string|nil class
 -- @treturn string|nil
 function M.from_arxiv(class)
@@ -93,7 +94,7 @@ function M.from_arxiv(class)
   return M.arxiv[class] or archive[class:match("^[^.]+")]
 end
 
---- MSC two-digit area -> subject tag
+--- The subject tag for each two-digit MSC area.
 M.msc = {
   ["00"] = "math/general", ["01"] = "math/history", ["03"] = "math/logic",
   ["05"] = "math/combinatorics", ["06"] = "math/algebra/lattice-theory",
@@ -137,8 +138,8 @@ local LCC = {
   HB = { { 1, 3840, "economics" } },
 }
 
---- The subject a Library of Congress class number stands for
--- ("QA247 .S47", "QA387.L35"), or nil.
+--- Returns the subject for a Library of Congress class number ("QA247
+-- .S47", "QA387.L35"), or nil.
 -- @tparam string class
 -- @treturn string|nil
 function M.from_lcc(class)
@@ -160,7 +161,7 @@ local DEWEY = { { "511.3", "math/logic" }, { "511.5", "math/combinatorics" }, { 
   { "519", "math/applied" }, { "51", "math" }, { "004", "cs" }, { "005", "cs" }, { "006", "cs" }, { "53", "physics" },
   { "41", "linguistics" }, { "1", "philosophy" } }
 
---- The subject a Dewey number stands for ("512'.55", "516.3/5"), or nil.
+--- Returns the subject for a Dewey number ("512'.55", "516.3/5"), or nil.
 -- @tparam string number
 -- @treturn string|nil
 function M.from_dewey(number)
@@ -172,14 +173,14 @@ function M.from_dewey(number)
   return nil
 end
 
---- Tags that mean the same thing as another tag; used when normalising.
+--- Tags that mean the same as another tag, used when normalising.
 M.alias = {
   ["math/geometry/algebraic"] = "math/algebraic-geometry",
   ["math/group-theory"] = "math/algebra/group-theory",
   ["math/topology/algebraic"] = "math/topology",
 }
 
---- The tag a tag is an alias of (`alias`), or the tag itself.
+--- Returns the tag that a tag is an alias of (see `alias`), or the tag itself.
 -- @tparam string tag
 -- @treturn string
 function M.canonical(tag)

@@ -1,12 +1,13 @@
---- Is a service's record this book? Titles and people held against each other.
--- Part of lulibre.net: require that, not this (it adds these functions to
--- lulibre.net's table; lulibre/net/core.lua has what they share).
+--- Decides whether a service's record is this book, by comparing titles
+-- and people.
+-- This file is part of lulibre.net. Require lulibre.net, which adds this
+-- file's functions to its table; the shared code is in lulibre/net/core.lua.
 --
 -- @submodule lulibre.net
 local M = require "lulibre.net.core"
 
---- Are two titles the same work? Deliberately strict: a wrong match would
--- put someone else's authors on a book.
+--- Returns true if two titles are the same work. The test is strict on
+-- purpose, since a wrong match would put another work's authors on a book.
 -- @tparam string a
 -- @tparam string b
 -- @treturn boolean
@@ -96,8 +97,9 @@ local function people_in_common(mine, theirs)
   return false
 end
 
---- Has a record none of the people a book has? (False when either names
--- nobody.) Its authors are then not offered over the book's as if sure.
+--- Returns true if a record has none of the book's people. Returns false if
+-- either names nobody. If true, the record's authors are not offered over
+-- the book's as if they were sure.
 -- @tparam {string,...} mine
 -- @tparam {string,...} theirs
 -- @treturn boolean
@@ -105,8 +107,9 @@ function M.other_people(mine, theirs)
   return people_in_common(mine, theirs) == false
 end
 
---- Does a record name some of the people a book has and nobody else: the
--- first author alone, where the book has all three? Catalogues often do.
+--- Returns true if a record names some of the book's people and nobody
+-- else, such as the first author alone where the book has all three.
+-- Catalogues often do this.
 -- @tparam {string,...} mine
 -- @tparam {string,...} theirs
 -- @treturn boolean
@@ -120,8 +123,9 @@ function M.fewer_people(mine, theirs)
   return true
 end
 
---- Is a record's title the book's with words left out ("Extending Python"
--- for "Extending and Embedding Python")? Not something to put over it.
+--- Returns true if a record's title is the book's title with words left out
+-- ("Extending Python" for "Extending and Embedding Python"). Such a title
+-- should not replace the book's.
 -- @tparam string mine
 -- @tparam string theirs
 -- @treturn boolean
@@ -135,25 +139,23 @@ function M.shorter_title(mine, theirs)
   return true
 end
 
---- Is a record that a search for a title turned up the work in hand, and how
--- far can it be believed? mine: the book's title; theirs: the record's;
--- my_authors, their_authors: lists of names, either may be empty. Returns a
--- confidence (0.7 to 0.9) or nil.
+--- Returns how far a record from a title search can be believed to be the
+-- book: a confidence from 0.7 to 0.9, or nil if the record is another work.
 --
--- A search always answers with something, and titles share their words:
--- "An introduction to the ipaddress module" brought back "An Introduction to
--- Module Theory", and two words in three were once enough. Now the titles
--- must say the same thing: the same telling words (0.8), or one of them the
--- other with something after it, a subtitle or the author's name run on
--- (0.7), and then only when four words or more are shared. A short title
--- ("Algebraic Geometry", "The Galois Correspondence") is many works': it
--- counts only when an author's family name is in the record too. Agreeing
--- authors add to the confidence; authors on both sides with no name in
--- common mean another work, whatever the titles say.
--- @tparam string mine
--- @tparam string theirs
--- @tparam {string,...} my_authors
--- @tparam {string,...} their_authors
+-- A search always returns something, and titles share words. "An
+-- introduction to the ipaddress module" once brought back "An Introduction
+-- to Module Theory", when two words in three were enough. Now the titles
+-- must mean the same: the same significant words (0.8), or one title is
+-- the other plus a subtitle or the author's name (0.7), and then only if
+-- they share four words or more. A short title ("Algebraic Geometry", "The
+-- Galois Correspondence") belongs to many works, so it counts only if an
+-- author's family name is in the record too. Matching authors raise the
+-- confidence. If both sides name authors and no name is in common, the
+-- record is another work, whatever the titles say.
+-- @tparam string mine the book's title
+-- @tparam string theirs the record's title
+-- @tparam {string,...} my_authors may be empty
+-- @tparam {string,...} their_authors may be empty
 -- @treturn number|nil
 function M.title_match(mine, theirs, my_authors, their_authors)
   local a, sa = title_words(mine)
@@ -179,31 +181,28 @@ function M.title_match(mine, theirs, my_authors, their_authors)
   return agree and 0.85 or 0.7
 end
 
---- Is a record that an identifier led to the record of the book in hand?
--- An identifier can be wrong: read off a page where it stood for a cited
--- work, written by an earlier mistake, or a chapter's or a review's in
--- place of the book's. rec: the record. titles: the book's own title, when
--- it has one worth the name, and those its file shows. authors: the book's,
--- when it has any worth the name. head: how the file's text opens.
+--- Returns true if a record found by an identifier is the book's record.
+-- An identifier can be wrong: read from a page where it belonged to a
+-- cited work, written by an earlier mistake, or a chapter's or a review's
+-- identifier instead of the book's.
 --
--- It is the book's record when the titles say the same thing, or the
--- record's title stands in the opening of the file. A looser likeness (a
--- title cut short, most of the words) counts unless the authors plainly
--- differ, which is how a review "..., by Sutton and Barto" is told from
--- the book. With no likeness at all, an author in common is enough: the
--- same people's work under another form of its title, or the book this
--- is a part of; the third value is then "people", and the record's title
--- is not one to put over the book's.
--- Returns true, or false and whether both title and authors speak
--- against it (the identifier is then very likely another work's).
--- @tparam table rec
--- @tparam {string,...} titles
--- @tparam {string,...} authors
--- @tparam[opt] string head
+-- The record is the book's if the titles mean the same, or if the record's
+-- title appears at the start of the file. A looser likeness (a shortened
+-- title, most of the words) counts unless the authors clearly differ; that
+-- is how a review "..., by Sutton and Barto" is told from the book. With no
+-- likeness at all, an author in common is enough: the record may be the
+-- same people's work under another form of the title, or the book that
+-- contains this one. The second value is then "people", and the record's
+-- title should not replace the book's.
+-- @tparam table rec the record
+-- @tparam {string,...} titles the book's own title, if it is a real title, and the titles its file shows
+-- @tparam {string,...} authors the book's authors, if they are real names
+-- @tparam[opt] string head the start of the file's text
 -- @treturn[1] boolean true
--- @treturn[1] string|nil "people" when only an author is in common
+-- @treturn[1] string|nil "people" if only an author is in common
 -- @treturn[2] boolean false
--- @treturn[2] boolean both title and authors speak against it
+-- @treturn[2] boolean true if both title and authors are against the record, so the
+-- identifier very likely belongs to another work
 function M.fits(rec, titles, authors, head)
   if not rec.title or (#(titles or {}) == 0 and #(authors or {}) == 0) then return true end
   local agree = people_in_common(authors, rec.authors)

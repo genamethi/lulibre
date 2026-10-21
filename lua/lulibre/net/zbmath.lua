@@ -1,6 +1,7 @@
---- zbMATH Open: records by DOI or arXiv number, and its table of links to arXiv.
--- Part of lulibre.net: require that, not this (it adds these functions to
--- lulibre.net's table; lulibre/net/core.lua has what they share).
+--- Looks works up in zbMATH Open by DOI or arXiv number, and reads its
+-- table of links to arXiv.
+-- This file is part of lulibre.net. Require lulibre.net, which adds this
+-- file's functions to its table; the shared code is in lulibre/net/core.lua.
 --
 -- @submodule lulibre.net
 local M = require "lulibre.net.core"
@@ -10,9 +11,9 @@ local encode, forename_first, lines_with = M._encode, M._forename_first, M._line
 
 -- ---- zbMATH Open ----
 
---- zbMATH Open's record for a work, by { doi = } or { arxiv = }: what gives
--- a mathematics paper or book its subject, since each is classified by hand
--- (the MSC codes), besides its title, authors, year and Zbl number.
+--- Returns zbMATH Open's record for a work: its title, authors, year, Zbl
+-- number and MSC codes. zbMATH classifies each work by hand, so the MSC
+-- codes are the best source of a mathematics paper's or book's subject.
 -- @tparam table by `{ doi= }` or `{ arxiv= }`
 -- @treturn[1] table the record
 -- @treturn[2] nil
@@ -53,12 +54,11 @@ function M.zbmath(by)
   return rec
 end
 
---- The zbMATH number of arXiv papers, from the table of zbMATH's links to
--- full texts (zbmath-oa_links.csv in the data folder: "zbmath_id,link", the
--- link mostly "https://arxiv.org/pdf/1111.2222.pdf"). Returns { [arXiv
--- number] = zbMATH number }; an empty table when the file is not there.
+--- Returns the zbMATH numbers of arXiv papers, from the table of zbMATH's
+-- links to full texts: zbmath-oa_links.csv in the data folder, with lines
+-- "zbmath_id,link", the link mostly "https://arxiv.org/pdf/1111.2222.pdf".
 -- @tparam {string,...} arxiv_ids
--- @treturn table
+-- @treturn table `{ [arXiv number] = zbMATH number }`, empty if the file is not there
 function M.zbmath_links(arxiv_ids)
   local path = require("lulibre.datasets").path("zbmath-oa_links.csv")
   local out, wanted, strings = {}, {}, {}

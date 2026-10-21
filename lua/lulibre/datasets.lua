@@ -1,9 +1,10 @@
---- Databases kept on this machine, so that books can be looked up without
--- asking anybody: what there is to have, whether it is here, and how it is
--- fetched. `lulibre datasets` (scripts/datasets.lua) is the way in.
+--- Fetches and finds the databases kept on this machine, so lulibre can
+-- look books up without asking any service. `lulibre datasets`
+-- (scripts/datasets.lua) is the way to use them.
 --
--- They live in lulibre's data folder, beside the index. A file there may be
--- a link to one kept elsewhere; fetching then renews the file it points to.
+-- The datasets live in lulibre's data folder, beside the index. A file
+-- there may be a link to a file kept elsewhere; fetching then renews the
+-- file the link points to.
 --
 -- @module lulibre.datasets
 -- @usage
@@ -17,7 +18,7 @@ local uv = require "luv"
 
 local M = {}
 
---- What can be had: `{ name=, title=, useful=, size=, from=, renewed=, files= }`.
+--- The datasets lulibre can fetch: `{ name=, title=, useful=, size=, from=, renewed=, files= }`.
 M.list = {
   {
     name = "arxiv",
@@ -51,7 +52,7 @@ M.list = {
   },
 }
 
---- The dataset of a name, or nil.
+--- Returns the dataset with a name, or nil.
 -- @tparam string name
 -- @treturn table|nil
 function M.get(name)
@@ -61,24 +62,24 @@ function M.get(name)
   return nil
 end
 
---- The folder they are kept in.
+--- Returns the folder the datasets are kept in.
 -- @treturn string
 function M.dir()
   return lulibre.settings.paths().data_dir
 end
 
---- Where a file of a dataset is, if it is here (a link is followed).
--- @tparam string name a file's
+--- Returns the path of a dataset's file, if the file is here. A link is followed.
+-- @tparam string name the file's name
 -- @treturn string|nil
 function M.path(name)
   local path = M.dir() .. "/" .. name
   return uv.fs_stat(path) and path or nil
 end
 
---- What is here of a dataset: { here = all its files are, bytes =, age = of
--- the oldest in days, missing = { names } }.
+--- Returns how much of a dataset is here.
 -- @tparam table ds
--- @treturn table
+-- @treturn table `{ here=, bytes=, age=, missing = { names } }`: `here` is true if
+-- every file is here, and `age` is the oldest file's age in days
 function M.status(ds)
   local st = { here = true, bytes = 0, age = nil, missing = {} }
   for _, f in ipairs(ds.files) do
@@ -100,7 +101,7 @@ local function size(bytes)
   return ("%d MB"):format(math.max(1, bytes // 1e6))
 end
 
---- A dataset's state in a few words: "here: 5.6 GB, 3 days old".
+--- Returns a dataset's state in a few words: "here: 5.6 GB, 3 days old".
 -- @tparam table ds
 -- @treturn string
 function M.state(ds)
@@ -188,14 +189,13 @@ local function fetch_kaggle(f, opts)
   return to
 end
 
---- Fetch a dataset's files into the data folder. opts.force: though what is
--- here is as new as its source; opts.with: the program to fetch from Kaggle
--- with; opts.say(text): told what happens. Returns true, or nil and why not;
--- a dataset that is here and fresh is left alone (true, "fresh").
+--- Fetches a dataset's files into the data folder. A dataset that is here
+-- and as new as its source is left alone.
 -- @tparam table ds
--- @tparam[opt] table opts `force`, `with`, `say`
+-- @tparam[opt] table opts `force` fetches even if the files are as new as the source;
+-- `with` is the program to fetch from Kaggle with; `say(text)` is told what happens
 -- @treturn[1] boolean true
--- @treturn[1] string|nil "fresh" when it was left alone
+-- @treturn[1] string|nil "fresh" if the dataset was left alone
 -- @treturn[2] nil
 -- @treturn[2] string why not
 function M.fetch(ds, opts)
@@ -220,9 +220,8 @@ function M.fetch(ds, opts)
   return true
 end
 
---- Use a file that was fetched by other means: it is linked into the data
--- folder under the name its dataset knows it by. Returns the dataset and the
--- name, or nil and why not.
+--- Uses a file fetched by other means. The file is linked into the data
+-- folder under the name its dataset uses.
 -- @tparam string path
 -- @treturn[1] table the dataset
 -- @treturn[1] string the name

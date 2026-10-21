@@ -1,15 +1,17 @@
---- init.lua as lulibre writes to it.
--- Options it does not mention yet are put in (commented out, with their
--- defaults, so the file says what can be set and changes nothing), and a
--- value set in the config window is written to the line that sets it.
--- Every write keeps the file as it was in init.lua.bak beside it. Lines it
--- adds look like the rest of the file: a comment saying what the option
--- does (`config_comments = "full"`) or only the values it takes ("values"),
--- then `-- o.pages = 6` for lulibre's own, `-- lulibre.cfg.mytags.depth = 2`
--- for a script's.
+--- Adds options to init.lua and writes the values set in the config window.
+-- lulibre adds the options init.lua doesn't list yet, commented out with
+-- their defaults. init.lua then shows every option you can set, and the
+-- added lines change nothing. A value set in the config window is written
+-- to the line that sets that option. Before each write, lulibre saves the
+-- old file as init.lua.bak beside it.
 --
--- An item names an option: `{ name= }` for lulibre's own, `{ ns=, name= }`
--- for a script's.
+-- Added lines match the rest of the file. Each option gets a comment first:
+-- what the option does (`config_comments = "full"`), or only the values the
+-- option takes ("values"). The setting follows: `-- o.pages = 6` for one of
+-- lulibre's options, `-- lulibre.cfg.mytags.depth = 2` for a script's.
+--
+-- An item names an option: `{ name= }` for one of lulibre's options,
+-- `{ ns=, name= }` for a script's.
 --
 -- @module lulibre.config_file
 -- @usage
@@ -23,14 +25,14 @@ local options = require "lulibre.options"
 
 local M = {}
 
---- Where init.lua is.
+--- Returns the path of init.lua.
 -- @treturn string
 function M.path()
   return lulibre.settings.paths().init
 end
 
---- init.lua's text.
--- @treturn string|nil nil when there is none
+--- Returns the text of init.lua.
+-- @treturn string|nil nil if there is no init.lua
 function M.read()
   local f = io.open(M.path(), "r")
   if not f then return nil end
@@ -69,12 +71,12 @@ local function pattern(item)
   return "%f[%w_]o%." .. name .. "%s*="
 end
 
---- The line that names an option, commented out or not.
+--- Finds the line that names an option, commented out or not.
 -- @tparam table item
--- @tparam[opt] string text init.lua's, read when not given
--- @treturn[1] integer its number
+-- @tparam[opt] string text the text of init.lua, read from the file if not given
+-- @treturn[1] integer the line's number
 -- @treturn[1] string the line
--- @treturn[2] nil when no line names it
+-- @treturn[2] nil if no line names the option
 function M.line_of(item, text)
   text = text or M.read() or ""
   local n = 0
@@ -85,7 +87,7 @@ function M.line_of(item, text)
   return nil
 end
 
---- The options init.lua does not mention.
+--- Returns the options that init.lua does not mention.
 -- @treturn table `{ core = { name, ... }, scripts = { {ns=, name=}, ... } }`
 function M.missing()
   local text = M.read() or ""
@@ -152,9 +154,9 @@ local function default_of(item)
   return lulibre.settings.info(item.name).default
 end
 
---- Put options in init.lua with their defaults, under a heading for
--- lulibre's own and one for each script's namespace: commented out, or
--- set, as the option `config_add_as` says.
+--- Adds options to init.lua with their defaults. lulibre's options go under
+-- one heading, and each script's namespace under its own. The option
+-- `config_add_as` says whether they are commented out or set.
 -- @tparam {table,...} items
 -- @treturn integer how many were put in
 function M.add(items)
@@ -185,10 +187,10 @@ function M.add(items)
   return #items
 end
 
---- Write a value for an option into init.lua: the line that names it is
--- made to set it (uncommented), or one is added.
+--- Writes an option's value to init.lua. The line that names the option is
+-- uncommented and set, or a new line is added.
 -- @tparam table item
--- @param value nil puts it back to its default: the line is commented out, with the default
+-- @param value nil resets the option: the line is commented out and shows the default
 function M.write_value(item, value)
   local text = M.read() or "local o = lulibre.o\n"
   local n = M.line_of(item, text)

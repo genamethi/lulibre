@@ -1,11 +1,13 @@
---- Copies of calibre's database.
--- metadata.db, and the preferences calibre keeps beside it, kept with
--- lulibre's data: one folder per copy under
--- `~/.local/share/lulibre/backups/<the index's name>/`, the newest
--- `backup_keep` of them. They are made before the content server starts
--- (lulibre.service, `:offline restart`) as `backup_restart` says, or when
--- asked; each is checked as it is made. A copy can be put back
--- (`restore`), once nothing has the library open.
+--- Makes, checks and restores copies of calibre's database.
+-- A copy holds metadata.db and the preferences calibre keeps beside it, in
+-- a folder under `~/.local/share/lulibre/backups/<the index's name>/`.
+-- lulibre keeps the newest `backup_keep` copies, and checks each copy when
+-- it makes the copy.
+--
+-- lulibre makes a copy before the content server starts (from
+-- lulibre.service or `:offline restart`) if `backup_restart` says so, and
+-- whenever you ask. `restore` puts a copy back once nothing has the library
+-- open.
 --
 -- @module lulibre.backup
 -- @usage
@@ -42,7 +44,7 @@ local function mkdirs(path)
   end
 end
 
---- Where this library's copies are kept.
+--- Returns the folder that holds this library's copies.
 -- @treturn string a folder
 function M.dir()
   local p = lulibre.settings.paths()
@@ -58,7 +60,7 @@ local function read_about(dir)
   return ok and type(v) == "table" and v or nil
 end
 
---- The copies, newest first.
+--- Returns the copies, newest first.
 -- @treturn {table,...} each `{ path=, ts=, reason=, books=, check=, problems= }`
 function M.list()
   local out, base = {}, M.dir()
@@ -79,21 +81,21 @@ function M.list()
   return out
 end
 
---- The newest copy.
+--- Returns the newest copy.
 -- @treturn table|nil
 function M.last()
   return M.list()[1]
 end
 
---- Days since the newest copy.
--- @treturn number|nil nil when there is none
+--- Returns the age of the newest copy in days.
+-- @treturn number|nil nil if there is no copy
 function M.age()
   local l = M.last()
   return l and (os.time() - l.ts) / 86400 or nil
 end
 
---- Is there no copy, or is the newest older than this?
--- @tparam[opt] number days `backup_max_age` when not given
+--- Returns true if there is no copy, or the newest is older than `days`.
+-- @tparam[opt] number days `backup_max_age` if not given
 -- @treturn boolean
 function M.too_old(days)
   days = days or lulibre.o.backup_max_age
@@ -101,14 +103,14 @@ function M.too_old(days)
   return age == nil or age > days
 end
 
---- Copy calibre's database now. Waits: the copy is made on a worker
--- thread. The server may be running: the copy is SQLite's own backup, so
--- it is whole even if calibre writes meanwhile. The copy is then checked
--- (`check`), and since it is the database page for page, a copy that fails
--- says calibre's database does.
+--- Copies calibre's database now, on a worker thread, and waits for the
+-- copy. The server may be running: the copy is made with SQLite's backup,
+-- so it is complete even if calibre writes during it. The copy is then
+-- checked with `check`. Since the copy matches the database page for page,
+-- a copy that fails the check means calibre's database fails it too.
 -- @tparam string reason what the copy is for, as the list shows it
--- @tparam[opt] table opts `raw`: if SQLite cannot copy the database (too
--- damaged), copy its files as they are (the server stopped: `put_back`)
+-- @tparam[opt] table opts `raw`: if SQLite cannot copy the database because it is
+-- too damaged, copy its files as they are. `put_back` passes `raw`, with the server stopped.
 -- @treturn table the copy, `{ path=, ts=, reason=, books=, check=, problems= }`; `check` is "ok" or "failed"
 function M.take(reason, opts)
   opts = opts or {}
@@ -151,13 +153,15 @@ function M.take(reason, opts)
   return b
 end
 
---- Remove all but the newest copies.
--- Only the files a copy is made of are removed; a folder holding anything
--- else is left. Never removed: the newest copy that passed its check, when
--- none of the newest `keep` did (a damaged database copied over and over
--- does not push out the last good copy of it), and a copy waiting to be
--- put back.
--- @tparam[opt] integer keep `backup_keep` when not given
+--- Removes all but the newest `keep` copies.
+-- Only a copy's own files are removed, so a folder that holds anything else
+-- stays. Two copies are never removed:
+--
+-- - the newest copy that passed its check, if none of the newest `keep`
+--   passed. So a damaged database copied again and again does not push out
+--   the last good copy.
+-- - a copy waiting to be put back.
+-- @tparam[opt] integer keep `backup_keep` if not given
 -- @treturn integer how many were removed
 function M.prune(keep)
   keep = keep or lulibre.o.backup_keep
@@ -184,7 +188,7 @@ function M.prune(keep)
   return gone
 end
 
---- `backup_restart`, read.
+--- Returns the value of `backup_restart`.
 -- @treturn string|number "always", "next", "never", or a number of days
 function M.policy()
   local v = tostring(lulibre.o.backup_restart or "always")
@@ -206,15 +210,16 @@ local function kv(key, value)
   lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", key, value)
 end
 
---- Note the value of `backup_restart`, so that "next" is armed again when
--- it is set to next again (lulibre does this at each start).
+--- Records the value of `backup_restart`. Then "next" works again once the
+-- option is set to something else and back to "next". lulibre calls
+-- `observe` at each start.
 function M.observe()
   local v = tostring(lulibre.o.backup_restart)
   if v == "next" and kv("backup:seen") ~= "next" then kv("backup:next_spent", false) end
   kv("backup:seen", v)
 end
 
---- Would the server's next start make a copy?
+--- Returns true if the server's next start would make a copy.
 -- @treturn boolean
 function M.due()
   M.observe()
@@ -225,7 +230,8 @@ function M.due()
   return M.too_old(p)
 end
 
---- Set `backup_restart`, for now and in init.lua. "next" arms it again.
+--- Sets `backup_restart`, for this session and in init.lua. Setting "next"
+-- re-arms "next".
 -- @tparam string|number value "always", "next", "never", or days
 function M.set(value)
   lulibre.o.backup_restart = value
@@ -235,7 +241,7 @@ function M.set(value)
   pcall(require("lulibre.config_file").write_value, { name = "backup_restart" }, value)
 end
 
---- Before the server starts: a copy, if one is due.
+--- Makes a copy if one is due. Called before the server starts.
 -- @treturn table|nil the copy
 function M.on_restart()
   if not M.due() then return nil end
@@ -244,10 +250,10 @@ function M.on_restart()
   return b
 end
 
---- Have calibre write the metadata.opf of every book whose file is behind
--- its record (`calibredb backup_metadata`). calibre writes them only from
--- its own program; changes made through calibredb or the content server
--- just mark the book. The server must be stopped.
+--- Has calibre write the metadata.opf of every book whose opf file is older
+-- than its record (`calibredb backup_metadata`). calibre writes these files
+-- only from its own program. Changes made through calibredb or the content
+-- server only mark the book as needing a new opf file. The server must be stopped.
 -- @treturn integer how many books' files were written
 function M.metadata()
   require("lulibre.calibre").wait_for_program("writing the books' opf files")
@@ -259,10 +265,10 @@ function M.metadata()
   return n
 end
 
---- Is calibre's database whole? SQLite's integrity check, read only, so
--- the server may run (the read holds back calibre's writes for as long as
--- the check takes: well under a second for a few thousand books).
--- @tparam[opt] string path a database; calibre's when not given
+--- Checks that calibre's database is intact, with SQLite's integrity check.
+-- The check only reads, so the server may be running. calibre's writes wait
+-- while the check runs, which is well under a second for a few thousand books.
+-- @tparam[opt] string path a database; calibre's if not given
 -- @treturn boolean
 -- @treturn {string,...}|nil the problems SQLite found
 function M.check(path)
@@ -271,10 +277,10 @@ function M.check(path)
   return ok, problems
 end
 
---- A copy by its place in `list` (1 is the newest) or by its folder's
--- name (20260101-120000, or as much of it as names one).
+--- Finds a copy by its place in `list` (1 is the newest) or by its folder's
+-- name (20260101-120000, or enough of the start to match only one).
 -- @tparam integer|string which
--- @treturn table|nil nil when there is none, or more than one by that name
+-- @treturn table|nil nil if no copy matches, or more than one does
 function M.find(which)
   local copies, n = M.list(), tonumber(which)
   if n and n >= 1 and n <= #copies and math.type(n) == "integer" then return copies[n] end
@@ -363,29 +369,29 @@ local function with_now(fn)
   return r
 end
 
---- What putting a copy back would change, against calibre's database as it
--- is now. Writes nothing.
--- @tparam table b a copy (`list`, `find`)
+--- Returns what putting a copy back would change, compared with calibre's
+-- database now. Writes nothing.
+-- @tparam table b a copy (from `list` or `find`)
 -- @treturn table with these fields:
 --
--- - `books_then`, `books_now`: how many books each has
--- - `back`: books removed since, whose records come back:
---   `{ {id=, title=, authors=, folder=, trash=}, ... }` (`folder`: their
---   folder is still there; `trash`: calibre's trash has it)
--- - `missing`, `trash`: of those, how many have no folder, and how many
---   calibre's trash has
--- - `gone`: books added since, whose records go (their folders stay, for
---   `:orphans`): `{ {id=, title=, authors=}, ... }`
--- - `changed`: books changed since, by calibre's last-modified time:
---   `{ {id=, title=, now=, fields={...}}, ... }`; `fields` names those of
---   lulibre's fields that differ (none for a book changed only in its
---   comments, custom columns or cover)
+-- - `books_then`, `books_now`: how many books the copy and the database have
+-- - `back`: books removed since the copy, whose records would come back:
+--   `{ {id=, title=, authors=, folder=, trash=}, ... }`. `folder` is true if
+--   the book's folder still exists, and `trash` if calibre's trash has it.
+-- - `missing`, `trash`: how many of those have no folder, and how many are
+--   in calibre's trash
+-- - `gone`: books added since the copy, whose records would go:
+--   `{ {id=, title=, authors=}, ... }`. Their folders stay, for `:orphans`.
+-- - `changed`: books changed since the copy, by calibre's last-modified time:
+--   `{ {id=, title=, now=, fields={...}}, ... }`. `fields` names the
+--   lulibre fields that differ. `fields` is empty for a book changed only in its
+--   comments, custom columns or cover.
 -- - `fields`: how many books differ in each field
--- - `moved`: folders calibre renamed since: `{ {id=, then=, now=}, ... }`;
---   `put_back` points the records at them as they are now
--- - `unfitted`: renamed, but not so that it can be followed
+-- - `moved`: folders calibre renamed since the copy: `{ {id=, then=, now=}, ... }`.
+--   `put_back` points the records at the current folders.
+-- - `unfitted`: folders renamed in a way that can't be followed
 -- - `journal`: how many of the changes were made through lulibre
--- - `check`: "ok" or "failed", the copy's integrity now
+-- - `check`: "ok" or "failed", the result of checking the copy now
 function M.compare(b)
   local whole = M.check(b.path .. "/metadata.db")
   local out = with_now(function(now) return differ(b.path .. "/metadata.db", now) end)
@@ -394,7 +400,7 @@ function M.compare(b)
   return out
 end
 
---- `compare`'s answer, in lines to show.
+--- Returns `compare`'s result as lines to show.
 -- @tparam table b the copy
 -- @tparam table d what `compare` returned
 -- @treturn {string,...}
@@ -443,9 +449,9 @@ function M.describe(b, d)
   return lines
 end
 
---- Put a copy back: queued until nothing has the library open
--- (`lulibre.offline`; `offline.ask` offers to do it). The copy must pass
--- its check.
+--- Puts a copy back. The job is queued until nothing has the library open
+-- (see `lulibre.offline`; `offline.ask` offers to run the job). The copy must
+-- pass its check.
 -- @tparam table b the copy
 -- @treturn integer the job's id
 function M.restore(b)
@@ -481,10 +487,10 @@ UPDATE sqlite_sequence SET seq = max(seq, coalesce((SELECT n.seq FROM now.sqlite
  WHERE n.name = sqlite_sequence.name), 0));
 ]]
 
---- Put the copy in a folder back as calibre's database. Nothing may have
--- the library open: `lulibre.offline` runs this (its job `restore_copy`).
--- calibre's database as it is goes first into a copy of its own (kept as
--- the others are: put that one back to undo this).
+--- Puts the copy in a folder back as calibre's database. Nothing may have
+-- the library open, so `lulibre.offline` runs this as its job
+-- `restore_copy`. calibre's current database is copied first and kept like
+-- the other copies. Putting that copy back undoes the restore.
 -- @tparam string path the copy's folder
 -- @treturn table `{ before=, moved=, dirty=, unfitted=, how= }`
 function M.put_back(path)
@@ -555,7 +561,7 @@ function M.put_back(path)
   return out
 end
 
---- `put_back`'s answer, in a line.
+--- Returns `put_back`'s result as one line.
 -- @tparam table r what `put_back` returned
 -- @treturn string
 function M.put_back_summary(r)
@@ -571,10 +577,10 @@ end
 
 local said = {} -- said.warned: the session's one popup (lulibre.claim)
 
---- Offer a copy, once a session: the first change to the library with the
--- newest copy older than `backup_max_age` (and `backup_too_old` = "warn").
--- In the interface only: a script's output stays its own. A replaceable
--- function.
+--- Offers to make a copy, once a session. The offer comes at the first
+-- change to the library if the newest copy is older than `backup_max_age`
+-- and `backup_too_old` is "warn". The offer comes only in the interface, so a
+-- script's output is left alone. A replaceable function.
 function M.warn()
   if said.warned or lulibre.headless or not lulibre.task_id() then return end
   if tostring(lulibre.o.backup_too_old) ~= "warn" or lulibre.o.library == "" or not M.too_old() then return end
