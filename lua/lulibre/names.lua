@@ -1,5 +1,5 @@
---- People's names: telling a name from an institution or a stray title word,
--- splitting lists of authors, fixing ALL CAPS.
+--- Recognises and cleans people's names. Tells a name from an institution
+-- or a stray title word, splits lists of authors, and fixes ALL CAPS.
 --
 -- @module lulibre.names
 -- @usage
@@ -69,7 +69,7 @@ local function is_affiliation(low)
     or low:find("institut") or low:find("e%-?mail") or low:find("@") or low:find("laborator")
     or low:find("acknowledg")
 end
---- Does the text name an institution, or an e-mail, rather than a person?
+--- Returns true if the text names an institution or an e-mail address, not a person.
 M.is_affiliation = function(s) return is_affiliation(s:lower()) ~= nil end
 
 -- the user's own additions, from the option never_authors; read when it changes
@@ -87,8 +87,8 @@ local function never()
   return never_list
 end
 
---- Is this something that is never an author: a rank or role among the
--- built-in ones, or a word or phrase from the option never_authors?
+--- Returns true if a name is never an author: a built-in rank or role, or
+-- a word or phrase from the option `never_authors`.
 -- @tparam string name
 -- @treturn boolean
 function M.never(name)
@@ -106,8 +106,9 @@ function M.never(name)
   return false
 end
 
---- One person's name, cleaned, or nil if this does not read as a name:
--- two to four capitalised words or initials, particles allowed, no digits.
+--- Returns one person's name, cleaned, or nil if the text is not a name. A
+-- name is two to four capitalised words or initials, with no digits.
+-- Particles such as "van" or "de" are allowed.
 -- @tparam string p
 -- @treturn string|nil
 function M.clean(p)
@@ -139,11 +140,11 @@ function M.clean(p)
   return solid and p or nil
 end
 
---- Does the line read as one person's name on evidence beyond its shape?
--- Two capitalised words are as often a title ("Hopf Algebras") as a name, so
--- one of these must hold as well: an initial among the words ("Sidney A.
--- Morris"), a first word that is a common given name, or an e-mail address
--- in `text` (the page) that spells the surname.
+--- Returns true if a line is one person's name, on more evidence than its
+-- shape. Two capitalised words are as often a title ("Hopf Algebras") as a
+-- name, so one of these must also hold: an initial among the words ("Sidney
+-- A. Morris"), a first word that is a common given name, or an e-mail
+-- address on the page that spells the surname.
 -- @tparam string line
 -- @tparam[opt] string text the page
 -- @treturn boolean
@@ -165,9 +166,9 @@ function M.is_person(line, text)
   return false
 end
 
---- Split "A. Author; B. Author and C. Author" into names. Commas separate
--- people only when every piece is itself more than one word, so
--- "Knuth, Donald" stays whole.
+--- Splits a list of authors such as "A. Author; B. Author and C. Author"
+-- into names. Commas separate people only if every piece has more than one
+-- word, so "Knuth, Donald" stays whole.
 -- @tparam string s
 -- @treturn {string,...}
 function M.split(s)
@@ -192,7 +193,7 @@ function M.split(s)
   return out
 end
 
---- Does this line read as a list of authors rather than prose?
+--- Returns true if a line is a list of authors, not prose.
 -- @tparam string line
 -- @treturn boolean
 function M.looks_like_authors(line)
@@ -210,9 +211,9 @@ function M.looks_like_authors(line)
   return #line < 100 and s:find("[%u\128-\255][%w%-\128-\255]*%s+[%u\128-\255][%w%-\128-\255]+") ~= nil
 end
 
---- Validated names from the author lines of a title page, in order, without
--- repeats. Here every comma separates people ("A. ONE, B. TWO, JR., AND C.
--- THREE"); pieces that are not names are dropped by M.clean.
+--- Returns the names on the author lines of a title page, in order and
+-- without repeats. On these lines every comma separates people ("A. ONE, B.
+-- TWO, JR., AND C. THREE"). `clean` drops the pieces that are not names.
 -- @tparam {string,...} lines
 -- @treturn {string,...}
 function M.validate(lines)
@@ -246,8 +247,8 @@ local function lower_latin(s)
   end))
 end
 
---- "JEAN-PIERRE SERRE" -> "Jean-Pierre Serre". Text that is not all capitals
--- is returned unchanged.
+--- Converts a name in capitals to normal case: "JEAN-PIERRE SERRE" becomes
+-- "Jean-Pierre Serre". Text that is not all capitals is returned unchanged.
 -- @tparam string s
 -- @treturn string
 function M.titlecase(s)
@@ -260,7 +261,7 @@ end
 
 local SMALL = set("a an the of in on and for to with by at from via or nor as de la du des")
 
---- Title-style capitals for an ALL CAPS title: small words stay lower case
+--- Converts an ALL CAPS title to title case. Short words stay lower case
 -- except at the start. Mixed-case text is returned unchanged.
 -- @tparam string s
 -- @treturn string

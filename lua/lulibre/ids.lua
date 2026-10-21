@@ -1,4 +1,4 @@
---- Identifiers found in page text: DOI, ISBN, arXiv id, MSC area.
+--- Finds identifiers in page text: DOI, ISBN, arXiv id, MSC area.
 --
 -- @module lulibre.ids
 -- @usage
@@ -21,7 +21,7 @@ local function trim_doi(d)
   return (d:gsub("[%.]+$", ""))
 end
 
---- The first DOI in a text, its trailing punctuation trimmed.
+--- Returns the first DOI in a text, without trailing punctuation.
 -- @tparam string text
 -- @treturn string|nil
 function M.doi(text)
@@ -29,20 +29,20 @@ function M.doi(text)
   return d and trim_doi(d) or nil
 end
 
---- Bytes from the start of a text that count as its top (`doi_in`).
+--- How many bytes from the start of a text count as its top, for `doi_in`.
 M.DOI_TOP = 4000
 
---- The DOI in a text, and whether it reads as the text's own rather than
--- that of a work it cites. Its own: near the top (a journal's heading, a
--- cover sheet), or on a line that holds nothing but the DOI and its label
--- ("DOI 10.1007/...", "https://doi.org/10...") before any list of
--- references has begun. One that follows other words on its line further
--- down ("... Linearization for Dylan: https://doi.org/10...") or stands
--- among the references is a citation.
+--- Returns the DOI in a text, and whether the DOI is the text's own or a
+-- cited work's. A DOI is the text's own if it is near the top (a journal's
+-- heading, a cover sheet), or alone on a line with its label ("DOI
+-- 10.1007/...", "https://doi.org/10...") before the references begin. A
+-- DOI further down that follows other words on its line ("... Linearization
+-- for Dylan: https://doi.org/10..."), or a DOI among the references, is a
+-- citation.
 -- @tparam string text
 -- @treturn[1] string the DOI
--- @treturn[1] boolean is it the text's own
--- @treturn[2] nil when there is none
+-- @treturn[1] boolean true if the DOI is the text's own
+-- @treturn[2] nil if there is no DOI
 function M.doi_in(text)
   local s, e = text:find(DOI)
   if not s then return nil end
@@ -57,14 +57,13 @@ function M.doi_in(text)
   return doi, own and true or false
 end
 
---- The identifiers a file's own metadata gives it (lulibre.doc_metadata:
--- a PDF's XMP packet and Info dictionary, an EPUB's package document).
--- Only those labelled as the work's own are taken: prism:doi, pdfx:doi,
--- crossmark:DOI, dc:identifier (with a doi or isbn scheme or prefix), and
--- an Info entry named doi or a "doi:" in its Subject. Returns a list of
--- { kind=, value=, where= } ("XMP", "PDF info", "EPUB package").
--- @tparam string text `lulibre.doc_metadata`'s
--- @treturn {table,...}
+--- Returns the identifiers in a file's own metadata: a PDF's XMP packet and
+-- Info dictionary, or an EPUB's package document. Only identifiers labelled
+-- as the work's own count: prism:doi, pdfx:doi, crossmark:DOI,
+-- dc:identifier (with a doi or isbn scheme or prefix), and an Info entry
+-- named doi or a "doi:" in the Info Subject.
+-- @tparam string text what `lulibre.doc_metadata` returns
+-- @treturn {table,...} `{ kind=, value=, where= }`, where `where` is "XMP", "PDF info" or "EPUB package"
 function M.from_metadata(text)
   local out, seen = {}, {}
   if not text or text == "" then return out end
@@ -129,8 +128,8 @@ local function isbn10_ok(d)
   return sum % 11 == 0
 end
 
---- An ISBN of ten figures as one of thirteen ("0387900403" is
--- "9780387900407"), or nil if it is not one.
+--- Converts a 10-digit ISBN to 13 digits ("0387900403" becomes
+-- "9780387900407"). Returns nil if the input is not a 10-digit ISBN.
 -- @tparam string isbn
 -- @treturn string|nil
 function M.isbn13(isbn)
@@ -142,8 +141,8 @@ function M.isbn13(isbn)
   return body .. tostring((10 - sum % 10) % 10)
 end
 
---- An ISBN of thirteen figures as one of ten, where there is one (those
--- that begin 978), or nil.
+--- Converts a 13-digit ISBN to 10 digits. Only ISBNs that begin with 978
+-- have a 10-digit form; for others, returns nil.
 -- @tparam string isbn
 -- @treturn string|nil
 function M.isbn10(isbn)
@@ -156,8 +155,9 @@ function M.isbn10(isbn)
   return body .. (check == 10 and "X" or tostring(check))
 end
 
---- The first ISBN whose check digit is right. The Python version accepted
--- any 13 digits starting 97, which let page ranges and phone numbers through.
+--- Returns the first ISBN in a text with a correct check digit. (The
+-- Python version accepted any 13 digits starting with 97, which let page
+-- ranges and phone numbers through.)
 -- @tparam string text
 -- @treturn string|nil
 function M.isbn(text)
@@ -174,7 +174,8 @@ function M.isbn(text)
   return nil
 end
 
---- The margin stamp "arXiv:1012.6008v1 [math.CO] 29 Dec 2010": id and class.
+--- Reads the arXiv margin stamp, such as "arXiv:1012.6008v1 [math.CO] 29
+-- Dec 2010", and returns the id and the class.
 -- @tparam string text
 -- @treturn[1] string the id
 -- @treturn[1] string the class
@@ -185,11 +186,12 @@ function M.arxiv_stamp(text)
   return (id:gsub("v%d+$", "")), class
 end
 
---- An arXiv id from page text, else from a file name that is nothing but one.
+--- Returns an arXiv id from page text, or else from a file name that is
+-- only an arXiv id.
 -- @tparam string text
 -- @tparam[opt] string filename
 -- @treturn string|nil the id
--- @treturn[opt] string its class, where the margin stamp gives one
+-- @treturn[opt] string the class, if the margin stamp gives one
 function M.arxiv(text, filename)
   local id, class = M.arxiv_stamp(text)
   if id then return id, class end
@@ -202,7 +204,8 @@ function M.arxiv(text, filename)
   return nil
 end
 
---- Year an arXiv id was assigned: 1012.6008 -> 2010, math/0601054 -> 2006.
+--- Returns the year an arXiv id was assigned: 1012.6008 gives 2010, and
+-- math/0601054 gives 2006.
 -- @tparam string id
 -- @treturn integer|nil
 function M.arxiv_year(id)
@@ -212,7 +215,8 @@ function M.arxiv_year(id)
   return yy >= 91 and 1900 + yy or 2000 + yy
 end
 
---- Two-digit MSC area from a "Mathematics Subject Classification" footnote.
+--- Returns the two-digit MSC area from a "Mathematics Subject
+-- Classification" footnote.
 -- @tparam string text
 -- @treturn string|nil
 function M.msc(text)

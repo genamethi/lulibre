@@ -1,10 +1,13 @@
---- Which calibre programs are running, from the outside: nothing is opened,
--- locked or asked. calibre keeps one program at a time on a user's
--- libraries with a lock that on Linux is an abstract unix socket, per user
--- (not per library): calibre-singleinstance-<uid>-db, held by its program,
--- calibre-server, and calibredb while it opens a library directly; its
--- program also holds ...-GUI. /proc/net/unix lists them. (Binding the name
--- to test it would be taking the lock: the program could not start.)
+--- Finds out which calibre programs are running, without opening, locking
+-- or asking anything.
+--
+-- calibre lets one program at a time use a user's libraries. On Linux the
+-- lock is an abstract unix socket per user (not per library),
+-- calibre-singleinstance-<uid>-db. The calibre program, calibre-server, and
+-- calibredb while it opens a library directly all hold that socket. The
+-- calibre program also holds ...-GUI. /proc/net/unix lists the sockets.
+-- Binding the name to test it would take the lock, and the calibre program
+-- could not start.
 --
 -- @module lulibre.calibre
 -- @usage
@@ -28,11 +31,12 @@ local function uid()
   return p and p.uid
 end
 
---- Where the sockets are listed (a test points it elsewhere).
+--- The file that lists the sockets. A test points `SOCKETS` elsewhere.
 M.SOCKETS = "/proc/net/unix"
 
---- Which of calibre's locks are held: by any program on the library (db), by its program (gui).
--- @treturn table|nil `{ db=, gui= }`; nil where it cannot be told
+--- Returns which of calibre's locks are held: `db` by any calibre program
+-- on the library, `gui` by the calibre program.
+-- @treturn table|nil `{ db=, gui= }`, or nil if the sockets can't be read
 function M.running()
   local id = uid()
   local f = id and io.open(M.SOCKETS)
@@ -43,14 +47,14 @@ function M.running()
   return { db = text:find(base .. "db%f[%s%z]") ~= nil, gui = text:find(base .. "GUI%f[%s%z]") ~= nil }
 end
 
---- Does something have the library open?
+--- Returns true if something has the library open.
 -- @treturn boolean|nil
 function M.holds()
   local r = M.running()
   return r and r.db
 end
 
---- Where contrib/calibre-server-opf.py says how it is doing.
+--- Returns the path of the status file contrib/calibre-server-opf.py writes.
 -- @treturn string
 function M.status_file()
   local dir = os.getenv("XDG_STATE_HOME")
@@ -58,8 +62,9 @@ function M.status_file()
   return dir .. "/lulibre/calibre-server.json"
 end
 
---- The status of calibre's server started through calibre-server-opf.py,
--- if one is running (the process the file names is alive and is it).
+--- Returns the status of calibre's server started through
+-- calibre-server-opf.py, if one is running: the process the status file
+-- names is alive and is calibre-server-opf.py.
 -- @treturn table|nil `{ pid=, opf_thread=, error=, calibre=, libraries= }`
 function M.server()
   local f = io.open(M.status_file())
@@ -75,8 +80,9 @@ function M.server()
   return st
 end
 
---- Who keeps the opf files current, and how many books' files are behind
--- their record (as the mirror last saw calibre's database).
+--- Returns which calibre program keeps the opf files current, and how many
+-- books' opf files are older than their record, as of the mirror's last
+-- read of calibre's database.
 -- @treturn table `{ by = "program" | "server" | nil, behind = n, why= }`
 function M.opf()
   local behind = tonumber((lulibre.sql("SELECT value FROM meta WHERE key = 'calibre_opf_behind'")[1] or {}).value)
@@ -94,10 +100,11 @@ function M.opf()
     .. "until then, at each stop (backup_metadata)" }
 end
 
---- Pause while calibre's program is open; resume once it is gone. From a
--- task (it sleeps); outside one it only says whether the program is open.
+--- Waits while the calibre program is open, and returns once the program
+-- has closed. Only a task can wait. Outside a task, `wait_for_program`
+-- only reports whether the program is open.
 -- @tparam string what what is waiting, for the message
--- @treturn boolean it waited
+-- @treturn boolean true if it waited
 function M.wait_for_program(what)
   local r = M.running()
   if not (r and r.gui) then return false end
