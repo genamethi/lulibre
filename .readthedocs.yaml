@@ -9,14 +9,12 @@ build:
   tools:
     python: latest
   apt_packages:
-    - lua5.4
-    - liblua5.4-dev # LDoc's luafilesystem is compiled
-    - luarocks
+    - luarocks # with the Lua it uses, which LDoc runs on
   jobs:
     install:
       # pinned: Zensical is before 1.0; the version the site was last built with
       - pip install zensical==0.0.71
-      - luarocks --local --lua-version 5.4 install ldoc
+      - luarocks --local install ldoc
     build:
       html:
         - ~/.luarocks/bin/ldoc -d docs/api .
