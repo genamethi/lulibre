@@ -140,6 +140,7 @@ and pasted with `<C-v>`.
 | `2` `gS` | `sync` | read the sync folder and show it |
 | `gb` | `beside` | the sync folder in a column beside the library: each waiting file next to the book that is the same, or looks like it |
 | `1` `gl` | `source library` | back to the library |
+| `3` `gC` | `source config` | the configuration window, or the cursor to it when it is open |
 | `S` `X` `D` | `sync add` / `sync move` / `sync drop` | staged files into the library, or out of the folder |
 | `yb` `yk` `yp` `yy` | `yank bib` / `key` / `path` / `title` | copy to the clipboard |
 | | `remove` | remove the selection from calibre (to its recycle bin; `u` undoes) |

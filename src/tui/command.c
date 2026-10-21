@@ -317,6 +317,13 @@ static void c_help(struct tui *t, const char *args) {
 }
 
 static void c_source(struct tui *t, const char *args) {
+  if (arg_is(args, "config")) {
+    /* whether the window is open is decided now, as the key is read: the
+     * script's own look (:config) comes later, after any key typed since */
+    if (t->screen_tab && panel_is_open(t->screen_tab)) panel_focus(t->screen_tab);
+    else tui_exec(t, "config");
+    return;
+  }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
   if (to && !t->app->cfg.sync_dir[0]) {
     tui_msg(t, 1, "no sync folder is set: lulibre.o.sync_dir = \"~/some/folder\" in init.lua, or :set sync_dir=DIR");
@@ -531,7 +538,7 @@ void commands_builtin(void) {
   command_register("index", c_index, "[force]  extract text from new or changed files");
   command_register("reload", c_reload, "re-read calibre's metadata now");
   command_register("source", c_source,
-                   "[library | sync]  what the list shows: the calibre library or the sync folder");
+                   "[library | sync | config]  the bar's tabs: the calibre library or the sync folder in the list, or the configuration window");
   command_register("set", c_set, "name[=value]  show or change an option");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "this screen");

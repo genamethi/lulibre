@@ -1090,7 +1090,7 @@ static const char *tab_command(const struct tui *t, int i) {
   int sync = t->app->cfg.sync_dir[0] != '\0';
   if (i == 0) return "source library";
   if (i == 1 && sync) return "sync";
-  return "config";
+  return "source config";
 }
 
 static void draw_tabs(struct tui *t) {
