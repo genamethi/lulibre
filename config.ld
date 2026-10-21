@@ -2,7 +2,7 @@
 -- from the doc comments in lua/lulibre/. `make api` writes it to build/api.
 project = "lulibre"
 title = "lulibre: the Lua API"
-description = "The modules a script or init.lua requires: lulibre's own, written in Lua."
+description = "The modules a script or init.lua requires, and the part of lulibre that is written in Lua."
 file = {
   "lua/lulibre/verify.lua",
   "lua/lulibre/backup.lua",
@@ -72,6 +72,7 @@ file = {
   "lua/lulibre/ui/snapshots.lua",
   "lua/lulibre/ui/terms.lua",
   "lua/lulibre/ui/weights.lua",
+  "lua/lulibre/prelude.lua",
 }
 dir = "build/api"
 format = "markdown"
