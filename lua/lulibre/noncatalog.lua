@@ -1,16 +1,17 @@
---- Works no catalogue has a record of: a handout, the notes of a course, a
--- chapter of the Stacks project, a page saved from the web. Such a work has
--- no DOI and no ISBN of its own, so one that stands in its file is that of
--- a work it cites, and a record found by searching for its title is
--- somebody else's. Marking a book as non-catalog says so once, and the
--- rest follows:
---   - a DOI or ISBN in its pages is not offered as its own (extract);
---   - it is not looked up by DOI or ISBN, nor searched for by title (:enrich);
---     an arXiv number is still followed, arXiv being where such works are kept;
---   - having no identifiers does not count against it (:good, :stats);
---   - what waits for it from catalogue records is withdrawn when it is
---     marked, and taking off a DOI or ISBN it holds is proposed, for review.
--- The mark is lulibre's own, kept in its index; nothing is written to calibre.
+--- Works that no catalogue has a record of, such as a handout, course
+-- notes, a chapter of the Stacks project or a saved web page. Such a work
+-- has no DOI or ISBN of its own. A DOI or ISBN in its file belongs to a
+-- work it cites, and a record found by searching for its title belongs to
+-- another work. Marking a book as non-catalog has these effects:
+--
+-- - A DOI or ISBN in its pages is not offered as its own (extract).
+-- - It is not looked up by DOI or ISBN, or searched for by title (:enrich).
+--   An arXiv number is still followed, since arXiv is where such works are kept.
+-- - Having no identifiers does not count against it (:good, :stats).
+-- - When it is marked, waiting proposals from catalogue records are
+--   withdrawn, and removing each DOI or ISBN it has is proposed for review.
+--
+-- The mark is stored in lulibre's index. Nothing is written to calibre.
 --
 -- @module lulibre.noncatalog
 -- @usage
@@ -21,11 +22,11 @@
 -- :noncatalog add | remove          for the selection;  is:noncatalog  in a filter
 local M = {}
 
---- The services whose records are a catalogue's: what a source begins with
+--- The catalogue services, as the start of a proposal's source.
 M.RECORDS = { "CrossRef ", "Open Library ", "OpenAlex ", "zbMATH " }
 --- The identifiers a catalogue gives.
 M.KINDS = { "doi", "isbn" }
---- What a proposal to take one of them off says of where it comes from
+--- The source of a proposal to remove one of these identifiers.
 M.SOURCE = "non-catalog: no catalogue has a record of it"
 
 local set -- the marked books, read once and kept up as they change
@@ -38,19 +39,19 @@ local function load()
   return set
 end
 
---- Is the book marked as non-catalog?
+--- Returns true if the book is marked as non-catalog.
 -- @tparam integer id
 -- @treturn boolean
 function M.is(id)
   return id ~= nil and load()[id] == true
 end
 
---- Forget what was read (the table was changed some other way).
+--- Clears the cached marks. Call it if the table was changed some other way.
 function M.reload()
   set = nil
 end
 
---- The marked books that are still in the library.
+--- Returns the marked books that are still in the library.
 -- @treturn {integer,...}
 function M.ids()
   local out = {}
@@ -71,11 +72,11 @@ local function from_catalogue(pr)
   return false
 end
 
---- Mark books as non-catalog, or take the mark back. Marking withdraws what
--- waits for them from catalogue records (it is deleted, not rejected), and
--- proposes taking off each DOI and ISBN they hold. Taking the mark back
--- withdraws those proposals again, and nothing else: propose or enrich
--- anew for what the catalogues say. Returns { withdrawn =, removals = }.
+--- Marks books as non-catalog, or removes the mark. Marking deletes (does
+-- not reject) the waiting proposals from catalogue records, and proposes
+-- removing each DOI and ISBN the books have. Removing the mark withdraws
+-- those removal proposals and nothing else. To get the catalogues' values
+-- again, propose or enrich again.
 -- @tparam {integer,...} ids
 -- @tparam boolean on
 -- @treturn table `{ withdrawn=, removals= }`

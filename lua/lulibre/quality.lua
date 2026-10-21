@@ -1,15 +1,16 @@
---- How far a book's record can be trusted, and which records the user has
+--- Scores how far a book's record can be trusted, and keeps the records you
 -- confirmed as right.
 --
--- Two different things. The score is lulibre's own estimate, from what the
--- record holds and how it looks: a complete record scores high, and one
--- whose title is a file name, or full of figures and odd characters, low. It
--- is used to rank what to look at, and it only *suggests*.
+-- These are two different things. The score is lulibre's estimate, based on
+-- what the record holds and how it looks. A complete record scores high. A
+-- record whose title is a file name, or is full of digits and odd
+-- characters, scores low. The score ranks what to look at; it only
+-- *suggests*.
 --
--- "Good" is a decision: a record the user has confirmed. What lulibre
--- learns about the library (the phrases that mark a subject: learn.lua) is
--- learned from good records, so that mistakes in the others are not taught
--- back. :good shows the records by score for confirming.
+-- "Good" is a decision: a record you have confirmed. lulibre learns about
+-- the library (the phrases that mark a subject, in learn.lua) only from good
+-- records, so mistakes in the others are not learned. :good lists the
+-- records by score so you can confirm them.
 --
 -- @module lulibre.quality
 -- @usage
@@ -28,8 +29,9 @@ local CATCHALL = { general = true, papers = true, books = true, handbook = true,
   unsorted = true, various = true }
 local catch_text, catch_extra
 
---- Is the subject a catch-all (math/general, linguistics/papers): one that
--- says where a book was put, not what it is about?
+--- Returns true if a subject is a catch-all, such as math/general or
+-- linguistics/papers: a subject that says where a book was filed, not what
+-- it is about.
 -- @tparam string subject
 -- @treturn boolean
 function M.catchall(subject)
@@ -54,11 +56,11 @@ local function oddness(title)
   return n
 end
 
---- A record's score, 0 to 1, and what holds it down. A score of 0.85 or
--- more is a record with nothing visibly wrong.
+--- Returns a record's score from 0 to 1, and what lowers it. A score of
+-- 0.85 or more means nothing is visibly wrong.
 -- @tparam table book
 -- @treturn number 0 to 1
--- @treturn {string,...} what holds it down
+-- @treturn {string,...} what lowers the score
 function M.score(book)
   local s, why = 0, {}
   local title = book.title or ""
@@ -118,14 +120,14 @@ function M.score(book)
   return math.max(0, math.min(1, s)), why
 end
 
---- Has the user confirmed this record?
+--- Returns true if you have confirmed this record.
 -- @tparam integer id
 -- @treturn boolean
 function M.is_good(id)
   return lulibre.sql("SELECT 1 AS x FROM good WHERE book = ?", id)[1] ~= nil
 end
 
---- Confirm records as good, or take the confirmation back.
+--- Confirms records as good, or removes the confirmation.
 -- @tparam {integer,...} ids
 -- @tparam boolean on
 function M.set_good(ids, on)
@@ -135,7 +137,7 @@ function M.set_good(ids, on)
   end
 end
 
---- The ids confirmed as good that are still in the library.
+--- Returns the ids confirmed as good that are still in the library.
 -- @treturn {integer,...}
 function M.good_ids()
   local out = {}
@@ -143,10 +145,9 @@ function M.good_ids()
   return out
 end
 
---- Every library book with its score, best first: { {book=, score=, why=, good=}, ... }.
--- opts.min: leave out those below a score; opts.good: only confirmed (true)
--- or only unconfirmed (false).
--- @tparam[opt] table opts `min`, `good`
+--- Returns every library book with its score, best first.
+-- @tparam[opt] table opts `min` leaves out books below that score; `good` keeps
+-- only confirmed (true) or only unconfirmed (false) books
 -- @treturn {table,...} `{ book=, score=, why=, good= }`
 function M.ranked(opts)
   opts = opts or {}
