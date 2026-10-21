@@ -50,6 +50,9 @@ file = {
   "lua/lulibre/net/openalex.lua",
   "lua/lulibre/net/openlibrary.lua",
   "lua/lulibre/net/zbmath.lua",
+  "lua/lulibre/layouts.lua",
+  "lua/lulibre/grammars.lua",
+  "lua/lulibre/titlepage.lua",
 }
 dir = "build/api"
 format = "markdown"

@@ -1,4 +1,4 @@
--- Layouts: kinds of page that say their facts in known places.
+--- Layouts: kinds of page that say their facts in known places.
 --
 -- A book's cataloguing block, a publisher's series page, the stamp arXiv
 -- prints down a margin: where one of these is recognised, what it says can
@@ -30,15 +30,24 @@
 --
 -- Put your own in ~/.config/lulibre/init.lua or a module it requires. :run
 -- candidates shows what every layout reads from the book under the cursor.
+--
+-- @module lulibre.layouts
+-- @usage
+-- local layouts = require "lulibre.layouts"
+-- layouts.add { name = "my-series", marks = { "my series" }, fields = { series = "My Series" } }
+-- layouts.read(doc)              --> { {field=, value=, source=, confidence=}, ... }
+-- layouts.house("Springer-Verlag New York, Inc.")   --> "Springer"
 local ids = require "lulibre.ids"
 local names = require "lulibre.names"
 local taxonomy = require "lulibre.taxonomy"
 
 local M = {}
 
+--- The layouts, in the order they are tried.
 M.list = {}
 
 --- Add a layout, or replace the one of the same name.
+-- @tparam table layout
 function M.add(layout)
   assert(type(layout) == "table" and type(layout.name) == "string", "a layout is a table with a name")
   assert(layout.marks or layout.find, "a layout needs marks or find to say which pages it is for")
@@ -54,6 +63,7 @@ function M.add(layout)
 end
 
 --- Take a layout out.
+-- @tparam string name
 function M.remove(name)
   for i, l in ipairs(M.list) do
     if l.name == name then return table.remove(M.list, i) end
@@ -82,6 +92,8 @@ end
 
 --- What the layouts read from a document: { {field=, value=, source=, confidence=}, ... }.
 -- doc.texts: the text of each leading page.
+-- @tparam table doc
+-- @treturn {table,...}
 function M.read(doc)
   local out = {}
   for _, layout in ipairs(M.list) do
@@ -136,6 +148,7 @@ end
 -- Series known by one spelling, and who publishes each (nil where more than
 -- one house has a series of the name).
 local AMS, CUP, PUP = "American Mathematical Society", "Cambridge University Press", "Princeton University Press"
+--- Series known by one spelling, and who publishes each: `{ { name, house }, ... }`.
 M.series = {
   { "Graduate Texts in Mathematics", "Springer" }, { "Undergraduate Texts in Mathematics", "Springer" },
   { "Lecture Notes in Mathematics", "Springer" }, { "Lecture Notes in Computer Science", "Springer" },
@@ -159,6 +172,8 @@ M.series = {
 
 --- A series' name as the series writes it: a known one by its usual
 -- spelling, any other in title case.
+-- @tparam string s
+-- @treturn string
 function M.series_name(s)
   local low = s:lower()
   for _, known in ipairs(M.series) do
@@ -167,18 +182,6 @@ function M.series_name(s)
   return require("lulibre.titlecase").apply(s)
 end
 
---- The cataloguing block the Library of Congress (or the British or German
--- national library) supplies for the back of a title page:
---
---   Library of Congress Cataloging in Publication Data
---   Lang, Serge                               the main entry: who it is filed under
---   SL2(R).                                   the title [ / who wrote it ]
---   (Graduate texts in mathematics; 105)      the series and the number in it
---   1. Lie groups. 2. Representations of groups. I. Title. II. Series.
---   QA387.L35 1985                            the class it is shelved in, and the year
---   512'.55                                   its Dewey number
---
--- Returns a table of fields; what cannot be made out is left out.
 -- The block as the Library of Congress has set it out since 2015, each part
 -- under a label and the parts of a part between bars:
 --   Names: Miyagawa, Shigeru, author.
@@ -251,6 +254,21 @@ local function labelled_cip(block, text)
   return out
 end
 
+--- The cataloguing block the Library of Congress (or the British or German
+-- national library) supplies for the back of a title page:
+--
+--   Library of Congress Cataloging in Publication Data
+--   Lang, Serge                               the main entry: who it is filed under
+--   SL2(R).                                   the title [ / who wrote it ]
+--   (Graduate texts in mathematics; 105)      the series and the number in it
+--   1. Lie groups. 2. Representations of groups. I. Title. II. Series.
+--   QA387.L35 1985                            the class it is shelved in, and the year
+--   512'.55                                   its Dewey number
+--
+-- Returns a table of fields; what cannot be made out is left out.
+-- The block as it has been set out since 2015, each part under a label, is read too.
+-- @tparam string text a page's
+-- @treturn table
 function M.cip(text)
   local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme")
   if not at then return {} end
@@ -467,14 +485,14 @@ local function words(list)
   return out
 end
 
--- what stands before "Series" when the series is a sum, not a set of books
+--- what stands before "Series" when the series is a sum, not a set of books
 M.not_series = words [[fourier power dirichlet taylor laurent maclaurin random time eisenstein poincaré poincare hilbert
   puiseux formal infinite trigonometric divergent convergent composition central derived hypergeometric asymptotic theta
   farey singular geometric harmonic complementary discrete principal volterra neumann binomial orthogonal double multiple
   lambert fibonacci numerical alternating telescoping generating zeta chief normal subnormal upper lower new second third
   first fourth this the a each in of and]]
 
--- houses and societies whose name opens the name of a series
+--- houses and societies whose name opens the name of a series
 M.series_houses = words [[springer cambridge oxford princeton wiley mit chapman academic elsevier north-holland birkhäuser
   birkhauser ams ias london gruyter world dover pearson mcgraw-hill addison-wesley prentice crc siam ems clay fields cbms nato
   schaum's schaum university chicago harvard yale stanford american european society international carus pitman van
@@ -545,6 +563,11 @@ end
 
 --- The series a page names, if it names one: its name, the volume's number
 -- (or nil), and what bears it out.
+-- @tparam string text
+-- @treturn[1] string the name
+-- @treturn[1] string|nil the number
+-- @treturn[1] string what bears it out
+-- @treturn[2] nil
 function M.series_line(text)
   local lines = {}
   for raw in (text .. "\n"):gmatch("(.-)\n") do
@@ -670,6 +693,10 @@ end
 -- "8 February 1972", "Feb. 8, 1972", "March 2004" (the first of the month),
 -- "2004-03-12". nil when it does not open with one. Dates written in
 -- figures alone (3/12/2004) are not read: which is the month?
+-- @tparam string s
+-- @treturn[1] string YYYY-MM-DD
+-- @treturn[1] integer where it ends
+-- @treturn[2] nil
 function M.date(s)
   s = s:gsub("^%s+", "")
   local d, m, y, e = s:match("^(%d%d?)%.?%s+(" .. WORD .. ")%.?,?%s+(%d%d%d%d)()")
@@ -754,11 +781,13 @@ M.add {
   confidence = 0.7,
 }
 
--- A journal heads an article with where it stands: "Physica 63 (1973) 1-32",
--- "Journal of Algebra 320 (2008) 1234–1256", "Invent. math. 123, 1–40
--- (1996)", "Ann. of Math. (2) 141 (1995), 443–551". M.journal(text) gives
--- { journal=, volume=, year=, pages= } for the first such line of a page.
 local DASH = "[%-\226]" -- a hyphen, or the first byte of an en or em dash
+
+--- Where an article stands, from the heading a journal puts over it:
+-- "Physica 63 (1973) 1-32", "Journal of Algebra 320 (2008) 1234–1256",
+-- "Invent. math. 123, 1–40 (1996)", "Ann. of Math. (2) 141 (1995), 443–551".
+-- @tparam string text a page's
+-- @treturn table|nil `{ journal=, volume=, year=, pages= }`, for the first such line
 function M.journal(text)
   local n = 0
   for raw in text:gmatch("[^\n]+") do
@@ -814,7 +843,7 @@ M.add {
   confidence = 0.8,
 }
 
--- Whose copyright it is: on a book or a journal's article, the publisher.
+--- Whose copyright it is: on a book or a journal's article, the publisher.
 -- Houses are known by a word of their name and written one way (M.houses:
 -- { pattern, name }, the pattern matched against the holder in lower case);
 -- add to it for more.
@@ -844,6 +873,8 @@ M.houses = {
 --- A publisher's name written the one way its house is (M.houses), or as it
 -- is when the house is not known: "Springer-Verlag New York, Inc." and
 -- "Springer Science and Business Media LLC" are "Springer".
+-- @tparam string name
+-- @treturn string
 function M.house(name)
   if type(name) ~= "string" or trim(name) == "" then return nil end
   local low = lulibre.lower(name)
@@ -856,6 +887,8 @@ end
 
 --- The house a name is one of (as M.houses writes it), or nil when it is
 -- none that is known.
+-- @tparam string name
+-- @treturn string|nil
 function M.known_house(name)
   if type(name) ~= "string" then return nil end
   local low = lulibre.lower(name)
@@ -865,16 +898,19 @@ function M.known_house(name)
   return nil
 end
 
--- Who registers a journal's articles without publishing the journal: not
+--- Who registers a journal's articles without publishing the journal: not
 -- named as its publisher.
 M.archives = { "jstor", "project euclid", "project muse", "crossref" }
 
--- what stands between a house and its journal
+--- what stands between a house and its journal
 M.journal_join = ": "
 
 --- The publisher of an article: its journal, after the house that puts the
 -- journal out when there is one ("Elsevier: Journal of Algebra"). Either
 -- alone when the other is missing; nil when both are.
+-- @tparam string|nil publisher
+-- @tparam string|nil journal
+-- @treturn string|nil
 function M.with_journal(publisher, journal)
   publisher, journal = M.house(publisher), type(journal) == "string" and trim(journal) ~= "" and trim(journal) or nil
   if publisher then
@@ -899,6 +935,10 @@ local YEARS = "[%d,%s%-\226\128\147\148]*%d%d%d%d"
 
 --- The holder a copyright line names, if it is a publisher: its name (as
 -- M.houses writes it, or as the line does), and whether the house is known.
+-- @tparam string text
+-- @treturn[1] string the name
+-- @treturn[1] boolean the house is known
+-- @treturn[2] nil
 function M.copyright_holder(text)
   for raw in text:gmatch("[^\n]+") do
     local line = trim(raw)
