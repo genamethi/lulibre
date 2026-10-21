@@ -1,13 +1,15 @@
--- What a proposal in review rests on, as rows for the panel review shows
+--- What a proposal in review rests on, as rows for the panel review shows
 -- where the list is: the verdict of the book's own pages on it (the mark its
 -- row carries, verify.judge), what the pages say of the value and of the
 -- record, the record it came from (or the record an identifier leads to),
 -- and what the other sources propose for the field.
 --
---   local context = require "lulibre.ui.context"
---   context.record_of(pr)        --> the kept record a proposal came from or points at, or nil
---   context.source_class(src)    --> "CrossRef" for "CrossRef 10.1007/...", and so on
---   context.rows(pr, others)     --> rows: { label, text, style = }
+-- @module lulibre.ui.context
+-- @usage
+-- local context = require "lulibre.ui.context"
+-- context.record_of(pr)        --> the kept record a proposal came from or points at, or nil
+-- context.source_class(src)    --> "CrossRef" for "CrossRef 10.1007/...", and so on
+-- context.rows(pr, others)     --> rows: { label, text, style = }
 local edit = require "lulibre.edit"
 local net = require "lulibre.net"
 local verify = require "lulibre.verify"
@@ -17,6 +19,8 @@ local M = {}
 --- The kind of source a proposal came from, without the work it names:
 -- "CrossRef 10.1007/x" and "CrossRef 10.1016/y" are both "CrossRef";
 -- "CrossRef title search" stays itself; notes in brackets go.
+-- @tparam string src
+-- @treturn string
 function M.source_class(src)
   src = (src or ""):gsub("%s*%b()", "")
   if src:find("^CrossRef title search") then return "CrossRef title search" end
@@ -42,6 +46,11 @@ end
 
 --- The kept record behind a proposal: the one its source names, or, for an
 -- identifier, the one the identifier leads to. Returns rec, kind, value.
+-- @tparam table pr
+-- @treturn[1] table the record
+-- @treturn[1] string its kind
+-- @treturn[1] string its value
+-- @treturn[2] nil
 function M.record_of(pr)
   -- an identifier: the record it leads to, which is what taking it would bring
   if pr.field == "identifiers" then
@@ -109,6 +118,9 @@ local GOOD = { better = "ok", more = "ok", both = nil, partly = "accent", silent
 
 --- Rows for a proposal: { label, text, style = }. others: the other
 -- proposals waiting for the same book and field.
+-- @tparam table pr
+-- @tparam {table,...} others
+-- @treturn {table,...}
 function M.rows(pr, others)
   local book = lulibre.book(pr.book)
   if not book then return { { "", "the book is no longer in the library" } } end

@@ -1,4 +1,4 @@
--- The keys of the screens written in Lua: for each screen, its actions and
+--- The keys of the screens written in Lua: for each screen, its actions and
 -- the keys each is on. A screen asks which action a key means, so the keys
 -- can be changed without touching it, and the hints in its title bar and its
 -- `?` help are written from the same table, so they say what the keys are
@@ -8,16 +8,18 @@
 --                                            -- and is the key the hint shows
 --   lulibre.map("review", "a", "")           -- a no longer does anything there
 --
---   local keys = require("lulibre.ui.keys").of("review")
---   keys:action("a")                 --> "accept"
---   keys:hint("accept", "write")     --> "a accept   w write   ? keys"
---   keys:own()                       --> every key the screen answers to
---   keys:show("review")              --> the `?` overlay
---
 -- Moving within a panel (j k gg G, paging), closing it (q) and leaving it
 -- (Esc) are the same in every panel and are bound in one place, "panel" (src/tui/ctxkeys.c):
 -- lulibre.map("panel", "n", "down"). A panel's movement keys come before a
 -- screen's own, so a key bound to both moves.
+--
+-- @module lulibre.ui.keys
+-- @usage
+-- local keys = require("lulibre.ui.keys").of("review")
+-- keys:action("a")                 --> "accept"
+-- keys:hint("accept", "write")     --> "a accept   w write   ? keys"
+-- keys:own()                       --> every key the screen answers to
+-- keys:show("review")              --> the `?` overlay
 local M = {}
 
 -- screen -> list of { action, keys, label, what it does }. The first key of
@@ -192,15 +194,22 @@ M.reset()
 
 --- Give a script's own screen a key table: list is { {action, {keys}, label,
 -- description}, ... }. Defining a screen again replaces it.
+-- @tparam string screen
+-- @tparam {table,...} list
 function M.define(screen, list)
   DEFAULTS[screen] = list
   screens[screen] = copy(list)
 end
 
+--- Has the screen a key table?
+-- @tparam string screen
+-- @treturn boolean
 function M.has(screen)
   return screens[screen] ~= nil
 end
 
+--- The screens that have key tables.
+-- @treturn {string,...}
 function M.names()
   local out = {}
   for name in pairs(screens) do out[#out + 1] = name end
@@ -210,6 +219,9 @@ end
 
 --- Put a key on an action of a screen; it becomes the key the hints show.
 -- An empty action takes the key away from whatever had it.
+-- @tparam string screen
+-- @tparam string key "<CR>", "a", "<C-x>" ...
+-- @tparam string action
 function M.set(screen, key, action)
   local s = screens[screen]
   if not s then error(("no screen named '%s' (there are: %s)"):format(tostring(screen), table.concat(M.names(), ", ")), 2) end
@@ -233,6 +245,8 @@ local SPOKEN = { ["<CR>"] = "Enter", ["<Space>"] = "Space", ["<Tab>"] = "Tab", [
   ["<Left>"] = "←", ["<Right>"] = "→", ["<Up>"] = "↑", ["<Down>"] = "↓" }
 
 --- A key as a person would read it: "<CR>" is "Enter".
+-- @tparam string key
+-- @treturn string
 function M.spoken(key)
   return SPOKEN[key] or key
 end
@@ -311,6 +325,8 @@ function View:show(title, extra)
 end
 
 --- The keys of one screen.
+-- @tparam string screen
+-- @treturn table with `:action(key)`, `:key(action)`, `:hint(...)`, `:own()`, `:lines()`, `:show(title, extra)`
 function M.of(screen)
   if not screens[screen] then error("no screen named " .. tostring(screen), 2) end
   return setmetatable({ screen = screen }, View)

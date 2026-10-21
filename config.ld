@@ -53,6 +53,11 @@ file = {
   "lua/lulibre/layouts.lua",
   "lua/lulibre/grammars.lua",
   "lua/lulibre/titlepage.lua",
+  "lua/lulibre/ui/panels.lua",
+  "lua/lulibre/ui/keys.lua",
+  "lua/lulibre/ui/form.lua",
+  "lua/lulibre/ui/context.lua",
+  "lua/lulibre/ui/dialogs.lua",
 }
 dir = "build/api"
 format = "markdown"
