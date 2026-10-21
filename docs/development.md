@@ -138,15 +138,23 @@ the API reference from them. `make api` writes the reference to
 `make api LDOC='lua path/to/ldoc.lua'`.
 
 - A module's opening comment starts with `---`, says what the module does,
-  and ends with `@module lulibre.NAME` and an `@usage` example. LDoc takes
-  the first sentence as the module's summary, so end it before any list.
+  and ends with its section and name (`@scripting lulibre.edit`) and an
+  `@usage` example. LDoc takes the first sentence as the module's summary,
+  so end it before any list.
+- The sections are `scripting`, `reading`, `judging`, `library`,
+  `services`, `setup` and `screens`. `config.ld` defines them (`new_type`)
+  and lists the modules section by section. `tools/ldoc/ldoc.ltp`, a copy of
+  LDoc's page template, shows each section's full heading and adds the
+  "Manual" links back to the guides. Those links work in the site, where the
+  reference is in `reference/`, but not in `build/api`.
 - Each function a module exports has a `---` comment with `@tparam` and
   `@treturn`. `[opt]` marks optional arguments, and `[1]`/`[2]` alternative
   returns.
 - A setting or list a module exports (`M.SHOWN`, `M.STOP`) gets its own
   `---` line.
 - Every module in `lua/lulibre/` is listed in `config.ld`, except
-  `commands/`, which only registers commands. Add a new module there.
+  `commands/`, which only registers commands. Add a new module there, in its
+  section.
 - A `--` inside a doc comment (such as `--only` written in the text) makes
   LDoc drop the item without a warning. Write it another way.
 

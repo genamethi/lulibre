@@ -6,7 +6,7 @@
 -- The kinds of item are check, choice, number, text, action and note (a
 -- line of text).
 --
--- @module lulibre.ui.form
+-- @screens lulibre.ui.form
 -- @usage
 -- local form = require "lulibre.ui.form"
 -- local did, v = form.run {

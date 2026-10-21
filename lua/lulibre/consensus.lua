@@ -13,7 +13,7 @@
 -- distance from the sources' values to the nearest global section the
 -- consistency radius. Here that distance is `disagreement`.)
 --
--- @module lulibre.consensus
+-- @judging lulibre.consensus
 -- @usage
 -- local consensus = require "lulibre.consensus"
 -- consensus.distance("title", a, b)        --> 0 (the same) .. 1 (nothing in common)

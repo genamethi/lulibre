@@ -2,7 +2,7 @@
 -- records (:learn), so you can review them: drop the ones that don't
 -- belong, and add your own.
 --
--- @module lulibre.ui.terms
+-- @screens lulibre.ui.terms
 -- @usage
 -- require("lulibre.ui.terms").run()   -- as :terms does
 local keys = require("lulibre.ui.keys").of("terms")

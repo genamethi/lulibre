@@ -5,7 +5,7 @@
 -- The grammars of publications (lulibre.grammars) set them, or you set them
 -- by hand like any field. Filters: is:part, #partof:handbook.
 --
--- @module lulibre.parts
+-- @scripting lulibre.parts
 -- @usage
 -- local parts = require "lulibre.parts"
 -- parts.set{ { id=, whole=, part=, parts= }, ... }   -- as one change (journaled); returns edit.apply's summary

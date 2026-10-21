@@ -3,7 +3,7 @@
 -- count. Moving through the tree narrows the list beside it. Tab moves to
 -- the list.
 --
--- @module lulibre.ui.browse
+-- @screens lulibre.ui.browse
 -- @usage
 -- require("lulibre.ui.browse").run()   -- as :browse, gt does
 local M = {}

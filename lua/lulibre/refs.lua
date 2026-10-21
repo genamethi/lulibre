@@ -14,7 +14,7 @@
 --
 -- The keys are stored in the table `refs`. refs never uses the network.
 --
--- @module lulibre.refs
+-- @reading lulibre.refs
 -- @usage
 -- local refs = require "lulibre.refs"
 -- refs.index_book(id)             --> how many entries were found (waits: it reads the file)

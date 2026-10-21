@@ -17,7 +17,7 @@
 -- the request (see `lulibre.offline`). The preview shows when the column
 -- does not exist yet, and when calibre's values differ from lulibre's.
 --
--- @module lulibre.custom
+-- @scripting lulibre.custom
 -- @usage
 -- local custom = require "lulibre.custom"
 -- custom.declare("#series2", { type = "text", help = "..." })   -- text | number | date | list

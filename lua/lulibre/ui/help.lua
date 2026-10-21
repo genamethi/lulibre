@@ -9,7 +9,7 @@
 --
 -- The guides are the files of docs/, installed beside lulibre's Lua code.
 --
--- @module lulibre.ui.help
+-- @screens lulibre.ui.help
 -- @usage
 -- require("lulibre.ui.help").run()   -- as :help, ? does
 local M = {}

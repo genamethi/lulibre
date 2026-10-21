@@ -2,7 +2,7 @@
 -- measured against the library (:weigh), and as set by hand where you know
 -- better.
 --
--- @module lulibre.ui.weights
+-- @screens lulibre.ui.weights
 -- @usage
 -- require("lulibre.ui.weights").run()   -- as :weights, <Leader>w does
 local consensus = require "lulibre.consensus"

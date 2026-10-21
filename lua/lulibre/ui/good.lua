@@ -2,7 +2,7 @@
 -- confirm the ones that are right. lulibre learns about subjects (:learn)
 -- from the confirmed records.
 --
--- @module lulibre.ui.good
+-- @screens lulibre.ui.good
 -- @usage
 -- require("lulibre.ui.good").run()   -- as :good, gk does
 local edit = require "lulibre.edit"

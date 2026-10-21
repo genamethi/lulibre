@@ -8,7 +8,7 @@
 -- A proposal's status is "pending", "accepted", "applied", "rejected" or
 -- "barred".
 --
--- @module lulibre.proposals
+-- @scripting lulibre.proposals
 -- @usage
 -- local proposals = require "lulibre.proposals"
 -- proposals.add(12, "title", "Knot Theory", { source = "title page", confidence = 0.8 })

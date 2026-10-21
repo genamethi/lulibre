@@ -9,7 +9,7 @@
 -- Binding the name to test it would take the lock, and the calibre program
 -- could not start.
 --
--- @module lulibre.calibre
+-- @library lulibre.calibre
 -- @usage
 -- local calibre = require "lulibre.calibre"
 -- calibre.running()   -- { db = bool, gui = bool }, or nil where it cannot be told

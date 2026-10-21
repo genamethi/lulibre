@@ -6,7 +6,7 @@
 -- library. Other modules show and rank the candidates, and propose the ones
 -- you accept.
 --
--- @module lulibre.extract
+-- @reading lulibre.extract
 -- @usage
 -- local extract = require "lulibre.extract"
 -- for _, c in ipairs(extract.candidates(12)) do

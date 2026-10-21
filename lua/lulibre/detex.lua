@@ -4,7 +4,7 @@
 --
 -- `plain` also returns whether any TeX is left.
 --
--- @module lulibre.detex
+-- @reading lulibre.detex
 -- @usage
 -- local detex = require "lulibre.detex"
 -- detex.plain("A proof of the Erd\\H{o}s primitive set conjecture")

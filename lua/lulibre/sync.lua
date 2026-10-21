@@ -8,7 +8,7 @@
 -- calibre. `add` then hands the files to calibre with that metadata, and can
 -- delete each file from the sync folder once calibre holds the same bytes.
 --
--- @module lulibre.sync
+-- @library lulibre.sync
 -- @usage
 -- local sync = require "lulibre.sync"
 -- local r = sync.scan()            --> { total=, new=, gone=, held= }, the new ids

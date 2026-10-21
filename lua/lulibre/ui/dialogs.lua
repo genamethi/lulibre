@@ -6,7 +6,7 @@
 -- - `datasets`: the databases kept on this machine. Choose which to fetch.
 -- - `sync`: the selected waiting files. Add them, add and remove them, or drop them.
 --
--- @module lulibre.ui.dialogs
+-- @screens lulibre.ui.dialogs
 -- @usage
 -- require("lulibre.ui.dialogs").change()   -- one change to every selected book
 -- require("lulibre.ui.dialogs").sync()     -- the selected waiting files

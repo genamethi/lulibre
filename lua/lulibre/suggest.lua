@@ -2,7 +2,7 @@
 -- book's file come first, then values of related books, then values the
 -- library already uses, most used first.
 --
--- @module lulibre.suggest
+-- @judging lulibre.suggest
 -- @usage
 -- local suggest = require "lulibre.suggest"
 -- for _, s in ipairs(suggest.for_field("publisher", { 12 })) do
