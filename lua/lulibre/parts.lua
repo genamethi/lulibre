@@ -1,9 +1,9 @@
---- Books that are parts of a whole: a chapter of a handbook, of the Stacks
--- project, of a book the library also holds whole. They are custom fields
--- (lulibre.custom): #partof (the whole), #part (its number in it) and #parts
--- (how many there are), set by the grammars of publications
--- (lulibre.grammars) or by hand like any field, and filtered by is:part,
--- #partof:handbook.
+--- Records which books are parts of a whole: a chapter of a handbook, of
+-- the Stacks project, or of a book the library also holds whole.
+-- The parts are custom fields (lulibre.custom): #partof (the whole), #part
+-- (the book's number in the whole) and #parts (how many parts there are).
+-- The grammars of publications (lulibre.grammars) set them, or you set them
+-- by hand like any field. Filters: is:part, #partof:handbook.
 --
 -- @module lulibre.parts
 -- @usage
@@ -15,7 +15,7 @@ local custom = require "lulibre.custom"
 
 local M = {}
 
---- Set the whole, number and count of several books, as one change (journaled).
+--- Sets the whole, number and count of several books, as one journaled change.
 -- @tparam {table,...} list `{ id=, whole=, part=, parts= }`
 -- @tparam[opt] string label
 -- @treturn table `lulibre.edit.apply`'s result
@@ -30,7 +30,7 @@ function M.set(list, label)
   return require("lulibre.edit").apply(changes, { label = label or "parts" })
 end
 
---- What a book is a part of.
+--- Returns what a book is a part of.
 -- @tparam integer id
 -- @treturn table|nil `{ whole=, part=, parts= }`
 function M.of(id)
@@ -39,8 +39,8 @@ function M.of(id)
   return { whole = whole, part = tonumber(custom.get(id, "#part")), parts = tonumber(custom.get(id, "#parts")) }
 end
 
---- Each whole, its parts in order, and the numbers it is known to have that
--- the library does not (when how many there are is known).
+--- Returns each whole with its parts in order. If the number of parts is
+-- known, also returns the part numbers the library is missing.
 -- @treturn {table,...}
 function M.wholes()
   local by, order = {}, {}

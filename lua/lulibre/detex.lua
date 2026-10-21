@@ -1,8 +1,8 @@
---- TeX as it turns up in records of papers, put into plain text: arXiv and
--- zbMATH hold titles and names as their authors typed them ("Erd\H{o}s",
--- "Bal\'azs", "$p$-adic").
+--- Converts the TeX in paper records to plain text. arXiv and zbMATH keep
+-- titles and names as their authors typed them ("Erd\H{o}s", "Bal\'azs",
+-- "$p$-adic").
 --
--- The second value says whether no TeX is left.
+-- `plain` also returns whether any TeX is left.
 --
 -- @module lulibre.detex
 -- @usage
@@ -33,14 +33,14 @@ M.accents = {
   r = { a = "å", u = "ů", A = "Å", U = "Ů" },
 }
 
---- TeX's commands for letters of their own (\\o, \\ss, \\l ...).
+--- TeX's commands for special letters (\\o, \\ss, \\l ...).
 M.letters = { o = "ø", O = "Ø", ss = "ß", l = "ł", L = "Ł", ae = "æ", AE = "Æ", oe = "œ", OE = "Œ", aa = "å", AA = "Å",
   i = "ı", j = "ȷ" }
 
---- The text without its TeX, and whether none is left.
+--- Returns the text without its TeX, and whether any TeX is left.
 -- @tparam string s
 -- @treturn string
--- @treturn boolean no TeX is left
+-- @treturn boolean true if no TeX is left
 function M.plain(s)
   if type(s) ~= "string" or not s:find("[\\${}~`]") then return s, true end
   local function accent(mark, letter)

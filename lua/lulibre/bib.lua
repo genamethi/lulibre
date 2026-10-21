@@ -1,8 +1,8 @@
---- BibTeX out and in.
+--- Exports books as BibTeX, and reads .bib files.
 --
--- Out: entries with stable cite keys and a `file` field, which Zotero,
--- JabRef and BibDesk all understand on import. In: a .bib file parsed into
--- entries, for matching against the library.
+-- Export writes entries with stable cite keys and a `file` field, which
+-- Zotero, JabRef and BibDesk all read on import. Import parses a .bib file
+-- into entries, for matching against the library.
 --
 -- @module lulibre.bib
 -- @usage
@@ -22,8 +22,8 @@ local function unknown(a)
   return a == nil or a == "" or a == "Unknown" or a == "()"
 end
 
---- A book's authors as individual people, even where the library still has
--- several run together in one entry ("A. One; B. Two").
+--- Returns a book's authors as individual people, even if the library
+-- still has several in one entry ("A. One; B. Two").
 local function people_of(book)
   local names = require "lulibre.names"
   local out = {}
@@ -34,8 +34,9 @@ local function people_of(book)
   return out
 end
 
---- "Gerard van der Geer" -> "van der Geer, Gerard". Names that already have
--- a comma, and names that are not people ("The PARI group"), are braced so
+--- Converts a name to BibTeX's "Last, First" form: "Gerard van der Geer"
+-- becomes "van der Geer, Gerard". Names that already have a comma, and
+-- names that are not people ("The PARI group"), are put in braces so
 -- BibTeX leaves them alone.
 -- @tparam string name
 -- @treturn string
@@ -64,11 +65,10 @@ local function escape(s)
   return (s:gsub("\\", "\\textbackslash "):gsub("[&%%$#_]", "\\%0"))
 end
 
---- The cite key for a book: first author's surname, year, first telling word
--- of the title, e.g. connes2006walk. opts.key is a template over %auth%,
--- %year%, %word%, %id%.
+--- Returns the cite key for a book: the first author's surname, the year,
+-- and the first significant word of the title, such as connes2006walk.
 -- @tparam table book
--- @tparam[opt] table opts `key`
+-- @tparam[opt] table opts `key`: a template using %auth%, %year%, %word% and %id%
 -- @treturn string
 function M.key(book, opts)
   local tpl = opts and opts.key or "%auth%%year%%word%"
@@ -87,10 +87,10 @@ function M.key(book, opts)
   return key
 end
 
---- One entry as text. opts.file = false leaves the file field out.
+--- Returns one entry as text.
 -- @tparam table book
 -- @tparam string key
--- @tparam[opt] table opts `file`
+-- @tparam[opt] table opts `file = false` leaves the file field out
 -- @treturn string
 function M.entry(book, key, opts)
   opts = opts or {}
@@ -122,11 +122,11 @@ function M.entry(book, key, opts)
   return ("@%s{%s,\n%s\n}\n"):format(kind, key, table.concat(f, ",\n"))
 end
 
---- Entries for a list of ids; keys are made unique with a, b, c. Returns
--- the text and the keys in order.
+--- Returns the entries for a list of ids, and their keys in order. Repeated
+-- keys get a, b, c added to make them unique.
 -- @tparam {integer,...} ids
 -- @tparam[opt] table opts as for `key` and `entry`
--- @treturn string
+-- @treturn string the entries
 -- @treturn {string,...} the keys
 function M.export(ids, opts)
   local used, out, keys = {}, {}, {}
@@ -154,11 +154,10 @@ local function clean(v)
   return (v:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
---- Parse .bib text: { {type=, key=, fields={name=value}, raw={name=text}}, ... }.
--- Field names are lower-cased; braces and escapes are removed from values
--- (raw keeps them as written).
+--- Parses .bib text. Field names are put in lower case, and braces and
+-- escapes are removed from values. `raw` keeps the values as written.
 -- @tparam string text
--- @treturn {table,...}
+-- @treturn {table,...} `{ {type=, key=, fields={name=value}, raw={name=text}}, ... }`
 function M.parse(text)
   local entries, pos = {}, 1
   while true do
@@ -201,8 +200,9 @@ function M.parse(text)
   return entries
 end
 
---- "Last, First and Last, First" -> { "First Last", ... }. A name written
--- in its own braces ("{The Stacks project authors}") is one name as it stands.
+--- Splits a BibTeX author field ("Last, First and Last, First") into names
+-- ("First Last", ...). A name in its own braces ("{The Stacks project
+-- authors}") is kept as one name, as written.
 -- @tparam string author_field
 -- @treturn {string,...}
 function M.people(author_field)
@@ -217,9 +217,9 @@ function M.people(author_field)
   return out
 end
 
---- The files an entry names, as absolute paths. Understands a plain path and
--- the JabRef / Zotero forms "desc:path:type;desc:path:type". Relative paths
--- are taken from `dir`, the folder the .bib file is in.
+--- Returns the files an entry names, as absolute paths. Reads a plain path
+-- and the JabRef / Zotero form "desc:path:type;desc:path:type". Relative
+-- paths start from `dir`, the folder the .bib file is in.
 -- @tparam table entry
 -- @tparam string dir
 -- @treturn {string,...}
@@ -237,11 +237,11 @@ function M.files(entry, dir)
   return out
 end
 
---- What an entry says, in the library's terms: { title=, authors=, pubdate=,
--- publisher=, series=, series_index=, tags=, identifiers = { "doi:…", … } }.
--- Fields the entry does not have are absent.
+--- Returns an entry's metadata in the library's fields. Fields the entry
+-- does not have are absent.
 -- @tparam table entry
--- @treturn table
+-- @treturn table `{ title=, authors=, pubdate=, publisher=, series=, series_index=, tags=,
+-- identifiers = { "doi:…", … } }`
 function M.metadata(entry)
   local f, m = entry.fields, { identifiers = {} }
   m.title = f.title
@@ -268,9 +268,9 @@ function M.metadata(entry)
   return m
 end
 
---- Metadata that travels with files: every entry of the .bib files in a
--- folder (or of one .bib file) that names a file, keyed by that file's
--- absolute path. This is how a build can say what its own output is.
+--- Returns the metadata that travels with files: every entry that names a
+-- file, in the .bib files of a folder (or in one .bib file), keyed by the
+-- file's absolute path. A build uses this to describe its own output.
 -- @tparam string path a folder or a .bib file
 -- @treturn table `{ [path] = entry }`
 function M.sidecar(path)
