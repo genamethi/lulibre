@@ -319,9 +319,78 @@ end
 --   Published by: Mathematical Association of America
 --   Stable URL: http://www.jstor.org/stable/2321713
 --
+-- or with each label on a line of its own and its value under it, as a
+-- university's repository puts in front of what it holds:
+--
+--   Unifying Labeling under Minimal Search ...
+--   Item Type
+--   Article; text
+--   Authors
+--   Epstein, Samuel D.; Kitahara, Hisatsugu; Seely, T. Daniel
+--   Publisher
+--   University of Arizona Linguistics Circle (Tucson, Arizona)
+--   Journal
+--   Coyote Papers
+--
 -- Returns nil when the page has no author label, else { title=, authors=,
--- year=, source=, publisher=, url=, jstor=, labels= } with whatever was
--- found; labels counts the labelled lines, which is how sure one can be.
+-- year=, source=, publisher=, journal=, url=, jstor=, labels= } with whatever
+-- was found; labels counts the labelled lines, which is how sure one can be.
+-- label -> what it gives, and how many lines its value may run to
+local STACKED = { ["item type"] = { "type", 1 }, ["authors"] = { "authors", 12 }, ["author"] = { "authors", 12 },
+  ["publisher"] = { "publisher", 1 }, ["journal"] = { "journal", 1 }, ["rights"] = { "rights", 1 },
+  ["download date"] = { "downloaded", 1 }, ["link to item"] = { "url", 1 }, ["permalink"] = { "url", 1 },
+  ["citation"] = { "citation", 1 }, ["title"] = { "title", 3 }, ["item license"] = { "license", 1 },
+  ["issn"] = { "issn", 1 }, ["publication date"] = { "date", 1 }, ["doi"] = { "doi", 1 } }
+
+local function stacked(text)
+  local got, first, n = {}, nil, 0
+  local i = 1
+  while i <= #text do
+    local label = STACKED[text[i]:lower()]
+    if label and text[i + 1] and text[i + 1] ~= "" and not STACKED[text[i + 1]:lower()] then
+      local key, most, value = label[1], label[2], {}
+      local j = i + 1
+      while text[j] and text[j] ~= "" and not STACKED[text[j]:lower()] and #value < most do
+        value[#value + 1] = text[j]
+        j = j + 1
+      end
+      got[key] = got[key] or value
+      first = first or i
+      n = n + 1
+      i = j
+    else
+      i = i + 1
+    end
+  end
+  if not got.authors or n < 3 then return nil end
+  -- "Epstein, Samuel D.; Kitahara, Hisatsugu", or one to a line: family name first
+  local people = {}
+  for _, line in ipairs(got.authors) do
+    for who in (line .. ";"):gmatch("%s*([^;]+);") do
+      local family, given = who:match("^([^,]+),%s*(.+)$")
+      people[#people + 1] = family and (given .. " " .. family) or who
+    end
+  end
+  local one = function(key) return got[key] and got[key][1] or nil end
+  local out = { authors = people, labels = n, url = one("url"),
+    -- "Physical Review E, 106(4)": the journal, without its volume and issue
+    journal = one("journal") and one("journal"):gsub(",?%s*%d+%s*%b()$", ""):gsub(",?%s*[Vv]ol%a*%.?%s*%d+.*$", "") or nil,
+    publisher = one("publisher") and one("publisher"):gsub("%s*%b()$", ""):gsub("%s*%.$", "") or nil,
+    year = one("date") and one("date"):match("^(%d%d%d%d)") or nil,
+    doi = one("doi") and one("doi"):match("^(10%.%d+/%S+)$") or nil }
+  if got.title then
+    out.title = table.concat(got.title, " ")
+  else
+    -- the title stands above the labels
+    local parts = {}
+    for k = 1, (first or 1) - 1 do
+      if text[k] ~= "" then parts[#parts + 1] = text[k] end
+    end
+    if #parts > 0 and #parts <= 3 then out.title = table.concat(parts, " ") end
+  end
+  return out
+end
+
 function M.labelled(lines)
   local text = {}
   for i, l in ipairs(lines or {}) do
@@ -336,15 +405,14 @@ function M.labelled(lines)
       break
     end
   end
-  if not at then return nil end
+  if not at then return stacked(text) end
   local out = { authors = names.split(who), labels = 1 }
   -- the title is what stands above the author line, when that is only a line or three
+  local above = {}
   if at > 1 and at <= 4 then
-    local parts = {}
     for i = 1, at - 1 do
-      if text[i] ~= "" and not text[i]:find("^%a[%a ()]-:%s") then parts[#parts + 1] = text[i] end
+      if text[i] ~= "" and not text[i]:find("^%a[%a ()]-:%s") then above[#above + 1] = text[i] end
     end
-    if #parts > 0 then out.title = table.concat(parts, " ") end
   end
   for i = at + 1, math.min(#text, at + 12) do
     local t = text[i]
@@ -363,6 +431,18 @@ function M.labelled(lines)
       out.jstor = url:match("jstor%.org/stable/([%w./-]-)[.,]?$")
     end
   end
+  -- (a sheet may be headed with the journal's name, above the title: "Annals of
+  -- Mathematics", the source being "Annals of Mathematics, Second Series, ...")
+  local journal = out.source and out.source:match("^([^,]+)")
+  while #above > 1 do
+    local low = lulibre.fold(above[1])
+    if (journal and low == lulibre.fold(journal)) or (out.publisher and low == lulibre.fold(out.publisher)) then
+      table.remove(above, 1)
+    else
+      break
+    end
+  end
+  if #above > 0 then out.title = table.concat(above, " ") end
   return out
 end
 

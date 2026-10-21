@@ -6,6 +6,8 @@
  *     columns = { {"Field", 12}, "Current", "Proposed", {"Source", 18} },
  *     rows = { {"authors", "Unknown", "E. Di Nardo", "title page", id = 1299, style = "ok"} },
  *     follow = true,      -- moving through rows moves the list to row.id
+ *     preview = 12,       -- the preview shows this book while the panel is up,
+ *                         -- or (a string) says that in place of a book
  *     height = 0.45,      -- share of the screen
  *     side = "left",      -- a column down the left instead (width = 0.28);
  *                         -- "main": in the list's window, which comes back when
@@ -31,6 +33,8 @@
  *   end
  *
  *   p:rows(rows)  p:title(s)  p:help(s)  p:cursor([row])  p:close()
+ *   p:preview(id | text | nil)   what the preview shows while it is up; nil
+ *                          gives it back to the rows (or the list)
  *   p:hide()  p:show()     off the screen and back, without closing: around a
  *                          panel opened on top of this one
  *   p:height(share)        resize (a share of the screen, 0.1 to 0.9)
@@ -314,6 +318,10 @@ static int l_panel_ui(lua_State *L) {
   lua_getfield(L, 1, "rows");
   if (lua_istable(L, -1)) set_rows(L, lp->p, -1);
   lua_pop(L, 1);
+  lua_getfield(L, 1, "preview");
+  if (lua_isinteger(L, -1)) panel_set_preview(lp->p, 1, lua_tointeger(L, -1), NULL);
+  else if (lua_type(L, -1) == LUA_TSTRING) panel_set_preview(lp->p, 1, 0, lua_tostring(L, -1));
+  lua_pop(L, 1);
   panel_set_cursor(lp->p, 0);
   return 1;
 }
@@ -374,6 +382,17 @@ static int m_hide_ui(lua_State *L) {
   return 0;
 }
 ON_UI(m_hide)
+
+static int m_preview_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  if (lp->p && !lp->closed) {
+    if (lua_isinteger(L, 2)) panel_set_preview(lp->p, 1, lua_tointeger(L, 2), NULL);
+    else if (lua_type(L, 2) == LUA_TSTRING) panel_set_preview(lp->p, 1, 0, lua_tostring(L, 2));
+    else panel_set_preview(lp->p, 0, 0, NULL);
+  }
+  return 0;
+}
+ON_UI(m_preview)
 
 static int m_show_ui(lua_State *L) {
   struct lpanel *lp = check(L);
@@ -491,7 +510,7 @@ void l_panel_open(lua_State *L) {
   static const luaL_Reg methods[] = {
     {"rows", m_rows},     {"title", m_title}, {"help", m_help},   {"columns", m_columns},
     {"cursor", m_cursor}, {"wait", m_wait},   {"close", m_close}, {"is_open", m_is_open},
-    {"hide", m_hide},     {"show", m_show},   {"height", m_height}, {"keys", m_keys},
+    {"hide", m_hide},     {"show", m_show},   {"preview", m_preview},   {"height", m_height}, {"keys", m_keys},
     {"tabs", m_tabs},     {"send", m_send},
     {"__gc", m_gc},      {"__close", m_close}, {NULL, NULL},
   };

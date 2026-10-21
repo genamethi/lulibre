@@ -52,12 +52,23 @@ sessions.
 
 ## Editing: `e`
 
-A form with one row per field for the selected book or books.
+A form with one row per field for the selected book or books. While it is
+open the preview shows the book being edited, wherever the list's cursor
+is (opened from duplicates or orphans, the row's book). For several books
+the preview shows none of them, only how many are selected, so that
+nothing is copied from the wrong one.
+
+Where the list was, `i` shows what the file's pages say for each field,
+source and confidence beside each value; for several books, which fields
+they share and which they differ in, with the values and how many hold
+each, and the books themselves. It opens with the form when
+`review_context = 1`.
 
 | Key | |
 |---|---|
 | `Enter` | type a value; a popup ranks suggestions and `Tab` takes the highlighted one |
 | `Space` | step through what the file itself and related books suggest |
+| `i` | what the pages say, where the list is; again to hide it |
 | `a` | fill every empty field with the best suggestion from the file |
 | `c` | clear: blank the field |
 | `t` | title case |
@@ -181,6 +192,14 @@ Notes"); the option `never_authors` adds words and phrases of your own:
 
     lulibre.o.never_authors = "visiting scholar, working group"
 Each proposal carries where it came from and how sure it is.
+
+A proposal under `propose_min` (60% by default) is kept but not shown:
+review leaves it out, the counts of what waits leave it out, and every
+summary ends by saying how many there are ("12 are under propose_min (60%)
+and not shown"). Lower the option, in the configuration window or
+init.lua, and they are shown at once. When another value is proposed for
+the same field of a book, the ones not shown give way to it
+(`propose_held = "keep"` keeps them all).
 
 A field that is empty always gets the file's best candidate. A field that
 already has a value is proposed for when the file is confident (0.8 or more)
@@ -562,12 +581,14 @@ those above it; a catch-all subject teaches only the ones above it.
 | `d` | show the dropped ones |
 | `L` | learn again |
 
-When a book's pages hold at least two of a subject's phrases, the edit form
-offers that subject for its tags, naming the phrases ("learned: modular
-forms, elliptic curves"), never as surer than 0.6. This is a judgement from
-a handful of phrases on a book's first pages and is often wrong; it is
-there to be looked at, not trusted. `subject_learned = "propose"` makes
-`:propose` use it too, `"off"` hides it.
+With `learned_tags = "suggest"`, when a book's pages hold at least two of a
+subject's phrases, the edit form offers that subject for its tags, naming
+the phrases ("learned: modular forms, elliptic curves"), never as surer
+than 0.3. This is a judgement from a handful of phrases on a book's first
+pages and has been wrong more often than right; it is off unless you turn
+it on. `learned_tags = "propose"` makes `:propose` use it too; such a
+proposal is shown when it reaches `learned_tags_min` (20%), in place of
+`propose_min`.
 
 `:run holdout` says how well this does on the library as it stands. The
 confirmed records are cut into five parts; each part in turn is left out,
@@ -634,6 +655,7 @@ whether the identifier was read from the file or the library holds it:
 | is only like it (a title cut short, most of the words) | is the book's unless the authors differ: a review "..., by Sutton and Barto" is not the book |
 | has another title, but an author in common | is taken, without its title being pressed (0.5): another form of the title, or the volume this is part of |
 | has another title and no author in common | is left out; what it proposed before is withdrawn; and if the library holds the identifier, taking it off is proposed (0.6) |
+| says what the book's pages contradict, as read by rule (a cataloguing block, a copyright line, a series page, a cover sheet, a journal header, an arXiv stamp, a grammar): a year earlier than the one they print, or a publisher that is not theirs nor its imprint nor its journal | is left out, the same way, and says why; an ISBN the pages do not print is proposed to be taken off. Where the pages state nothing of the kind, the record is not held to them |
 
 What was left out is listed in the log (`:messages`), and on the terminal
 by `lulibre enrich`. Even from a record that is the book's, a value that
@@ -1248,6 +1270,15 @@ one does not becomes proposals for the kept one.
 its proposals; the duplicates panel steps aside while they are open and
 comes back up to date. `p` gives the preview more room.
 
+Where the list was, the group's copies stand side by side, field by field,
+the fields they differ in in colour, with their formats and folders (`i`
+hides it, and brings it back). The preview shows the copy under the
+cursor, even one the list's filter leaves out, and stays on it in the edit
+form.
+
+`t` (take from this copy) proposes what it asks for whatever `propose_min`
+says: those proposals are always shown.
+
 `t` takes from the copy under the cursor: every field where its record says
 something the kept copy's does not is proposed for the kept copy, and review
 opens on those proposals, each marked with the book it came from. Accept
@@ -1262,7 +1293,11 @@ what is wanted and `w` writes it; nothing is removed.
 | a file in one of calibre's folders that calibre does not know | move it out, if a book already holds the same bytes |
 | a symbolic link in a folder of your own that points at a renamed book | repair it |
 
-`Space` changes a row's action, `w` carries them out. `e` and `r` open the
+Where the list was, the row is shown in full: a record with no file beside
+the book that has its file, field by field; a stray file or a link with
+what it leads to (`i` hides it, and brings it back). `Space` changes a
+row's action; on a heading ("Records with no file"), every row under it at
+once. `w` carries them out. `e` and `r` open the
 edit form and the review for the row's book, as in duplicates, and `t` on a
 record whose file is gone offers what it says to the book that is the same
 work and has the file. `x` opens the row

@@ -250,6 +250,62 @@ local TRUST = { arxiv = 0.95, crossref = 0.95, openlibrary = 0.9, zbmath = 0.85,
 -- both speak against it.
 local verify = require "lulibre.verify"
 
+-- What the book's own pages state of its date and publisher, read by rule:
+-- the readers of known layouts and grammars (lulibre.layouts, .grammars)
+-- and a cover sheet that labels its fields; not a title page's guesses.
+local STATED = { ["cataloguing data"] = true, ["copyright line"] = true, ["series page"] = true, ["cover sheet"] = true,
+  ["journal header"] = true, ["arXiv stamp"] = true }
+local function stated(b)
+  if b.stated then return b.stated end
+  b.stated = { years = {}, publishers = {} }
+  local ok, cands = pcall(extract.candidates, b.id)
+  for _, c in ipairs(ok and cands or {}) do
+    local source = c.source or ""
+    if (STATED[source] or source:find("^grammar: ")) and (c.confidence or 0) >= 0.75 then
+      local year = c.field == "pubdate" and tonumber(tostring(c.value):match("^(%d%d%d%d)"))
+      if year then b.stated.years[#b.stated.years + 1] = { year = year, source = source } end
+      if c.field == "publisher" then b.stated.publishers[#b.stated.publishers + 1] = { name = c.value, source = source } end
+    end
+  end
+  return b.stated
+end
+
+-- one house's imprints are the house
+local PARENT = { ["North-Holland"] = "Elsevier", ["Academic Press"] = "Elsevier", ["Birkhäuser"] = "Springer",
+  ["Kluwer"] = "Springer", ["Addison-Wesley"] = "Pearson", ["Prentice Hall"] = "Pearson", ["Interscience"] = "Wiley",
+  ["CRC Press"] = "Taylor & Francis", ["Chapman & Hall"] = "Taylor & Francis", ["Routledge"] = "Taylor & Francis" }
+local function same_house(a, b)
+  if not a or not b or a == "" or b == "" then return true end
+  local fa, fb = lulibre.fold(a), lulibre.fold(b)
+  if fa:find(fb, 1, true) or fb:find(fa, 1, true) then return true end
+  local ha, hb = layouts.known_house(a), layouts.known_house(b)
+  return ha ~= nil and hb ~= nil and (PARENT[ha] or ha) == (PARENT[hb] or hb)
+end
+
+-- Does the record say what the pages, so read, contradict? A year earlier
+-- than one the pages print for the book (a copyright line gives the latest
+-- of its years: the edition in hand) is another edition's; a publisher that
+-- is not the one the pages name, nor its imprint, nor its journal, is
+-- another's. Returns why, or nil. Where the pages state nothing, nothing is
+-- contradicted.
+local function contradicts(b, rec)
+  local st = stated(b)
+  local year = tonumber(tostring(rec.date or rec.year or ""):match("^(%d%d%d%d)"))
+  for _, s in ipairs(st.years) do
+    if year and year < s.year then
+      return ("the pages print %d (%s), the record %d"):format(s.year, s.source, year)
+    end
+  end
+  if rec.publisher or rec.container then
+    for _, s in ipairs(st.publishers) do
+      if not same_house(s.name, rec.publisher or rec.container) and not (rec.container and same_house(s.name, rec.container)) then
+        return ("the pages name %s (%s), the record %s"):format(s.name, s.source, rec.publisher or rec.container)
+      end
+    end
+  end
+  return nil
+end
+
 local function fits(b, kind, rec)
   if b.in_file[kind == "isbn-record" and "isbn" or kind] then
     if not rec.title or #b.titles == 0 then return true end
@@ -290,6 +346,9 @@ for n, b in ipairs(books) do
       local judged = verify.record(b.ev, rec)
       rec.judged = judged
       if ok and judged.another then ok, plain = false, true end
+      -- a record whose date or publisher the pages contradict is another edition's or another work's
+      local clash = ok and contradicts(b, rec)
+      if clash then ok, plain, rec.clash = false, true, clash end
       if ok and kind == "title" and not judged.unread and judged.title ~= "shown" then ok, plain = false, false end
       -- a record of the whole the file is a part of (a handbook, for one of its chapters)
       if ok and judged.part then rec.part_of = judged.size_why end
@@ -299,8 +358,9 @@ for n, b in ipairs(books) do
         local in_file = b.in_file[kind == "isbn-record" and "isbn" or kind]
         if in_file then cited = cited + 1 else others = others + 1 end
         -- which, and why: in the log (:messages), and on the terminal when there is no interface
-        local line = ("book %d (%s): the record %s is left out, it is of \"%s\"%s"):format(b.id, b.book.title or "", rec.source or service,
-          rec.title or "", #rec.authors > 0 and (" by " .. table.concat(rec.authors, ", ")) or "")
+        local line = ("book %d (%s): the record %s is left out, it is of \"%s\"%s%s"):format(b.id, b.book.title or "", rec.source or service,
+          rec.title or "", #rec.authors > 0 and (" by " .. table.concat(rec.authors, ", ")) or "",
+          rec.clash and ("; " .. rec.clash) or "")
         if lulibre.headless then print("  " .. line) else lulibre.log("enrich: " .. line) end
         -- what an earlier run proposed from this record is withdrawn with it
         if rec.source then
@@ -308,6 +368,12 @@ for n, b in ipairs(books) do
         end
         if plain and not in_file and ((service == "arxiv" and kind == "arxiv") or (kind == "doi" and (service == "crossref" or service == "openalex"))) then
           wrong[kind] = rec.title
+        end
+        -- an ISBN the book's pages do not print, whose record they contradict
+        -- (one they print is the book's: only its record is wrong)
+        if rec.clash and kind == "isbn-record" and b.book.idents.isbn
+            and verify.ident(b.ev, "isbn:" .. b.book.idents.isbn) == "absent" then
+          wrong.isbn = rec.title
         end
         other[kind], rec = true, nil
       end
@@ -477,7 +543,7 @@ if cited > 0 then
     cited, cited == 1 and "" or "s"))
 end
 if others > 0 then
-  print(("%d record%s left out: the book has the identifier, but the record is not the book's by its title and authors%s"):format(
+  print(("%d record%s left out: the book has the identifier, but the record is not the book's by its title and authors, or by the date or publisher its pages print%s"):format(
     others, others == 1 and "" or "s", removals > 0 and ("; taking the identifier off is proposed for %d"):format(removals) or ""))
 end
 if uncatalogued > 0 then

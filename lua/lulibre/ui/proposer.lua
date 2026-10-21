@@ -140,13 +140,13 @@ function M.run()
   do
     -- the options the boxes stand for, for this run only; put back however
     -- the run ends (done, failed, or stopped from outside)
-    local was = { learned = lulibre.o.subject_learned, weigh = lulibre.o.weigh_sources }
+    local was = { learned = lulibre.o.learned_tags, weigh = lulibre.o.weigh_sources }
     local over <close> = setmetatable({}, { __close = function()
-      lulibre.o.subject_learned, lulibre.o.weigh_sources = was.learned, was.weigh
+      lulibre.o.learned_tags, lulibre.o.weigh_sources = was.learned, was.weigh
       lulibre.progress(nil)
       runs.finish(run, "cancelled") -- does nothing when the run got to its end
     end })
-    if v.shared or v.learned then lulibre.o.subject_learned = "propose" end
+    if v.shared or v.learned then lulibre.o.learned_tags = "propose" end
     lulibre.o.weigh_sources = v.weigh and "on" or "off"
     local ok, err = pcall(function()
       if v.refs then

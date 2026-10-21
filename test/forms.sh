@@ -100,6 +100,15 @@ shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
 
+# ---- while typing, Ctrl and Alt with the arrows move a word at a time
+k :; lit "echo one two"; k C-Left; lit "X"
+shown "C-Left goes back a word"               ":echo one Xtwo"
+k M-Left M-Left; lit "Y"
+shown "M-Left goes back a word too"           ":echo Yone Xtwo"
+k C-Right; lit "Z"
+shown "C-Right goes to the next word"         ":echo Yone ZXtwo"
+k Escape
+
 # ---- a title in capitals, put in title case
 expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2>/dev/null)"
 k "&"; lit "is:capstitle"; k Enter
@@ -278,6 +287,10 @@ else
 fi
 k X
 shown "X opens every row"                     "book 3 is the same work and has its file"
+k gg Space
+shown "Space on a heading sets every row under it" "1 of 1 rows set to keep"
+k Space
+shown "and again, to the next action"         "1 of 1 rows set to remove record"
 k q
 
 # ---- the configuration window (a configuration of the test's own: $XDG_CONFIG_HOME)
@@ -368,6 +381,23 @@ k q
 shown "and comes back to duplicates"          "duplicates  1 groups"
 k q
 
+# ---- the preview stays on the book a panel is about, and the list's place shows it
+k "&"; lit "id:1"; k Enter
+wait_for "filter id:1"
+k g d
+shown "where the list was, the copies side by side" "the 2 copies, field by field"
+k j
+shown "the preview shows the row's book, though the list leaves it out" "unknown author"
+k e
+shown "e opens the edit form for it"              "edit  5  "
+shown "where the list was, what its pages say"    "what the pages of book 5 say"
+shown "and the preview stays on the book being edited" "unknown author"
+k Escape
+sleep 0.2
+k q
+k BSpace
+wait_for "all books"
+
 # ---- known good: the records by score, confirmed one at a time or in bulk
 k g k
 shown "known good opens, best records first"  "known good  0 confirmed of"
@@ -399,6 +429,21 @@ k u
 shown "one undo takes it back"                "undid"
 expect "from every book"                      0 "$(run query -c tag:from-the-dialog 2>/dev/null)"
 k '\\' Space
+
+# ---- the edit form for several books: where they differ, what they hold
+k "&"; lit "id:1,3,4"; k Enter
+shown "the filter narrows the list to three" "3 of 4"
+k :; lit "mark all"; k Enter
+k e
+shown "the edit form opens for the marked books" "edit  3 books"
+shown "a field they differ in shows each value and how many hold it" "Sam Poe (2) · Ann Lee (1)"
+shown "the preview names no book while several are edited" "3 books selected"
+shown "and where the list was, what they share and where they differ" "3 books: what they share"
+k Escape
+sleep 0.2
+k '\\' Space
+k BSpace
+wait_for "all books"
 
 k q
 i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done

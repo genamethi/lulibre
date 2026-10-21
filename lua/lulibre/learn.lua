@@ -106,14 +106,15 @@ end
 
 --- The learned subject for a book in the library, as a candidate, or nil:
 -- { field = "tags", value =, source = "learned: phrase, phrase", confidence = }.
--- Learned subjects are a judgement from a handful of phrases: they are
--- never offered as surer than 0.6.
+-- Learned subjects are a judgement from a handful of phrases, and have
+-- proved poor at it: what the phrases come to is halved, and never more
+-- than 0.3.
 function M.candidate(id)
-  if lulibre.o.subject_learned == "off" or not M.ready() then return nil end
+  if lulibre.o.learned_tags == "off" or not M.ready() then return nil end
   local text = M.text(id, true)
   local subject, confidence, why = M.suggest(text or "")
   if not subject then return nil end
-  return { field = "tags", value = subject, confidence = math.min(0.6, confidence),
+  return { field = "tags", value = subject, confidence = math.min(0.3, confidence / 2),
     source = "learned: " .. table.concat(why, ", ", 1, math.min(3, #why)) }
 end
 

@@ -24,12 +24,13 @@ local M = {}
 -- an action is the one hints show.
 local DEFAULTS = {
   edit = {
-    { "edit", { "<CR>", "e", "i" }, "edit", "type a value; a popup ranks suggestions and Tab takes the highlighted one" },
+    { "edit", { "<CR>", "e" }, "edit", "type a value; a popup ranks suggestions and Tab takes the highlighted one" },
     { "suggest", { "<Space>" }, "suggest", "step through what the file itself and related books suggest" },
     { "fill", { "a" }, "fill gaps", "take the file's best suggestion for every field that is empty" },
     { "clear", { "c" }, "clear", "blank the field: the form shows (blank) where the value will be removed" },
     { "titlecase", { "t" }, "title case", "put the value in title case: Capitals for All but the Minor Words" },
     { "revert", { "x" }, "revert", "forget the change pending for this field" },
+    { "about", { "i" }, "about this", "show, where the list is, what the file's pages say for each field (for several books: what they share and where they differ); again to hide it" },
     { "write", { "w" }, "write", "write the changes and close" },
   },
   review = {
@@ -64,10 +65,11 @@ local DEFAULTS = {
     { "edit", { "e" }, "edit", "open the edit form for the book under the cursor" },
     { "review", { "r" }, "review", "go through the proposals waiting for the book under the cursor" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
+    { "about", { "i" }, "about this", "show, where the list is, the group's copies side by side, field by field; again to hide it" },
     { "remove", { "D" }, "remove the rest", "remove the surplus copies (to calibre's recycle bin)" },
   },
   orphans = {
-    { "action", { "<Space>", "<CR>" }, "action", "change what will be done about this row" },
+    { "action", { "<Space>", "<CR>" }, "action", "change what will be done about this row; on a heading, about every row under it" },
     { "expand", { "x" }, "details", "show what the columns cut short: the verdict in full, the whole path" },
     { "expand_all", { "X" }, "all", "show, or hide, every row's details" },
     { "mark", { "m" }, "mark", "mark the records set to be removed" },
@@ -76,6 +78,7 @@ local DEFAULTS = {
     { "edit", { "e" }, "edit", "open the edit form for the row's book" },
     { "review", { "r" }, "review", "go through the proposals waiting for the row's book" },
     { "peek", { "p" }, "more preview", "shrink this panel to give the preview room; again to bring it back" },
+    { "about", { "i" }, "about this", "show, where the list is, the row's record beside the book that has its file, or the stray file and its twin; again to hide it" },
     { "write", { "w" }, "do it", "carry out the actions" },
   },
   beside = {

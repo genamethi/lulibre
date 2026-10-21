@@ -1068,8 +1068,13 @@ static void render(struct tui *t) {
   notcurses_cursor_disable(t->nc);
   keymap_set_leader(t->km, t->app->cfg.leader);
   wm_note_focus(t);
-  if (t->peek && t->focus->cls != &view_panel) { /* the panel that was looking has lost the cursor */
+  /* the panel that was looking has lost the cursor to the list, which says
+   * again what the preview shows (in the preview itself, to page or copy
+   * from it, the cursor keeps what it was showing) */
+  if ((t->peek || t->preview_note) && t->focus->cls == &view_list) {
     t->peek = 0;
+    free(t->preview_note);
+    t->preview_note = NULL;
     preview_book_changed(t);
   }
   if (t->rows_n >= 4 && t->cols_n >= 20) {

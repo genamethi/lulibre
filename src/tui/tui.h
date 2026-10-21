@@ -145,7 +145,7 @@ enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END
 enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE, PA_BACK };
 enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PREV, LA_UP, LA_DOWN,
        LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
-       LA_KILL_START, LA_KILL_END, LA_KILL_WORD };
+       LA_KILL_START, LA_KILL_END, LA_KILL_WORD, LA_WORD_LEFT, LA_WORD_RIGHT };
 enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
 enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP };
 enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
@@ -447,6 +447,10 @@ void panel_set_help(struct panel *p, const char *help);
 #define PANEL_TABS 12
 void panel_set_tabs(struct panel *p, int n, const char *const *names, int current);
 void panel_set_follow(struct panel *p, int follow);
+/* What the preview shows while the panel is up, whatever row the cursor is
+ * on: the book id, or (note not NULL) that note in place of a book; set 0
+ * gives the preview back to the rows (or the list). */
+void panel_set_preview(struct panel *p, int set, sqlite3_int64 id, const char *note);
 /* For a panel that follows: 1, and the book its cursor row stands for (0
  * when that row is not a book). 0 for a panel that does not follow. */
 int panel_points_at(const struct panel *p, sqlite3_int64 *id);
@@ -601,6 +605,7 @@ struct tui {
   } sel;
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
+  char *preview_note;   /* shown by the preview in place of any book (panel_set_preview) */
   /* whoever asked to be told when the indexing run ends (tui_index) */
   void (*ix_hook[8])(const struct index_stats *st, void *ud);
   void *ix_hook_ud[8];
