@@ -1,15 +1,16 @@
---- Patterns that pull named fields out of a string, and put them back.
+--- Pulls named fields out of a string with a pattern, and fills a pattern
+-- from a book's fields.
 --
--- Two spellings are accepted wherever a pattern is asked for:
+-- Wherever a pattern is asked for, two forms are accepted:
 --
 --   %author% - %title% (%year%)         a template: named fields between
 --                                        literal text
 --   ^(.-) %- (.-) %((%d+)%)$ => author, title, year
---                                        a Lua pattern, with the names its
---                                        captures get
+--                                        a Lua pattern, followed by the
+--                                        names of its captures
 --
--- Both compile to a Lua pattern plus a list of field names, so a match is a
--- table indexed by field name.
+-- Both forms compile to a Lua pattern and a list of field names, so a match
+-- is a table indexed by field name.
 --
 -- @module lulibre.template
 -- @usage
@@ -29,9 +30,10 @@ local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
---- What is wrong with a Lua pattern, or nil. Lua only reports a malformed
--- pattern when matching happens to reach the bad part, so this looks at its
--- structure instead: escapes, sets and captures all closed.
+--- Returns what is wrong with a Lua pattern, or nil. Lua reports a
+-- malformed pattern only if matching reaches the bad part, so `check`
+-- checks the pattern's structure instead: escapes, sets and captures must
+-- all be closed.
 -- @tparam string pat
 -- @treturn string|nil what is wrong
 function M.check(pat)
@@ -63,8 +65,7 @@ function M.check(pat)
   return nil
 end
 
---- Compile a template or "pattern => fields". Returns
--- { pattern=, fields={...}, spec= } or nil, message.
+--- Compiles a template or a "pattern => fields" spec.
 -- @tparam string spec
 -- @treturn[1] table `{ pattern=, fields=, spec= }`
 -- @treturn[2] nil
@@ -99,11 +100,11 @@ function M.compile(spec)
   return { pattern = table.concat(out), fields = fields, spec = spec }
 end
 
---- Match s against a compiled pattern: { field = value, ... } or nil.
--- Field names are as written; M.canonical maps them to calibre's.
+--- Matches a string against a compiled pattern. Field names are as
+-- written in the pattern; `canonical` maps them to calibre's.
 -- @tparam table compiled
 -- @tparam string s
--- @treturn table|nil
+-- @treturn table|nil `{ field = value, ... }`, or nil if the string does not match
 function M.match(compiled, s)
   local caps = table.pack(pcall(string.match, s, compiled.pattern))
   if not caps[1] then return nil end -- a pattern Lua rejects matches nothing
@@ -122,8 +123,9 @@ function M.match(compiled, s)
   return out
 end
 
---- calibre field and value for a captured name: "year", "1996" ->
--- "pubdate", "1996"; "doi", "10.1/x" -> "identifiers", "doi:10.1/x".
+--- Returns the calibre field and value for a captured name and value.
+-- "year", "1996" gives "pubdate", "1996", and "doi", "10.1/x" gives
+-- "identifiers", "doi:10.1/x".
 -- @tparam string name
 -- @tparam string value
 -- @treturn string the field
@@ -134,9 +136,9 @@ function M.canonical(name, value)
   return field, value
 end
 
---- Fill a template from a book: M.format("%author% - %title% (%year%)", book).
--- Missing fields become "unknown"; slashes are replaced so the result is
--- safe as a file name.
+--- Fills a template from a book: format("%author% - %title% (%year%)", book).
+-- Missing fields become "unknown", and slashes are replaced so the result
+-- is safe as a file name.
 -- @tparam string spec
 -- @tparam table book
 -- @treturn string

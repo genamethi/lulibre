@@ -1,22 +1,23 @@
---- Learning what marks a subject, from the records the user has confirmed.
+--- Learns which phrases mark a subject, from the records you confirmed.
 --
--- Every book's indexed pages are cut into phrases of two and three words
--- (lulibre.phrases). A phrase marks a subject when books of that subject use
--- it far more than books of other subjects do, and when it is not one
--- author's habit: it must stand in several of the subject's books, by more
--- than one author. For each subject the strongest few are kept (the option
--- subject_terms says how many) in the table `terms`, where :terms shows
--- them for review: a phrase can be dropped for good, or added by hand.
+-- learn cuts every book's indexed pages into phrases of two and three words
+-- (lulibre.phrases). A phrase marks a subject if books of that subject use
+-- the phrase far more than books of other subjects, and if the phrase is
+-- not one author's habit: it must appear in several of the subject's books,
+-- by more than one author. For each subject, the strongest few phrases are
+-- kept in the table `terms` (the option subject_terms sets how many). :terms
+-- shows them for review, where you can drop a phrase for good or add one
+-- by hand.
 --
--- A subject is then suggested for a book from the marking phrases its pages
--- hold, and the suggestion names them, so it can be judged.
+-- lulibre then suggests a subject for a book from the marking phrases on
+-- the book's pages. The suggestion names those phrases, so you can judge it.
 --
--- Only confirmed records teach (quality.lua, :good): a wrong subject on an
--- unchecked record would otherwise be taught back to the rest. A book
--- teaches its subject and each subject above it ("math/number-theory/
--- algebraic" also teaches "math/number-theory" and "math"); a catch-all
--- subject ("math/general") teaches only the ones above it, since it says
--- where a book was put and not what it is about.
+-- Only confirmed records teach (quality.lua, :good). Otherwise a wrong
+-- subject on an unchecked record would be taught back to the rest. A book
+-- teaches its subject and every subject above it: "math/number-theory/
+-- algebraic" also teaches "math/number-theory" and "math". A catch-all
+-- subject ("math/general") teaches only the subjects above it, since a
+-- catch-all says where a book was filed, not what it is about.
 --
 -- @module lulibre.learn
 -- @usage
@@ -29,22 +30,24 @@ local quality = require "lulibre.quality"
 
 local M = {}
 
---- A subject needs this many confirmed books before anything is learned for it.
+--- How many confirmed books a subject needs before learn learns phrases for it.
 M.MIN_BOOKS = 6
---- A marking phrase stands in at least this share of the subject's books ...
+--- The share of a subject's books a marking phrase must appear in, at least.
 M.MIN_SHARE = 0.08
---- ... and in at least this many of them ...
+--- How many of a subject's books a marking phrase must appear in, at least.
 M.MIN_IN = 3
---- ... and this much more often than in books of other subjects ...
+--- How many times more often a marking phrase must appear in the subject's
+-- books than in books of other subjects.
 M.MIN_LIFT = 2.5
---- ... by at least this many different authors (fewer for a subject of few books).
+--- How many different authors must use a marking phrase, at least. A
+-- subject with few books needs fewer.
 M.MIN_AUTHORS = 3
 
---- Phrases that say how a book was published and not what it is about. They
--- stand in the front matter of one publisher's series, so the subjects that
--- series serves use them far more than the others do; and the library holds
--- titles that are such headings ("Handbook of Algebra: Editorial Board"),
--- which is how they pass for words a title is made of. Add your own:
+--- Phrases that say how a book was published, not what it is about. These
+-- phrases appear in the front matter of one publisher's series, so the
+-- subjects that series covers use them far more than other subjects do.
+-- Some titles in the library are such headings ("Handbook of Algebra:
+-- Editorial Board"), so the phrases also pass for title words. Add your own:
 --   require("lulibre.learn").FURNITURE["lecture notes"] = true
 M.FURNITURE = {}
 for _, g in ipairs { "editorial board", "series editors", "series editor", "managing editor", "advisory board",
@@ -54,10 +57,12 @@ for _, g in ipairs { "editorial board", "series editors", "series editor", "mana
   M.FURNITURE[g] = true
 end
 
---- Text that many books share word for word says nothing of any one of
--- them: a publisher's imprint, the list of a series, a journal's notice to
--- readers. It is found by counting whole lines across the library (copies of
--- one book counted once, by title) and left out wherever phrases are read.
+--- How many different books a line must appear in to count as shared.
+-- Text that many books share word for word, such as a publisher's imprint,
+-- a series list or a journal's notice to readers, says nothing about any
+-- one book. learn finds shared lines by counting whole lines across the
+-- library (copies of one book count once, by title), and leaves them out
+-- wherever phrases are read.
 M.SHARED = 3 -- a line in this many different books is not any book's own
 
 local shared -- the counter of lines, built when first needed and after the library changes
@@ -81,7 +86,7 @@ local function shared_lines()
   return c
 end
 
---- Forget what was worked out about shared lines (the library has changed).
+--- Clears the shared lines worked out so far. Call it after the library has changed.
 function M.forget()
   shared = nil
 end
@@ -93,11 +98,11 @@ local IMPRINT = { "isbn", "rights reserved", "rights are reserved", "copyright",
   "printed in ", "cataloging", "catalogue record", "trademark", "permission", "publisher", "distributed",
   "terms and conditions", "typeset" }
 
---- The text of a book that speaks for the book: its indexed pages, without
--- those that are imprint and without the lines it shares with other books.
--- quick: leave the second out, which needs the whole library read once.
+--- Returns the text that is the book's own: its indexed pages, without the
+-- imprint pages and without the lines it shares with other books.
 -- @tparam integer id
--- @tparam[opt] boolean quick
+-- @tparam[opt] boolean quick keep the shared lines, since finding them needs the whole
+-- library read once
 -- @treturn string
 function M.text(id, quick)
   local text = lulibre.text(id)
@@ -114,13 +119,12 @@ function M.text(id, quick)
   return shared_lines():strip(table.concat(keep, "\n"), M.SHARED)
 end
 
---- The learned subject for a book in the library, as a candidate, or nil:
--- { field = "tags", value =, source = "learned: phrase, phrase", confidence = }.
--- Learned subjects are a judgement from a handful of phrases, and have
--- proved poor at it: what the phrases come to is halved, and never more
--- than 0.3.
+--- Returns the learned subject for a book in the library as a candidate,
+-- or nil. A learned subject is a judgement from a handful of phrases, and
+-- such judgements have proved poor. So the confidence is half of what the
+-- phrases give, and never more than 0.3.
 -- @tparam integer id
--- @treturn table|nil
+-- @treturn table|nil `{ field = "tags", value =, source = "learned: phrase, phrase", confidence = }`
 function M.candidate(id)
   if lulibre.o.learned_tags == "off" or not M.ready() then return nil end
   local text = M.text(id, true)
@@ -142,7 +146,7 @@ local function title_phrases()
   return set
 end
 
---- A subject and those above it: "a/b/c" gives { "a/b/c", "a/b", "a" }.
+--- Returns a subject and the subjects above it: "a/b/c" gives { "a/b/c", "a/b", "a" }.
 -- @tparam string subject
 -- @treturn {string,...}
 function M.lineage(subject)
@@ -170,11 +174,10 @@ local function taught(book)
   return out
 end
 
---- Read the whole library once: how many of its books use each phrase.
--- A phrase common to the whole library marks nothing, whatever the
--- confirmed books do with it. Waits. Returns what work() takes as
--- opts.census.
--- @treturn table
+--- Reads the whole library once and counts how many books use each phrase,
+-- and waits. A phrase common to the whole library marks nothing, whatever
+-- the confirmed books do with it.
+-- @treturn table the census, which `work` takes as `opts.census`
 function M.census()
   M.forget()
   local counter, ids = lulibre.counter(), lulibre.ids("in:library")
@@ -192,16 +195,14 @@ function M.census()
   return { counter = counter, total = total }
 end
 
---- Work out the marking phrases without keeping them. opts.from: the ids to
--- learn from (default: the confirmed records); opts.census: the library as
--- census() read it, when it is to be used for several goes. Returns
--- { terms = { [subject] = { {term=, score=, books=}, ... strongest first },
--- books=, read=, subjects=, nterms=, phrases= }, or nil and why nothing
--- could be learned. Phrases dropped in :terms are left out, as run() does.
--- @tparam[opt] table opts `from`, `census`
--- @treturn[1] table
+--- Works out the marking phrases without storing them. Phrases dropped in
+-- :terms are left out, as `run` leaves them out.
+-- @tparam[opt] table opts `from` is the ids to learn from (the confirmed records by
+-- default); `census` is a census from `census`, to reuse it across several calls
+-- @treturn[1] table `{ terms = { [subject] = { {term=, score=, books=}, ... strongest first },
+-- books=, read=, subjects=, nterms=, phrases= }`
 -- @treturn[2] nil
--- @treturn[2] string why
+-- @treturn[2] string why nothing could be learned
 function M.work(opts)
   opts = opts or {}
   local from = opts.from or quality.good_ids()
@@ -331,14 +332,12 @@ function M.work(opts)
     phrases = counter:size() }
 end
 
---- Learn, and keep what was learned. Waits (a few seconds for a library of a
--- couple of thousand books). opts.from: the ids to learn from (default: the
--- confirmed records). Returns { books=, read=, subjects=, terms=, phrases=,
--- seconds= }, or nil and why nothing could be.
--- @tparam[opt] table opts `from`
--- @treturn[1] table
+--- Learns the marking phrases and stores them. Waits: a few seconds for a
+-- library of a couple of thousand books.
+-- @tparam[opt] table opts `from` is the ids to learn from (the confirmed records by default)
+-- @treturn[1] table `{ books=, read=, subjects=, terms=, phrases=, seconds= }`
 -- @treturn[2] nil
--- @treturn[2] string why
+-- @treturn[2] string why nothing could be learned
 function M.run(opts)
   local t0 = os.time()
   local got, why = M.work(opts)
@@ -359,11 +358,10 @@ function M.run(opts)
 end
 
 
---- A subject's marking phrases, strongest first (kept ones before learned),
--- or every subject's when none is named. Dropped ones are left out unless
--- all is set.
+--- Returns a subject's marking phrases, strongest first, with kept phrases
+-- before learned ones. Without a subject, returns every subject's phrases.
 -- @tparam[opt] string subject
--- @tparam[opt] boolean all
+-- @tparam[opt] boolean all also return the dropped phrases
 -- @treturn {table,...} `{ term=, score=, books=, state= }`
 function M.terms(subject, all)
   local where, args = {}, {}
@@ -377,12 +375,11 @@ function M.terms(subject, all)
     " ORDER BY subject, state = 'dropped', state <> 'kept', score DESC, term", table.unpack(args))
 end
 
---- Add a phrase to a subject by hand, drop one for good, or let one go back
--- to being learned or not as the books decide. state: "kept", "dropped", or
--- nil to forget what was decided about it.
+--- Adds a phrase to a subject by hand, drops a phrase for good, or lets the
+-- books decide again whether the phrase is learned.
 -- @tparam string subject
 -- @tparam string term
--- @tparam string|nil state
+-- @tparam string|nil state "kept", "dropped", or nil to remove the decision
 function M.set(subject, term, state)
   term = lulibre.fold(term):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "") -- as phrases are spelled
   if state then
@@ -405,8 +402,9 @@ local function load()
   return by
 end
 
---- What classify and suggest go by, for a result of work() that was not
--- kept: its phrases, and those added by hand in :terms.
+--- Returns the model `classify` and `suggest` use for a `work` result that
+-- was not stored: the result's phrases, plus the phrases added by hand in
+-- :terms.
 -- @tparam table got `work`'s result
 -- @treturn table
 function M.model(got)
@@ -422,18 +420,16 @@ function M.model(got)
   return by
 end
 
---- Has anything been learned?
+--- Returns true if any phrases have been learned.
 -- @treturn boolean
 function M.ready()
   return next(load()) ~= nil
 end
 
---- The subjects whose marking phrases a text holds, best first:
--- { {subject=, score=, matched={ phrase, ... }}, ... }. model: go by that
--- (see model) and not by what has been learned and kept.
+--- Returns the subjects whose marking phrases a text holds, best first.
 -- @tparam string text
--- @tparam[opt] table model
--- @treturn {table,...}
+-- @tparam[opt] table model a model from `model`, used instead of the stored phrases
+-- @treturn {table,...} `{ {subject=, score=, matched={ phrase, ... }}, ... }`
 function M.classify(text, model)
   local by = model or load()
   local has = {}
@@ -466,12 +462,13 @@ local function related(a, b)
   return a == b or a:sub(1, #b + 1) == b .. "/" or b:sub(1, #a + 1) == a .. "/"
 end
 
---- The subject to suggest for a text, how sure, and the phrases that say so;
--- nil when its phrases mark nothing, or too little. At least two marking
--- phrases are wanted; of a subject and one below it that both fit, the more
--- particular is taken when it fits nearly as well. model: as for classify.
+--- Returns the subject to suggest for a text, how sure the suggestion is,
+-- and the phrases behind it. Returns nil if the text's phrases mark no
+-- subject, or too weakly. A suggestion needs at least two marking phrases.
+-- If a subject and a narrower subject both fit, the narrower one is taken
+-- if it fits nearly as well.
 -- @tparam string text
--- @tparam[opt] table model
+-- @tparam[opt] table model as for `classify`
 -- @treturn[1] string the subject
 -- @treturn[1] number how sure
 -- @treturn[1] {string,...} the phrases

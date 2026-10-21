@@ -1,18 +1,18 @@
---- References: what a book cites, read from the bibliography at its end, and
--- what books that cite the same things have in common.
+--- Reads the bibliography at the end of a book, and finds what books that
+-- cite the same works have in common.
 --
--- The index holds each file's first pages; a bibliography is on its last.
--- refs.index_book reads those (the option refs_pages says how many), finds
--- the heading the bibliography stands under, cuts what follows into entries
--- and gives each a key by which the same work is recognised in another
--- book's list, however each list writes it:
+-- The index holds each file's first pages, but a bibliography is on the
+-- last pages. `index_book` reads the last pages (the option refs_pages sets
+-- how many), finds the bibliography's heading, cuts the text after it into
+-- entries, and gives each entry a key. The key recognises the same work in
+-- another book's list, however each list writes it:
 --
---   doi:10.1090/s0002-9947                     when the entry gives a DOI
+--   doi:10.1090/s0002-9947                     if the entry gives a DOI
 --   arxiv:1012.6008                            or an arXiv number
 --   bogoliubov:1957:227                        else first author, year, first page
 --   serre:1973                                 or author and year, for a book
 --
--- The keys are kept in the table `refs`. Nothing here needs the network.
+-- The keys are stored in the table `refs`. refs never uses the network.
 --
 -- @module lulibre.refs
 -- @usage
@@ -35,9 +35,10 @@ local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
---- Is the line the heading of a bibliography? A short line that is one of the
--- usual words and nothing else, numbered or not ("7. References",
--- "REFERENCES"); not a line of a table of contents ("References 213").
+--- Returns true if a line is a bibliography's heading: a short line with
+-- one of the usual words and nothing else, numbered or not ("7.
+-- References", "REFERENCES"). A table of contents line ("References 213")
+-- is not a heading.
 -- @tparam string text
 -- @treturn boolean
 function M.is_heading(text)
@@ -45,12 +46,11 @@ function M.is_heading(text)
   return #t <= 30 and HEADS[t] == true
 end
 
---- The lines under the last bibliography heading of a file's closing pages.
--- pages: as lulibre.extract gives them ({ {lines = { {text=, x0=, size=}, ... }}, ... }).
--- Returns the lines (nil when no heading is found) and the page it is on.
--- @tparam {table,...} pages
--- @treturn {table,...}|nil the lines
--- @treturn[opt] integer the page
+--- Returns the lines under the last bibliography heading of a file's
+-- closing pages, and the heading's page.
+-- @tparam {table,...} pages as `lulibre.extract` gives them: `{ {lines = { {text=, x0=, size=}, ... }}, ... }`
+-- @treturn {table,...}|nil the lines, or nil if no heading is found
+-- @treturn[opt] integer the heading's page
 function M.find(pages)
   local at_page, at_line
   for p, page in ipairs(pages) do
@@ -75,9 +75,9 @@ local function starts(text)
   return text:find("^%[[%w+%-,. ]-%]") or text:find("^%d+%.%s") or text:find("^%(%d+%)%s") or text:find("^%d+%s+%u")
 end
 
---- Cut the lines of a bibliography into its entries (strings). Entries are
--- told apart by their numbering ("[1]", "[Se73]", "1.") when most have one,
--- else by the hanging indent: the first line of each stands further left
+--- Cuts the lines of a bibliography into entries. If most entries are
+-- numbered ("[1]", "[Se73]", "1."), the numbers separate them. Otherwise
+-- the hanging indent does: each entry's first line starts further left
 -- than the lines that continue it.
 -- @tparam {table,...} lines
 -- @treturn {string,...}
@@ -113,8 +113,8 @@ end
 local NOT_SURNAME = { ["and"] = true, ["the"] = true, ["von"] = true, ["van"] = true, ["de"] = true, ["der"] = true,
   ["la"] = true, ["le"] = true, ["du"] = true, ["et"] = true, ["al"] = true, ["eds"] = true, ["ed"] = true }
 
---- The key of one entry, by which the same work is known in another list;
--- nil for a line that is not a reference at all.
+--- Returns an entry's key, which identifies the same work in another
+-- book's list. Returns nil for a line that is not a reference.
 -- @tparam string entry
 -- @treturn string|nil
 function M.key(entry)
@@ -156,12 +156,10 @@ function M.key(entry)
   return ("%s:%s"):format(surname, year)
 end
 
---- Read a book's bibliography from its file and keep its keys. Waits.
--- opts.pages: how many closing pages to read (default: the option
--- refs_pages). Returns how many entries were kept, or nil and why none.
+--- Reads a book's bibliography from its file and stores the keys. Waits.
 -- @tparam integer id
--- @tparam[opt] table opts `pages`
--- @treturn[1] integer
+-- @tparam[opt] table opts `pages`: how many closing pages to read (the option refs_pages by default)
+-- @treturn[1] integer how many entries were stored
 -- @treturn[2] nil
 -- @treturn[2] string why none
 function M.index_book(id, opts)
@@ -185,26 +183,26 @@ function M.index_book(id, opts)
   return kept
 end
 
---- Has the book's bibliography been looked for already?
+--- Returns true if the book's bibliography has been looked for already.
 -- @tparam integer id
 -- @treturn boolean
 function M.done(id)
   return lulibre.sql("SELECT 1 AS x FROM kv WHERE key = ?", "refs:" .. id)[1] ~= nil
 end
 
---- What a book cites, as it was read: { {key=, raw=}, ... }.
+--- Returns what a book cites, as it was read.
 -- @tparam integer id
--- @treturn {table,...}
+-- @treturn {table,...} `{ {key=, raw=}, ... }`
 function M.of(id)
   return lulibre.sql("SELECT key, raw FROM refs WHERE book = ? ORDER BY key", id)
 end
 
---- The books that cite works this one cites, the most telling first:
--- { {book=, shared=, weight=}, ... }. A work half the library cites counts
--- for little; one cited by two books counts for much.
+--- Returns the books that cite works this book cites, the strongest links
+-- first. A work half the library cites counts for little; a work only two
+-- books cite counts for much.
 -- @tparam integer id
 -- @tparam[opt] integer limit
--- @treturn {table,...}
+-- @treturn {table,...} `{ {book=, shared=, weight=}, ... }`
 function M.coupled(id, limit)
   return lulibre.sql([[
     SELECT o.book AS book, count(*) AS shared,
@@ -213,9 +211,9 @@ function M.coupled(id, limit)
     WHERE mine.book = ? GROUP BY o.book ORDER BY weight DESC, shared DESC LIMIT ?]], id, limit or 20)
 end
 
---- The subject of the books that cite what this one cites: the subject, how
--- sure, and how many books speak for it; nil when too few do. Two books that
--- share at least two works with this one are wanted.
+--- Returns the subject of the books that cite what this book cites, how
+-- sure the subject is, and how many books support it. Returns nil unless
+-- at least two books share at least two cited works with this book.
 -- @tparam integer id
 -- @treturn[1] string
 -- @treturn[1] number how sure
@@ -244,9 +242,9 @@ function M.subject(id)
   return best, math.min(0.75, 0.35 + 0.08 * books[best]) * (share >= 0.5 and 1 or 0.8), books[best]
 end
 
---- How many entries of a book's bibliography have this person as their
--- first author. People cite themselves: a name read off a title page that
--- also heads several of the book's own references is less likely a
+--- Returns how many entries of a book's bibliography have this person as
+-- first author. People cite themselves, so a name read from a title page
+-- that also heads several of the book's references is less likely a
 -- misreading.
 -- @tparam integer id
 -- @tparam string name
@@ -257,12 +255,12 @@ function M.cites(id, name)
   return lulibre.sql("SELECT count(*) AS n FROM refs WHERE book = ? AND key LIKE ?", id, surname .. ":%")[1].n
 end
 
---- The authors of the books that share the most references with this one,
--- for a book whose author is not known: { {name=, shared=, book=}, ... }.
--- A hint, not a finding: who writes on the same things, not who wrote this.
+--- Returns the authors of the books that share the most references with
+-- this book, for a book whose author is unknown. The result is a hint: the
+-- people who write on the same topics, not the book's author.
 -- @tparam integer id
 -- @tparam[opt] integer limit
--- @treturn {table,...}
+-- @treturn {table,...} `{ {name=, shared=, book=}, ... }`
 function M.neighbours(id, limit)
   local out, seen = {}, {}
   for _, c in ipairs(M.coupled(id, 12)) do
@@ -279,7 +277,7 @@ function M.neighbours(id, limit)
   return out
 end
 
---- The subject shared references point to, as a candidate, or nil.
+--- Returns the subject that shared references point to, as a candidate, or nil.
 -- @tparam integer id
 -- @treturn table|nil
 function M.candidate(id)
