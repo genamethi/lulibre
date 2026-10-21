@@ -1,8 +1,9 @@
---- Builds the rows review shows about a proposal, in place of the list:
--- the verdict of the book's own pages on the proposal (the mark its row
--- carries, from verify.judge), what the pages say about the value and the
--- record, the record the proposal came from (or the record an identifier
--- leads to), and what other sources propose for the field.
+--- Builds the rows review shows about a proposal, in place of the list.
+-- The rows give the verdict of the book's own pages on the proposal (the
+-- mark the proposal's row carries, from `verify.judge`), what the pages say
+-- about the value and the record, the record the proposal came from (or
+-- the record an identifier leads to), and what other sources propose for
+-- the field.
 --
 -- @module lulibre.ui.context
 -- @usage

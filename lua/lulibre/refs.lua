@@ -7,10 +7,10 @@
 -- entries, and gives each entry a key. The key recognises the same work in
 -- another book's list, however each list writes it:
 --
---   doi:10.1090/s0002-9947                     if the entry gives a DOI
---   arxiv:1012.6008                            or an arXiv number
---   bogoliubov:1957:227                        else first author, year, first page
---   serre:1973                                 or author and year, for a book
+-- - `doi:10.1090/s0002-9947` if the entry gives a DOI;
+-- - `arxiv:1012.6008` if it gives an arXiv number;
+-- - `bogoliubov:1957:227` otherwise: first author, year and first page;
+-- - `serre:1973`: author and year, for a book.
 --
 -- The keys are stored in the table `refs`. refs never uses the network.
 --

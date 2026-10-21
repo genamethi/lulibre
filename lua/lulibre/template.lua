@@ -3,11 +3,10 @@
 --
 -- Wherever a pattern is asked for, two forms are accepted:
 --
---   %author% - %title% (%year%)         a template: named fields between
---                                        literal text
---   ^(.-) %- (.-) %((%d+)%)$ => author, title, year
---                                        a Lua pattern, followed by the
---                                        names of its captures
+-- - a template, with named fields between literal text:
+--   `%author% - %title% (%year%)`
+-- - a Lua pattern, followed by the names of its captures:
+--   `^(.-) %- (.-) %((%d+)%)$ => author, title, year`
 --
 -- Both forms compile to a Lua pattern and a list of field names, so a match
 -- is a table indexed by field name.

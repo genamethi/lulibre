@@ -1,13 +1,13 @@
 --- Converts titles to title case, following the APA Publication Manual
--- (7th edition):
+-- (7th edition). The rules are:
 --
---   * the first word of the title, and of a subtitle (after a colon, a dash
---     or the end of a sentence), is capitalised;
---   * every major word, and every word of four letters or more, is capitalised;
---   * minor words of three letters or fewer stay in lower case: articles,
---     short conjunctions and short prepositions (`minor`);
---   * both parts of a hyphenated major word are capitalised (Self-Report),
---     but not the word after a hyphenated prefix (Anti-hero, Mid-year).
+-- - the first word of the title, and of a subtitle (after a colon, a dash
+--   or the end of a sentence), is capitalised;
+-- - every major word, and every word of four letters or more, is capitalised;
+-- - minor words of three letters or fewer stay in lower case: articles,
+--   short conjunctions and short prepositions (`minor`);
+-- - both parts of a hyphenated major word are capitalised (Self-Report),
+--   but not the word after a hyphenated prefix (Anti-hero, Mid-year).
 --
 -- A title set in CAPITALS has lost its case, so titlecase guesses some of
 -- the case back. Roman numerals stay as they are, and so do words with a

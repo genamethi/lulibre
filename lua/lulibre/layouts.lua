@@ -5,18 +5,18 @@
 -- it reads the page by rule, with more confidence than a title page read
 -- by font size. A layout describes one kind of page:
 --
---   local layouts = require "lulibre.layouts"
---   layouts.add {
---     name = "ams-memoirs",                          -- shown as where a value came from
---     marks = { "memoirs of the", "american mathematical society" },
---     fields = {
---       series = "Memoirs of the American Mathematical Society",      -- a value as it stands
---       series_index = "Number%s+(%d+)",                              -- a pattern with a capture
---       pubdate = "(%d%d%d%d)%s*%S*%s*Volume",
---       publisher = function(text, doc) return "AMS" end,             -- or a function
---     },
---     confidence = 0.85,
---   }
+--    local layouts = require "lulibre.layouts"
+--    layouts.add {
+--      name = "ams-memoirs",                          -- shown as where a value came from
+--      marks = { "memoirs of the", "american mathematical society" },
+--      fields = {
+--        series = "Memoirs of the American Mathematical Society",      -- a value as it stands
+--        series_index = "Number%s+(%d+)",                              -- a pattern with a capture
+--        pubdate = "(%d%d%d%d)%s*%S*%s*Volume",
+--        publisher = function(text, doc) return "AMS" end,             -- or a function
+--      },
+--      confidence = 0.85,
+--    }
 --
 -- - `marks`: Lua patterns, matched ignoring case. All of them must appear
 --   on one of the file's first pages for the layout to apply, and the

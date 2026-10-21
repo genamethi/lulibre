@@ -1,10 +1,10 @@
---- Dialogs for things lulibre already does. Each dialog is a form
+--- Opens dialogs for things lulibre already does. Each dialog is a form
 -- (lulibre.ui.form) that says what will happen before it happens:
 --
---   M.enrich()     look books up: what would be asked of which services, then go
---   M.change()     one change to every selected book: add or remove a subject, set a field
---   M.datasets()   the databases kept on this machine: choose which to fetch
---   M.sync()       the selected waiting files: add, add and remove, or drop
+-- - `enrich`: look books up. Shows what would be asked of which services, then runs.
+-- - `change`: one change to every selected book: add or remove a subject, or set a field.
+-- - `datasets`: the databases kept on this machine. Choose which to fetch.
+-- - `sync`: the selected waiting files. Add them, add and remove them, or drop them.
 --
 -- @module lulibre.ui.dialogs
 -- @usage

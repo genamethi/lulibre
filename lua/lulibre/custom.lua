@@ -190,7 +190,7 @@ end
 
 -- ---- in calibre too ----
 
---- calibre's type for each lulibre type, in the form calibredb's add_custom_column takes.
+--- calibre's type for each lulibre type, in the form calibredb's `add_custom_column` takes.
 M.DATATYPES = { text = { "text" }, number = { "float" }, date = { "datetime" }, list = { "text", "--is-multiple" } }
 
 --- Returns calibre's label for a field: its name without the #.

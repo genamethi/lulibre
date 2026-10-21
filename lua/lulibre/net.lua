@@ -18,8 +18,8 @@
 --
 -- Every function here waits, so call them from a task. Each returns a record
 --
---   { title=, authors={...}, year=, date="YYYY-MM-DD", publisher=, series=, series_index=,
---     subjects={ {tag=, confidence=, why=}, ... }, ids={ doi=, isbn=, arxiv=, zbl= }, type=, source= }
+--    { title=, authors={...}, year=, date="YYYY-MM-DD", publisher=, series=, series_index=,
+--      subjects={ {tag=, confidence=, why=}, ... }, ids={ doi=, isbn=, arxiv=, zbl= }, type=, source= }
 --
 -- with whatever the service knows, or nil and the reason.
 --

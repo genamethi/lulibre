@@ -294,11 +294,11 @@ end
 --- Reads papers' records from a file of arXiv's metadata instead of asking
 -- arXiv. Two kinds of file are read, told apart by how they begin:
 --
---   * arXiv's own snapshot (on Kaggle as arxiv-metadata-oai-snapshot.json):
---     every paper, one JSON object per line, with its DOI and the date of
---     each version;
---   * a hypergraph of arXiv (papers as edges, authors as nodes): title,
---     authors and classes, but no DOI and no submission date.
+-- - arXiv's own snapshot (on Kaggle as arxiv-metadata-oai-snapshot.json):
+--   every paper, one JSON object per line, with its DOI and the date of
+--   each version;
+-- - a hypergraph of arXiv (papers as edges, authors as nodes): title,
+--   authors and classes, but no DOI and no submission date.
 --
 -- The file is read once, and each record found is stored as an answer from
 -- arXiv. A number the file does not have is left to be asked for, since

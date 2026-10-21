@@ -2,16 +2,16 @@
 --
 -- The mathematics comes from three places:
 --
---   * the book's own pages. The PDF reader marks up a line's mathematics as
---     TeX, from the fonts and from each character's size and height
---     ("COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$"; lulibre.lines gives
---     the TeX as math=). `title` turns the marked-up line into the title.
---   * TeX in a record's title, as arXiv gives it ("On $\mathbb{Z}_p$-extensions").
---     `render` converts it.
---   * a title in plain text that lost its scripts on the way ("SL2(Z)",
---     "GLn(Qp)", "X3 −5"). The glossary (`notation`) converts it, and changes
---     only text that can be read one way; text that can be read two ways is
---     left alone.
+-- - the book's own pages. The PDF reader marks up a line's mathematics as
+--   TeX, from the fonts and from each character's size and height
+--   (`COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$`; lulibre.lines gives
+--   the TeX as math=). `title` turns the marked-up line into the title.
+-- - TeX in a record's title, as arXiv gives it (`On $\mathbb{Z}_p$-extensions`).
+--   `render` converts it.
+-- - a title in plain text that lost its scripts on the way ("SL2(Z)",
+--   "GLn(Qp)", "X3 −5"). The glossary (`notation`) converts it, and changes
+--   only text that can be read one way; text that can be read two ways is
+--   left alone.
 --
 -- Search is not affected: lulibre.fold, and calibre's own search, read
 -- SL₂(ℤ) as SL2(Z).
@@ -327,6 +327,8 @@ end
 --- The glossary's rules. Each rule takes text and returns the text with the
 -- notation the rule knows written in Unicode. Rules see only text outside
 -- formulas. In init.lua you can add rules or replace one.
+-- @table glossary
+-- @field [n] a rule: `rule(text)` returns the text with its notation in Unicode
 M.glossary = {
   -- SL2 GLn PSL2 SL_2 SL_{2}, with the ring after it: SL2(Z) GLn(Qp)
   function(s)

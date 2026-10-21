@@ -60,7 +60,9 @@ end
 --- Returns the line at the top of a view, which says what the view is and
 -- how to drop it. Returning nil shows no line. Replace this function in
 -- init.lua to change the line, or to remove it:
---   require("lulibre.ui.review").banner = function() end
+--
+--    require("lulibre.ui.review").banner = function() end
+--
 -- @tparam table view `{ run=, count= }`: the view's run (from lulibre.runs) or nil, and how
 -- many proposals the view holds
 -- @tparam function key `key(action)` returns the key bound to one of review's actions

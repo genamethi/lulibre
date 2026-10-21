@@ -1,9 +1,9 @@
 --- Queues the calibre changes that need the library closed, and runs them
 -- once the content server is stopped.
 --
--- calibredb won't run catalog, add_custom_column, remove_custom_column,
--- restore_database, check_library or backup_metadata through the content
--- server. lulibre queues these commands in the history file beside the
+-- calibredb won't run `catalog`, `add_custom_column`, `remove_custom_column`,
+-- `restore_database`, `check_library` or `backup_metadata` through the
+-- content server. lulibre queues these commands in the history file beside the
 -- index. When the server is stopped, `run` applies the queued commands
 -- straight to the library folder. First `run` makes a copy of calibre's
 -- database if `backup_restart` says so (see `lulibre.backup`). lulibre's

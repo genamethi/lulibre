@@ -1,11 +1,11 @@
 --- Shows help: the keys, grouped by purpose under headings that open and
 -- close, with a search over all of them; and the guides, by topic.
 --
---   ?              the keys: Enter opens a heading, / searches, K (or Enter on
---                  a key) shows what the guides say about the key
---   :help          the same
---   :help TOPIC    the part of the guides about a word: `:help enrich`,
---                  `:help filters`, `:help group`
+-- - `?` shows the keys. Enter opens a heading, / searches, and K (or Enter
+--   on a key) shows what the guides say about the key.
+-- - `:help` does the same.
+-- - `:help TOPIC` shows the part of the guides about a word: `:help enrich`,
+--   `:help filters`, `:help group`.
 --
 -- The guides are the files of docs/, installed beside lulibre's Lua code.
 --

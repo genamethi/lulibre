@@ -12,17 +12,17 @@
 -- A grammar is matched against the first page's lines in order. Each line
 -- has its text, its font size, and whether it is bold:
 --
---   local G = require "lulibre.grammars"
---   G.add {
---     name = "keith-conrad",           -- shown as where a value came from
---     kind = "handout",                -- what such a file is
---     noncatalog = true,               -- such works have no catalogue record
---     lines = {                        -- the opening lines, in order
---       G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
---       G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
---     },
---     confidence = 0.95,
---   }
+--    local G = require "lulibre.grammars"
+--    G.add {
+--      name = "keith-conrad",           -- shown as where a value came from
+--      kind = "handout",                -- what such a file is
+--      noncatalog = true,               -- such works have no catalogue record
+--      lines = {                        -- the opening lines, in order
+--        G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
+--        G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
+--      },
+--      confidence = 0.95,
+--    }
 --
 -- A line rule (`G.line`) can test:
 --
@@ -50,10 +50,12 @@
 -- give `peg` as a pattern over its opening lines (`head` lines, 12 by
 -- default) joined by newlines. The pattern's table capture (lpeg.Ct with
 -- named lpeg.Cg) gives fields:
---   local lpeg = G.lpeg()
---   local P, C, Cg, Ct, R, S = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.R, lpeg.S
---   local caps = (R"AZ" + S" '-:,")^3
---   G.add { name = "my-notes", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
+--
+--    local lpeg = G.lpeg()
+--    local P, C, Cg, Ct, R, S = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.R, lpeg.S
+--    local caps = (R"AZ" + S" '-:,")^3
+--    G.add { name = "my-notes", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
+--
 -- Fields are the book's fields (title, authors, tags, ...) and three more,
 -- which lulibre stores (:parts): part_of (the whole the file is part of),
 -- part (the file's number in the whole) and parts (how many parts there are).

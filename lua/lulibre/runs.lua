@@ -1,13 +1,12 @@
---- Tracks runs. A run is one round of proposing for some books, like the
--- round the "propose, then review" dialog starts. Your own scripts can start
--- runs too. lulibre keeps a run while proposals wait for its books, so
+--- Tracks runs: rounds of proposing for some books, like the round the
+-- "propose, then review" dialog starts. Your own scripts can start runs too. lulibre keeps a run while proposals wait for its books, so
 -- review can show the run's proposals on their own and you can drop the run
 -- as a whole.
 --
 -- A script that may be one step of a larger run joins that run:
 --
---   local run <close> = runs.join { ids = ids, steps = { "files" } }
---   run:step("files") ...
+--    local run <close> = runs.join { ids = ids, steps = { "files" } }
+--    run:step("files") ...
 --
 -- `join` starts a run if the task has none, and finishes that run when the
 -- script ends (as stopped, if the script did not reach its end). If the task
@@ -15,9 +14,9 @@
 --
 -- To change how a run in progress is shown, set these in init.lua:
 --
---   runs.badge = function(run) return "busy", "error" end   -- other words, another colour
---   runs.badge = function() end                              -- no badge at all
---   runs.on(function(event, run) ... end)    -- "start", "step", "finish", "drop"
+--    runs.badge = function(run) return "busy", "error" end   -- other words, another colour
+--    runs.badge = function() end                              -- no badge at all
+--    runs.on(function(event, run) ... end)    -- "start", "step", "finish", "drop"
 --
 -- @module lulibre.runs
 -- @usage

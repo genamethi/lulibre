@@ -48,7 +48,9 @@ M.MIN_AUTHORS = 3
 -- subjects that series covers use them far more than other subjects do.
 -- Some titles in the library are such headings ("Handbook of Algebra:
 -- Editorial Board"), so the phrases also pass for title words. Add your own:
---   require("lulibre.learn").FURNITURE["lecture notes"] = true
+--
+--    require("lulibre.learn").FURNITURE["lecture notes"] = true
+--
 M.FURNITURE = {}
 for _, g in ipairs { "editorial board", "series editors", "series editor", "managing editor", "advisory board",
   "graduate texts", "texts in mathematics", "graduate texts in", "undergraduate texts", "undergraduate texts in",

@@ -1,16 +1,14 @@
---- Sets up lulibre's systemd units around calibre's content server, as
--- three options ask:
+--- Sets up lulibre's systemd units around calibre's content server.
+-- Three options say which units to set up:
 --
---   server_hook = true          lulibre.service, run before each start of the
---                               server's unit. It runs `lulibre offline`: the
---                               copy of calibre's database, the opf files, and
---                               the changes that wait for the server to stop.
---   opf_writer = "server"       a drop-in on the server's unit,
---                               lulibre-opf-writer.conf. It starts the server
---                               through calibre-server-opf.py, so calibre's own
---                               opf writer runs in the server.
---   server_restart_at = "HH:MM" lulibre-restart.timer, which restarts the
---                               server every day at that time
+-- - `server_hook = true`: lulibre.service, which runs before each start of
+--   the server's unit. It runs `lulibre offline`: the copy of calibre's
+--   database, the opf files, and the changes that wait for the server to stop.
+-- - `opf_writer = "server"`: a drop-in on the server's unit,
+--   lulibre-opf-writer.conf. It starts the server through
+--   calibre-server-opf.py, so calibre's own opf writer runs in the server.
+-- - `server_restart_at = "HH:MM"`: lulibre-restart.timer, which restarts the
+--   server every day at that time.
 --
 -- `plan` compares what the options ask for with what is installed, and
 -- `apply` makes the difference. lulibre writes a user unit's files itself. A

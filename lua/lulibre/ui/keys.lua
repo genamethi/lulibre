@@ -6,9 +6,9 @@
 -- `?` help are written from the same table, so they show the current keys,
 -- not the keys at the time the screen was written.
 --
---   lulibre.map("review", "y", "accept")     -- in init.lua: y accepts too,
---                                            -- and is the key the hint shows
---   lulibre.map("review", "a", "")           -- a no longer does anything there
+--    lulibre.map("review", "y", "accept")     -- in init.lua: y accepts too,
+--                                             -- and is the key the hint shows
+--    lulibre.map("review", "a", "")           -- a no longer does anything there
 --
 -- Moving within a panel (j k gg G, paging), closing it (q) and leaving it
 -- (Esc) work the same in every panel. These keys are bound in one place,

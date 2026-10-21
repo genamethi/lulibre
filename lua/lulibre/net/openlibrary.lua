@@ -129,8 +129,8 @@ function M.openlibrary(isbn)
 end
 
 --- Reads books' records from Open Library's dumps instead of asking Open
--- Library. The editions dump (ol_dump_editions_latest.txt.gz) gives a book
--- by its ISBN. The authors dump (ol_dump_authors_latest.txt.gz) gives the
+-- Library. The editions dump (`ol_dump_editions_latest.txt.gz`) gives a book
+-- by its ISBN. The authors dump (`ol_dump_authors_latest.txt.gz`) gives the
 -- authors' names, since an edition holds only keys to them. Both dumps are
 -- looked for in lulibre's data folder (see lulibre.datasets). Without the
 -- editions dump, nothing is done.

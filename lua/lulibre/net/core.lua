@@ -11,17 +11,22 @@ local M = {}
 -- of one request to the start of the next. Only one request runs at a time.
 -- Each pace is well within what the service asks of callers who do not
 -- identify themselves:
---   arXiv         "no more than one request every three seconds", "a single connection at a time"
---                 (https://info.arxiv.org/help/api/tou.html)
---   CrossRef      public pool: 5 requests a second, one at a time; "Back off if the response times start to increase"
---                 (https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/)
---   Open Library  "1 request per second" unidentified; "do not use our APIs to bulk download metadata"
---                 (https://openlibrary.org/developers/api)
---   OpenAlex      10 requests a second without a key, and a daily budget
---                 (https://help.openalex.org/how-to-use-the-api/rate-limits-and-authentication)
---   zbMATH Open   "keeping the number of HTTP requests per second to a reasonable rate"; when it is
---                 "heavily loaded ... the use has to be retried" (its API's terms of June 2021,
---                 https://static.zbmath.org/legal/api-terms-and-conditions.html; the data is CC-BY-SA 4.0)
+--
+-- - arXiv: "no more than one request every three seconds", "a single
+--   connection at a time" (https://info.arxiv.org/help/api/tou.html)
+-- - CrossRef: public pool, 5 requests a second, one at a time; "Back off if
+--   the response times start to increase"
+--   (https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/)
+-- - Open Library: "1 request per second" unidentified; "do not use our APIs
+--   to bulk download metadata" (https://openlibrary.org/developers/api)
+-- - OpenAlex: 10 requests a second without a key, and a daily budget
+--   (https://help.openalex.org/how-to-use-the-api/rate-limits-and-authentication)
+-- - zbMATH Open: "keeping the number of HTTP requests per second to a
+--   reasonable rate"; when it is "heavily loaded ... the use has to be
+--   retried" (its API's terms of June 2021,
+--   https://static.zbmath.org/legal/api-terms-and-conditions.html; the data
+--   is CC-BY-SA 4.0)
+--
 -- A slow answer is followed by a pause as long as the request took, so a
 -- service under load is asked less.
 M.PACE = { arxiv = 5, crossref = 1, zbmath = 2, openlibrary = 2, openalex = 1 }
