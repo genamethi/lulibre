@@ -143,7 +143,11 @@ others are listed in `config.ld` as they are done.
 version). To see it before pushing:
 
     pip install zensical==0.0.71
+    ldoc -d docs/api .      # the API reference, which the site links to
     zensical serve          # http://localhost:8000; zensical build --strict writes site/
+
+Read the Docs does the same (`.readthedocs.yaml`): LDoc from luarocks,
+written into `docs/api` (not kept in git), then Zensical.
 
 A new page goes in `nav` in `zensical.toml`. Links between pages are
 relative (`[Keys](keys.md)`); a link to a file outside `docs/` (the README,
