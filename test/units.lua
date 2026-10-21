@@ -743,7 +743,7 @@ do
     if c.field == "authors" then authors = c end
   end
   eq("and is proposed with the page's word for it", { authors.value, authors.source, authors.confidence },
-    { "George W. Mackey", "by-line", 0.85 })
+    { "George W. Mackey", "by-line", 0.9 })
 end
 
 -- who is not an author, and a page that opens with its author's name
@@ -780,7 +780,7 @@ do
     if c.field == "authors" then authors = authors or c end
   end
   eq("proposed as such, surer for being on the page twice", { authors.value, authors.source, authors.confidence },
-    { "David Mumford", "first line, named twice", 0.85 })
+    { "David Mumford", "first line, named twice", 0.95 })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
   got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),
@@ -1094,7 +1094,7 @@ QA9.AIL64 1991
     if c.field == "publisher" then got[c.source] = { c.value, c.confidence } end
   end
   eq("read from a first page: the journal with its house is the surer publisher", got,
-    { ["journal header"] = { "Elsevier: Journal of Algebra", 0.82 }, ["copyright line"] = { "Elsevier", 0.8 } })
+    { ["journal header"] = { "Elsevier: Journal of Algebra", 0.87 }, ["copyright line"] = { "Elsevier", 0.85 } })
   eq("a journal alone, when the page names no house", field_of("journal header", "publisher", "Physica 63 (1973) 1-32\nSCATTERING THEORY"), "Physica")
   local function year_of(text)
     for _, c in ipairs(layouts.read { texts = { text } }) do
@@ -1119,7 +1119,7 @@ QA9.AIL64 1991
   for _, c in ipairs(layouts.read { texts = { "© 2008 Elsevier Inc. All rights reserved." } }) do
     if c.source == "copyright line" then got[c.field] = { c.value, c.confidence } end
   end
-  eq("the line gives the year and the house, each as sure as it is", got, { pubdate = { "2008", 0.75 }, publisher = { "Elsevier", 0.8 } })
+  eq("the line gives the year and the house, each as sure as it is", got, { pubdate = { "2008", 0.75 }, publisher = { "Elsevier", 0.85 } })
   -- a reprint's series page knows better than its copyright line, and says so more surely
   local best
   for _, c in ipairs(layouts.read { texts = { "Graduate Texts in Mathematics 52\nSoftcover reprint of the hardcover 1st edition 1977\n© 2010 Springer" } }) do

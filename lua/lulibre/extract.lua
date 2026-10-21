@@ -64,15 +64,19 @@ function M.from_doc(doc)
         end
       end
       value = join(people)
+      -- agreement ranks a plain reading of the title page higher, but does not
+      -- carry it over a value the book has (0.8): measured, what it adds there
+      -- is mostly a cited person or a list cut short
+      local top = source == "title page" and 0.79 or 0.95
       if #people > 0 and twice and source ~= "embedded" and source ~= "cover sheet" then
-        source, confidence = source .. ", named twice", math.min(0.9, confidence + 0.15)
+        source, confidence = source .. ", named twice", math.min(top, confidence + 0.15)
       end
       -- and one who heads entries of the book's own bibliography (people
       -- cite themselves), where the bibliography has been read (:refs)
       if #people > 0 and doc.id and (source:find("title page", 1, true) or source:find("first line", 1, true)) then
         local ok, n = pcall(function() return require("lulibre.refs").cites(doc.id, people[1]) end)
         if ok and n >= 2 then
-          source, confidence = ("%s, cited %d times in its references"):format(source, n), math.min(0.9, confidence + 0.1)
+          source, confidence = ("%s, cited %d times in its references"):format(source, n), math.min(top, confidence + 0.1)
         end
       end
     end
@@ -119,27 +123,30 @@ function M.from_doc(doc)
     if th.authors and #th.authors > 0 then
       local people = {}
       for i, a in ipairs(th.authors) do people[i] = names.titlecase(a) end
-      add("authors", join(people), "thesis cover", 0.8)
+      add("authors", join(people), "thesis cover", 0.85)
     end
-    if th.title and not junk.title(th.title) then add("title", names.title_caps(th.title), "thesis cover", 0.75) end
-    if th.year then add("pubdate", th.year, "thesis cover", 0.75) end
-    if th.institution then add("publisher", th.institution, "thesis cover", 0.7) end
+    if th.title and not junk.title(th.title) then add("title", names.title_caps(th.title), "thesis cover", 0.8) end
+    if th.year then add("pubdate", th.year, "thesis cover", 0.8) end
+    if th.institution then add("publisher", th.institution, "thesis cover", 0.75) end
   end
 
   -- the title page
   local tp = doc.pages and titlepage.classify_pages(doc.pages) or titlepage.classify(doc.lines or {})
-  local conf = tp.arxiv and 0.85 or 0.55
+  -- a reading of the page by its type: the largest lines for the title, the
+  -- names under it for the authors (0.75: shown in review and fills an empty
+  -- field; over a value only with a by-line, a first line, or a name given twice)
+  local conf = tp.arxiv and 0.9 or 0.75
   if tp.title and not junk.title(tp.title) then
     local title = tp.title_math and require("lulibre.notation").title(tp.title_math, names.title_caps)
       or names.title_caps(tp.title)
-    add("title", title, "title page", tp.name_first and math.max(conf, 0.65) or conf)
+    add("title", title, "title page", tp.arxiv and conf or tp.name_first and 0.75 or 0.7)
   end
   if #tp.authors > 0 then
     local people = {}
     for i, a in ipairs(tp.authors) do people[i] = names.titlecase(a) end
     -- "by A. Name" is the page saying who wrote it, not a guess from the layout
-    if tp.byline then add("authors", join(people), "by-line", math.max(conf, 0.85))
-    elseif tp.name_first then add("authors", join(people), "first line", math.max(conf, 0.7))
+    if tp.byline then add("authors", join(people), "by-line", math.max(conf, 0.9))
+    elseif tp.name_first then add("authors", join(people), "first line", math.max(conf, 0.8))
     else add("authors", join(people), "title page", conf) end
   end
   if tp.subject then add("tags", tp.subject, tp.subject_source, 0.9) end
@@ -167,7 +174,7 @@ function M.from_doc(doc)
   end
   if not outside then
     local doi, own = ids.doi_in(text)
-    if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.8 or 0.5) end
+    if doi then add("identifiers", "doi:" .. doi, own and "page text" or "page text (perhaps a work it cites)", own and 0.85 or 0.5) end
     local isbn = ids.isbn(text)
     if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
   end
