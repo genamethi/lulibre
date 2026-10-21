@@ -1,7 +1,8 @@
 # Filters
 
-One language, used by `lulibre query`, by `&` and `/` in the interface, and by
-`lulibre.ids(filter)` and friends in Lua. `lulibre query -h` prints a summary.
+lulibre has one filter language. `lulibre query`, `&` and `/` in the
+interface, and Lua functions such as `lulibre.ids(filter)` all use it.
+`lulibre query -h` prints a summary.
 
     term term ...        all must hold
     a or b               "or" between terms starts an alternative
@@ -15,8 +16,8 @@ One language, used by `lulibre query`, by `&` and `/` in the interface, and by
 
 Quote a value that contains spaces: `author:="Saunders Mac Lane"`.
 
-In the interface the status line shows the filter in force as `filter …`,
-with how many of the library's books it leaves; `<BS>` shows everything
+In the interface, the status line shows the current filter as `filter …`,
+with how many of the library's books match it. `<BS>` shows every book
 again.
 
 ## Fields
@@ -38,9 +39,9 @@ again.
 
 ## Custom fields
 
-`#name:value` matches a custom field (`:custom`) as a field term does
-(`=`, `^`, `~` work as above); `#name:none` the books without it;
-`has:#name` and `no:#name` likewise.
+`#name:value` matches a custom field (`:custom`) the way a field term does,
+and `=`, `^` and `~` work as above. `#name:none` matches the books without
+the field, and so do `no:#name`; `has:#name` matches the books with it.
 
     #partof:handbook  #part:=3  has:#partof
 
@@ -72,5 +73,5 @@ again.
     is:missing or is:error
     in:sync -is:inlibrary             staged files that are new to the library
 
-Inside the interface a filter applies to whatever the list is showing, the
-library or the sync folder, unless it says `in:`.
+In the interface, a filter applies to what the list is showing, the library
+or the sync folder, unless the filter has `in:`.

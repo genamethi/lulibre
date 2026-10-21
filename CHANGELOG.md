@@ -5,6 +5,9 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: the API reference and the guides are rewritten in plain words.
+  Each function's description starts with what the function does, and
+  lists and code examples in the reference render as lists and code.
 - New: `propose_min` (60% by default). A proposal under it is kept but not
   shown in review, nor counted as waiting, nor found by `is:proposed`;
   every summary says how many there are. Lowering it shows them. When
