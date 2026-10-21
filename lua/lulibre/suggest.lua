@@ -1,6 +1,6 @@
---- Ranked values for a field, as the edit form offers them. The values the
--- file suggests come first, then the values of related books, then the
--- values the library already uses, most used first.
+--- Ranks the values the edit form offers for a field. Values found in the
+-- book's file come first, then values of related books, then values the
+-- library already uses, most used first.
 --
 -- @module lulibre.suggest
 -- @usage

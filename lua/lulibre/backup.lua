@@ -1,11 +1,13 @@
---- Copies of calibre's database.
--- A copy holds metadata.db and the preferences calibre keeps beside it.
--- Each copy is a folder under
--- `~/.local/share/lulibre/backups/<the index's name>/`, and the newest
--- `backup_keep` copies are kept. Copies are made before the content server
--- starts (by lulibre.service or `:offline restart`) if `backup_restart`
--- says so, or when you ask. Each copy is checked when it is made. A copy can
--- be put back with `restore` once nothing has the library open.
+--- Makes, checks and restores copies of calibre's database.
+-- A copy holds metadata.db and the preferences calibre keeps beside it, in
+-- a folder under `~/.local/share/lulibre/backups/<the index's name>/`.
+-- lulibre keeps the newest `backup_keep` copies, and checks each copy when
+-- it makes the copy.
+--
+-- lulibre makes a copy before the content server starts (from
+-- lulibre.service or `:offline restart`) if `backup_restart` says so, and
+-- whenever you ask. `restore` puts a copy back once nothing has the library
+-- open.
 --
 -- @module lulibre.backup
 -- @usage
@@ -108,7 +110,7 @@ end
 -- a copy that fails the check means calibre's database fails it too.
 -- @tparam string reason what the copy is for, as the list shows it
 -- @tparam[opt] table opts `raw`: if SQLite cannot copy the database because it is
--- too damaged, copy its files as they are (`put_back` does this with the server stopped)
+-- too damaged, copy its files as they are. `put_back` passes `raw`, with the server stopped.
 -- @treturn table the copy, `{ path=, ts=, reason=, books=, check=, problems= }`; `check` is "ok" or "failed"
 function M.take(reason, opts)
   opts = opts or {}
@@ -208,8 +210,9 @@ local function kv(key, value)
   lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", key, value)
 end
 
---- Records the value of `backup_restart`, so that setting it to "next"
--- again arms it again. lulibre calls this at each start.
+--- Records the value of `backup_restart`. Then "next" works again once the
+-- option is set to something else and back to "next". lulibre calls
+-- `observe` at each start.
 function M.observe()
   local v = tostring(lulibre.o.backup_restart)
   if v == "next" and kv("backup:seen") ~= "next" then kv("backup:next_spent", false) end
@@ -228,7 +231,7 @@ function M.due()
 end
 
 --- Sets `backup_restart`, for this session and in init.lua. Setting "next"
--- arms it again.
+-- re-arms "next".
 -- @tparam string|number value "always", "next", "never", or days
 function M.set(value)
   lulibre.o.backup_restart = value
@@ -250,7 +253,7 @@ end
 --- Has calibre write the metadata.opf of every book whose opf file is older
 -- than its record (`calibredb backup_metadata`). calibre writes these files
 -- only from its own program. Changes made through calibredb or the content
--- server only mark the book as needing it. The server must be stopped.
+-- server only mark the book as needing a new opf file. The server must be stopped.
 -- @treturn integer how many books' files were written
 function M.metadata()
   require("lulibre.calibre").wait_for_program("writing the books' opf files")
@@ -381,7 +384,7 @@ end
 --   `{ {id=, title=, authors=}, ... }`. Their folders stay, for `:orphans`.
 -- - `changed`: books changed since the copy, by calibre's last-modified time:
 --   `{ {id=, title=, now=, fields={...}}, ... }`. `fields` names the
---   lulibre fields that differ. It is empty for a book changed only in its
+--   lulibre fields that differ. `fields` is empty for a book changed only in its
 --   comments, custom columns or cover.
 -- - `fields`: how many books differ in each field
 -- - `moved`: folders calibre renamed since the copy: `{ {id=, then=, now=}, ... }`.
@@ -447,7 +450,7 @@ function M.describe(b, d)
 end
 
 --- Puts a copy back. The job is queued until nothing has the library open
--- (see `lulibre.offline`; `offline.ask` offers to run it). The copy must
+-- (see `lulibre.offline`; `offline.ask` offers to run the job). The copy must
 -- pass its check.
 -- @tparam table b the copy
 -- @treturn integer the job's id
@@ -487,7 +490,7 @@ UPDATE sqlite_sequence SET seq = max(seq, coalesce((SELECT n.seq FROM now.sqlite
 --- Puts the copy in a folder back as calibre's database. Nothing may have
 -- the library open, so `lulibre.offline` runs this as its job
 -- `restore_copy`. calibre's current database is copied first and kept like
--- the other copies. Put that copy back to undo this.
+-- the other copies. Putting that copy back undoes the restore.
 -- @tparam string path the copy's folder
 -- @treturn table `{ before=, moved=, dirty=, unfitted=, how= }`
 function M.put_back(path)
@@ -576,7 +579,7 @@ local said = {} -- said.warned: the session's one popup (lulibre.claim)
 
 --- Offers to make a copy, once a session. The offer comes at the first
 -- change to the library if the newest copy is older than `backup_max_age`
--- and `backup_too_old` is "warn". It comes only in the interface, so a
+-- and `backup_too_old` is "warn". The offer comes only in the interface, so a
 -- script's output is left alone. A replaceable function.
 function M.warn()
   if said.warned or lulibre.headless or not lulibre.task_id() then return end

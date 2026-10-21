@@ -1,17 +1,19 @@
---- Works that no catalogue has a record of, such as a handout, course
--- notes, a chapter of the Stacks project or a saved web page. Such a work
--- has no DOI or ISBN of its own. A DOI or ISBN in its file belongs to a
--- work it cites, and a record found by searching for its title belongs to
--- another work. Marking a book as non-catalog has these effects:
+--- Marks books that no catalogue describes: handouts, course notes, Stacks
+-- project chapters, saved web pages. A non-catalog book has no DOI or ISBN
+-- of its own. A DOI or ISBN in its file belongs to a work it cites, and a
+-- title search finds another work's record.
 --
--- - A DOI or ISBN in its pages is not offered as its own (extract).
--- - It is not looked up by DOI or ISBN, or searched for by title (:enrich).
---   An arXiv number is still followed, since arXiv is where such works are kept.
--- - Having no identifiers does not count against it (:good, :stats).
--- - When it is marked, waiting proposals from catalogue records are
---   withdrawn, and removing each DOI or ISBN it has is proposed for review.
+-- For a book marked non-catalog, lulibre:
 --
--- The mark is stored in lulibre's index. Nothing is written to calibre.
+-- - doesn't offer a DOI or ISBN found in its pages as the book's own (extract);
+-- - doesn't look the book up by DOI or ISBN, or search for its title
+--   (:enrich), but still follows an arXiv number, since arXiv keeps many
+--   non-catalog works;
+-- - doesn't count missing identifiers against the book (:good, :stats);
+-- - withdraws the book's waiting proposals from catalogue records when you
+--   mark the book, and proposes removing each DOI and ISBN the book has.
+--
+-- lulibre stores the mark in its index and writes nothing to calibre.
 --
 -- @module lulibre.noncatalog
 -- @usage
@@ -26,7 +28,7 @@ local M = {}
 M.RECORDS = { "CrossRef ", "Open Library ", "OpenAlex ", "zbMATH " }
 --- The identifiers a catalogue gives.
 M.KINDS = { "doi", "isbn" }
---- The source of a proposal to remove one of these identifiers.
+--- The source of a proposal to remove a DOI or ISBN.
 M.SOURCE = "non-catalog: no catalogue has a record of it"
 
 local set -- the marked books, read once and kept up as they change

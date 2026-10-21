@@ -1,13 +1,15 @@
---- Changes books in the library and undoes the changes.
--- Every change is written by calibredb, through the content server if one
--- answers. The journal records each change with the old value, so it can
--- be undone.
+--- Changes books in the library and undoes those changes.
+-- calibredb writes every change, through the content server if the server
+-- answers. The journal records each change with the old value, so `undo`
+-- can put the old value back.
 --
--- A change is `{ id=, field=, value=, op= }`. The field is one of `fields`
--- or a custom field such as "#partof" (see `lulibre.custom`). The op is
--- "set" (the default), "add" or "remove". Only list fields take "add" and
--- "remove": authors, tags, identifiers and custom fields of the type list.
--- These two ops leave the book's other values in place.
+-- A change is `{ id=, field=, value=, op= }`:
+--
+-- - `field` is one of `fields`, or a custom field such as "#partof" (see
+--   `lulibre.custom`).
+-- - `op` is "set" (the default), "add" or "remove". "add" and "remove" work
+--   only on list fields (authors, tags, identifiers, and custom fields of the
+--   type list), and leave the field's other items in place.
 --
 -- @module lulibre.edit
 -- @usage
@@ -216,7 +218,7 @@ end
 local probe = { at = 0 }
 
 --- Returns true if something is listening at the content server's address.
--- Waits up to 400 ms. Returns true if it cannot check (luv is missing).
+-- Waits up to 400 ms. Returns true if luv is missing, since then nothing can be checked.
 -- @tparam string url "http://host:port"
 -- @treturn boolean
 function M.server_up(url)
@@ -294,8 +296,8 @@ end
 
 --- Returns the start of a calibredb command for this library. Following
 -- `route`, the command goes through the server (with the user and password
--- file) or straight to the library folder. In the second case, this first
--- waits for the calibre program to close.
+-- file) or straight to the library folder. A command straight to the folder
+-- first waits for the calibre program to close.
 -- @treturn {string,...} the command's first words; add calibredb's own after them
 -- @raise when the password file is missing
 function M.calibredb()
@@ -334,7 +336,7 @@ end
 --- Writes the opf files of the changed books, after a change made straight
 -- in the library folder. calibre's backup_metadata does the writing, since
 -- with no server or calibre program running nothing else would. The option
--- `backup_metadata` turns this on. Errors are logged, not raised, because
+-- `backup_metadata` turns the writing on. Errors are logged, not raised, because
 -- the change itself was made.
 function M.after_direct()
   if not lulibre.o.backup_metadata or M.route() ~= "direct" then return end
@@ -754,7 +756,7 @@ function M.history(limit)
     FROM journal GROUP BY batch ORDER BY batch DESC LIMIT ?]], limit or 50)
 end
 
---- Undoes a batch. This restores changed fields, removed books (from
+--- Undoes a batch. Undoing restores changed fields, removed books (from
 -- calibre's recycle bin), a PDF replaced by OCR, and a file dropped from
 -- the sync folder. A field that was changed again after the batch is left
 -- alone and counted in `skipped`.

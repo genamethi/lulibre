@@ -1,11 +1,12 @@
---- Proposed changes that wait for you to accept or reject them.
--- Scripts add proposals, `:review` shows them, and the accepted ones are
--- written together as one batch. Proposals are stored in the index, so a
--- review can continue in a later session.
+--- Stores proposed changes until you accept or reject them in review.
+-- Scripts add proposals, and `:review` shows them. lulibre writes the
+-- accepted proposals together as one batch. Proposals are stored in the
+-- index, so you can finish a review in a later session.
 --
--- Each proposal is a row of the `proposals` table: `{ id=, book=, field=,
+-- A proposal is a row of the `proposals` table: `{ id=, book=, field=,
 -- op=, value=, source=, confidence=, status=, created=, note=, asked= }`.
--- Its status is "pending", "accepted", "applied", "rejected" or "barred".
+-- A proposal's status is "pending", "accepted", "applied", "rejected" or
+-- "barred".
 --
 -- @module lulibre.proposals
 -- @usage
@@ -67,7 +68,7 @@ M.shown_sql = shown_sql
 --
 -- A title in capitals is converted to title case (if `title_case` allows)
 -- and its mathematics to Unicode (if `math_notation` allows). Typed values
--- and `opts.as_is` skip this.
+-- and `opts.as_is` skip both conversions.
 --
 -- A value you barred for this book and field (N in review) is not proposed
 -- again. Neither is a rejected value when `review_reject` is "always".
@@ -199,9 +200,9 @@ end
 
 --- Returns a sentence about what waits for review, such as "300 proposals
 -- wait. Press gr to review.", followed by how many are hidden under
--- `propose_min`. Every script that proposes ends its summary with this.
--- You can replace this function.
--- @tparam[opt] string prefix put before it (not when it is empty)
+-- `propose_min`. Every script that proposes ends its summary with this
+-- sentence. You can replace this function.
+-- @tparam[opt] string prefix put before the sentence, if the sentence is not empty
 -- @treturn string "" when none wait and none are held back
 function M.to_review(prefix)
   local n, held, learned = M.count("pending"), 0, 0

@@ -1,13 +1,13 @@
---- Writes options to init.lua.
--- Options that init.lua does not mention yet are added, commented out and
--- with their defaults. The file then lists what can be set without changing
--- anything. A value set in the config window is written to the line that
--- sets the option. Before each write, the old file is saved as init.lua.bak
--- beside it.
+--- Adds options to init.lua and writes the values set in the config window.
+-- lulibre adds the options init.lua doesn't list yet, commented out with
+-- their defaults. init.lua then shows every option you can set, and the
+-- added lines change nothing. A value set in the config window is written
+-- to the line that sets that option. Before each write, lulibre saves the
+-- old file as init.lua.bak beside it.
 --
--- Added lines look like the rest of the file. First comes a comment that
--- says what the option does (`config_comments = "full"`), or only the values
--- it takes ("values"). Then comes the setting: `-- o.pages = 6` for one of
+-- Added lines match the rest of the file. Each option gets a comment first:
+-- what the option does (`config_comments = "full"`), or only the values the
+-- option takes ("values"). The setting follows: `-- o.pages = 6` for one of
 -- lulibre's options, `-- lulibre.cfg.mytags.depth = 2` for a script's.
 --
 -- An item names an option: `{ name= }` for one of lulibre's options,

@@ -1,17 +1,20 @@
---- Changes calibre makes only while no calibre program has the library open.
+--- Queues the calibre changes that need the library closed, and runs them
+-- once the content server is stopped.
+--
 -- calibredb won't run catalog, add_custom_column, remove_custom_column,
 -- restore_database, check_library or backup_metadata through the content
--- server. These commands are queued here, in the history file beside the
--- index, until the server is stopped. Then `run` applies them straight to
--- the library folder. Before that, it makes a copy of calibre's database if
--- `backup_restart` says so (see `lulibre.backup`). lulibre's own changes
--- of this kind wait in the same queue (see `handlers`; putting a copy of
--- calibre's database back is one).
+-- server. lulibre queues these commands in the history file beside the
+-- index. When the server is stopped, `run` applies the queued commands
+-- straight to the library folder. First `run` makes a copy of calibre's
+-- database if `backup_restart` says so (see `lulibre.backup`). lulibre's
+-- own jobs that need the library closed wait in the same queue (see
+-- `handlers`), for example putting a copy of calibre's database back.
 --
--- `run` applies the queue, whatever stops the server. lulibre.service
--- calls it before each start of the server (`lulibre offline`), `restart`
--- calls it when you choose "restart now", and you can run `lulibre offline`
--- yourself while the server is down.
+-- `run` is called in three ways:
+--
+-- - lulibre.service calls `lulibre offline` before each start of the server;
+-- - `restart` calls `run` when you choose "restart now";
+-- - you run `lulibre offline` yourself while the server is down.
 --
 -- @module lulibre.offline
 -- @usage
@@ -74,7 +77,7 @@ end
 
 --- Tests for jobs that have nothing left to do, by calibredb command. Each
 -- test gets the job's argv and calibre's current columns (`{ label = true }`).
--- It returns why there is nothing to do, or nil. The test runs before the
+-- A test returns why there is nothing to do, or nil. The test runs before the
 -- job, so a job already done (by hand, or by a run that stopped half way)
 -- is not tried again. You can replace these tests or add your own.
 M.already = {
@@ -83,7 +86,8 @@ M.already = {
 }
 
 --- The calibredb commands that change the structure of calibre's database.
--- They are held back if the books' metadata.opf files could not be written first.
+-- lulibre holds these commands back if the books' metadata.opf files could not
+-- be written first.
 M.STRUCTURAL = { add_custom_column = true, remove_custom_column = true, restore_database = true }
 
 --- Jobs lulibre does itself instead of calibredb. `argv[1]` names the
@@ -313,7 +317,7 @@ function M.restart()
 end
 
 --- Says which jobs are waiting and offers what can be done now. The
--- interface calls it after a job is queued. The offer depends on what has
+-- interface calls `ask` after a job is queued. The offer depends on what has
 -- the library open (see `lulibre.calibre`):
 --
 -- - nothing (no server, or it is stopped): run the jobs now

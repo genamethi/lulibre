@@ -1,19 +1,20 @@
---- Checks a value against the text of the book's own file.
+--- Checks a book's metadata against the text of the book's own file.
 --
--- A catalogue record, a title search result and an identifier found on a
--- page each claim that the file is a certain work. Only the file itself is
--- sure to be about this work. So lulibre accepts:
+-- Catalogue records, title search results and identifiers found on a page
+-- all claim that a file is a certain work, and any of them can be wrong.
+-- The file's own text is the one source that is always about this work.
+-- lulibre accepts:
 --
 -- - a title if its words appear on the opening pages;
--- - authors if their family names appear there;
+-- - authors if their family names appear on the opening pages;
 -- - an identifier if it appears there as the book's own, not in a reference list;
--- - a record if the pages show its title or its authors, and the file is
---   about as long as the work the record describes. A 30-page file is not a
---   900-page handbook, but it may be a chapter of one.
+-- - a record if the pages show the record's title or authors, and the file
+--   is about as long as the work the record describes. A 30-page file is
+--   not a 900-page handbook, but a 30-page file may be a chapter of one.
 --
--- Only a file with readable text can decide. If the text is missing, too
--- short or garbled, every verdict is "unknown", and callers treat the value
--- as unconfirmed, not as wrong.
+-- A verdict needs readable text. If a file's text is missing, too short or
+-- garbled, every verdict is "unknown", and callers treat the value as
+-- unconfirmed, not as wrong.
 --
 -- @module lulibre.verify
 -- @usage
@@ -171,7 +172,7 @@ function M.title(ev, title)
 end
 
 --- Returns how much of a title appears on the opening pages in its own
--- word order. This is the longest run of the title's significant words that
+-- word order: the longest run of the title's significant words that
 -- appears in the same order in the text, as a share of its words. Short
 -- common words in between are skipped. For example, "On Predicate Logic as
 -- Modal Logic" against pages that say "Modal Predicate Logic" shares every

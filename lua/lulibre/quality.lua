@@ -1,15 +1,15 @@
---- Scores how far a book's record can be trusted, and keeps the records you
--- confirmed as right.
+--- Scores how far each book's record can be trusted, and stores the records
+-- you confirm as good.
 --
--- These are two different things. The score is lulibre's estimate, based on
--- what the record holds and how it looks. A complete record scores high. A
--- record whose title is a file name, or is full of digits and odd
--- characters, scores low. The score ranks what to look at; it only
+-- The score and "good" are separate. The score is lulibre's estimate from
+-- what a record holds and how the record looks. A complete record scores
+-- high. A record whose title is a file name, or is full of digits and odd
+-- characters, scores low. The score ranks what to look at, and only
 -- *suggests*.
 --
--- "Good" is a decision: a record you have confirmed. lulibre learns about
--- the library (the phrases that mark a subject, in learn.lua) only from good
--- records, so mistakes in the others are not learned. :good lists the
+-- "Good" is your decision that a record is right. lulibre learns about the
+-- library (the phrases that mark a subject, in learn.lua) only from good
+-- records, so mistakes in other records are not learned. :good lists the
 -- records by score so you can confirm them.
 --
 -- @module lulibre.quality

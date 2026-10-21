@@ -1,18 +1,19 @@
---- Runs. A run is one round of proposing for some books, like the one the
--- "propose, then review" dialog starts. Your own scripts can start runs the
--- same way. A run is kept while proposals wait for its books, so review can
--- show the run on its own and you can drop it as a whole.
+--- Tracks runs. A run is one round of proposing for some books, like the
+-- round the "propose, then review" dialog starts. Your own scripts can start
+-- runs too. lulibre keeps a run while proposals wait for its books, so
+-- review can show the run's proposals on their own and you can drop the run
+-- as a whole.
 --
--- A script that may be one step of another run joins it instead:
+-- A script that may be one step of a larger run joins that run:
 --
 --   local run <close> = runs.join { ids = ids, steps = { "files" } }
 --   run:step("files") ...
 --
--- If the task has no run, `join` starts one and finishes it when the
--- script ends (as stopped, if the script did not reach its end). Inside a
--- run already going on, `join` does nothing.
+-- `join` starts a run if the task has none, and finishes that run when the
+-- script ends (as stopped, if the script did not reach its end). If the task
+-- is already in a run, `join` does nothing.
 --
--- You can change how a run in progress is shown, in init.lua:
+-- To change how a run in progress is shown, set these in init.lua:
 --
 --   runs.badge = function(run) return "busy", "error" end   -- other words, another colour
 --   runs.badge = function() end                              -- no badge at all
@@ -99,8 +100,8 @@ function M.covers(run, pr)
 end
 
 --- Returns true if the run itself made a proposal. A run's view also shows
--- proposals that waited for its books before it began. This tells them
--- apart, so that dropping a run removes only what it added.
+-- proposals that waited for its books before it began. `own` tells the two
+-- kinds apart, so that dropping a run removes only what the run added.
 -- @tparam table run
 -- @tparam table pr a row of the proposals table
 -- @treturn boolean
@@ -154,7 +155,7 @@ function M.list(scope)
   return mine
 end
 
---- Returns the run review opens on if it is not told what to show: a run
+--- Returns the run review opens on if review is not told what to show: a run
 -- in progress, or the newest finished run not yet seen.
 -- @tparam[opt] string scope
 -- @treturn table|nil

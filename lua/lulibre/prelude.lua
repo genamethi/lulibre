@@ -1,7 +1,7 @@
---- The functions of the `lulibre` table that are written in Lua.
--- The other functions are written in C (src/lua/l_*.c); the Lua API page
--- lists all of them. This file is loaded once at startup, together with the
--- commands written in Lua (lulibre/commands/).
+--- Defines the functions of the `lulibre` table that are written in Lua.
+-- The other functions of `lulibre` are written in C (src/lua/l_*.c), and
+-- the Lua API page lists both kinds. lulibre loads this file once at
+-- startup, together with the commands written in Lua (lulibre/commands/).
 --
 -- @module lulibre
 -- @usage
@@ -125,7 +125,7 @@ function lulibre.each(items, fn, opts)
   if errors[1] then error(errors[1], 0) end
 end
 --- Returns the key a command is bound to now, or ":command" if it has no
--- key. Messages use it to name a key.
+-- key. Messages that name a key use this function.
 -- @tparam string command
 -- @treturn string
 function lulibre.hint(command)

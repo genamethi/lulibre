@@ -1,21 +1,21 @@
---- Decides what to propose for a book, based on its file.
+--- Decides what to propose for a book from the book's file.
 --
--- A field that is empty, or holds something that is clearly not a value
--- (such as a file name as a title), is a gap. The file's best candidate is
--- proposed for it. A field that has a value is different: the value may be
--- right and the title page misread, or the value may be a typo and the file
--- right. The option `propose_over` sets when the file's value is proposed
--- over the book's:
+-- A gap is a field that is empty or holds something that is clearly not a
+-- value, such as a file name as a title. lulibre proposes the file's best
+-- candidate for every gap. A field with a value is different: the value may
+-- be right and the title page misread, or the value may be a typo and the
+-- file right. The option `propose_over` sets when lulibre proposes the
+-- file's value over the book's:
 --
--- - "gaps": never. Only gaps get proposals.
+-- - "gaps": never. lulibre proposes only for gaps.
 -- - "sure": when the file's evidence is strong (confidence 0.8 or more,
 --   such as a stated identifier, a labelled cover sheet or a clear title
 --   page) and differs from the book's value.
 -- - "any": whenever the file's best candidate differs.
 --
--- With any setting, the book's value is never trusted more than the file's
--- just because someone typed it. Review shows both side by side, and you
--- decide there.
+-- lulibre never trusts the book's value more than the file's just because
+-- someone typed it. Review shows both values side by side, and you decide
+-- there.
 --
 -- @module lulibre.propose
 -- @usage

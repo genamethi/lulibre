@@ -1,9 +1,10 @@
---- Finds candidate values for a book's fields in its file.
--- A candidate is `{ field=, value=, source=, confidence= }`. Candidates come
--- from the file's own metadata and its title page (title and authors), the
--- identifiers in the text, the layouts and grammars of known publications,
--- and the subject vocabulary. Nothing here changes the library. Candidates
--- are shown, ranked and, once accepted, proposed.
+--- Finds candidate values for a book's fields in the book's file.
+-- A candidate is `{ field=, value=, source=, confidence= }`. extract looks
+-- in the file's own metadata and title page (for the title and authors),
+-- the identifiers in the text, the layouts and grammars of known
+-- publications, and the subject vocabulary. extract changes nothing in the
+-- library. Other modules show and rank the candidates, and propose the ones
+-- you accept.
 --
 -- @module lulibre.extract
 -- @usage

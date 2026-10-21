@@ -1,20 +1,21 @@
---- Custom fields: your own metadata alongside calibre's.
--- Custom fields are stored in their own database beside the index
--- (<index>.custom.db). calibre's database is never changed for them, and
--- they are not lost when the index is rebuilt. A field is named the way
--- calibre names a custom column (#partof), so it can become one later.
+--- Adds custom fields: metadata of your own, kept beside calibre's.
+-- lulibre stores custom fields in a database of their own beside the index
+-- (<index>.custom.db). Custom fields never change calibre's database, and
+-- rebuilding the index keeps them. A custom field is named the way calibre
+-- names a custom column (#partof), so the field can become a column later.
 --
--- A custom field works like any other field. It is written through
--- lulibre.edit, so it is in the journal and undo and snapshots restore it.
--- It is proposed and reviewed, shown in the preview, and can be filtered:
--- `#partof:handbook`, `#part:none`, `has:#partof`.
+-- A custom field works like any other field. lulibre.edit writes custom
+-- fields, so the journal records their changes, and undo and snapshots
+-- restore them. Custom fields are proposed and reviewed, shown in the
+-- preview, and can be used in filters: `#partof:handbook`, `#part:none`,
+-- `has:#partof`.
 --
--- A field can also be a custom column of the same name in calibre. lulibre
--- still keeps its own values, which filters, the journal and undo use, and
--- writes every change to calibre's column as well. calibre adds a column
--- only while the content server is stopped, so a request for one is queued
--- (see `lulibre.offline`). The preview says when the column is not there
--- yet, and when calibre's values differ from lulibre's.
+-- A custom field can also have a calibre custom column of the same name.
+-- lulibre then keeps its own values, which filters, the journal and undo
+-- use, and writes every change to calibre's column too. calibre adds a
+-- column only while the content server is stopped, so `add_column` queues
+-- the request (see `lulibre.offline`). The preview shows when the column
+-- does not exist yet, and when calibre's values differ from lulibre's.
 --
 -- @module lulibre.custom
 -- @usage

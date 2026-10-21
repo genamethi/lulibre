@@ -1,18 +1,24 @@
---- Options of scripts and modules. Each script or module has its own
--- namespace, separate from lulibre's own options (`lulibre.o`).
+--- Declares and stores the options of scripts and modules.
+-- Each script or module keeps its options under a namespace of its own,
+-- separate from lulibre's options (`lulibre.o`).
 --
--- A script declares its options when it starts, with defaults and
--- optional help. init.lua sets them by the same names, before or after the
--- script declares them (`lulibre.cfg.mytags.depth = 3`). A value set in
--- init.lua overrides the script's own, unless the script uses force. A
--- value set during the session (in the config window or with `:lua`)
--- overrides both until lulibre closes.
+-- A script declares its options when it starts, with defaults and optional
+-- help. init.lua sets a script's options by the same names, before or after
+-- the script declares them (`lulibre.cfg.mytags.depth = 3`). An option's
+-- value comes from the first of these that sets it:
+--
+-- - the session (the config window or `:lua`), until lulibre closes;
+-- - init.lua;
+-- - the script. With force, the script's value overrides init.lua's;
+-- - the default.
 --
 -- An option's spec is `{ default=, type=, choices=, help= }`:
 --
--- - `type` is "number", "boolean" or "string". If not given, it is the default's type.
+-- - `type` is "number", "boolean" or "string". If not given, the type is
+--   the default's type.
 -- - `choices` lists the values the option takes, as a list or as "a|b|c".
--- - `help` is written as a comment in init.lua. Without it, no comment is written.
+-- - `help` is written as a comment in init.lua. An option without help gets
+--   no comment.
 --
 -- @module lulibre.options
 -- @usage
@@ -78,8 +84,8 @@ function M.check(spec, v)
 end
 
 --- Declares an option, or a table of options, in a namespace. A value that
--- init.lua set before the declaration is checked now. If it does not fit,
--- it is dropped with a warning.
+-- init.lua set before the declaration is checked now. A value that does not
+-- fit is dropped with a warning.
 -- @tparam string ns letters, digits and _
 -- @tparam string|table name the option's name, or `{ name = spec, ... }`
 -- @tparam[opt] table spec if name is a name
