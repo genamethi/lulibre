@@ -29,10 +29,10 @@ static const struct opt_def opts[] = {
   OPT(server_start, OPT_STR, "", NULL,
       "shell command that starts the content server again (systemctl --user start calibre-server)",
       NULL),
-  OPT(server_hook, OPT_STR, "off", "on|off",
+  OPT(server_hook, OPT_BOOL, "false", "true|false",
       "lulibre.service, run before each start of the content server's systemd unit: the copy of "
       "calibre's database, the books' opf files, the changes that wait for the server to be "
-      "stopped. on: lulibre installs and enables it (`lulibre units`)",
+      "stopped. true: lulibre installs and enables it (`lulibre units`)",
       NULL),
   OPT(opf_writer, OPT_STR, "off", "off|server",
       "server: the content server runs calibre's own opf writer, so each book's metadata.opf is "
@@ -53,7 +53,7 @@ static const struct opt_def opts[] = {
   OPT(backup_too_old, OPT_STR, "warn", "warn|false",
       "warn, the first time the library is changed, when the last copy is older than backup_max_age", NULL),
   OPT(backup_max_age, OPT_INT, "7", NULL, "days after which a copy is too old", NULL),
-  OPT(backup_metadata, OPT_STR, "on", "on|off",
+  OPT(backup_metadata, OPT_BOOL, "true", "true|false",
       "have calibre write each changed book's metadata.opf (calibredb backup_metadata) whenever "
       "nothing else can: each time the content server is stopped (lulibre offline, lulibre.service), "
       "and after lulibre changes the library straight in its folder; a calibre column is added or "
@@ -191,7 +191,7 @@ static const struct opt_def opts[] = {
       "once: rejecting a proposal decides that proposal only, and a later run may propose the value "
       "again (N in review is the key that says never again); always: a rejected value is not proposed "
       "again for that book and field", NULL),
-  OPT(weigh_sources, OPT_STR, "off", "off|on",
+  OPT(weigh_sources, OPT_BOOL, "false", "true|false",
       "a proposal's confidence is what its agreeing sources come to, each taken for how often it has been right "
       "in this library (measured by :weigh, adjustable in :weights), instead of the confidence its rule claims", NULL),
   OPT(leader, OPT_STR, "\\", NULL,
@@ -208,14 +208,14 @@ static const struct opt_def opts[] = {
   OPT(log_file, OPT_PATH, "", NULL,
       "also append the log to this file (the console, `, shows it either way)", NULL),
 
-  OPT(pixi_deps, OPT_STR, "off", "off|on",
+  OPT(pixi_deps, OPT_BOOL, "false", "true|false",
       "on: programs that features need (pdftotext, tesseract, ocrmypdf) may come from an environment "
       "lulibre keeps with pixi under its data folder, and it offers to add one that is missing there. "
       "Off by default: it means running what pixi fetches",
       "Programs and modules"),
   OPT(rocks_tree, OPT_PATH, "", NULL,
       "a luarocks tree (luarocks --tree DIR) whose Lua modules scripts may require", NULL),
-  OPT(rocks_install, OPT_STR, "off", "off|on",
+  OPT(rocks_install, OPT_BOOL, "false", "true|false",
       "on: when a script needs a rock that is not there, lulibre offers to install it into rocks_tree. "
       "Off by default: it means running what luarocks fetches",
       NULL),
@@ -269,13 +269,14 @@ void config_init(struct config *c) {
   memset(c, 0, sizeof *c);
   for (size_t i = 0; i < ARRAY_LEN(opts); i++) {
     if (opts[i].type == OPT_INT) note_floor(opts[i].name, *int_slot(c, &opts[i]) = atoi(opts[i].def));
+    else if (opts[i].type == OPT_BOOL) *int_slot(c, &opts[i]) = !strcmp(opts[i].def, "true");
     else *str_slot(c, &opts[i]) = xstrdup(opts[i].def);
   }
 }
 
 void config_free(struct config *c) {
   for (size_t i = 0; i < ARRAY_LEN(opts); i++)
-    if (opts[i].type != OPT_INT) free(*str_slot(c, &opts[i]));
+    if (opts[i].type != OPT_INT && opts[i].type != OPT_BOOL) free(*str_slot(c, &opts[i]));
   memset(c, 0, sizeof *c);
 }
 
@@ -296,6 +297,15 @@ int config_set(struct config *c, const char *name, const char *val, char **err) 
     *int_slot(c, o) = (int)v;
     note_floor(o->name, (int)v);
     return 0;
+  }
+  if (o->type == OPT_BOOL) {
+    static const char *const yes[] = {"true", "on", "yes", "1"}, *const no[] = {"false", "off", "no", "0"};
+    for (size_t k = 0; k < ARRAY_LEN(yes); k++) {
+      if (!strcmp(val, yes[k])) return *int_slot(c, o) = 1, 0;
+      if (!strcmp(val, no[k])) return *int_slot(c, o) = 0, 0;
+    }
+    *err = xasprintf("option '%s' is true or false, not '%s'", name, val);
+    return -1;
   }
   if (o->choices) {
     size_t n = strlen(val);
@@ -318,6 +328,7 @@ int config_set(struct config *c, const char *name, const char *val, char **err) 
 }
 
 const char *config_str(const struct config *c, const struct opt_def *o) {
+  if (o->type == OPT_BOOL) return *int_slot(c, o) ? "true" : "false";
   return *str_slot(c, o);
 }
 

@@ -80,7 +80,7 @@ M.handlers = {
     local backup = require "lulibre.backup"
     local r = backup.put_back(argv[2])
     -- the copy's books whose opf files are behind it are marked: written now, if they can be
-    if lulibre.o.backup_metadata == "on" then pcall(backup.metadata) end
+    if lulibre.o.backup_metadata then pcall(backup.metadata) end
     return backup.put_back_summary(r)
   end,
 }
@@ -174,7 +174,7 @@ function M.run()
   -- the books' opf files, by calibre: with the server stopped nothing else
   -- writes them (backup_metadata option); before anything that changes the
   -- database's shape, they must be
-  local opf_ok = lulibre.o.backup_metadata ~= "on" or out.restarted
+  local opf_ok = not lulibre.o.backup_metadata or out.restarted
   if not opf_ok then
     local ok, n = pcall(require("lulibre.backup").metadata)
     if ok then out.opf, opf_ok = n, true else out.opf_error = tostring(n) end

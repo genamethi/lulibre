@@ -94,7 +94,7 @@ static void emit(FILE *f, const struct app *app) {
     /* a path default is compared after expansion, as it is stored */
     int is_default = !strcmp(val, o[i].def);
     fprintf(f, "%so.%s = ", is_default ? "-- " : "", o[i].name);
-    if (o[i].type == OPT_INT) {
+    if (o[i].type == OPT_INT || o[i].type == OPT_BOOL) {
       fputs(val, f);
     } else if (o[i].type == OPT_PATH && hl && !strncmp(val, home, hl) && val[hl] == '/') {
       char *tilde = xasprintf("~%s", val + hl);
