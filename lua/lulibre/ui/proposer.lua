@@ -64,7 +64,7 @@ function M.run()
   local fields = {}
   for i, f in ipairs(FIELDS) do fields[i] = { id = "f_" .. f[1], kind = "check", label = f[2], value = true } end
   local did, v = form.run {
-    title = "propose, then review", height = 0.78, label_width = 68,
+    title = "propose, then review", height = 0.78, label_width = 70,
     sections = {
       { title = "Which books", items = {
         { id = "books", kind = "choice", label = "propose for", value = 1, choices = {
@@ -75,7 +75,7 @@ function M.run()
         { id = "files", kind = "check", label = "the files themselves: title pages, known layouts, embedded data", value = true },
         { id = "kept", kind = "check", label = "records kept on this machine (datasets, earlier answers)", value = have_data ~= nil or kept > 0,
           off = not have_data and kept == 0 and "none here yet: lulibre datasets" or nil },
-        { id = "online", kind = "check", label = "the services, for what is not kept (arXiv, CrossRef ...)", value = false,
+        { id = "online", kind = "check", label = "ask online services (arXiv, CrossRef ...) about what isn't stored here", value = false,
           off = services == "" and "enrich_services is empty" or nil },
         { id = "titles", kind = "check", label = "  and CrossRef by title, for books with no identifier", value = false,
           off = services == "" and "enrich_services is empty" or nil },
@@ -92,7 +92,7 @@ function M.run()
         { id = "over", kind = "choice", label = "a field that has a value", value = 1, choices = {
           ("as the option says (propose_over = %s)"):format(lulibre.o.propose_over), "is left alone: only empty or junk fields",
           "is proposed over wherever a source differs" } },
-        { id = "fresh", kind = "check", label = "as if the ticked fields were empty, and though barred before (--fresh)", value = false },
+        { id = "fresh", kind = "check", label = "ignore current values, and propose values rejected for good (--fresh)", value = false },
         { id = "clear", kind = "check", label = ("drop the proposals waiting for these books first (%d wait in all)"):format(waiting), value = false,
           off = waiting == 0 and "none are waiting" or nil },
       } },
