@@ -222,6 +222,19 @@ expect "the publisher is gone"                "" "$(field 1 publisher)"
 # neighbour the list has fallen back to
 k g r
 shown "review again"                          "review  2 pending"
+# one of each screen: opening it again goes to the one that is open
+k Escape g r
+shown "gr with review open goes to it"        "review is open already: here it is"
+expect "and opens no second"                  1 "$(screen | grep -c 'review  2 pending')"
+k :; lit "new review"; k Enter
+wait_for "2 tasks"
+expect ":new review opens a second all the same" 2 "$(screen | grep -c 'review  2 pending')"
+k q
+wait_for "1 task "
+k :; lit "split"; k Enter
+shown ":split in a panel says it is not split" "a panel is not split"
+k Escape g r
+wait_for "review is open already"
 k s
 wait_for "surest first"
 k s

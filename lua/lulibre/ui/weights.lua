@@ -23,11 +23,12 @@ function M.run()
     end
     return rows
   end
-  local p <close> = lulibre.panel {
+  local p <close> = require("lulibre.ui.panels").open("weights", {
     title = "how much each source is believed, field by field", help = keys:hint("set", "clear", "measure"), height = 0.6, keys = keys:own(),
     columns = { { "field", 11 }, { "source", -1 }, { "agreed with the library", 24 }, { "measured", 10 }, { "by hand", 8 }, { "in force", 9 } },
     rows = build(),
-  }
+  })
+  if not p then return end
   while true do
     local key, row = p:wait()
     if not key then return end

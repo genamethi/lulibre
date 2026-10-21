@@ -80,13 +80,14 @@ function M.run(args)
     or ("edit  %d books"):format(#books)
   -- The preview shows the book being edited, wherever the list's cursor is;
   -- for several, none of them, so that nothing is copied from the wrong one.
-  local p <close> = lulibre.panel {
+  local p <close> = require("lulibre.ui.panels").open("edit", {
     title = title, help = keys:hint("edit", "suggest", "clear", "about", "write"), height = 0.38, dialog = true,
     columns = { { "Field", 12 }, { "Now", -3 }, { "New", -3 }, { "From", 26 } },
     rows = rows(),
     preview = #ids == 1 and ids[1] or ("%d books selected\n\n%s shows, where the list is, what they share and where they differ"):format(
       #ids, keys:key("about") or "i"),
-  }
+  })
+  if not p then return end
 
   -- where the list is: what the file's pages say for each field, or for
   -- several books, which fields they share and which they differ in

@@ -228,7 +228,9 @@ static void c_focus(struct tui *t, const char *args) {
 static void c_split(struct tui *t, const char *args) {
   char dir = arg_is(args, "h") ? 'h' : 'v';
   const char *view = (arg_is(args, "h") || arg_is(args, "v")) ? arg_rest(args) : args;
-  if (wm_split(t, dir, view)) tui_msg(t, 1, "no such view: %s (views: list, preview)", view);
+  if (!wm_split(t, dir, view)) return;
+  if (*view) tui_msg(t, 1, "no such view: %s (views: list, preview)", view);
+  else tui_msg(t, 1, "a panel is not split: :split list, or :split preview");
 }
 
 static void c_close(struct tui *t, const char *args) { wm_close(t); }

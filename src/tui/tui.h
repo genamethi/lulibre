@@ -433,6 +433,7 @@ void panel_close(struct panel *p);  /* safe to call twice */
  * script does this around a panel it opens on top of its own. */
 void panel_hide(struct panel *p);
 void panel_show(struct panel *p);
+void panel_focus(struct panel *p);
 void panel_set_size(struct panel *p, float size);
 /* Keys the script handles (panel_set_own) and the global commands, by first
  * word and separated by spaces, that its other keys may reach

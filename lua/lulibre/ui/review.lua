@@ -399,12 +399,13 @@ session = function(args)
         or "every proposal",
       field_only and ("   only %s (%s%s shows all)"):format(field_only, keys:key("field") or "f", keys:key("field") or "f") or "")
   end
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("review", {
     title = title(), help = keys:hint("accept", "reject", "edit", "other", "about", "write"), follow = true, height = 0.42,
     keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 2 }, { "Field", 12 }, { "Now", -2 }, { "Proposed", -3 }, { "From", 24 } },
     rows = rows, tabs = tab_names(), tab = at,
-  }
+  })
+  if not p then return end
   p:cursor(first_row())
   -- what the proposal under the cursor rests on, where the list is (the option review_context)
   local ctx
