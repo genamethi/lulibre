@@ -1,6 +1,6 @@
---- Guess a subject from the words on the first pages: count each subject's
--- indicative terms among the text's 1-, 2- and 3-word sequences. Multi-word
--- terms are more specific and count double.
+--- Guesses a subject from the words on the first pages. Counts each
+-- subject's indicative terms among the text's 1-, 2- and 3-word sequences.
+-- Terms of more than one word are more specific and count double.
 --
 -- @module lulibre.subjects
 -- @usage
@@ -92,9 +92,9 @@ local function build()
   index = ix
 end
 
---- Ranked { {subject=, score=}, ... } for a piece of text; best first.
+--- Returns the subjects for a piece of text, ranked best first.
 -- @tparam string text
--- @treturn {table,...}
+-- @treturn {table,...} `{ {subject=, score=}, ... }`
 function M.score(text)
   if not index then build() end
   local words = {}

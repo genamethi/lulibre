@@ -1,14 +1,14 @@
---- Review proposed changes: accept, reject or correct each, then write the
--- accepted ones as one batch. The list and preview follow the cursor, so the
--- book's title page is in view while you decide.
+--- Reviews proposed changes. Accept, reject or correct each proposal, then
+-- write the accepted ones as one batch. The list and preview follow the
+-- cursor, so the book's title page is in view while you decide.
 --
--- x opens a book up: its other fields appear under the proposals, so what is
--- proposed can be judged against what is already known, and any of them can
--- be edited in the same pass (an edit becomes an accepted proposal).
+-- x expands a book: its other fields appear under the proposals, so you can
+-- compare the proposals with what is already known. You can edit any of
+-- those fields in the same pass, and the edit becomes an accepted proposal.
 --
 -- Review has views, shown as tabs in its bar: one for each run of proposing
--- that still has something waiting (lulibre.runs), and "all waiting". h and
--- l step through them; D drops what the one in view holds.
+-- that still has proposals waiting (lulibre.runs), and "all waiting". h and
+-- l move between views, and D drops the proposals of the view shown.
 --
 -- @module lulibre.ui.review
 -- @usage
@@ -22,8 +22,8 @@ local verify = require "lulibre.verify"
 
 local M = {}
 
---- The mark a row carries for what the book's pages say of its proposal
--- (verify.judge's levels). Replace it in init.lua to mark them otherwise.
+--- The mark a row shows for what the book's pages say about its proposal,
+-- by verify.judge's levels. Replace the table in init.lua to use other marks.
 M.marks = { better = "●", more = "●", both = "=", partly = "◐", silent = "·", neither = "○", against = "✗" }
 
 local keys = require("lulibre.ui.keys").of("review")
@@ -38,14 +38,13 @@ M.fields = { "title", "authors", "pubdate", "tags", "publisher", "series", "iden
 M.single = { title = true, authors = true, pubdate = true, publisher = true, series = true, series_index = true,
   languages = true }
 
---- What the panel where the list is shows about the proposal under the
--- cursor (the option review_context; i shows and hides it): rows of
--- { label, text, style = }. pr: the proposal; others: the other proposals
--- waiting for that book and field. Replace it in init.lua to show something
--- else:  require("lulibre.ui.review").context = function(pr, others) return { { "source", pr.source } } end
--- @tparam table pr
--- @tparam {table,...} others
--- @treturn {table,...}
+--- Returns what the panel in place of the list shows about the proposal
+-- under the cursor (the option review_context; i shows and hides the
+-- panel). Replace this function in init.lua to show something else:
+-- require("lulibre.ui.review").context = function(pr, others) return { { "source", pr.source } } end
+-- @tparam table pr the proposal
+-- @tparam {table,...} others the other proposals waiting for that book and field
+-- @treturn {table,...} rows of `{ label, text, style = }`
 function M.context(pr, others)
   return context.rows(pr, others)
 end
@@ -58,13 +57,15 @@ local function key_of(item)
   return "p" .. item.id
 end
 
---- The line at the top of a view, saying what it is and how to be rid of it.
--- view: { run = a run of lulibre.runs or nil, count = proposals in it };
--- key(action) gives the key an action of review is on now. Return nil for no
--- line. Replace this function in init.lua to say it your way, or not at all:
---   require("lulibre.ui.review").banner = function() end
--- @tparam table view
--- @tparam function key
+--- Returns the line at the top of a view, which says what the view is and
+-- how to drop it. Returning nil shows no line. Replace this function in
+-- init.lua to change the line, or to remove it:
+--
+--    require("lulibre.ui.review").banner = function() end
+--
+-- @tparam table view `{ run=, count= }`: the view's run (from lulibre.runs) or nil, and how
+-- many proposals the view holds
+-- @tparam function key `key(action)` returns the key bound to one of review's actions
 -- @treturn string|nil
 function M.banner(view, key)
   local run = view.run
@@ -82,11 +83,11 @@ end
 
 local session
 
---- Open review. args: a filter (as :review FILTER gives it) or { ids = {...} }
--- keeps it to those books' proposals; { run = a run } opens on that run's
--- view; otherwise it opens on a run that is going on or has not been looked
--- at yet, if there is one, and else on everything waiting for what the list
--- is showing. The other views are a key away either way.
+--- Opens review. A filter (as :review FILTER gives it) or `{ ids = {...} }`
+-- limits review to those books' proposals. `{ run = run }` opens on that
+-- run's view. Otherwise review opens on a run that is in progress or not
+-- yet seen, if there is one, or else on everything waiting for the books
+-- the list shows. The other views are one key away.
 -- @tparam[opt] string|table args a filter, `{ ids = {...} }` or `{ run = run }`
 function M.run(args)
   local before = M.live
@@ -96,8 +97,8 @@ function M.run(args)
   return table.unpack(r, 2, r.n)
 end
 
---- Bring a run's proposals into view: in the review that is open, if one
--- is, and in a new one otherwise.
+--- Shows a run's proposals: in the open review if there is one, or else in
+-- a new review.
 -- @tparam table run
 function M.show_run(run)
   if M.live and pcall(M.live.show, "run:" .. run.id) then return end

@@ -1,8 +1,8 @@
---- The sync folder beside the library: the files waiting to be added in a
--- column on the left, and beside it the library's own list, which follows
--- the file under the cursor: to the book that is the very same file, when
--- the library holds it already, else narrowed to the books that look like
--- it. The preview shows the file under the cursor; Tab crosses to the
+--- Shows the sync folder beside the library. The files waiting to be added
+-- are in a column on the left. Beside them, the library's list follows the
+-- file under the cursor: it moves to the book with the same file if the
+-- library already has it, or else narrows to the books that look like the
+-- file. The preview shows the file under the cursor. Tab moves to the
 -- library's list, and the preview then shows the book there.
 --
 -- @module lulibre.ui.beside
@@ -19,9 +19,9 @@ local panels = require "lulibre.ui.panels"
 local SMALL = { the = 1, ["and"] = 1, ["for"] = 1, with = 1, from = 1, into = 1, over = 1, some = 1, notes = 1, lecture = 1,
   lectures = 1, introduction = 1, theory = 1, volume = 1, edition = 1 }
 
---- A filter for the library's books that look like a title: its three
--- longest words, all of which must be in a book's title, authors or tags.
--- nil when the title has nothing to go by.
+--- Returns a filter for the library's books that look like a title. The
+-- filter uses the title's three longest words, which must all appear in a
+-- book's title, authors or tags. Returns nil if the title has no usable words.
 -- @tparam string title
 -- @treturn string|nil
 function M.likely(title)
@@ -45,7 +45,7 @@ function M.likely(title)
   return table.concat(out, " ")
 end
 
---- Open the screen on the waiting files.
+--- Opens the screen on the waiting files.
 function M.run()
   if (lulibre.o.sync_dir or "") == "" then
     lulibre.notify('no sync folder is set: lulibre.o.sync_dir = "~/some/folder" in init.lua', "error")

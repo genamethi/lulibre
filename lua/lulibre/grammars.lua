@@ -1,50 +1,64 @@
---- Grammars of publications: how a kind of document sets its opening page.
+--- Recognises kinds of documents by how they set their opening lines.
 --
--- Keith Conrad's handouts put the title in capitals and KEITH CONRAD, smaller,
--- under it; a chapter of the Stacks project its title in capitals and then
--- its tag ("01H8") or "Contents"; a Springer chapter its number and title in
--- very large type. The title page as such is rarely telling, but the first
--- few lines and how they are set are: a grammar says what they look like,
--- line by line, and what follows when they do (the title, the authors, that
--- such works have no catalogue record, which whole the file is a part of).
+-- Keith Conrad's handouts put the title in capitals, with KEITH CONRAD
+-- smaller below. A chapter of the Stacks project puts its title in
+-- capitals, then its tag ("01H8") or "Contents". A Springer chapter puts
+-- its number and title in very large type. The first few lines and how
+-- they are set say more than the title page as a whole. A grammar describes
+-- those lines one by one, and what follows if they match: the title, the
+-- authors, that such works have no catalogue record, or which whole the
+-- file is part of.
 --
--- A grammar is matched against the lines of the first page, in order, each
--- with its text, the size of its type and whether it is bold:
+-- A grammar is matched against the first page's lines in order. Each line
+-- has its text, its font size, and whether it is bold:
 --
---   local G = require "lulibre.grammars"
---   G.add {
---     name = "keith-conrad",           -- shown as where a value came from
---     kind = "handout",                -- what such a file is
---     noncatalog = true,               -- such works have no catalogue record
---     lines = {                        -- the opening lines, in order
---       G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
---       G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
---     },
---     confidence = 0.95,
---   }
+--    local G = require "lulibre.grammars"
+--    G.add {
+--      name = "keith-conrad",           -- shown as where a value came from
+--      kind = "handout",                -- what such a file is
+--      noncatalog = true,               -- such works have no catalogue record
+--      lines = {                        -- the opening lines, in order
+--        G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
+--        G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
+--      },
+--      confidence = 0.95,
+--    }
 --
--- A line rule (G.line) may ask for: pattern (a Lua pattern; nocase = true
--- to ignore case), upper (its letters all capitals), bold, bigger / smaller
--- (than the type of the page's body text), largest (the largest type on the
--- page), size = { min, max } (in points). It may take = "field" (the line,
--- or the pattern's first capture; case = "title" puts it in title case), or
--- give = { field = value }. G.skip(n) lets up to n lines go by; G.opt(rule)
--- may be missing; G.either{ rule, rule } is one or the other.
--- Besides lines: text = { patterns } that must stand somewhere in the pages
--- read (without regard to case), pages = { min, max } for the file's length,
--- and read = function(doc, got) returning more fields from the document.
--- With LPeg installed (a rock; lulibre.features names it), a line rule may
--- give peg = an LPeg pattern instead of pattern (its first capture is what
--- take takes; a table capture gives fields), and a grammar may give peg =
--- a pattern over its opening lines (head of them, 12 by default) joined by
--- newlines, whose table capture (lpeg.Ct with named lpeg.Cg) gives fields:
---   local lpeg = G.lpeg()
---   local P, C, Cg, Ct, R, S = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.R, lpeg.S
---   local caps = (R"AZ" + S" '-:,")^3
---   G.add { name = "my-notes", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
--- Fields are the book's (title, authors, tags, ...) and three of their own:
--- part_of (the whole the file is a part of), part (its number in it) and
--- parts (how many there are), which lulibre keeps (:parts).
+-- A line rule (`G.line`) can test:
+--
+-- - `pattern`: a Lua pattern (`nocase = true` ignores case)
+-- - `upper`: all letters are capitals
+-- - `bold`
+-- - `bigger` / `smaller`: than the font of the page's body text
+-- - `largest`: the largest font on the page
+-- - `size = { min, max }`: in points
+--
+-- A line rule can set fields with `take = "field"`, which takes the line or
+-- the pattern's first capture (`case = "title"` puts it in title case), or
+-- with `give = { field = value }`. `G.skip(n)` skips up to n lines,
+-- `G.opt(rule)` makes a rule optional, and `G.either{ rule, rule }` matches
+-- one rule or the other.
+--
+-- A grammar can also give `text = { patterns }`, which must appear
+-- somewhere in the pages read (ignoring case); `pages = { min, max }` for the
+-- file's length; and `read = function(doc, got)`, which returns more fields
+-- from the document.
+--
+-- With LPeg installed (a rock; lulibre.features names it), a line rule can
+-- give `peg`, an LPeg pattern, instead of `pattern`. Its first capture is
+-- what `take` takes, and a table capture gives fields. A grammar can also
+-- give `peg` as a pattern over its opening lines (`head` lines, 12 by
+-- default) joined by newlines. The pattern's table capture (lpeg.Ct with
+-- named lpeg.Cg) gives fields:
+--
+--    local lpeg = G.lpeg()
+--    local P, C, Cg, Ct, R, S = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.R, lpeg.S
+--    local caps = (R"AZ" + S" '-:,")^3
+--    G.add { name = "my-notes", peg = Ct(Cg(C(caps), "title") * P"\n" * Cg(C((1 - P"\n")^1), "authors")) }
+--
+-- Fields are the book's fields (title, authors, tags, ...) and three more,
+-- which lulibre stores (:parts): part_of (the whole the file is part of),
+-- part (the file's number in the whole) and parts (how many parts there are).
 --
 -- @module lulibre.grammars
 -- @usage
@@ -56,8 +70,8 @@ local M = {}
 --- The grammars, in the order they are tried.
 M.list = {}
 
---- LPeg, when it is installed (and loads: lulibre refuses a C module built
--- for another Lua); nil and why not otherwise.
+--- Returns LPeg, if it is installed and loads. lulibre refuses a C module
+-- built for another Lua version.
 -- @treturn[1] table lpeg
 -- @treturn[2] nil
 -- @treturn[2] string why not
@@ -67,7 +81,7 @@ function M.lpeg()
   return nil, "LPeg is not installed for " .. _VERSION .. " (luarocks install lpeg, or the option rocks_tree): " .. tostring(lpeg):match("[^\n]*$")
 end
 
---- Add a grammar, or replace the one of the same name.
+--- Adds a grammar, or replaces the grammar with the same name.
 -- @tparam table g
 -- @treturn table g
 function M.add(g)
@@ -83,9 +97,9 @@ function M.add(g)
   return g
 end
 
---- Take a grammar out.
+--- Removes a grammar.
 -- @tparam string name
--- @treturn table|nil the grammar taken out
+-- @treturn table|nil the grammar removed
 function M.remove(name)
   for i, x in ipairs(M.list) do
     if x.name == name then return table.remove(M.list, i) end
@@ -94,7 +108,8 @@ end
 
 -- ---- rules ----
 
---- A rule for one line (see above for what it may ask for and take).
+--- Returns a rule for one line. The module description lists what a rule
+-- can test and take.
 -- @tparam table t
 -- @treturn table the rule
 function M.line(t)
@@ -102,21 +117,21 @@ function M.line(t)
   return t
 end
 
---- A rule that lets up to n lines go by.
--- @tparam[opt] integer n 1 when not given
+--- Returns a rule that skips up to n lines.
+-- @tparam[opt] integer n 1 if not given
 -- @treturn table the rule
 function M.skip(n)
   return { kind = "skip", n = n or 1 }
 end
 
---- A rule that may be missing.
+--- Returns a rule that makes another rule optional.
 -- @tparam table rule
 -- @treturn table the rule
 function M.opt(rule)
   return { kind = "opt", rule = rule }
 end
 
---- A rule that is one or another of several.
+--- Returns a rule that matches any one of several rules.
 -- @tparam {table,...} rules
 -- @treturn table the rule
 function M.either(rules)
@@ -225,10 +240,10 @@ local function sizes(lines)
   return body, largest
 end
 
---- What the document is, by the grammars: a list of { grammar=, fields= }.
--- doc: { id=, lines = (the first page's lines), texts = { page texts }, pages = the file's length }.
--- @tparam table doc
--- @treturn {table,...}
+--- Returns the grammars that match a document, with the fields each gives.
+-- @tparam table doc `{ id=, lines=, texts=, pages= }`: the first page's lines, the pages'
+-- texts, and the file's length
+-- @treturn {table,...} `{ grammar=, fields= }`
 function M.match(doc)
   local out = {}
   local lines = {}
@@ -272,7 +287,7 @@ function M.match(doc)
   return out
 end
 
---- The document of a book, as M.match wants it.
+--- Returns a book's document in the form `match` takes.
 -- @tparam integer id
 -- @treturn table
 function M.doc(id)

@@ -1,19 +1,19 @@
---- Title case, after the APA Publication Manual (7th edition):
+--- Converts titles to title case, following the APA Publication Manual
+-- (7th edition). The rules are:
 --
---   * the first word of the title, and of a subtitle (after a colon, a dash
---     or the end of a sentence), is capitalised;
---   * so is every major word, and every word of four letters or more;
---   * minor words of three letters or fewer stay in lower case: articles,
---     short conjunctions and short prepositions (M.minor);
---   * both parts of a hyphenated major word are capitalised (Self-Report),
---     but not the word after a hyphenated prefix (Anti-hero, Mid-year).
+-- - the first word of the title, and of a subtitle (after a colon, a dash
+--   or the end of a sentence), is capitalised;
+-- - every major word, and every word of four letters or more, is capitalised;
+-- - minor words of three letters or fewer stay in lower case: articles,
+--   short conjunctions and short prepositions (`minor`);
+-- - both parts of a hyphenated major word are capitalised (Self-Report),
+--   but not the word after a hyphenated prefix (Anti-hero, Mid-year).
 --
--- A title set in CAPITALS has lost what case would have said, so some of it
--- is guessed back: Roman numerals stay as they are, as do words with a digit
--- in them and short words with no vowel (PDF, NMR), and M.keep lists words
--- that are always spelled one way. In a title that is not all capitals, a
--- word that already has capitals past its first letter (LaTeX, PDE, McKean)
--- is left alone.
+-- A title set in CAPITALS has lost its case, so titlecase guesses some of
+-- the case back. Roman numerals stay as they are, and so do words with a
+-- digit and short words with no vowel (PDF, NMR). `keep` lists words that
+-- are always spelled one way. In a title that is not all capitals, a word
+-- with capitals after its first letter (LaTeX, PDE, McKean) is left alone.
 --
 -- @module lulibre.titlecase
 -- @usage
@@ -31,15 +31,16 @@ local function set(words)
   return out
 end
 
---- lower case unless first: articles, conjunctions and prepositions of three
--- letters or fewer
+--- Words in lower case unless first: articles, conjunctions and
+-- prepositions of three letters or fewer.
 M.minor = set "a an the and as but for if nor or so yet at by in of off on per to up via"
 
---- a prefix before a hyphen: the word after it stays in lower case
+--- Prefixes before a hyphen. The word after the hyphen stays in lower case.
 M.prefixes = set [[anti co counter de extra hyper inter intra macro micro mid mini multi non over post pre pro
   pseudo quasi re semi sub super trans ultra un under]]
 
---- words spelled one way whatever the title does; the key is the word in lower case
+--- Words always spelled one way, whatever the title's case. The key is the
+-- word in lower case.
 M.keep = {
   pde = "PDE", pdes = "PDEs", ode = "ODE", odes = "ODEs", sde = "SDE", sdes = "SDEs",
   usa = "USA", uk = "UK", ussr = "USSR", ieee = "IEEE", acm = "ACM", ams = "AMS", siam = "SIAM",
@@ -53,8 +54,8 @@ local lower = function(s) return lulibre.lower(s) end
 local function notation() return require "lulibre.notation" end
 local upper = function(s) return lulibre.upper(s) end
 
---- Is the text set in capitals? True when it has at least two letters and
--- none of them is in lower case.
+--- Returns true if the text is set in capitals: it has at least two letters,
+-- and none of them is lower case.
 -- @tparam string s
 -- @treturn boolean
 function M.is_caps(s)
@@ -134,7 +135,7 @@ local function word(core, caps, first)
   return table.concat(parts, "-")
 end
 
---- The title in title case.
+--- Returns the title in title case.
 -- @tparam string s
 -- @treturn string
 function M.apply(s)
@@ -162,10 +163,10 @@ function M.apply(s)
   return table.concat(out)
 end
 
---- Roman numerals a catalogue put in title case ("Lectures in Abstract
--- Algebra: Ii. Linear Algebra") back in capitals. Only numerals of two
--- letters or more, and not "Xi" (a name, a Greek letter) nor "Vi" unless
--- a full stop follows it.
+--- Puts Roman numerals that a catalogue wrote in title case back in
+-- capitals: "Lectures in Abstract Algebra: Ii. Linear Algebra" gets "II".
+-- Only numerals of two letters or more are changed. "Xi" (a name, a Greek
+-- letter) is never changed, and "Vi" only if a full stop follows.
 -- @tparam string s
 -- @treturn string
 function M.numerals(s)
@@ -177,8 +178,8 @@ function M.numerals(s)
   end))
 end
 
---- The title as it should be proposed: in title case when it was found in
--- capitals and the option title_case allows; otherwise as it is.
+--- Returns the title as it should be proposed: in title case if it was
+-- found in capitals and the option `title_case` allows; otherwise unchanged.
 -- @tparam string s
 -- @treturn string
 function M.proposed(s)

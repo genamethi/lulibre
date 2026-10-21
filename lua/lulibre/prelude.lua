@@ -1,7 +1,7 @@
---- The part of the `lulibre` table that is written in Lua.
--- The rest of it is C (src/lua/l_*.c; the Lua API page sums all of it up).
--- Loaded once at startup, with the commands written in Lua
--- (lulibre/commands/).
+--- Defines the functions of the `lulibre` table that are written in Lua.
+-- The other functions of `lulibre` are written in C (src/lua/l_*.c), and
+-- the Lua API page lists both kinds. lulibre loads this file once at
+-- startup, together with the commands written in Lua (lulibre/commands/).
 --
 -- @module lulibre
 -- @usage
@@ -10,10 +10,10 @@
 -- lulibre.propose(12, "title", "Knot Theory", { source = "my script", confidence = 0.7 })
 -- print(lulibre.inspect(lulibre.book(12)))
 
---- A readable rendering of any value, for :lua and for debugging.
+--- Returns any value as readable text, for :lua and for debugging.
 -- @param v any value
 -- @tparam[opt] string indent
--- @tparam[opt] table seen the tables shown already (a table that holds itself is shown once)
+-- @tparam[opt] table seen the tables already shown, so a table that contains itself is shown once
 -- @treturn string
 function lulibre.inspect(v, indent, seen)
   indent, seen = indent or "", seen or {}
@@ -40,7 +40,8 @@ function lulibre.inspect(v, indent, seen)
   if #flat < 72 and not flat:find("\n") then return "{" .. flat .. " }" end
   return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
 end
---- :lua runs this: evaluate as an expression if possible, else as statements.
+--- Runs the code typed after :lua. The code is evaluated as an expression
+-- if possible, and otherwise run as statements.
 -- @local
 function lulibre._eval(code)
   local f, err = load("return " .. code, "=:lua")
@@ -54,17 +55,18 @@ function lulibre._eval(code)
   if text:find("\n") and not lulibre.headless then lulibre.show(text, ":lua " .. code)
   else print(text) end
 end
---- Ask a yes/no question on the bottom line. Waits; true only for y or yes.
--- @tparam string question "[y/N]" is added
+--- Asks a yes/no question on the bottom line and waits for the answer.
+-- Returns true only for y or yes.
+-- @tparam string question "[y/N]" is added to it
 -- @treturn boolean
 function lulibre.confirm(question)
   local a = lulibre.input({ prompt = question .. " [y/N] " })
   return a ~= nil and (a:lower() == "y" or a:lower() == "yes")
 end
---- Whether to do something lulibre may do on its own, as the option of that
--- name says: "auto" yes, "never" no, "ask" puts the question (and means no
--- where there is nobody to ask).
--- @tparam string name the option: "auto", "ask" or "never"
+--- Returns true if lulibre should do something it may do on its own.
+-- The option named `name` decides: "auto" returns true and "never" returns
+-- false. "ask" asks the question, and returns false if nobody can be asked.
+-- @tparam string name the option, set to "auto", "ask" or "never"
 -- @tparam string question
 -- @treturn boolean
 function lulibre.policy(name, question)
@@ -73,19 +75,21 @@ function lulibre.policy(name, question)
   if v == "ask" and not lulibre.headless and lulibre.task_id() then return lulibre.confirm(question) end
   return false
 end
---- Set several options at once: lulibre.setup{ pages = 8, ocr = "auto" }.
+--- Sets several options at once: lulibre.setup{ pages = 8, ocr = "auto" }.
 -- @tparam table opts `{ name = value, ... }`
 function lulibre.setup(opts)
   for k, v in pairs(opts) do lulibre.o[k] = v end
 end
---- Run fn(item, index) over a list with several tasks at once, and wait for
--- all of it. opts.jobs: how many at a time (default: one per CPU);
--- opts.progress: a word for the status line ("hashing" shows "hashing 12/300").
--- An error in fn stops the rest and is raised here.
+--- Runs fn(item, index) for each item of a list, several at once, and waits
+-- for all of them. `opts.jobs` is how many run at a time (one per CPU by
+-- default). `opts.progress` is a word for the status line: "hashing" shows
+-- "hashing 12/300". An error in fn stops the remaining items and is raised
+-- here.
 --
--- Tasks take turns, and a turn can end between any two Lua operations, so
--- fn must not count in a shared variable (`n = n + 1` can lose a count).
--- Put results on the item, or use table.insert, which cannot be interrupted.
+-- The tasks take turns, and a turn can end between any two Lua operations.
+-- So fn must not count in a shared variable: `n = n + 1` can lose a count.
+-- Store results on the item, or use table.insert, which cannot be
+-- interrupted.
 -- @tparam table items
 -- @tparam function fn `fn(item, index)`
 -- @tparam[opt] table opts `jobs`, `progress`
@@ -120,8 +124,8 @@ function lulibre.each(items, fn, opts)
   if opts.progress then lulibre.progress(nil) end
   if errors[1] then error(errors[1], 0) end
 end
---- For a message that names a key: the key a command line is bound to now,
--- or ":command" when it has none.
+--- Returns the key a command is bound to now, or ":command" if it has no
+-- key. Messages that name a key use this function.
 -- @tparam string command
 -- @treturn string
 function lulibre.hint(command)
@@ -142,7 +146,7 @@ do
     return map(modes, key, target, help)
   end
 end
---- Propose a change for later review; see lulibre.proposals.
+--- Proposes a change for later review. See lulibre.proposals.
 -- @tparam integer id
 -- @tparam string field
 -- @tparam string value
@@ -151,14 +155,15 @@ end
 function lulibre.propose(id, field, value, opts)
   return require("lulibre.proposals").add(id, field, value, opts)
 end
---- Apply changes now: lulibre.apply{ {id=, field=, value=, op=}, ... }. Waits.
+--- Applies changes now and waits for them to finish:
+-- lulibre.apply{ {id=, field=, value=, op=}, ... }.
 -- @tparam {table,...} changes
 -- @tparam[opt] table opts as `lulibre.edit.apply` takes them
 -- @treturn table its result
 function lulibre.apply(changes, opts)
   return require("lulibre.edit").apply(changes, opts)
 end
---- A title in title case (APA style); see lulibre.titlecase.
+--- Returns a title in title case (APA style). See lulibre.titlecase.
 -- @tparam string s
 -- @treturn string
 function lulibre.titlecase(s)
@@ -166,17 +171,17 @@ function lulibre.titlecase(s)
 end
 -- ---- options of scripts, and the configuration file ----
 
---- lulibre.option(namespace, { name = { default=, type=, choices=, help= }, ... }):
--- declare a script's options; returns the namespace to read them from. See
--- lulibre.options.
+--- Declares a script's options and returns the namespace to read them from:
+-- lulibre.option(namespace, { name = { default=, type=, choices=, help= }, ... }).
+-- See lulibre.options.
 -- @tparam string ns
 -- @tparam[opt] table defs
 -- @treturn table
 function lulibre.option(ns, defs)
   return require("lulibre.options").option(ns, defs)
 end
---- lulibre.cfg.<namespace>.<name>: a script's option, read or set (in
--- init.lua: lulibre.cfg.mytags.depth = 3).
+--- A script's options, read and set as lulibre.cfg.<namespace>.<name>.
+-- In init.lua, for example: lulibre.cfg.mytags.depth = 3.
 lulibre.cfg = require("lulibre.options").cfg
 -- C modules. One built for another Lua (compiled against another version's
 -- lua.h, which a stray header earlier on the include path makes easy) can
@@ -270,13 +275,13 @@ table.insert(package.searchers, 2, function(name)
   end
   return ("\n\tno module '%s' in the luarocks tree %s"):format(name, tree)
 end)
---- Require a module, offering (when the option rocks_install is true, and
--- someone can be asked) to install the rock that has it into rocks_tree.
--- rock: the rock's name when it is not the module's.
+--- Requires a module. If the module is missing, offers to install its rock
+-- into `rocks_tree`. The offer is made only if `rocks_install` is true and
+-- someone can be asked.
 -- @tparam string module
--- @tparam[opt] string rock
+-- @tparam[opt] string rock the rock's name, if it differs from the module's
 -- @return the module
--- @raise when it is not installed and is not to be
+-- @raise if the module is missing and is not installed
 function lulibre.require_rock(module, rock)
   local ok, m = pcall(require, module)
   if ok then return m end

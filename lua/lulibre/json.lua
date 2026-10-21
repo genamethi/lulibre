@@ -1,5 +1,5 @@
---- A small JSON codec: enough for metadata services and for reading the
--- .jsonl files the old Python scripts wrote.
+--- Encodes and decodes JSON. The codec is small: enough for metadata
+-- services and for reading the .jsonl files the old Python scripts wrote.
 --
 -- @module lulibre.json
 -- @usage
@@ -92,7 +92,7 @@ function decode_value(s, i)
   return tonumber(num), i + #num
 end
 
---- Decode one JSON value. null becomes nil.
+--- Decodes one JSON value. null becomes nil.
 -- @tparam string s
 -- @return the value
 function M.decode(s)
@@ -135,7 +135,7 @@ local function encode(v, out)
   end
 end
 
---- Encode a value as JSON.
+--- Encodes a value as JSON.
 -- @param v
 -- @treturn string
 function M.encode(v)

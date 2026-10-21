@@ -1,8 +1,9 @@
---- What a proposal in review rests on, as rows for the panel review shows
--- where the list is: the verdict of the book's own pages on it (the mark its
--- row carries, verify.judge), what the pages say of the value and of the
--- record, the record it came from (or the record an identifier leads to),
--- and what the other sources propose for the field.
+--- Builds the rows review shows about a proposal, in place of the list.
+-- The rows give the verdict of the book's own pages on the proposal (the
+-- mark the proposal's row carries, from `verify.judge`), what the pages say
+-- about the value and the record, the record the proposal came from (or
+-- the record an identifier leads to), and what other sources propose for
+-- the field.
 --
 -- @module lulibre.ui.context
 -- @usage
@@ -16,9 +17,10 @@ local verify = require "lulibre.verify"
 
 local M = {}
 
---- The kind of source a proposal came from, without the work it names:
--- "CrossRef 10.1007/x" and "CrossRef 10.1016/y" are both "CrossRef";
--- "CrossRef title search" stays itself; notes in brackets go.
+--- Returns the kind of source a proposal came from, without the work it
+-- names. "CrossRef 10.1007/x" and "CrossRef 10.1016/y" both give
+-- "CrossRef"; "CrossRef title search" stays as it is. Notes in brackets
+-- are removed.
 -- @tparam string src
 -- @treturn string
 function M.source_class(src)
@@ -44,12 +46,12 @@ local function named(src)
   return nil
 end
 
---- The kept record behind a proposal: the one its source names, or, for an
--- identifier, the one the identifier leads to. Returns rec, kind, value.
+--- Returns the stored record behind a proposal: the record its source
+-- names, or, for an identifier, the record the identifier leads to.
 -- @tparam table pr
 -- @treturn[1] table the record
--- @treturn[1] string its kind
--- @treturn[1] string its value
+-- @treturn[1] string the record's kind
+-- @treturn[1] string the record's identifier value
 -- @treturn[2] nil
 function M.record_of(pr)
   -- an identifier: the record it leads to, which is what taking it would bring
@@ -116,11 +118,10 @@ end
 -- how a verdict's level is shown (verify.judge)
 local GOOD = { better = "ok", more = "ok", both = nil, partly = "accent", silent = "dim", neither = "warn", against = "warn" }
 
---- Rows for a proposal: { label, text, style = }. others: the other
--- proposals waiting for the same book and field.
+--- Returns the rows to show for a proposal.
 -- @tparam table pr
--- @tparam {table,...} others
--- @treturn {table,...}
+-- @tparam {table,...} others the other proposals waiting for the same book and field
+-- @treturn {table,...} `{ label, text, style = }`
 function M.rows(pr, others)
   local book = lulibre.book(pr.book)
   if not book then return { { "", "the book is no longer in the library" } } end

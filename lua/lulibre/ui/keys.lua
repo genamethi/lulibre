@@ -1,17 +1,20 @@
---- The keys of the screens written in Lua: for each screen, its actions and
--- the keys each is on. A screen asks which action a key means, so the keys
--- can be changed without touching it, and the hints in its title bar and its
--- `?` help are written from the same table, so they say what the keys are
--- now, not what they were when the screen was written.
+--- Holds the keys of the screens written in Lua: each screen's actions and
+-- the keys bound to each action.
 --
---   lulibre.map("review", "y", "accept")     -- in init.lua: y accepts too,
---                                            -- and is the key the hint shows
---   lulibre.map("review", "a", "")           -- a no longer does anything there
+-- A screen looks up which action a key means, so you can change the keys
+-- without changing the screen. The hints in the screen's title bar and its
+-- `?` help are written from the same table, so they show the current keys,
+-- not the keys at the time the screen was written.
+--
+--    lulibre.map("review", "y", "accept")     -- in init.lua: y accepts too,
+--                                             -- and is the key the hint shows
+--    lulibre.map("review", "a", "")           -- a no longer does anything there
 --
 -- Moving within a panel (j k gg G, paging), closing it (q) and leaving it
--- (Esc) are the same in every panel and are bound in one place, "panel" (src/tui/ctxkeys.c):
--- lulibre.map("panel", "n", "down"). A panel's movement keys come before a
--- screen's own, so a key bound to both moves.
+-- (Esc) work the same in every panel. These keys are bound in one place,
+-- "panel" (src/tui/ctxkeys.c): lulibre.map("panel", "n", "down"). A panel's
+-- movement keys take precedence over a screen's own, so a key bound to both
+-- moves.
 --
 -- @module lulibre.ui.keys
 -- @usage
@@ -185,30 +188,30 @@ local function copy(list)
   return s
 end
 
---- Put every screen's keys back as they come.
+--- Resets every screen's keys to the defaults.
 function M.reset()
   screens = {}
   for name, list in pairs(DEFAULTS) do screens[name] = copy(list) end
 end
 M.reset()
 
---- Give a script's own screen a key table: list is { {action, {keys}, label,
--- description}, ... }. Defining a screen again replaces it.
+--- Defines the key table of a script's own screen. Defining a screen again
+-- replaces its table.
 -- @tparam string screen
--- @tparam {table,...} list
+-- @tparam {table,...} list `{ {action, {keys}, label, description}, ... }`
 function M.define(screen, list)
   DEFAULTS[screen] = list
   screens[screen] = copy(list)
 end
 
---- Has the screen a key table?
+--- Returns true if the screen has a key table.
 -- @tparam string screen
 -- @treturn boolean
 function M.has(screen)
   return screens[screen] ~= nil
 end
 
---- The screens that have key tables.
+--- Returns the screens that have key tables.
 -- @treturn {string,...}
 function M.names()
   local out = {}
@@ -217,8 +220,8 @@ function M.names()
   return out
 end
 
---- Put a key on an action of a screen; it becomes the key the hints show.
--- An empty action takes the key away from whatever had it.
+--- Binds a key to an action of a screen. The hints then show this key. An
+-- empty action unbinds the key.
 -- @tparam string screen
 -- @tparam string key "<CR>", "a", "<C-x>" ...
 -- @tparam string action
@@ -244,7 +247,7 @@ end
 local SPOKEN = { ["<CR>"] = "Enter", ["<Space>"] = "Space", ["<Tab>"] = "Tab", ["<BS>"] = "Backspace",
   ["<Left>"] = "←", ["<Right>"] = "→", ["<Up>"] = "↑", ["<Down>"] = "↓" }
 
---- A key as a person would read it: "<CR>" is "Enter".
+--- Returns a key in readable form: "<CR>" becomes "Enter".
 -- @tparam string key
 -- @treturn string
 function M.spoken(key)
@@ -254,18 +257,19 @@ end
 local View = {}
 View.__index = View
 
---- The action a key means on this screen, or nil.
+--- Returns the action a key means on this screen, or nil.
 function View:action(key)
   return screens[self.screen].by_key[key]
 end
 
---- The key an action is on, as it is read; nil if it has none.
+--- Returns the key bound to an action, in readable form, or nil if the
+-- action has no key.
 function View:key(action)
   local keys = screens[self.screen].keys[action]
   return keys and keys[1] and M.spoken(keys[1])
 end
 
---- Every key this screen answers to, in key-map notation.
+--- Returns every key this screen responds to, in key-map notation.
 function View:own()
   local out = {}
   for key in pairs(screens[self.screen].by_key) do out[#out + 1] = key end
@@ -273,8 +277,8 @@ function View:own()
   return out
 end
 
---- A line for the title bar: the named actions with their keys, then how to
--- see the rest. Actions that have lost their key are left out.
+--- Returns a line for the title bar: the named actions with their keys,
+-- then how to see the rest. Actions without a key are left out.
 function View:hint(...)
   local s, parts = screens[self.screen], {}
   for _, action in ipairs { ... } do
@@ -286,7 +290,7 @@ function View:hint(...)
   return table.concat(parts, "   ")
 end
 
---- The whole list, as lines: every action, its keys, what it does.
+--- Returns every action as lines: the action, its keys, and what it does.
 function View:lines()
   local s, out = screens[self.screen], {}
   for _, action in ipairs(s.order) do
@@ -299,8 +303,8 @@ function View:lines()
   return out
 end
 
---- Show the `?` overlay. extra: lines to add under the screen's own keys
--- (what else works there).
+--- Shows the `?` overlay. `extra` is lines to add under the screen's own
+-- keys, listing what else works there.
 function View:show(title, extra)
   local out = { "KEYS HERE" }
   for _, line in ipairs(self:lines()) do out[#out + 1] = line end
@@ -324,7 +328,7 @@ function View:show(title, extra)
   lulibre.show(out, title or self.screen)
 end
 
---- The keys of one screen.
+--- Returns the keys of one screen.
 -- @tparam string screen
 -- @treturn table with `:action(key)`, `:key(action)`, `:hint(...)`, `:own()`, `:lines()`, `:show(title, extra)`
 function M.of(screen)

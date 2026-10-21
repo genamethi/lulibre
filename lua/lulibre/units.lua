@@ -1,25 +1,25 @@
---- lulibre's part in the systemd units around calibre's content server, as
--- three options ask for it:
+--- Sets up lulibre's systemd units around calibre's content server.
+-- Three options say which units to set up:
 --
---   server_hook = true          lulibre.service, run before each start of the
---                               server's unit (lulibre offline: the copy of
---                               calibre's database, the opf files, the changes
---                               that wait for the server to be stopped)
---   opf_writer = "server"       a drop-in on the server's unit,
---                               lulibre-opf-writer.conf, that starts the server
---                               through calibre-server-opf.py, so calibre's own
---                               opf writer runs in it
---   server_restart_at = "HH:MM" lulibre-restart.timer: the server restarted
---                               every day at that time
+-- - `server_hook = true`: lulibre.service, which runs before each start of
+--   the server's unit. It runs `lulibre offline`: the copy of calibre's
+--   database, the opf files, and the changes that wait for the server to stop.
+-- - `opf_writer = "server"`: a drop-in on the server's unit,
+--   lulibre-opf-writer.conf. It starts the server through
+--   calibre-server-opf.py, so calibre's own opf writer runs in the server.
+-- - `server_restart_at = "HH:MM"`: lulibre-restart.timer, which restarts the
+--   server every day at that time.
 --
--- M.plan() compares what the options ask for with what is installed, and
--- M.apply() makes the difference: the files of a user unit lulibre writes
--- itself; a system unit's are written with sudo, in the terminal, after
--- asking. A unit with sandboxing or hardening settings is not given the
--- drop-in (it changes how the server starts): the change is shown instead.
--- The interface applies a user unit's changes when it starts and when one of
--- the three options is changed in the configuration window; `lulibre units`
--- shows the plan, `lulibre units apply` makes it.
+-- `plan` compares what the options ask for with what is installed, and
+-- `apply` makes the difference. lulibre writes a user unit's files itself. A
+-- system unit's files are written with sudo, in the terminal, after asking.
+-- A unit with sandboxing or hardening settings doesn't get the drop-in,
+-- because the drop-in changes how the server starts; lulibre shows the
+-- change instead.
+--
+-- The interface applies a user unit's changes when it starts, and when one
+-- of the three options is changed in the config window. `lulibre units`
+-- shows the plan, and `lulibre units apply` carries it out.
 --
 -- @module lulibre.units
 -- @usage
@@ -35,7 +35,7 @@ local uv = require "luv"
 M.HOOK = "lulibre.service"
 --- The drop-in on the server's unit (`opf_writer = "server"`).
 M.DROPIN = "lulibre-opf-writer.conf"
---- The drop-in's name before these options, as `lulibre server-unit` wrote it.
+--- The drop-in's old name, from before these options, as `lulibre server-unit` wrote it.
 M.OLD_DROPIN = "lulibre-opf.conf"
 M.TIMER, M.TIMER_SERVICE = "lulibre-restart.timer", "lulibre-restart.service"
 
@@ -89,12 +89,12 @@ local function running_units()
   return out
 end
 
---- Where a user's units are written: ~/.config/systemd/user.
+--- Returns the folder where a user's units are written: ~/.config/systemd/user.
 -- @treturn string
 function M.user_dir()
   return (os.getenv("HOME") or "") .. "/.config/systemd/user"
 end
---- Where system units are written.
+--- The folder where system units are written.
 M.SYSTEM_DIR = "/etc/systemd/system"
 
 -- units whose files start calibre-server, running or not
@@ -117,9 +117,9 @@ local function unit_files()
   return out
 end
 
---- The units that run calibre-server: those running it now, else those
--- whose files start it. `{ {name=, user=, pid=}, ... }`.
--- @treturn {table,...}
+--- Returns the units that run calibre-server: the units running it now, or
+-- else the units whose files start it.
+-- @treturn {table,...} `{ {name=, user=, pid=}, ... }`
 function M.find()
   local units = running_units()
   if #units == 0 then units = unit_files() end
@@ -308,11 +308,11 @@ local function valid_time(at)
   return h and tonumber(h) < 24 and tonumber(m) < 60
 end
 
---- What the options ask for against what is installed: `{ server=, why=,
--- changes = { {feature=, option=, files = { {path=, text=} }, remove = { path, ... },
--- after = { {systemctl args}, ... }, restart=, manual=, cannot=, note=, from_tree= }, ... } }`.
--- A change with `manual` or `cannot` is not made: it is shown.
--- @treturn table
+--- Compares what the options ask for with what is installed, and returns
+-- the changes. A change with `manual` or `cannot` set is shown, not made.
+-- @treturn table `{ server=, why=, changes = { {feature=, option=, files = { {path=, text=} },
+-- remove = { path, ... }, after = { {systemctl args}, ... }, restart=, manual=, cannot=, note=,
+-- from_tree= }, ... } }`
 function M.plan()
   local p = { changes = {} }
   local found = M.find()
@@ -408,7 +408,7 @@ local function sc_line(user, args)
   return (user and "systemctl --user " or "sudo systemctl ") .. table.concat(args, " ")
 end
 
---- The plan, in lines.
+--- Returns the plan as lines.
 -- @tparam table p the plan
 -- @treturn {string,...}
 function M.describe(p)
@@ -500,12 +500,12 @@ local function run_system(c)
   for _, cmd in ipairs(c.after or {}) do sudo({ "systemctl", table.unpack(cmd) }) end
 end
 
---- Make the plan's changes. confirm(question) is asked before a system
--- unit's changes (sudo) and before restarting the server; nil: nothing is
--- asked, and only a user unit's changes are made. Returns the lines said.
+--- Makes the plan's changes.
 -- @tparam table p the plan
--- @tparam[opt] function confirm `confirm(question)` -> boolean
--- @treturn {string,...}
+-- @tparam[opt] function confirm `confirm(question)` -> boolean, asked before a system
+-- unit's changes (sudo) and before restarting the server. Without `confirm`, nothing is
+-- asked and only a user unit's changes are made.
+-- @treturn {string,...} the lines to show
 function M.apply(p, confirm)
   local out = {}
   if not p.server or p.why then
@@ -554,9 +554,9 @@ function M.apply(p, confirm)
   return out
 end
 
---- When the interface starts: a user unit's changes are made, as the options
--- ask (said in a line); a system unit's wait for `lulibre units apply`.
--- A replaceable function.
+--- Runs when the interface starts. Makes a user unit's changes as the
+-- options ask, and says so in one line. A system unit's changes wait for
+-- `lulibre units apply`. A replaceable function.
 function M.on_start()
   local ok, p = pcall(M.plan)
   if not ok or not p.server or p.why or #p.changes == 0 then return end

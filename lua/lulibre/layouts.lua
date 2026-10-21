@@ -1,35 +1,37 @@
---- Layouts: kinds of page that say their facts in known places.
+--- Reads pages that state their facts in known places.
 --
--- A book's cataloguing block, a publisher's series page, the stamp arXiv
--- prints down a margin: where one of these is recognised, what it says can
--- be read by rule and with more confidence than a title page read by the
--- size of its type. A layout is a description of such a page:
+-- Examples are a book's cataloguing block, a publisher's series page and
+-- the stamp arXiv prints down a margin. If lulibre recognises such a page,
+-- it reads the page by rule, with more confidence than a title page read
+-- by font size. A layout describes one kind of page:
 --
---   local layouts = require "lulibre.layouts"
---   layouts.add {
---     name = "ams-memoirs",                          -- shown as where a value came from
---     marks = { "memoirs of the", "american mathematical society" },
---     fields = {
---       series = "Memoirs of the American Mathematical Society",      -- a value as it stands
---       series_index = "Number%s+(%d+)",                              -- a pattern with a capture
---       pubdate = "(%d%d%d%d)%s*%S*%s*Volume",
---       publisher = function(text, doc) return "AMS" end,             -- or a function
---     },
---     confidence = 0.85,
---   }
+--    local layouts = require "lulibre.layouts"
+--    layouts.add {
+--      name = "ams-memoirs",                          -- shown as where a value came from
+--      marks = { "memoirs of the", "american mathematical society" },
+--      fields = {
+--        series = "Memoirs of the American Mathematical Society",      -- a value as it stands
+--        series_index = "Number%s+(%d+)",                              -- a pattern with a capture
+--        pubdate = "(%d%d%d%d)%s*%S*%s*Volume",
+--        publisher = function(text, doc) return "AMS" end,             -- or a function
+--      },
+--      confidence = 0.85,
+--    }
 --
--- marks: Lua patterns, matched without regard to case, that must all stand
--- on one of the file's first pages for the layout to apply; that page's text
--- is what the fields are read from. (Or `find = function(doc)`, returning
--- the text to read, for a test that patterns cannot make.)
--- fields: for each field (title authors tags series series_index publisher
--- pubdate identifiers), a constant, a pattern whose first capture is the
--- value, or a function(text, doc) returning it. A layout may instead give
--- `read = function(text, doc)` returning a table of fields.
--- confidence: how far its word is taken (default 0.8).
+-- - `marks`: Lua patterns, matched ignoring case. All of them must appear
+--   on one of the file's first pages for the layout to apply, and the
+--   fields are read from that page. For a test patterns can't express, give
+--   `find = function(doc)` instead, returning the text to read.
+-- - `fields`: for each field (title authors tags series series_index
+--   publisher pubdate identifiers), a constant, a pattern whose first
+--   capture is the value, or a function(text, doc) returning the value. A
+--   layout may instead give `read = function(text, doc)` returning a table
+--   of fields.
+-- - `confidence`: how far the layout is trusted (0.8 by default).
 --
--- Put your own in ~/.config/lulibre/init.lua or a module it requires. :run
--- candidates shows what every layout reads from the book under the cursor.
+-- Add your own layouts in ~/.config/lulibre/init.lua or a module it
+-- requires. `:run candidates` shows what every layout reads from the book
+-- under the cursor.
 --
 -- @module lulibre.layouts
 -- @usage
@@ -46,7 +48,7 @@ local M = {}
 --- The layouts, in the order they are tried.
 M.list = {}
 
---- Add a layout, or replace the one of the same name.
+--- Adds a layout, or replaces the layout with the same name.
 -- @tparam table layout
 function M.add(layout)
   assert(type(layout) == "table" and type(layout.name) == "string", "a layout is a table with a name")
@@ -62,7 +64,7 @@ function M.add(layout)
   return layout
 end
 
---- Take a layout out.
+--- Removes a layout.
 -- @tparam string name
 function M.remove(name)
   for i, l in ipairs(M.list) do
@@ -90,10 +92,9 @@ local function find(layout, doc)
   return nil
 end
 
---- What the layouts read from a document: { {field=, value=, source=, confidence=}, ... }.
--- doc.texts: the text of each leading page.
--- @tparam table doc
--- @treturn {table,...}
+--- Returns what the layouts read from a document.
+-- @tparam table doc `doc.texts` is the text of each of the first pages
+-- @treturn {table,...} `{ {field=, value=, source=, confidence=}, ... }`
 function M.read(doc)
   local out = {}
   for _, layout in ipairs(M.list) do
@@ -148,7 +149,7 @@ end
 -- Series known by one spelling, and who publishes each (nil where more than
 -- one house has a series of the name).
 local AMS, CUP, PUP = "American Mathematical Society", "Cambridge University Press", "Princeton University Press"
---- Series known by one spelling, and who publishes each: `{ { name, house }, ... }`.
+--- Series with one known spelling, and the publisher of each: `{ { name, house }, ... }`.
 M.series = {
   { "Graduate Texts in Mathematics", "Springer" }, { "Undergraduate Texts in Mathematics", "Springer" },
   { "Lecture Notes in Mathematics", "Springer" }, { "Lecture Notes in Computer Science", "Springer" },
@@ -170,8 +171,8 @@ M.series = {
   { "Mathematical Sciences Research Institute Publications" },
 }
 
---- A series' name as the series writes it: a known one by its usual
--- spelling, any other in title case.
+--- Returns a series' name as the series writes it: a known series in its
+-- usual spelling, any other in title case.
 -- @tparam string s
 -- @treturn string
 function M.series_name(s)
@@ -254,8 +255,8 @@ local function labelled_cip(block, text)
   return out
 end
 
---- The cataloguing block the Library of Congress (or the British or German
--- national library) supplies for the back of a title page:
+--- Reads the cataloguing block that the Library of Congress (or the
+-- British or German national library) supplies for the back of a title page:
 --
 --   Library of Congress Cataloging in Publication Data
 --   Lang, Serge                               the main entry: who it is filed under
@@ -265,9 +266,9 @@ end
 --   QA387.L35 1985                            the class it is shelved in, and the year
 --   512'.55                                   its Dewey number
 --
--- Returns a table of fields; what cannot be made out is left out.
--- The block as it has been set out since 2015, each part under a label, is read too.
--- @tparam string text a page's
+-- Returns a table of fields, leaving out what can't be read. The labelled
+-- form used since 2015 is read too.
+-- @tparam string text a page's text
 -- @treturn table
 function M.cip(text)
   local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme")
@@ -485,14 +486,14 @@ local function words(list)
   return out
 end
 
---- what stands before "Series" when the series is a sum, not a set of books
+--- Words before "Series" when the series is a mathematical sum, not a set of books.
 M.not_series = words [[fourier power dirichlet taylor laurent maclaurin random time eisenstein poincaré poincare hilbert
   puiseux formal infinite trigonometric divergent convergent composition central derived hypergeometric asymptotic theta
   farey singular geometric harmonic complementary discrete principal volterra neumann binomial orthogonal double multiple
   lambert fibonacci numerical alternating telescoping generating zeta chief normal subnormal upper lower new second third
   first fourth this the a each in of and]]
 
---- houses and societies whose name opens the name of a series
+--- Publishers and societies whose name starts a series' name.
 M.series_houses = words [[springer cambridge oxford princeton wiley mit chapman academic elsevier north-holland birkhäuser
   birkhauser ams ias london gruyter world dover pearson mcgraw-hill addison-wesley prentice crc siam ems clay fields cbms nato
   schaum's schaum university chicago harvard yale stanford american european society international carus pitman van
@@ -561,12 +562,12 @@ local function dressed(name)
   return name
 end
 
---- The series a page names, if it names one: its name, the volume's number
--- (or nil), and what bears it out.
+--- Returns the series a page names, if any: its name, the volume's number
+-- (or nil), and the evidence.
 -- @tparam string text
 -- @treturn[1] string the name
 -- @treturn[1] string|nil the number
--- @treturn[1] string what bears it out
+-- @treturn[1] string the evidence
 -- @treturn[2] nil
 function M.series_line(text)
   local lines = {}
@@ -689,13 +690,14 @@ local function month_of(word)
   return MONTHS[lulibre.lower(word)]
 end
 
---- The date a piece of text opens with, as YYYY-MM-DD, and where it ends:
--- "8 February 1972", "Feb. 8, 1972", "March 2004" (the first of the month),
--- "2004-03-12". nil when it does not open with one. Dates written in
--- figures alone (3/12/2004) are not read: which is the month?
+--- Returns the date a text starts with, as YYYY-MM-DD, and where the date
+-- ends. Reads "8 February 1972", "Feb. 8, 1972", "March 2004" (the first of
+-- the month) and "2004-03-12". Returns nil if the text does not start with
+-- a date. Dates in digits only (3/12/2004) are not read, since the month is
+-- ambiguous.
 -- @tparam string s
 -- @treturn[1] string YYYY-MM-DD
--- @treturn[1] integer where it ends
+-- @treturn[1] integer where the date ends
 -- @treturn[2] nil
 function M.date(s)
   s = s:gsub("^%s+", "")
@@ -783,10 +785,11 @@ M.add {
 
 local DASH = "[%-\226]" -- a hyphen, or the first byte of an en or em dash
 
---- Where an article stands, from the heading a journal puts over it:
--- "Physica 63 (1973) 1-32", "Journal of Algebra 320 (2008) 1234–1256",
--- "Invent. math. 123, 1–40 (1996)", "Ann. of Math. (2) 141 (1995), 443–551".
--- @tparam string text a page's
+--- Returns where an article was published, from the heading a journal
+-- puts over it: "Physica 63 (1973) 1-32", "Journal of Algebra 320 (2008)
+-- 1234–1256", "Invent. math. 123, 1–40 (1996)", "Ann. of Math. (2) 141
+-- (1995), 443–551".
+-- @tparam string text a page's text
 -- @treturn table|nil `{ journal=, volume=, year=, pages= }`, for the first such line
 function M.journal(text)
   local n = 0
@@ -843,10 +846,11 @@ M.add {
   confidence = 0.8,
 }
 
---- Whose copyright it is: on a book or a journal's article, the publisher.
--- Houses are known by a word of their name and written one way (M.houses:
--- { pattern, name }, the pattern matched against the holder in lower case);
--- add to it for more.
+--- Known publishers, as `{ pattern, name }`. On a book or a journal
+-- article, the copyright holder is the publisher. A publisher is
+-- recognised by a word of its name (the pattern, matched against the
+-- holder in lower case) and written one way (the name). Add entries for
+-- more publishers.
 M.houses = {
   { "springer", "Springer" }, { "birkh.-user", "Birkhäuser" }, { "elsevier", "Elsevier" }, { "north%-holland", "North-Holland" },
   { "academic press", "Academic Press" }, { "cambridge university press", "Cambridge University Press" },
@@ -870,9 +874,9 @@ M.houses = {
   { "benjamin", "W. A. Benjamin" }, { "van nostrand", "Van Nostrand" }, { "hermann", "Hermann" }, { "interscience", "Interscience" },
 }
 
---- A publisher's name written the one way its house is (M.houses), or as it
--- is when the house is not known: "Springer-Verlag New York, Inc." and
--- "Springer Science and Business Media LLC" are "Springer".
+--- Returns a publisher's name in the one form `houses` gives it, or
+-- unchanged if the publisher is not known. "Springer-Verlag New York, Inc."
+-- and "Springer Science and Business Media LLC" both become "Springer".
 -- @tparam string name
 -- @treturn string
 function M.house(name)
@@ -885,8 +889,8 @@ function M.house(name)
   return (trim(name):gsub("%s*%([%u&]+%)$", ""))
 end
 
---- The house a name is one of (as M.houses writes it), or nil when it is
--- none that is known.
+--- Returns the known publisher a name belongs to, as `houses` writes it,
+-- or nil.
 -- @tparam string name
 -- @treturn string|nil
 function M.known_house(name)
@@ -898,16 +902,16 @@ function M.known_house(name)
   return nil
 end
 
---- Who registers a journal's articles without publishing the journal: not
--- named as its publisher.
+--- Archives that register a journal's articles without publishing the
+-- journal, so they are never named as the publisher.
 M.archives = { "jstor", "project euclid", "project muse", "crossref" }
 
---- what stands between a house and its journal
+--- The text between a publisher and its journal.
 M.journal_join = ": "
 
---- The publisher of an article: its journal, after the house that puts the
--- journal out when there is one ("Elsevier: Journal of Algebra"). Either
--- alone when the other is missing; nil when both are.
+--- Returns the publisher of an article: the journal, after the journal's
+-- publisher if there is one ("Elsevier: Journal of Algebra"). If one is
+-- missing, returns the other; if both are missing, nil.
 -- @tparam string|nil publisher
 -- @tparam string|nil journal
 -- @treturn string|nil
@@ -933,11 +937,12 @@ local ORG = { "press", "publish", "verlag", "society", "university", "books", "m
 local SIGNS = { "©%s*", "[Cc]opyright%s*%(?[cC]?%)?%s*\194?\169?%s*", "COPYRIGHT%s*%(?[cC]?%)?%s*\194?\169?%s*", "%(c%)%s*" }
 local YEARS = "[%d,%s%-\226\128\147\148]*%d%d%d%d"
 
---- The holder a copyright line names, if it is a publisher: its name (as
--- M.houses writes it, or as the line does), and whether the house is known.
+--- Returns the holder a copyright line names, if the holder is a
+-- publisher: the name (as `houses` writes it, or as the line does), and
+-- whether the publisher is known.
 -- @tparam string text
 -- @treturn[1] string the name
--- @treturn[1] boolean the house is known
+-- @treturn[1] boolean true if the publisher is known
 -- @treturn[2] nil
 function M.copyright_holder(text)
   for raw in text:gmatch("[^\n]+") do

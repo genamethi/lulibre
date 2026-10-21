@@ -1,10 +1,12 @@
---- Proposed changes waiting for a decision.
--- Scripts add them; `:review` shows them; accepted ones are applied as one
--- batch. They are kept in the index database, so a long review can be
--- spread over several sessions. A proposal is a row of the table
--- `proposals`: `{ id=, book=, field=, op=, value=, source=, confidence=,
--- status=, created=, note=, asked= }`, status one of "pending", "accepted",
--- "applied", "rejected", "barred".
+--- Stores proposed changes until you accept or reject them in review.
+-- Scripts add proposals, and `:review` shows them. lulibre writes the
+-- accepted proposals together as one batch. Proposals are stored in the
+-- index, so you can finish a review in a later session.
+--
+-- A proposal is a row of the `proposals` table: `{ id=, book=, field=,
+-- op=, value=, source=, confidence=, status=, created=, note=, asked= }`.
+-- A proposal's status is "pending", "accepted", "applied", "rejected" or
+-- "barred".
 --
 -- @module lulibre.proposals
 -- @usage
@@ -24,7 +26,7 @@ local M = {}
 -- shows them; a typed proposal, one without a confidence, and one asked for
 -- (opts.asked: taking a copy's values) are always shown.
 
---- Is the source that of a subject learned from the library?
+--- Returns true if the source is a subject learned from the library.
 -- @tparam string source a proposal's source
 -- @treturn boolean
 function M.learned(source)
@@ -32,8 +34,8 @@ function M.learned(source)
   return source:find("^learned:") ~= nil or source:find("^shares references with ") ~= nil
 end
 
---- The confidence a proposal from this source needs to be shown:
--- `propose_min`, or `learned_tags_min` for a learned subject.
+--- Returns the lowest confidence at which a proposal from this source is
+-- shown: `propose_min`, or `learned_tags_min` for a learned subject.
 -- @tparam string source
 -- @treturn number 0 to 1
 function M.floor(source)
@@ -41,8 +43,9 @@ function M.floor(source)
   return (tonumber(pct) or 0) / 100
 end
 
---- Is the proposal shown? Accepted, typed, asked for, without a
--- confidence, or at least at its source's floor (`floor`).
+--- Returns true if review shows the proposal. A proposal is shown if it is
+-- accepted, typed, asked for, has no confidence, or reaches its source's
+-- `floor`.
 -- @tparam table pr a proposal: `confidence`, `source`, `status`, `asked`
 -- @treturn boolean
 function M.shown(pr)
@@ -50,7 +53,7 @@ function M.shown(pr)
     or pr.confidence >= M.floor(pr.source) - 1e-9
 end
 
---- `shown` in SQL, for a query of the table proposals.
+--- Returns the test `shown` makes, as SQL, for a query of the `proposals` table.
 -- @function shown_sql
 -- @treturn string a condition beginning " AND (", to append to a WHERE clause
 local function shown_sql()
@@ -61,19 +64,22 @@ local function shown_sql()
 end
 M.shown_sql = shown_sql
 
---- Propose a change.
--- A title that arrives in capitals is proposed in title case, as the
--- option `title_case` allows, and with its mathematics in Unicode, as
--- `math_notation` allows (`lulibre.notation`), unless it was typed (source
--- "typed") or `opts.as_is` is set. A value that was proposed for this book
--- and field and barred (N in review: never again) is not proposed again,
--- nor one that was rejected when `review_reject` is "always", unless it is
--- typed or `opts.again` is set. When the same proposal is waiting and this
--- source is surer, the waiting one takes this source and confidence.
--- Proposals not shown, for the same book and field, are removed when
--- another value is proposed for it, unless `propose_held` is "keep" (not
--- for subjects and identifiers, where each value is one more, not another
--- choice).
+--- Proposes a change to a book.
+--
+-- A title in capitals is converted to title case (if `title_case` allows)
+-- and its mathematics to Unicode (if `math_notation` allows). Typed values
+-- and `opts.as_is` skip both conversions.
+--
+-- A value you barred for this book and field (N in review) is not proposed
+-- again. Neither is a rejected value when `review_reject` is "always".
+-- Typed values and `opts.again` override both.
+--
+-- If the same proposal is already waiting and the new source is more
+-- confident, the waiting proposal takes the new source and confidence.
+--
+-- Proposing a new value removes the hidden proposals for the same book and
+-- field, unless `propose_held` is "keep". Subjects and identifiers are
+-- exempt, since each value adds to the others instead of replacing them.
 -- @tparam integer id the book
 -- @tparam string field a field `lulibre.edit` knows ("title", "authors", "tags", "#custom" ...)
 -- @tparam string value
@@ -81,8 +87,8 @@ M.shown_sql = shown_sql
 -- `note`, `as_is`, `again`, `asked` (asked for: shown whatever `propose_min` says)
 -- @treturn[1] boolean true: proposed and shown
 -- @treturn[1] integer the proposal's id
--- @treturn[2] boolean false: the book has that value already, or the same proposal waits, or it was barred
--- @treturn[3] boolean false: kept but not shown, under `propose_min`
+-- @treturn[2] boolean false: the book has the value, the same proposal waits, or the value was barred
+-- @treturn[3] boolean false: stored but hidden, under `propose_min`
 -- @treturn[3] integer its id
 -- @treturn[3] string "held"
 function M.add(id, field, value, opts)
@@ -152,9 +158,9 @@ local function side(scope)
     .. " AND EXISTS (SELECT 1 FROM books b WHERE b.id = proposals.book)"
 end
 
---- Proposals with the given status, by book, strongest first. Pending ones
--- under `propose_min` are left out (`held` lists them). Proposals for a
--- book no longer there are not listed.
+--- Returns the proposals with a status, by book, most confident first.
+-- Pending proposals under `propose_min` are left out (`held` lists them),
+-- and so are proposals for books that have been removed.
 -- @tparam[opt] string status "pending" and "accepted" when not given
 -- @tparam[opt] string scope "library" (positive ids), "sync" (files staged from the sync folder,
 -- negative ids), or nil for both
@@ -168,8 +174,8 @@ function M.list(status, scope)
     shown_sql() .. " ORDER BY abs(book), field, confidence DESC, id")
 end
 
---- How many proposals have the status; pending ones under `propose_min`
--- are not counted.
+--- Returns how many proposals have a status. Pending proposals under
+-- `propose_min` are not counted.
 -- @tparam[opt] string status "pending" when not given
 -- @tparam[opt] string scope as for `list`
 -- @treturn integer
@@ -179,7 +185,8 @@ function M.count(status, scope)
     (status == "pending" and shown_sql() or ""), status)[1].n
 end
 
---- The pending proposals under `propose_min` (or `learned_tags_min`): kept, not shown.
+--- Returns the pending proposals that are stored but hidden, because they are
+-- under `propose_min` (or `learned_tags_min`).
 -- @tparam[opt] string scope as for `list`
 -- @treturn {table,...}
 function M.held(scope)
@@ -191,11 +198,11 @@ function M.held(scope)
   return out
 end
 
---- What waits for review, and the key that goes there, as a sentence:
--- "300 proposals wait. Press gr to review.", and how many are under
--- `propose_min` and not shown. Every script that proposes ends its summary
--- with it. A replaceable function.
--- @tparam[opt] string prefix put before it (not when it is empty)
+--- Returns a sentence about what waits for review, such as "300 proposals
+-- wait. Press gr to review.", followed by how many are hidden under
+-- `propose_min`. Every script that proposes ends its summary with this
+-- sentence. You can replace this function.
+-- @tparam[opt] string prefix put before the sentence, if the sentence is not empty
 -- @treturn string "" when none wait and none are held back
 function M.to_review(prefix)
   local n, held, learned = M.count("pending"), 0, 0
@@ -219,14 +226,14 @@ function M.to_review(prefix)
   return (prefix or "") .. table.concat(out, " ")
 end
 
---- Set a proposal's status.
+--- Sets a proposal's status.
 -- @tparam integer pid the proposal's id
 -- @tparam string status "pending", "accepted", "applied", "rejected", "barred"
 function M.set_status(pid, status)
   lulibre.store("UPDATE proposals SET status = ? WHERE id = ?", status, pid)
 end
 
---- Change what a proposal proposes; its source is marked " (edited)".
+--- Changes a proposal's value, and adds " (edited)" to its source.
 -- @tparam integer pid the proposal's id
 -- @tparam string value
 -- @tparam[opt] string op the operation, when it changes
@@ -236,8 +243,8 @@ function M.set_value(pid, value, op)
     WHERE id = ?]], value, op, pid)
 end
 
---- Accept a proposal. For a single-valued field (op "set"), the others
--- accepted for that book and field go back to pending.
+--- Accepts a proposal. For a field that holds one value (op "set"), any
+-- other accepted proposal for the same book and field goes back to pending.
 -- @tparam table p the proposal: `id`, `book`, `field`, `op`
 function M.accept(p)
   if p.op == "set" then
@@ -247,9 +254,9 @@ function M.accept(p)
   M.set_status(p.id, "accepted")
 end
 
---- Apply every accepted proposal as one batch, and wait. Applied ones are
--- marked so, failed ones go back to pending, and pending ones the library
--- now already agrees with are marked applied.
+--- Writes every accepted proposal as one batch, and waits until done.
+-- Written proposals are marked applied and failed ones go back to pending.
+-- Pending proposals that now match the library are marked applied too.
 -- @tparam[opt] string scope as for `list`
 -- @tparam[opt] table only a set of book ids, `{ [id] = true }`, to keep to; the rest stay accepted
 -- @treturn table `lulibre.edit.apply`'s result
@@ -282,9 +289,9 @@ function M.apply_accepted(scope, only)
   return r
 end
 
---- Would this proposal replace a value the book has (rather than fill an
--- empty field, or add to a list)? A value that is plainly not one (a file
--- name for a title) does not count as one.
+--- Returns true if the proposal would replace a value the book has, rather
+-- than fill an empty field or add to a list. A junk value, such as a file
+-- name used as a title, counts as empty.
 -- @tparam table p the proposal
 -- @treturn boolean
 function M.replaces(p)
@@ -295,7 +302,7 @@ function M.replaces(p)
   return not require("lulibre.propose").is_gap(p.field, edit.current(book, p.field), p.book)
 end
 
---- Drop proposals: by status, or every one not yet applied.
+--- Deletes the proposals with a status, or all that are not applied.
 -- @tparam[opt] string status
 function M.clear(status)
   if status then lulibre.store("DELETE FROM proposals WHERE status = ?", status)

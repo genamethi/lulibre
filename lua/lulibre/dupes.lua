@@ -1,6 +1,7 @@
---- Books whose files hold exactly the same bytes. Two files can only be the
--- same if they are the same size, so only files that share a size with
--- another are read and hashed (MD5); the hashes are remembered in the index.
+--- Finds books whose files hold exactly the same bytes.
+-- Two files can be the same only if they have the same size, so dupes reads
+-- and hashes (MD5) only the files that share a size with another file. The
+-- index stores the hashes.
 --
 -- @module lulibre.dupes
 -- @usage
@@ -14,7 +15,8 @@ local junk = require "lulibre.junk"
 
 local M = {}
 
---- How much a record says about its book; the richest copy is the one kept.
+--- Returns how much a record says about its book. Each group keeps the
+-- copy with the richest record.
 -- @tparam table book
 -- @treturn number
 function M.score(book)
@@ -46,12 +48,11 @@ local function library_files()
   return out
 end
 
---- Hash what needs hashing and return the groups of identical files:
--- { { md5=, size=, books = { book, ... }, keep = id }, ... }, biggest waste
--- first. Each book also carries .file (its path) and .score. opts.all hashes
--- every file, not only those that share a size. Waits; shows progress.
--- @tparam[opt] table opts `all`
--- @treturn {table,...} the groups
+--- Hashes the files that need hashing and returns the groups of identical
+-- files, the most wasted space first. Each book in a group also has `.file`
+-- (its path) and `.score`. Waits, and shows progress.
+-- @tparam[opt] table opts `all` hashes every file, not only the files that share a size
+-- @treturn {table,...} the groups: `{ { md5=, size=, books = { book, ... }, keep = id }, ... }`
 function M.scan(opts)
   opts = opts or {}
   local files = library_files()
@@ -107,7 +108,8 @@ function M.scan(opts)
   return groups, { hashed = #files, unreadable = unreadable }
 end
 
---- The books that would go if each group kept only its chosen copy.
+--- Returns the books that would be removed if each group kept only its
+-- chosen copy.
 -- @tparam {table,...} groups as `scan` gives them
 -- @treturn {table,...} the books
 function M.surplus(groups)
@@ -122,8 +124,9 @@ function M.surplus(groups)
   return ids
 end
 
---- What the copies to be removed know that the kept one does not, as changes
--- to the kept book: empty fields are filled, tags and identifiers are added.
+--- Returns what the copies to be removed know and the kept copy doesn't, as
+-- changes to the kept book. The changes fill empty fields and add tags and
+-- identifiers.
 -- @tparam {table,...} groups
 -- @treturn {table,...} changes `{ id=, field=, value=, op= }`
 function M.gather(groups)
@@ -157,14 +160,13 @@ function M.gather(groups)
   return changes
 end
 
---- Propose for one book what another book's record says: every field where
--- `from` has a value and `to` has none or a different one (tags and
--- identifiers are proposed as additions). Nothing is written: the
--- proposals wait in review, where each is accepted or not. Returns how many
--- were made.
+--- Proposes another book's values for one book: every field where `from`
+-- has a value and `to` has none or a different one. Tags and identifiers
+-- are proposed as additions. Nothing is written; the proposals wait in
+-- review.
 -- @tparam table from a book
 -- @tparam table to a book
--- @treturn integer
+-- @treturn integer how many proposals were made
 function M.pull(from, to)
   local proposals = require "lulibre.proposals"
   local n = 0
@@ -181,12 +183,11 @@ function M.pull(from, to)
   return n
 end
 
---- Turn gathered changes into proposals, so that removing a record loses
--- nothing it knew. `what` names where they came from ("duplicate", "record
--- with no file"). Returns how many proposals were new.
+--- Turns gathered changes into proposals, so that removing a record loses
+-- nothing the record knew.
 -- @tparam {table,...} changes
--- @tparam string what
--- @treturn integer
+-- @tparam string what where the changes came from ("duplicate", "record with no file")
+-- @treturn integer how many proposals were new
 function M.propose(changes, what)
   if #changes == 0 then return 0 end
   if not lulibre.policy("carry_metadata", ("keep what the %s records being removed know (%d values) as proposals?"):format(
@@ -203,8 +204,8 @@ function M.propose(changes, what)
   return n
 end
 
---- The books in the library whose file has this hash (only files that have
--- been hashed are found; M.scan hashes them).
+--- Returns the library books whose file has this hash. Only hashed files
+-- are found; `scan` hashes them.
 -- @tparam string md5
 -- @treturn {integer,...} ids
 function M.books_with(md5)
@@ -216,8 +217,9 @@ function M.books_with(md5)
   return ids
 end
 
---- The library books that already hold the bytes of the file at path
--- (usually none or one). Reads only library files of exactly that size.
+--- Returns the library books that already hold the bytes of the file at
+-- `path`, usually none or one. Reads only library files of exactly the
+-- same size.
 -- @tparam string path
 -- @treturn {integer,...} ids
 function M.holders(path)
@@ -243,14 +245,14 @@ function M.holders(path)
   return out
 end
 
---- The first of M.holders(path), or nil.
+--- Returns the first of `holders(path)`, or nil.
 -- @tparam string path
 -- @treturn integer|nil
 function M.twin(path)
   return M.holders(path)[1]
 end
 
---- A size in bytes as people read it: "1.2 GB", "340.0 MB", "12 kB".
+--- Returns a size in bytes in readable form: "1.2 GB", "340.0 MB", "12 kB".
 -- @tparam number bytes
 -- @treturn string
 function M.human(bytes)

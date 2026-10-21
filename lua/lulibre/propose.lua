@@ -1,21 +1,21 @@
---- Deciding what to propose for a book from what its file says.
+--- Decides what to propose for a book from the book's file.
 --
--- A field that is empty, or holds what is plainly not a value (a file name
--- for a title), is a gap, and the file's best candidate is proposed for it.
--- A field that holds a value is another matter: the value may be right and
--- the file's title page misread, or the value may be a slip of the hand and
--- the file right. How far the file is believed over what the book already
--- says is the option `propose_over`:
+-- A gap is a field that is empty or holds something that is clearly not a
+-- value, such as a file name as a title. lulibre proposes the file's best
+-- candidate for every gap. A field with a value is different: the value may
+-- be right and the title page misread, or the value may be a typo and the
+-- file right. The option `propose_over` sets when lulibre proposes the
+-- file's value over the book's:
 --
---   "gaps"   never: only gaps are proposed for
---   "sure"   when the file's evidence is strong (confidence 0.8 or more:
---            a stated identifier, a labelled cover sheet, a clear title
---            page) and says something different
---   "any"    whenever the file's best candidate differs
+-- - "gaps": never. lulibre proposes only for gaps.
+-- - "sure": when the file's evidence is strong (confidence 0.8 or more,
+--   such as a stated identifier, a labelled cover sheet or a clear title
+--   page) and differs from the book's value.
+-- - "any": whenever the file's best candidate differs.
 --
--- Whatever the option, the value the book has is never treated as surer
--- than the file's because someone typed it: review shows both side by side
--- and the decision is made there.
+-- lulibre never trusts the book's value more than the file's just because
+-- someone typed it. Review shows both values side by side, and you decide
+-- there.
 --
 -- @module lulibre.propose
 -- @usage
@@ -31,7 +31,7 @@ local quality = require "lulibre.quality"
 
 local M = {}
 
---- How sure the file must be to be proposed over a value, under "sure".
+--- The confidence a candidate needs to be proposed over a value, if `propose_over` is "sure".
 M.SURE = 0.8
 
 -- a value reduced to what matters when asking "do these say the same?":
@@ -80,9 +80,9 @@ local function same_people(a, b)
   return true
 end
 
---- Is a subject a finer one under a subject the book has, and not one it
--- has already? tags: the book's, as "a, b/c". ("cs/ml" refines "cs"; not
--- when the book has "cs/ml" or "cs/ml/theory" too.)
+--- Returns true if a subject is narrower than one the book has, and the
+-- book doesn't have it yet. For example, "cs/ml" refines "cs", but not if
+-- the book also has "cs/ml" or "cs/ml/theory".
 -- @tparam string tags the book's, as "a, b/c"
 -- @tparam string subject
 -- @treturn boolean
@@ -96,11 +96,10 @@ function M.refines(tags, subject)
   return under
 end
 
---- Do two values of a field say the same thing? Authors are compared as a
--- set of names; dates by year when either gives no more than a year. a is
--- what the book has, b what is offered: the same people named less fully
--- ("S. Joffily" for "Sérgio Joffily") say nothing new, named more fully
--- they do.
+--- Returns true if two values of a field mean the same. Authors are
+-- compared as a set of names. Dates are compared by year if either gives
+-- only a year. The same people with shorter names ("S. Joffily" for
+-- "Sérgio Joffily") count as the same; with fuller names they don't.
 -- @tparam string field
 -- @tparam string a what the book has
 -- @tparam string b what is offered
@@ -129,15 +128,14 @@ function M.same(field, a, b)
   return plain(a) == plain(b)
 end
 
---- Is a field's value no value at all: empty, or something that is plainly
--- not one? A title that is a file name, a number or a heading; an author
--- that is the program that made the file, a web site, a rank. Such a value
--- has no claim to stay, and whatever the file offers is proposed for it.
--- id: the book, when known. A record confirmed as good (:good) has no junk:
--- its values were looked at and stand.
+--- Returns true if a field's value is a gap: empty, or clearly not a real
+-- value. Examples are a title that is a file name, a number or a heading,
+-- and an author that is the program that made the file, a web site or a
+-- rank. The file's candidate is proposed for a gap. A record confirmed as
+-- good (:good) has no gaps of this kind, since its values were checked.
 -- @tparam string field
 -- @tparam string cur the value
--- @tparam[opt] integer id the book
+-- @tparam[opt] integer id the book, if known
 -- @treturn boolean
 function M.is_gap(field, cur, id)
   if cur == "" then return true end
@@ -153,15 +151,15 @@ function M.is_gap(field, cur, id)
 end
 local is_gap = M.is_gap
 
---- The letters and names a field goes by, as `only` (propose's fields) and review's filter take them.
+--- The letters and names of the fields, as `only` (propose's fields) and review's filter take them.
 M.FIELD = { t = "title", title = "title", a = "authors", author = "authors", authors = "authors", s = "tags",
   subject = "tags", tags = "tags", tag = "tags", i = "identifiers", id = "identifiers", ids = "identifiers",
   identifiers = "identifiers", identifier = "identifiers", d = "pubdate", date = "pubdate", pubdate = "pubdate",
   year = "pubdate", p = "publisher", publisher = "publisher", e = "series", series = "series",
   series_index = "series_index", n = "series_index" }
 
---- "title,authors" or "t,a" as a set of field names; nil and the offending
--- word when one is not a field.
+--- Converts a list such as "title,authors" or "t,a" into a set of field
+-- names. Returns nil and the bad word if a word is not a field.
 -- @tparam string list
 -- @treturn[1] table `{ [field] = true }`
 -- @treturn[2] nil
@@ -178,15 +176,15 @@ end
 
 local SINGLE = { title = true, authors = true, pubdate = true, publisher = true, series = true, series_index = true }
 
---- Which of a file's candidates (strongest first within a field, as
--- extract gives them) are worth proposing for a book. over: "gaps", "sure"
--- or "any" (default: the option propose_over). Each result carries
--- over = true when it would replace a value the book has.
--- opts (in place of over, a table): over as above; only: a set of fields to
--- keep to; fresh: propose as if the fields were empty, whatever they hold.
+--- Returns the file's candidates that are worth proposing for a book. The
+-- candidates are ordered strongest first within each field, as extract
+-- gives them. A result has `over = true` if it would replace a value the
+-- book has.
 -- @tparam table book
 -- @tparam {table,...} candidates
--- @tparam[opt] string|table over "gaps", "sure", "any", or opts `{ over=, only=, fresh= }`
+-- @tparam[opt] string|table over "gaps", "sure" or "any" (`propose_over` by default),
+-- or a table `{ over=, only=, fresh= }`: `only` is a set of fields to limit to, and
+-- `fresh` proposes as if the fields were empty
 -- @treturn {table,...} `{ field=, value=, op=, source=, confidence=, over= }`
 function M.wanted(book, candidates, over)
   local opts = type(over) == "table" and over or { over = over }
@@ -247,11 +245,10 @@ function M.wanted(book, candidates, over)
   return out
 end
 
---- Propose for one book from its file. opts.over, opts.only and opts.fresh
--- as for M.wanted; opts.again proposes even what was barred before. Returns how many
--- proposals were added, and how many of them replace a value the book has.
+--- Proposes values for one book from its file.
 -- @tparam integer id
--- @tparam[opt] table opts `over`, `only`, `fresh`, `again`
+-- @tparam[opt] table opts `over`, `only` and `fresh` as for `wanted`; `again`
+-- also proposes values that were barred before
 -- @treturn integer proposals added
 -- @treturn integer how many of them replace a value
 function M.book(id, opts)

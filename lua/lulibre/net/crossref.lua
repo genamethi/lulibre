@@ -1,6 +1,6 @@
---- CrossRef: records by DOI, in batches, and a search by title.
--- Part of lulibre.net: require that, not this (it adds these functions to
--- lulibre.net's table; lulibre/net/core.lua has what they share).
+--- Looks works up in CrossRef: by DOI, in batches, and by title.
+-- This file is part of lulibre.net. Require lulibre.net, which adds this
+-- file's functions to its table; the shared code is in lulibre/net/core.lua.
 --
 -- @submodule lulibre.net
 local M = require "lulibre.net.core"
@@ -51,7 +51,7 @@ local function mailto(sep)
   return mail ~= "" and sep .. "mailto=" .. encode(mail) or ""
 end
 
---- CrossRef's record for a DOI.
+--- Returns CrossRef's record for a DOI.
 -- @tparam string doi
 -- @treturn[1] table the record
 -- @treturn[2] nil
@@ -66,15 +66,15 @@ function M.crossref(doi)
   return rec
 end
 
---- how many DOIs go in one request to CrossRef
+--- How many DOIs go in one request to CrossRef.
 M.CROSSREF_BATCH = 20
 
---- Ask CrossRef about many DOIs in as few requests as it takes (its `filter`
--- takes several, and `select` leaves out the reference lists and the rest
--- that is not wanted), keeping each answer; M.crossref then answers from
--- what was kept. Returns how many were newly fetched.
+--- Asks CrossRef about many DOIs in as few requests as possible, and stores
+-- each answer, so `crossref` then answers from storage. CrossRef's `filter`
+-- takes several DOIs, and `select` leaves out the reference lists and other
+-- unneeded fields.
 -- @tparam {string,...} dois
--- @treturn integer
+-- @treturn integer how many records were newly fetched
 function M.crossref_prefetch(dois)
   local keys = {}
   for _, doi in ipairs(dois) do
@@ -98,11 +98,11 @@ function M.crossref_prefetch(dois)
   end)
 end
 
---- Search CrossRef by title; the record only if it is that work (title_match
--- says how). authors: the book's, when it has any worth the name. The
--- record carries `trust`: how far the match can be believed.
+--- Searches CrossRef by title, and returns the record only if it is the
+-- same work (see `title_match`). The record's `trust` says how far the
+-- match can be believed.
 -- @tparam string title
--- @tparam[opt] {string,...} authors
+-- @tparam[opt] {string,...} authors the book's authors, if they are real names
 -- @treturn[1] table the record
 -- @treturn[2] nil
 -- @treturn[2] string why not

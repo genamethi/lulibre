@@ -1,9 +1,10 @@
---- A dialog: a pane of boxes to tick, choices to step through, values to
--- type and things to do, under headings. It takes the keys while it is up,
--- and gives back what was set when one of its actions is chosen.
+--- Shows a dialog: a pane of checkboxes, choices, typed values and actions,
+-- under headings. The dialog takes the keys while it is open, and returns
+-- the values when you choose one of its actions.
 --
--- An item with `off` set is shown greyed, with why, and cannot be changed.
--- kinds: check, choice, number, text, action, note (a line of words).
+-- An item with `off` set is greyed out, shows why, and can't be changed.
+-- The kinds of item are check, choice, number, text, action and note (a
+-- line of text).
 --
 -- @module lulibre.ui.form
 -- @usage
@@ -26,9 +27,9 @@ local M = {}
 
 local keys = require("lulibre.ui.keys").of("form")
 
---- Show the dialog, and wait for one of its actions or for it to be closed.
+--- Shows the dialog and waits until you choose an action or close the dialog.
 -- @tparam table spec `{ title=, sections = { {title=, items = {...}}, ... } }`
--- @treturn string|nil the id of the action chosen; nil when it was closed
+-- @treturn string|nil the id of the chosen action, or nil if the dialog was closed
 -- @treturn table each item's value, by id
 function M.run(spec)
   local at -- row -> item

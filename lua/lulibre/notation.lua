@@ -1,22 +1,23 @@
---- Mathematics in titles, written in Unicode: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], X³ − 5.
+--- Writes the mathematics in titles in Unicode: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], X³ − 5.
 --
--- It comes from three places:
+-- The mathematics comes from three places:
 --
---   * the book's own pages: the PDF reader marks up a line's mathematics as
---     TeX from the fonts and the size and height of each character
---     ("COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$"; lulibre.lines gives
---     it as math=), and M.title turns that into the title;
---   * TeX in a record's title, as arXiv gives it ("On $\mathbb{Z}_p$-extensions"):
---     M.render;
---   * a title in plain text, where the scripts were lost on the way
---     ("SL2(Z)", "GLn(Qp)", "X3 −5"): the glossary, M.notation. It only
---     changes what reads one way; what could be read two ways is left.
+-- - the book's own pages. The PDF reader marks up a line's mathematics as
+--   TeX, from the fonts and from each character's size and height
+--   (`COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$`; lulibre.lines gives
+--   the TeX as math=). `title` turns the marked-up line into the title.
+-- - TeX in a record's title, as arXiv gives it (`On $\mathbb{Z}_p$-extensions`).
+--   `render` converts it.
+-- - a title in plain text that lost its scripts on the way ("SL2(Z)",
+--   "GLn(Qp)", "X3 −5"). The glossary (`notation`) converts it, and changes
+--   only text that can be read one way; text that can be read two ways is
+--   left alone.
 --
 -- Search is not affected: lulibre.fold, and calibre's own search, read
 -- SL₂(ℤ) as SL2(Z).
 --
--- Unicode has no subscript for some letters (b c d f g q w y z) nor a
--- superscript q: those are written _q and ^q, and longer ones _{…}.
+-- Unicode has no subscript for some letters (b c d f g q w y z) and no
+-- superscript q. Those are written _q and ^q, and longer ones _{…}.
 -- The option math_notation = "off" leaves titles as they come.
 --
 -- @module lulibre.notation
@@ -72,7 +73,7 @@ local function letter_in(alphabet, c)
   return c
 end
 
---- the number systems, which are set in bold as often as in blackboard
+--- The number systems, which are set in bold as often as in blackboard bold.
 M.bold = { Z = "ℤ", Q = "ℚ", R = "ℝ", C = "ℂ", N = "ℕ" }
 
 --- TeX's commands for letters and symbols, by name, as Unicode.
@@ -178,9 +179,9 @@ local function spaced(s)
   return (table.concat(out):gsub(" +", " "):gsub("^ ", ""):gsub(" $", ""):gsub("%( ", "("):gsub(" %)", ")"))
 end
 
---- One formula (what stands between dollars) in Unicode, or nil when it
--- holds something that has none (a fraction, a matrix, a command lulibre
--- does not know).
+--- Returns one formula (the text between dollars) in Unicode, or nil if the
+-- formula holds something with no Unicode form (a fraction, a matrix, a
+-- command lulibre does not know).
 -- @tparam string tex
 -- @treturn string|nil
 function M.unicode(tex)
@@ -255,11 +256,11 @@ function M.unicode(tex)
   return spaced(table.concat(out))
 end
 
---- Text with its formulas ($…$) in Unicode; a formula that has no Unicode
--- form keeps its dollars. opts.notes: drop the footnote marks the page
--- set after a word (Semirings∗, Title¹) or alone.
+--- Returns a text with its formulas ($…$) in Unicode. A formula with no
+-- Unicode form keeps its dollars.
 -- @tparam string s
--- @tparam[opt] table opts `notes`
+-- @tparam[opt] table opts `notes` drops the footnote marks set after a word
+-- (Semirings∗, Title¹) or on their own
 -- @treturn string
 function M.render(s, opts)
   if type(s) ~= "string" or not s:find("$", 1, true) then return s end
@@ -277,8 +278,8 @@ function M.render(s, opts)
   return (s:gsub("\1", "$"):gsub("  +", " "):gsub("^ ", ""):gsub(" $", ""))
 end
 
---- Does s hold mathematics in Unicode, or a formula? (Title case leaves such
--- a word alone.)
+--- Returns true if the text holds mathematics in Unicode, or a formula.
+-- Title case leaves words with mathematics alone.
 -- @tparam string s
 -- @treturn boolean
 function M.has_math(s)
@@ -295,18 +296,18 @@ end
 
 -- ---- the glossary: plain text where the scripts were lost ----
 
---- A subscript or a superscript in Unicode, or _q, ^{…} where it has none.
+--- Returns a subscript in Unicode, or _q or _{…} if Unicode has none.
 -- @tparam string s
 -- @treturn string
 function M.subscript(s) return script(M.sub, "_", s) end
---- A superscript in Unicode, or ^q, ^{…} where it has none.
+--- Returns a superscript in Unicode, or ^q or ^{…} if Unicode has none.
 -- @tparam string s
 -- @treturn string
 function M.superscript(s) return script(M.sup, "^", s) end
 local subs, sups = M.subscript, M.superscript
 local function bb(c) return M.bold[c] or c end
 
---- the groups whose index is written below: SL₂, GLₙ, PSL₂, SO₃
+--- The groups whose index is written as a subscript: SL₂, GLₙ, PSL₂, SO₃.
 M.groups = { "SL", "GL", "PSL", "PGL", "SO", "SU", "Sp", "PSp", "GSp", "PSO", "PSU", "sl", "gl" }
 
 -- a ring after a group, in brackets: (Z), (Qp), (Fq), (R)
@@ -323,9 +324,11 @@ local function ring(r)
   return letter .. (index ~= "" and subs(index == "l" and "ℓ" or index) or "")
 end
 
---- Each rule takes the text and gives it back with what it knows in Unicode.
--- They only see text outside formulas; add to the list, or replace one, in
--- init.lua.
+--- The glossary's rules. Each rule takes text and returns the text with the
+-- notation the rule knows written in Unicode. Rules see only text outside
+-- formulas. In init.lua you can add rules or replace one.
+-- @table glossary
+-- @field [n] a rule: `rule(text)` returns the text with its notation in Unicode
 M.glossary = {
   -- SL2 GLn PSL2 SL_2 SL_{2}, with the ring after it: SL2(Z) GLn(Qp)
   function(s)
@@ -396,8 +399,8 @@ M.glossary = {
   end,
 }
 
---- Plain text with the glossary's notation in Unicode. Formulas ($…$) are
--- left to M.render.
+--- Returns plain text with the glossary's notation in Unicode. Formulas
+-- ($…$) are left for `render`.
 -- @tparam string s
 -- @treturn string
 function M.notation(s)
@@ -412,13 +415,13 @@ function M.notation(s)
   return (table.concat(parts):gsub("\1", "\\$"))
 end
 
---- A title marked up as the PDF reader marks it, or with TeX from a record:
--- case (a function, such as titlecase.proposed) is given the words, with
--- the formulas held aside; the glossary is given what is outside them; and
--- the formulas are written in Unicode. With math_notation = "off", the
--- title is as case has it and its formulas in TeX.
+--- Returns a title from the PDF reader's markup, or from a record's TeX.
+-- `case` converts the words while the formulas are set aside, the glossary
+-- converts the text outside the formulas, and the formulas are written in
+-- Unicode. With math_notation = "off", the title gets only `case`, and its
+-- formulas stay in TeX.
 -- @tparam string s
--- @tparam[opt] function case `case(words)` -> words
+-- @tparam[opt] function case `case(words)` -> words, such as `titlecase.proposed`
 -- @treturn string
 function M.title(s, case)
   if type(s) ~= "string" then return s end
