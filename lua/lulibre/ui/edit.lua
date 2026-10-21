@@ -1,5 +1,5 @@
---- The edit form: the fields of the selected book or books, each with ranked
--- suggestions. Nothing is written until w.
+--- Shows the edit form: the fields of the selected books, each with ranked
+-- suggestions. Nothing is written until you press w.
 --
 -- @module lulibre.ui.edit
 -- @usage
@@ -18,8 +18,8 @@ local function is_gap(field, value)
   return false
 end
 
---- Open the form. args.ids: the books to edit; otherwise the selection.
--- @tparam[opt] table args `{ ids = {...} }`
+--- Opens the form.
+-- @tparam[opt] table args `{ ids = {...} }`, the books to edit; the selection if not given
 function M.run(args)
   local ids = type(args) == "table" and args.ids or lulibre.selection()
   if #ids == 0 then

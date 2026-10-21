@@ -1,6 +1,6 @@
---- Known good: the records by how complete and clean they look, for
--- confirming the ones that are right. What lulibre learns about subjects
--- (:learn) it learns from the confirmed ones.
+--- Lists the records by how complete and clean they look, so you can
+-- confirm the ones that are right. lulibre learns about subjects (:learn)
+-- from the confirmed records.
 --
 -- @module lulibre.ui.good
 -- @usage
@@ -14,7 +14,7 @@ local M = {}
 
 local VIEWS = { "to confirm", "confirmed", "all" }
 
---- Open the records by score.
+--- Opens the records, sorted by score.
 function M.run()
   local view = 1
   local ranked, shown
