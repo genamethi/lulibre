@@ -164,6 +164,15 @@ void panel_show(struct panel *p) {
   follow(p);
 }
 
+/* The cursor to this panel, brought back first if it was hidden. */
+void panel_focus(struct panel *p) {
+  if (!p->open) return;
+  panel_show(p);
+  struct node *n = wm_leaf_of(p->t, p);
+  if (n) p->t->focus = n;
+  tui_dirty(p->t);
+}
+
 void panel_set_size(struct panel *p, float size) {
   p->size = size;
   if (p->open && !p->hidden) wm_set_size(p->t, p, size);

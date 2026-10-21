@@ -41,12 +41,13 @@ function M.run(args)
     return ("marking phrases%s%s"):format(only and "  " .. only or "",
       when and ("   learned %s from %s confirmed books"):format(os.date("%Y-%m-%d", tonumber(when)), books) or "")
   end
-  local p <close> = lulibre.panel {
+  local p <close> = require("lulibre.ui.panels").open("terms", {
     title = title(), help = keys:hint("drop", "add", "find", "learn"), height = 0.5, keys = keys:own(),
     pass = require("lulibre.ui.panels").PASS,
     columns = { { "", 1 }, { "Phrase", -3 }, { "Score", 6 }, { "Books", 6 }, { "", -2 } },
     rows = rows,
-  }
+  })
+  if not p then return end
   p:cursor(2)
 
   while true do

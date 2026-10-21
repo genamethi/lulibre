@@ -365,10 +365,11 @@ function M.run(args)
   local function title()
     return query and ("help   keys and commands matching '%s'"):format(query) or "help   keys, by what they are for"
   end
-  local p <close> = lulibre.panel {
+  local p <close> = require("lulibre.ui.panels").open("help", {
     title = title(), help = keys:hint("toggle", "find", "topic", "all"), side = "left", width = 0.62, keys = keys:own(),
     columns = { { "", 30 }, { "", -1 } }, rows = build(),
-  }
+  })
+  if not p then return end
   local function refresh(keep)
     p:rows(build())
     p:title(title())

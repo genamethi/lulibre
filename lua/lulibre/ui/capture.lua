@@ -144,8 +144,9 @@ function M.run(args)
 
   recompute()
   local cols, rows, title = view()
-  local p <close> = lulibre.panel { title = title, help = keys:hint("pattern", "source", "write", "propose"), follow = true, columns = cols, rows = rows, height = 0.45,
-    keys = keys:own(), pass = require("lulibre.ui.panels").PASS }
+  local p <close> = require("lulibre.ui.panels").open("capture", { title = title, help = keys:hint("pattern", "source", "write", "propose"), follow = true, columns = cols, rows = rows, height = 0.45,
+    keys = keys:own(), pass = require("lulibre.ui.panels").PASS })
+  if not p then return end
   local function refresh()
     cols, rows, title = view()
     p:columns(cols)

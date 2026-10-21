@@ -89,12 +89,13 @@ function M.run()
     return "orphans  " .. (#todo > 0 and table.concat(todo, ", ") or "nothing to do as it stands")
   end
 
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("orphans", {
     title = title(), help = keys:hint("action", "expand", "edit", "about", "write"), follow = true, height = 0.5,
     keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", 32 } },
     rows = build(),
-  }
+  })
+  if not p then return end
   p:cursor(2)
   local peek = panels.peeker(p, 0.5)
   -- where the list is: a record beside the book that has its file, a stray

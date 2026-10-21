@@ -21,6 +21,54 @@ function M.also()
   }
 end
 
+-- One of each screen at a time. A screen opens its panel with M.open, under
+-- its name (the command's: "review", "dupes" ...); opening it again while it
+-- is open goes to the open one, so nothing it holds is lost (actions chosen
+-- and not yet written) and two of them are never up by chance. `:new
+-- <command>` opens another all the same (M.again).
+local screens = {} -- name -> { [panel] = true, ... }, weakly
+local newest = setmetatable({}, { __mode = "v" }) -- name -> the last one opened
+local again = {} -- task id -> true: this task may open one that is open (:new)
+
+--- Open screen `name`'s panel, lulibre.panel(spec); or, when that screen is
+-- open already, put the cursor in it, say so, and return nil.
+-- (a closed panel's handle may be released already, and then says so)
+local function alive(q)
+  local ok, open = pcall(q.is_open, q)
+  return ok and open
+end
+
+function M.open(name, spec)
+  local open = newest[name]
+  if not (open and alive(open)) then
+    open = nil
+    for q in pairs(screens[name] or {}) do
+      if alive(q) then open = q end
+    end
+  end
+  local task = lulibre.task_id()
+  if open and not (task and again[task]) then
+    open:focus()
+    lulibre.notify(("%s is open already: here it is (:new %s opens another)"):format(name, name))
+    return nil
+  end
+  local p = lulibre.panel(spec)
+  screens[name] = screens[name] or setmetatable({}, { __mode = "k" })
+  screens[name][p] = true
+  newest[name] = p
+  return p
+end
+
+--- Run fn(...) with leave to open a screen that is open already.
+function M.again(fn, ...)
+  local task = lulibre.task_id()
+  if task then again[task] = true end
+  local r = table.pack(pcall(fn, ...))
+  if task then again[task] = nil end
+  if not r[1] then error(r[2], 0) end
+  return table.unpack(r, 2, r.n)
+end
+
 -- the "about" panel each screen has open (M.about), by the screen's panel
 local abouts = setmetatable({}, { __mode = "k" })
 

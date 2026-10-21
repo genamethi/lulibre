@@ -75,6 +75,7 @@ edit form, the browse column ...) are reached with their own keys, below.
 | `<S-Tab>` | the panel before (`:focus panel prev`) |
 | `Esc` | in a panel, back to the window it was reached from; the panel stays open. A dialog (the edit form, a form that asks something) closes |
 | `q` | close the panel |
+| `:new` *command* | one of each screen is open at a time: `gr` with review open goes to that review, and so for every screen. `:new review` (any command that opens a screen) opens another beside it all the same |
 | `/` · `n` `N` | search the panel's rows, as in the list: the rows holding the text are marked `›` and the cursor goes to the first as it is typed; `n` and `N` the next and the one before. Where a panel has its own `/` (help, the tree browser) or `N` (review: never again), the panel's own stays |
 
 ## The mouse

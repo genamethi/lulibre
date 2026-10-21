@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## In development (since 0.2.0-alpha.3)
+## 0.2.0-beta.1
 
 - New: `propose_min` (60% by default). A proposal under it is kept but not
   shown in review, nor counted as waiting, nor found by `is:proposed`;
@@ -33,6 +33,12 @@ written in `src/version.h`.
   heading's qualifier ("Rings (Algebra)").
 - New: while typing (a field, the `:` and `/` prompts, the pickers),
   Ctrl or Alt with Left and Right moves a word at a time, as `b` and `w`.
+- Changed: one of each screen at a time. Opening review (or duplicates,
+  orphans, the edit form, help, any screen) while it is open goes to the
+  open one and says so, instead of opening a second beside it and another
+  "about" panel with it; `:new review` opens another when that is wanted.
+- Fixed: `:split` with a panel focused crashed lulibre; it now says a
+  panel is not split.
 - Changed: the options with two values are `true` or `false`, read in Lua
   as booleans: `server_hook`, `backup_metadata`, `weigh_sources`,
   `pixi_deps`, `rocks_install`. "on" and "off" are still taken when

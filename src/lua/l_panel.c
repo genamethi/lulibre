@@ -37,6 +37,7 @@
  *                          gives it back to the rows (or the list)
  *   p:hide()  p:show()     off the screen and back, without closing: around a
  *                          panel opened on top of this one
+ *   p:focus()              the cursor to it (shown again first if hidden)
  *   p:height(share)        resize (a share of the screen, 0.1 to 0.9)
  *   p:keys(list)           say again which keys are handled
  *   p:tabs(names, current) the names in the bar and which is in view. The
@@ -401,6 +402,13 @@ static int m_show_ui(lua_State *L) {
 }
 ON_UI(m_show)
 
+static int m_focus_ui(lua_State *L) {
+  struct lpanel *lp = check(L);
+  if (lp->p && !lp->closed) panel_focus(lp->p);
+  return 0;
+}
+ON_UI(m_focus)
+
 static int m_height_ui(lua_State *L) {
   struct lpanel *lp = check(L);
   if (lp->p && !lp->closed) panel_set_size(lp->p, (float)luaL_checknumber(L, 2));
@@ -510,7 +518,7 @@ void l_panel_open(lua_State *L) {
   static const luaL_Reg methods[] = {
     {"rows", m_rows},     {"title", m_title}, {"help", m_help},   {"columns", m_columns},
     {"cursor", m_cursor}, {"wait", m_wait},   {"close", m_close}, {"is_open", m_is_open},
-    {"hide", m_hide},     {"show", m_show},   {"preview", m_preview},   {"height", m_height}, {"keys", m_keys},
+    {"hide", m_hide},     {"show", m_show},     {"focus", m_focus},   {"preview", m_preview},   {"height", m_height}, {"keys", m_keys},
     {"tabs", m_tabs},     {"send", m_send},
     {"__gc", m_gc},      {"__close", m_close}, {NULL, NULL},
   };
