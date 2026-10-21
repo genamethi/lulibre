@@ -1,26 +1,29 @@
--- Options of scripts and modules, each under a name of its own (a
--- namespace), beside lulibre's own (lulibre.o).
+--- Options of scripts and modules, each under a name of its own (a
+-- namespace), beside lulibre's own (`lulibre.o`).
 --
 -- A script declares its options when it starts, with defaults and, if it
--- likes, help:
---   local opt = lulibre.option("mytags", {
---     depth = { default = 2, type = "number", help = "how many levels of subject to keep" },
---     style = { default = "short", choices = "short|long" },   -- no help: no comment is written for it
---   })
---   print(opt.depth)
--- init.lua sets them by the same names, before or after the script has
--- declared them:
---   lulibre.cfg.mytags.depth = 3
--- What init.lua sets wins over what a script sets (unless the script says
--- force), and what is set in the session (the config window, :lua) wins
--- over both, until lulibre closes.
+-- likes, help. init.lua sets them by the same names, before or after the
+-- script has declared them (`lulibre.cfg.mytags.depth = 3`). What init.lua
+-- sets wins over what a script sets (unless the script says force), and
+-- what is set in the session (the config window, `:lua`) wins over both,
+-- until lulibre closes.
 --
---   local options = require "lulibre.options"
---   options.declare(ns, name, spec) / options.declare(ns, { name = spec, ... })
---   options.get(ns, name)  options.set(ns, name, value, how)   -- how: "file" | "script" | "session"
---   options.reset(ns, name)                 -- forget the session's value
---   options.namespaces()                    -- in the order they were declared
---   options.list(ns)                        -- { {name=, value=, default=, from=, spec=}, ... }
+-- An option's spec: `{ default=, type=, choices=, help= }`. type is
+-- "number", "boolean" or "string" (the default's type when not given);
+-- choices, the values it takes, as a list or "a|b|c"; without help, no
+-- comment is written for it in init.lua.
+--
+-- @module lulibre.options
+-- @usage
+-- local opt = lulibre.option("mytags", {
+--   depth = { default = 2, type = "number", help = "how many levels of subject to keep" },
+--   style = { default = "short", choices = "short|long" },
+-- })
+-- print(opt.depth)                                   --> 2, or what init.lua set
+-- local options = require "lulibre.options"
+-- options.set("mytags", "depth", 4, "session")
+-- options.from("mytags", "depth")                    --> "session"
+-- options.list("mytags")    --> { {name=, value=, default=, from=, spec=}, ... }
 local M = {}
 
 local specs, order = {}, {}         -- ns -> name -> spec; ns order
@@ -40,7 +43,13 @@ local function choices_of(spec)
   return spec.choices
 end
 
---- A value made to fit an option, or nil and why it does not.
+--- A value made to fit an option: a number from its text, a boolean from
+-- true/false (or on/off, yes/no, 1/0), one of its choices.
+-- @tparam table spec
+-- @param v the value
+-- @return[1] the value, made to fit
+-- @treturn[2] nil
+-- @treturn[2] string why it does not
 function M.check(spec, v)
   if v == nil then return nil, "no value" end
   local t = spec.type or type(spec.default)
@@ -51,7 +60,7 @@ function M.check(spec, v)
   elseif t == "boolean" then
     if v == "on" or v == "true" or v == "yes" or v == 1 then v = true
     elseif v == "off" or v == "false" or v == "no" or v == 0 then v = false end
-    if type(v) ~= "boolean" then return nil, ("on or off, not %s"):format(tostring(v)) end
+    if type(v) ~= "boolean" then return nil, ("true or false, not %s"):format(tostring(v)) end
   else
     v = tostring(v)
   end
@@ -66,7 +75,12 @@ function M.check(spec, v)
   return v
 end
 
---- Declare an option (or a table of them) under a namespace.
+--- Declare an option, or a table of them, under a namespace. A value
+-- init.lua gave before it was declared is checked now (and dropped, with a
+-- warning, when the option does not take it).
+-- @tparam string ns letters, figures and _
+-- @tparam string|table name the option's name, or `{ name = spec, ... }`
+-- @tparam[opt] table spec when name is a name
 function M.declare(ns, name, spec)
   if type(name) == "table" then
     local names = {}
@@ -95,6 +109,10 @@ function M.declare(ns, name, spec)
   end
 end
 
+--- An option's spec, as declared.
+-- @tparam string ns
+-- @tparam string name
+-- @treturn table|nil
 function M.spec(ns, name)
   return specs[ns] and specs[ns][name]
 end
@@ -108,11 +126,18 @@ local function pick(ns, name)
   return s and s.default
 end
 
+--- An option's value: the session's, else init.lua's, else the script's, else the default.
+-- @tparam string ns
+-- @tparam string name
+-- @return the value
 function M.get(ns, name)
   return pick(ns, name)
 end
 
---- Where an option's value comes from: "session", "file", "script" or "default".
+--- Where an option's value comes from.
+-- @tparam string ns
+-- @tparam string name
+-- @treturn string "session", "file", "script" or "default"
 function M.from(ns, name)
   if session[ns] and session[ns][name] ~= nil then return "session" end
   if file[ns] and file[ns][name] ~= nil then return "file" end
@@ -120,8 +145,15 @@ function M.from(ns, name)
   return "default"
 end
 
---- Set an option. how: "file" (what init.lua says), "script" (a script's
--- own say, beneath init.lua's unless opts.force) or "session".
+--- Set an option.
+-- @tparam string ns
+-- @tparam string name
+-- @param value checked against the spec; nil takes this source's value away, and the next one
+-- down holds
+-- @tparam[opt] string how "file" (what init.lua says), "script" (a script's own say, beneath
+-- init.lua's unless `opts.force`) or "session" (the default)
+-- @tparam[opt] table opts `force`
+-- @raise when the option does not take the value
 function M.set(ns, name, value, how, opts)
   local s = M.spec(ns, name)
   if value == nil then
@@ -144,6 +176,9 @@ function M.set(ns, name, value, how, opts)
   slot(t, ns)[name] = value
 end
 
+--- Forget the session's value of an option.
+-- @tparam string ns
+-- @tparam string name
 function M.reset(ns, name)
   if session[ns] then session[ns][name] = nil end
 end
@@ -153,6 +188,9 @@ function M.forget_file()
   file = {}
 end
 
+--- The namespaces, in the order they were declared; then those init.lua
+-- set that no script has declared yet.
+-- @treturn {string,...}
 function M.namespaces()
   local out = {}
   for _, ns in ipairs(order) do out[#out + 1] = ns end
@@ -163,6 +201,9 @@ function M.namespaces()
   return out
 end
 
+--- A namespace's options, by name.
+-- @tparam string ns
+-- @treturn {table,...} `{ name=, value=, default=, from=, spec= }`
 function M.list(ns)
   local names = {}
   for n in pairs(specs[ns] or {}) do names[#names + 1] = n end
@@ -194,9 +235,10 @@ local function caller_kind(level)
   return "script"
 end
 
---- lulibre.cfg.<ns>.<name>: read an option, or set it (as init.lua, a
--- script or the session, by where the line that sets it is).
 local proxies = {}
+--- `lulibre.cfg.<ns>.<name>`: read an option, or set it, as init.lua, a
+-- script or the session, by where the line that sets it is (init.lua and
+-- the modules beside it speak for the file; `:lua` for the session).
 M.cfg = setmetatable({}, {
   __index = function(_, ns)
     if not proxies[ns] then
@@ -217,8 +259,11 @@ M.cfg = setmetatable({}, {
   __newindex = function() error("set an option as lulibre.cfg.NAMESPACE.OPTION = value", 2) end,
 })
 
---- lulibre.option(ns, { name = spec, ... }): declare, and get the namespace
--- to read the values from.
+--- `lulibre.option(ns, { name = spec, ... })`: declare, and get the
+-- namespace to read the values from.
+-- @tparam string ns
+-- @tparam[opt] table defs `{ name = spec, ... }`
+-- @treturn table `lulibre.cfg[ns]`
 function M.option(ns, defs)
   if defs then M.declare(ns, defs) end
   return M.cfg[ns]
