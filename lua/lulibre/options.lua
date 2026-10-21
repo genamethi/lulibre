@@ -1,17 +1,18 @@
---- Options of scripts and modules, each under a name of its own (a
--- namespace), beside lulibre's own (`lulibre.o`).
+--- Options of scripts and modules. Each script or module has its own
+-- namespace, separate from lulibre's own options (`lulibre.o`).
 --
--- A script declares its options when it starts, with defaults and, if it
--- likes, help. init.lua sets them by the same names, before or after the
--- script has declared them (`lulibre.cfg.mytags.depth = 3`). What init.lua
--- sets wins over what a script sets (unless the script says force), and
--- what is set in the session (the config window, `:lua`) wins over both,
--- until lulibre closes.
+-- A script declares its options when it starts, with defaults and
+-- optional help. init.lua sets them by the same names, before or after the
+-- script declares them (`lulibre.cfg.mytags.depth = 3`). A value set in
+-- init.lua overrides the script's own, unless the script uses force. A
+-- value set during the session (in the config window or with `:lua`)
+-- overrides both until lulibre closes.
 --
--- An option's spec: `{ default=, type=, choices=, help= }`. type is
--- "number", "boolean" or "string" (the default's type when not given);
--- choices, the values it takes, as a list or "a|b|c"; without help, no
--- comment is written for it in init.lua.
+-- An option's spec is `{ default=, type=, choices=, help= }`:
+--
+-- - `type` is "number", "boolean" or "string". If not given, it is the default's type.
+-- - `choices` lists the values the option takes, as a list or as "a|b|c".
+-- - `help` is written as a comment in init.lua. Without it, no comment is written.
 --
 -- @module lulibre.options
 -- @usage
@@ -43,13 +44,14 @@ local function choices_of(spec)
   return spec.choices
 end
 
---- A value made to fit an option: a number from its text, a boolean from
--- true/false (or on/off, yes/no, 1/0), one of its choices.
+--- Converts a value to fit an option. Text becomes a number for a number
+-- option, and true/false (or on/off, yes/no, 1/0) becomes a boolean. For an
+-- option with choices, the value must be one of them.
 -- @tparam table spec
 -- @param v the value
--- @return[1] the value, made to fit
+-- @return[1] the converted value
 -- @treturn[2] nil
--- @treturn[2] string why it does not
+-- @treturn[2] string why the value does not fit
 function M.check(spec, v)
   if v == nil then return nil, "no value" end
   local t = spec.type or type(spec.default)
@@ -75,12 +77,12 @@ function M.check(spec, v)
   return v
 end
 
---- Declare an option, or a table of them, under a namespace. A value
--- init.lua gave before it was declared is checked now (and dropped, with a
--- warning, when the option does not take it).
--- @tparam string ns letters, figures and _
+--- Declares an option, or a table of options, in a namespace. A value that
+-- init.lua set before the declaration is checked now. If it does not fit,
+-- it is dropped with a warning.
+-- @tparam string ns letters, digits and _
 -- @tparam string|table name the option's name, or `{ name = spec, ... }`
--- @tparam[opt] table spec when name is a name
+-- @tparam[opt] table spec if name is a name
 function M.declare(ns, name, spec)
   if type(name) == "table" then
     local names = {}
@@ -109,7 +111,7 @@ function M.declare(ns, name, spec)
   end
 end
 
---- An option's spec, as declared.
+--- Returns an option's spec, as declared.
 -- @tparam string ns
 -- @tparam string name
 -- @treturn table|nil
@@ -126,7 +128,8 @@ local function pick(ns, name)
   return s and s.default
 end
 
---- An option's value: the session's, else init.lua's, else the script's, else the default.
+--- Returns an option's value: the session's, else init.lua's, else the
+-- script's, else the default.
 -- @tparam string ns
 -- @tparam string name
 -- @return the value
@@ -134,7 +137,7 @@ function M.get(ns, name)
   return pick(ns, name)
 end
 
---- Where an option's value comes from.
+--- Returns where an option's value comes from.
 -- @tparam string ns
 -- @tparam string name
 -- @treturn string "session", "file", "script" or "default"
@@ -145,15 +148,15 @@ function M.from(ns, name)
   return "default"
 end
 
---- Set an option.
+--- Sets an option.
 -- @tparam string ns
 -- @tparam string name
--- @param value checked against the spec; nil takes this source's value away, and the next one
--- down holds
--- @tparam[opt] string how "file" (what init.lua says), "script" (a script's own say, beneath
--- init.lua's unless `opts.force`) or "session" (the default)
+-- @param value checked against the spec. nil removes this source's value, so the next
+-- source down applies.
+-- @tparam[opt] string how "file" (init.lua's value), "script" (the script's own value, which
+-- init.lua's overrides unless `opts.force` is set) or "session" (the default)
 -- @tparam[opt] table opts `force`
--- @raise when the option does not take the value
+-- @raise if the value does not fit the option
 function M.set(ns, name, value, how, opts)
   local s = M.spec(ns, name)
   if value == nil then
@@ -176,20 +179,20 @@ function M.set(ns, name, value, how, opts)
   slot(t, ns)[name] = value
 end
 
---- Forget the session's value of an option.
+--- Removes the session's value of an option.
 -- @tparam string ns
 -- @tparam string name
 function M.reset(ns, name)
   if session[ns] then session[ns][name] = nil end
 end
 
---- Forget what init.lua said (it is about to be read again).
+--- Removes the values init.lua set, before init.lua is read again.
 function M.forget_file()
   file = {}
 end
 
---- The namespaces, in the order they were declared; then those init.lua
--- set that no script has declared yet.
+--- Returns the namespaces in the order they were declared, followed by the
+-- ones init.lua set that no script has declared yet.
 -- @treturn {string,...}
 function M.namespaces()
   local out = {}
@@ -201,7 +204,7 @@ function M.namespaces()
   return out
 end
 
---- A namespace's options, by name.
+--- Returns a namespace's options, sorted by name.
 -- @tparam string ns
 -- @treturn {table,...} `{ name=, value=, default=, from=, spec= }`
 function M.list(ns)
@@ -236,9 +239,10 @@ local function caller_kind(level)
 end
 
 local proxies = {}
---- `lulibre.cfg.<ns>.<name>`: read an option, or set it, as init.lua, a
--- script or the session, by where the line that sets it is (init.lua and
--- the modules beside it speak for the file; `:lua` for the session).
+--- Reads or sets an option as `lulibre.cfg.<ns>.<name>`. Where the setting
+-- line is decides the source: lines in init.lua and the modules beside it
+-- set the file's value, lines typed in `:lua` set the session's, and other
+-- lines set the script's.
 M.cfg = setmetatable({}, {
   __index = function(_, ns)
     if not proxies[ns] then
@@ -259,8 +263,8 @@ M.cfg = setmetatable({}, {
   __newindex = function() error("set an option as lulibre.cfg.NAMESPACE.OPTION = value", 2) end,
 })
 
---- `lulibre.option(ns, { name = spec, ... })`: declare, and get the
--- namespace to read the values from.
+--- Declares options and returns the namespace to read their values from:
+-- `lulibre.option(ns, { name = spec, ... })`.
 -- @tparam string ns
 -- @tparam[opt] table defs `{ name = spec, ... }`
 -- @treturn table `lulibre.cfg[ns]`

@@ -1,19 +1,20 @@
---- Custom fields: metadata of your own beside calibre's.
--- They are kept in a database of their
--- own beside the index (<index>.custom.db). It is additive: calibre's
--- database is never changed for it, and nothing in it is lost when the
--- index is built again. A field is named as calibre names a custom column
--- (#partof), so it could become one; it is written through lulibre.edit like
--- any field (so it is in the journal, and undo and snapshots take it back),
--- proposed and reviewed like any field, shown in the preview, and filtered
--- by: `#partof:handbook`, `#part:none`, `has:#partof`.
+--- Custom fields: your own metadata alongside calibre's.
+-- Custom fields are stored in their own database beside the index
+-- (<index>.custom.db). calibre's database is never changed for them, and
+-- they are not lost when the index is rebuilt. A field is named the way
+-- calibre names a custom column (#partof), so it can become one later.
 --
--- A field can be in calibre too, as a custom column of the same name. lulibre
--- keeps its values as before (filters, the journal and undo use them), and
--- every change is written to calibre's column as well. calibre adds a column
--- only while the content server is stopped, so asking for one queues it
--- (`lulibre.offline`); until it is there, and wherever calibre's values are
--- not lulibre's, the preview says so.
+-- A custom field works like any other field. It is written through
+-- lulibre.edit, so it is in the journal and undo and snapshots restore it.
+-- It is proposed and reviewed, shown in the preview, and can be filtered:
+-- `#partof:handbook`, `#part:none`, `has:#partof`.
+--
+-- A field can also be a custom column of the same name in calibre. lulibre
+-- still keeps its own values, which filters, the journal and undo use, and
+-- writes every change to calibre's column as well. calibre adds a column
+-- only while the content server is stopped, so a request for one is queued
+-- (see `lulibre.offline`). The preview says when the column is not there
+-- yet, and when calibre's values differ from lulibre's.
 --
 -- @module lulibre.custom
 -- @usage
@@ -28,17 +29,17 @@
 -- custom.push("#partof")       -- copy lulibre's values into calibre's column
 local M = {}
 
---- The types a field can be: text, number, date, list.
+--- The types a field can have: text, number, date, list.
 M.TYPES = { text = true, number = true, date = true, list = true }
 
---- The fields lulibre itself uses, declared from the start: #partof, #part, #parts.
+--- The fields lulibre itself uses, declared at startup: #partof, #part, #parts.
 M.builtin = {
   ["#partof"] = { type = "text", help = "the whole this is a part of: the handbook a chapter is from, the Stacks project" },
   ["#part"] = { type = "number", help = "its number in that whole (a chapter's)" },
   ["#parts"] = { type = "number", help = "how many parts the whole has" },
 }
 
---- A field's name as it is kept: "#" first, in lower case.
+--- Returns a field's name as it is stored: lower case, starting with "#".
 -- @function norm
 -- @tparam string name "partof", "#PartOf" ...
 -- @treturn string "#partof"
@@ -49,7 +50,7 @@ local function norm(name)
 end
 M.norm = norm
 
---- Is a field name a custom field's (#something)?
+--- Returns true if a field name is a custom field's (#something).
 -- @tparam any field
 -- @treturn boolean
 function M.is(field)
@@ -70,9 +71,9 @@ local function load()
   return d
 end
 
---- Declare a field, or say again what it is.
+--- Declares a field, or changes its declaration.
 -- @tparam string name
--- @tparam table spec `{ type=, help= }`, type one of `TYPES`
+-- @tparam table spec `{ type=, help= }`, where type is one of `TYPES`
 function M.declare(name, spec)
   name = norm(name)
   assert(name:match("^#[%w_]+$"), "a custom field's name is # and letters, figures or _")
@@ -85,14 +86,14 @@ function M.declare(name, spec)
   return name
 end
 
---- What a field is.
+--- Returns a field's declaration.
 -- @tparam string name
--- @treturn table|nil `{ type=, help= }`; nil when it has not been declared
+-- @treturn table|nil `{ type=, help= }`, or nil if the field is not declared
 function M.field(name)
   return load()[norm(name)]
 end
 
---- Every field, declared or holding values, with how many books have it.
+--- Returns every field that is declared or has values, with how many books have it.
 -- @treturn {table,...} `{ name=, type=, help=, books= }`
 function M.fields()
   local counts = {}
@@ -110,10 +111,10 @@ function M.fields()
   return out
 end
 
---- A book's value of a field, as changes spell it.
+--- Returns a book's value of a field, in the form changes use.
 -- @tparam integer id
 -- @tparam string name
--- @treturn string "" when it has none; a list's items joined by ", "
+-- @treturn string "" if the book has no value; a list's items are joined by ", "
 function M.get(id, name)
   local vals = {}
   for _, r in ipairs(lulibre.sql("SELECT value FROM custom.data WHERE book = ? AND field = ? ORDER BY ord", id, norm(name))) do
@@ -122,7 +123,7 @@ function M.get(id, name)
   return table.concat(vals, ", ")
 end
 
---- A book's values of every custom field.
+--- Returns a book's values of every custom field.
 -- @tparam integer id
 -- @treturn table `{ ["#partof"] = "...", ... }`
 function M.all(id)
@@ -133,12 +134,12 @@ function M.all(id)
   return out
 end
 
---- A value made to fit its field, as `lulibre.edit.resolve` does for a set.
--- A list's items are kept in the order given.
+--- Converts a value to its field's type, as `lulibre.edit.resolve` does
+-- for a set. A list's items keep the order given.
 -- @tparam string name
 -- @tparam string value
 -- @treturn string
--- @raise when the value cannot be one of the field's type
+-- @raise if the value can't be converted to the field's type
 function M.resolve(name, value)
   local spec = M.field(name) or { type = "text" }
   value = (value or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -153,11 +154,11 @@ function M.resolve(name, value)
   return value
 end
 
---- Write a book's value of a field. `lulibre.edit` does this: go through
--- it, so that the change is journaled.
+--- Writes a book's value of a field. `lulibre.edit` calls this. Make
+-- changes through `lulibre.edit`, so that they are journaled.
 -- @tparam integer id
 -- @tparam string name
--- @tparam string|nil value as `get` gives it; "" or nil removes it
+-- @tparam string|nil value in the form `get` returns; "" or nil removes the value
 -- @tparam[opt] string source
 function M.put(id, name, value, source)
   name = norm(name)
@@ -178,8 +179,8 @@ function M.put(id, name, value, source)
   end
 end
 
---- A book's custom fields follow it to a new id (a file added from the
--- sync folder, a book brought back from the recycle bin).
+--- Moves a book's custom fields to its new id, for example after a file is
+-- added from the sync folder or a book is restored from the recycle bin.
 -- @tparam integer from
 -- @tparam integer to
 function M.move(from, to)
@@ -188,26 +189,26 @@ end
 
 -- ---- in calibre too ----
 
---- calibre's type for each of lulibre's, as calibredb's add_custom_column takes it.
+--- calibre's type for each lulibre type, in the form calibredb's add_custom_column takes.
 M.DATATYPES = { text = { "text" }, number = { "float" }, date = { "datetime" }, list = { "text", "--is-multiple" } }
 
---- calibre's label for a field: its name without the #.
+--- Returns calibre's label for a field: its name without the #.
 -- @tparam string name
 -- @treturn string
 function M.label(name)
   return norm(name):sub(2)
 end
 
---- calibre's column for a field.
+--- Returns calibre's column for a field.
 -- @tparam string name
--- @treturn table|nil `{ label=, name=, datatype=, multiple= }`; nil when calibre has none
+-- @treturn table|nil `{ label=, name=, datatype=, multiple= }`, or nil if calibre has no such column
 function M.column(name)
   return lulibre.sql("SELECT label, name, datatype, multiple FROM cal_columns WHERE label = ?", M.label(name))[1]
 end
 
---- The books whose value of a field calibre's column does not hold.
+--- Returns the books whose value of a field differs from calibre's column.
 -- @tparam string name
--- @treturn {table,...} `{ book=, lulibre=, calibre= }`, values as `get` spells them ("" for none)
+-- @treturn {table,...} `{ book=, lulibre=, calibre= }`, values in the form `get` returns ("" for none)
 function M.differing(name)
   name = norm(name)
   return lulibre.sql([[
@@ -227,11 +228,11 @@ local function queued(command, name)
   end
 end
 
---- Where a field stands with calibre.
+--- Returns whether calibre has a column for a field.
 -- @tparam string name
--- @treturn table `{ state = "lulibre" }` (calibre has no column for it), `{ state = "waiting", job = id }`
--- (one is queued), or `{ state = "calibre", differ = n }` (n books' values are not calibre's;
--- `removing = id` when the column's removal is queued)
+-- @treturn table `{ state = "lulibre" }` if calibre has no column, `{ state = "waiting", job = id }`
+-- if one is queued, or `{ state = "calibre", differ = n }` if calibre has one and n books' values
+-- differ from it. `removing = id` is set if the column's removal is queued.
 function M.state(name)
   name = norm(name)
   if M.column(name) then
@@ -242,11 +243,11 @@ function M.state(name)
   return { state = "lulibre" }
 end
 
---- Ask calibre for a column for a field. Queued: it is made the next time
--- the content server is stopped (`lulibre.offline`).
+--- Queues a request for calibre to add a column for a field. The column is
+-- added the next time the content server is stopped (see `lulibre.offline`).
 -- @tparam string name
 -- @tparam[opt] table opts `heading` (the column's heading in calibre; the name by default),
--- `datatype` (calibre's type, when the field's own will not do: int for a chapter's number)
+-- `datatype` (calibre's type, if the field's own does not fit, such as int for a chapter's number)
 -- @treturn[1] integer the job's id
 -- @treturn[2] nil
 -- @treturn[2] string why not
@@ -270,10 +271,10 @@ function M.add_column(name, opts)
   return require("lulibre.offline").queue(argv, ("the calibre column %s"):format(name))
 end
 
---- Ask calibre to remove a column: any of calibre's, lulibre's field or
--- not. calibre's values in it go with it; lulibre's own values of a field
--- stay. Queued like adding one; a column whose adding is still queued is
--- not added instead.
+--- Queues a request for calibre to remove a column, whether or not it is a
+-- lulibre field. calibre's values in the column are removed with it, and
+-- lulibre's own values of the field stay. If the column's addition is still
+-- queued, that job is cancelled instead.
 -- @tparam string name
 -- @treturn[1] integer the job's id
 -- @treturn[2] integer the adding job's id
@@ -294,15 +295,15 @@ function M.remove_column(name)
   return offline.queue({ "remove_custom_column", M.label(name), "--force" }, ("removing the calibre column %s"):format(name))
 end
 
---- How many books have a value in calibre's column for a field.
+--- Returns how many books have a value in calibre's column for a field.
 -- @tparam string name
 -- @treturn integer
 function M.calibre_books(name)
   return lulibre.sql("SELECT count(DISTINCT book) AS n FROM cal_values WHERE label = ?", M.label(name))[1].n
 end
 
---- calibredb's spelling of a field's value (a date at noon UTC, the same
--- day wherever calibre shows it).
+--- Returns a field's value in the form calibredb takes. A date is written
+-- at noon UTC, so it is the same day in every time zone calibre shows it in.
 -- @tparam string name
 -- @tparam string value
 -- @treturn string
@@ -314,8 +315,8 @@ function M.wire(name, value)
   return value
 end
 
---- Copy a field's values into calibre's column, for the books where they
--- differ (`differing`): lulibre's value wins. Waits.
+--- Copies a field's values into calibre's column, for the books where they
+-- differ (see `differing`), and waits. lulibre's value replaces calibre's.
 -- @tparam string name
 -- @treturn table `{ copied=, failed = { {id=, error=}, ... } }`
 function M.push(name)
