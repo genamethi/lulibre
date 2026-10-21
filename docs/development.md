@@ -123,6 +123,19 @@ server without the thread, the reason in its log and its status file) and
 hard with `LULIBRE_OPF_REQUIRED=1`. `lua/lulibre/units.lua` only writes
 units; it does not depend on calibre's internals.
 
+## The API reference
+
+The modules' doc comments are written for LDoc (`config.ld`), which makes
+the API reference from them: `make api` writes it to `build/api` (LDoc from
+`luarocks --local install ldoc`, or `make api LDOC='lua path/to/ldoc.lua'`).
+A module's opening comment starts with `---`, says what it is, and ends
+with `@module lulibre.NAME` and an `@usage` example; each function a module
+exports has a `---` comment with `@tparam`, `@treturn` (and `[opt]`,
+`[1]`/`[2]` for optional arguments and alternative returns). A setting or
+list a module exports (`M.SHOWN`, `M.STOP`) gets a `---` line of its own.
+Done so far: `lulibre.verify`, `lulibre.backup`, `lulibre.offline`; the
+others are listed in `config.ld` as they are done.
+
 ## The documentation site
 
 `docs/` is also a site, built with [Zensical](https://zensical.org)
@@ -130,7 +143,14 @@ units; it does not depend on calibre's internals.
 version). To see it before pushing:
 
     pip install zensical==0.0.71
+    ldoc -d docs/api .      # the API reference, which the site links to
     zensical serve          # http://localhost:8000; zensical build --strict writes site/
+
+Read the Docs does the same (`.readthedocs.yaml`): LDoc from luarocks,
+written into `docs/api` (not kept in git), then Zensical. The other
+configuration, `tools/readthedocs-ldoc/.readthedocs.yaml`, makes the site of
+LDoc's reference alone; which one is used is the project's "path for
+.readthedocs.yaml" on Read the Docs.
 
 A new page goes in `nav` in `zensical.toml`. Links between pages are
 relative (`[Keys](keys.md)`); a link to a file outside `docs/` (the README,

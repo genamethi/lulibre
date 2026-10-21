@@ -117,6 +117,14 @@ e2e: $(BIN)
 	sh test/write.sh $(BIN)
 	sh test/forms.sh $(BIN)
 
+# ---- the API reference (LDoc: config.ld) ----
+
+LDOC ?= ldoc
+api:
+	@command -v $(firstword $(LDOC)) >/dev/null || { echo "LDoc not found: luarocks --local install ldoc, or make api LDOC='lua path/to/ldoc.lua'"; exit 1; }
+	$(LDOC) .
+	@echo "the API reference is in build/api/index.html"
+
 # ---- installing ----
 
 install: $(BIN)
@@ -153,4 +161,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status builds unit check check-offline check-write check-forms e2e install datasets uninstall clean distclean
+.PHONY: all help status builds api unit check check-offline check-write check-forms e2e install datasets uninstall clean distclean
