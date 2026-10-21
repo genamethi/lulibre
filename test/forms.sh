@@ -109,6 +109,14 @@ k C-Right; lit "Z"
 shown "C-Right goes to the next word"         ":echo Yone ZXtwo"
 k Escape
 
+# ---- a long question wraps, so its choices are not cut off; so does the pager
+k :; lit 'lua lulibre.spawn(function() lulibre.confirm(string.rep("word ", 40) .. "end of it?") end)'; k Enter
+shown "a long question ends with its choices"  "end of it? \[y/N\]"
+k Escape
+k :; lit 'lua lulibre.show(string.rep("abc ", 40) .. "TAILEND", "long")'; k Enter
+shown "a long line in the pager wraps"         "abc TAILEND"
+k q
+
 # ---- a title in capitals, put in title case
 expect "is:capstitle finds a title in capitals" 1 "$(run query -c is:capstitle 2>/dev/null)"
 k "&"; lit "is:capstitle"; k Enter
@@ -335,6 +343,13 @@ else
 fi
 k 3
 shown "3 opens it again"                      "configuration .*comments: full"
+k /; lit "opf_wri"
+shown "/ in a panel marks the rows that hold it" "›opf_writer"
+k Enter
+shown "and goes to the first"                 "/opf_wri: 1 of 1 rows"
+k Enter
+shown "where the cursor now is"               "opf_writer = "
+k Escape
 k 3
 k q
 wait_for "all books"

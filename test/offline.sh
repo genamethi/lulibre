@@ -325,6 +325,8 @@ expect   "and leaves the unit's file as it was" no "$(grep -q calibre-debug "$un
 contains "server_hook = on: lulibre.service, before the server's unit" "Before=calibre-server.service" "$(cat "$units/lulibre.service" 2>/dev/null)"
 contains "running lulibre offline" "offline" "$(grep '^ExecStart=' "$units/lulibre.service" 2>/dev/null)"
 contains "and enabled for it" "enable lulibre.service" "$(log)"
+contains "with an [Install] section, so that enabling it ties it to the server" "[Install]
+WantedBy=calibre-server.service" "$(cat "$units/lulibre.service" 2>/dev/null)"
 contains "server_restart_at: a timer at that time" "OnCalendar=*-*-* 03:30:00" "$(cat "$units/lulibre-restart.timer" 2>/dev/null)"
 contains "that restarts the server's unit" "restart calibre-server.service" "$(cat "$units/lulibre-restart.service" 2>/dev/null)"
 contains "started now" "enable --now lulibre-restart.timer" "$(log)"
@@ -359,6 +361,21 @@ expect   "nothing is written for it" no "$([ -e "$dropin" ] && echo yes || echo 
 expect   "lulibre.service, a unit of its own, still is" yes "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
 uopts="-o opf_writer=server"
 contains "what to add is shown instead" "ExecStart=$debug -e " "$(un)"
+uopts=
+un apply >/dev/null
+# a command makes no unit and takes none away, whatever its init.lua says:
+# only the interface does, as it starts (lulibre offline runs from one of them)
+mkdir -p "$t/ucfg"
+printf 'lulibre.o.server_hook = "on"\n' > "$t/ucfg/init.lua"
+printf 'print("ran")\n' > "$t/u.lua"
+cmd() { unshare --pid --fork --mount-proc env HOME="$home" PATH="$t/bin:$PATH" "$bin" -C "$t/ucfg" -L "$lib" run "$t/u.lua" 2>&1; }
+contains "a command with server_hook on in its init.lua runs" "ran" "$(cmd)"
+expect   "and does not make lulibre.service" no "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
+uopts="-o server_hook=on"
+un apply >/dev/null
+: > "$t/ucfg/init.lua"
+cmd >/dev/null
+expect   "nor, with it off, take one away" yes "$([ -e "$units/lulibre.service" ] && echo yes || echo no)"
 uopts=
 un apply >/dev/null
 

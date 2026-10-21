@@ -385,6 +385,21 @@ static void test_words(void) {
   ctx_free();
 }
 
+static void test_lines(void) {
+  size_t off[4], len[4];
+  const char *s = "aaa bbb ccc";
+  int n = dr_lines(s, 8, off, len, 4);
+  ok(n == 2 && len[0] == 7 && off[1] == 8 && len[1] == 3, "lines break at a space, which is not shown");
+  s = "one\ntwo\n";
+  n = dr_lines(s, 20, off, len, 4);
+  ok(n == 2 && len[0] == 3 && off[1] == 4 && len[1] == 3, "at the text's own newlines, none for one at the end");
+  s = "a b c d e f";
+  n = dr_lines(s, 1, off, len, 4);
+  ok(n == 6 && off[3] == 6, "the count is of every line, past the ones filled in");
+  n = dr_lines("question [y/N] ", 40, off, len, 4);
+  ok(n == 1 && len[0] == 15, "the last line keeps its space, where the answer is typed");
+}
+
 int main(void) {
   test_version();
   test_util();
@@ -396,6 +411,7 @@ int main(void) {
   test_quality();
   test_reentrant();
   test_words();
+  test_lines();
   printf("C unit tests: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

@@ -928,37 +928,124 @@ static void draw_status(struct tui *t, int y) {
   }
 }
 
-static void draw_bottom(struct tui *t, int y) {
+/* The bottom line, and the lines above it that a long question or message
+ * takes. A question wraps so that its end (the choices: "[y/N]") is never
+ * cut, and what is typed follows it, on a line of its own when the question
+ * leaves less than a third of the width. */
+#define BOTTOM_MAX 64
+struct bottom {
+  const char *s;  /* the question or the message, NULL for none */
+  int n;          /* its lines, which may be more than are shown */
+  int alone;      /* what is typed goes on a line of its own */
+  int h;          /* the lines given to the bottom */
+  size_t off[BOTTOM_MAX], len[BOTTOM_MAX];
+};
+
+static void bottom_wrap(struct tui *t, struct bottom *b) {
+  int W = t->cols_n;
+  b->s = NULL;
+  b->n = b->alone = 0;
+  if (t->mode == MODE_PROMPT) {
+    b->s = t->prompt == PROMPT_FILTER ? "&" : t->prompt == PROMPT_SEARCH ? "/"
+         : t->prompt == PROMPT_INPUT && t->input_label ? t->input_label : ":";
+    b->n = dr_lines(b->s, W - 1, b->off, b->len, BOTTOM_MAX);
+    int last = b->n <= BOTTOM_MAX ? b->n - 1 : BOTTOM_MAX - 1;
+    b->alone = W - dr_width(b->s + b->off[last], b->len[last]) < W / 3;
+  } else if (t->msg && *t->msg) {
+    b->s = t->msg;
+    b->n = dr_lines(b->s, W - 12, b->off, b->len, BOTTOM_MAX);
+  }
+  int cap = t->rows_n / 3;
+  if (cap > BOTTOM_MAX) cap = BOTTOM_MAX;
+  b->h = b->n + b->alone;
+  if (b->h > cap) b->h = cap;
+  if (b->h < 1) b->h = 1;
+}
+
+static void draw_bottom(struct tui *t, int y, const struct bottom *b) {
   struct ncplane *n = t->std;
   int W = t->cols_n;
   if (t->mode == MODE_PROMPT) {
-    const char *lead = t->prompt == PROMPT_FILTER ? "&" : t->prompt == PROMPT_SEARCH ? "/"
-                     : t->prompt == PROMPT_INPUT && t->input_label ? t->input_label : ":";
-    const char *text = t->line.text.s ? t->line.text.s : "";
+    /* the question's last lines, which hold the choices, when not all fit */
+    int rows = b->h - b->alone, have = b->n < BOTTOM_MAX ? b->n : BOTTOM_MAX;
+    int first = b->n <= BOTTOM_MAX && have > rows ? have - rows : 0, lw = 0;
+    if (rows < 1) rows = 1;
     dr_style(n, theme.accent, C_DEFAULT, A_BOLD);
-    int lw = dr_text(n, y, 0, W / 2, lead);
+    for (int i = 0; i < rows && first + i < have; i++) {
+      int x = i == 0 && first > 0 ? dr_text(n, y + i, 0, W, "… ") : 0;
+      lw = x + dr_textn(n, y + i, x, W - x, b->s + b->off[first + i], b->len[first + i]);
+    }
+    int yi = y + b->h - 1;
+    if (b->alone) lw = 0;
+    const char *text = t->line.text.s ? t->line.text.s : "";
     dr_style(n, C_DEFAULT, C_DEFAULT, 0);
     /* keep the cursor in view on a long line */
     int cur = dr_width(text, t->line.cur);
     size_t skip = 0;
     while (cur - dr_width(text, skip) > W - lw - 2 && skip < t->line.cur) skip++;
     while (skip < t->line.text.len && ((unsigned char)text[skip] & 0xc0) == 0x80) skip++;
-    dr_text(n, y, lw, W - lw, text + skip);
-    if (t->nsugg_match) draw_suggestions(t, y, lw);
-    notcurses_cursor_enable(t->nc, y, lw + cur - dr_width(text, skip));
+    dr_text(n, yi, lw, W - lw, text + skip);
+    if (t->nsugg_match) draw_suggestions(t, y, b->alone ? 0 : lw);
+    notcurses_cursor_enable(t->nc, yi, lw + cur - dr_width(text, skip));
     return;
   }
-  if (t->msg) {
+  if (b->s) {
     dr_style(n, t->msg_error ? theme.error : C_DEFAULT, C_DEFAULT, 0);
-    dr_text(n, y, 0, W - 12, t->msg);
+    for (int i = 0; i < b->h && i < BOTTOM_MAX; i++) {
+      int w = dr_textn(n, y + i, 0, W - 12, b->s + b->off[i], b->len[i]);
+      /* more than fits: the rest is in the console */
+      if (i == b->h - 1 && b->n > b->h) dr_text(n, y + i, w < W - 13 ? w + 1 : W - 13, 1, "…");
+    }
   }
   if (t->km->npending) {
     sbuf k = SBUF_INIT;
     key_format(&k, t->km->pending, t->km->npending);
     dr_style(n, theme.dim, C_DEFAULT, 0);
-    dr_text(n, y, W - 11, 10, k.s);
+    dr_text(n, y + b->h - 1, W - 11, 10, k.s);
     sb_free(&k);
   }
+}
+
+/* The pager (help, lulibre.show): each line wraps at the box's width, and
+ * what wraps lines up under the line's own indent. Calls fn for every line
+ * as shown and returns how many there are. */
+typedef void pager_line_fn(struct tui *t, int i, int indent, const char *s, size_t len, int heading, void *ud);
+
+static int pager_lines(struct tui *t, int w, pager_line_fn *fn, void *ud) {
+  int n = 0;
+  for (const char *p = t->help; *p;) {
+    const char *nl = strchr(p, '\n');
+    size_t len = nl ? (size_t)(nl - p) : strlen(p);
+    int heading = len > 0 && p[0] != ' ';
+    size_t ind = 0;
+    while (ind < len && p[ind] == ' ') ind++;
+    if ((int)ind > w / 2) ind = 0;
+    size_t i = 0;
+    do {
+      int lead = i ? (int)ind : 0;
+      size_t k = dr_wrap(p + i, len - i, w - lead), shown = k;
+      if (i + k < len)
+        while (shown > 0 && p[i + shown - 1] == ' ') shown--;
+      if (fn) fn(t, n, lead, p + i, shown, heading, ud);
+      n++;
+      i += k;
+      while (i && i < len && p[i] == ' ') i++; /* a wrapped line starts at a word */
+    } while (i < len);
+    p = nl ? nl + 1 : p + len;
+  }
+  return n;
+}
+
+struct pager_draw {
+  int x, y, h, from;
+};
+
+static void pager_draw_line(struct tui *t, int i, int indent, const char *s, size_t len, int heading, void *ud) {
+  struct pager_draw *d = ud;
+  int r = i - d->from + 1; /* the box's first row is its title */
+  if (r < 1 || r >= d->h - 1) return;
+  dr_style(t->std, heading ? theme.accent : C_DEFAULT, theme.bar_bg, heading ? A_BOLD : 0);
+  dr_textn(t->std, d->y + r, d->x + indent, 1 << 30, s, len);
 }
 
 static void draw_help(struct tui *t) {
@@ -967,31 +1054,20 @@ static void draw_help(struct tui *t) {
   int w = W > 84 ? 80 : W - 2, h = H - 4;
   if (w < 20 || h < 4) return;
   int x = (W - w) / 2, y = 1;
-  int total = 0;
-  for (const char *p = t->help; *p; p++) total += *p == '\n';
+  int total = pager_lines(t, w - 4, NULL, NULL);
   if (t->help_scroll > total - h + 2) t->help_scroll = total - h + 2;
   if (t->help_scroll < 0) t->help_scroll = 0;
 
-  const char *p = t->help;
-  for (int i = 0; i < t->help_scroll && *p; i++) {
-    const char *nl = strchr(p, '\n');
-    p = nl ? nl + 1 : p + strlen(p);
-  }
   for (int r = 0; r < h; r++) {
     dr_style(n, C_DEFAULT, theme.bar_bg, 0);
     dr_fill(n, y + r, x, w);
-    if (r == 0 && t->pager_title) {
-      dr_style(n, theme.dim, theme.bar_bg, 0);
-      dr_text(n, y, x + 2, w - 4, t->pager_title);
-    }
-    if (r == 0 || r == h - 1 || !*p) continue;
-    const char *nl = strchr(p, '\n');
-    size_t len = nl ? (size_t)(nl - p) : strlen(p);
-    int heading = len > 0 && p[0] != ' ';
-    dr_style(n, heading ? theme.accent : C_DEFAULT, theme.bar_bg, heading ? A_BOLD : 0);
-    dr_textn(n, y + r, x + 2, w - 4, p, len);
-    p = nl ? nl + 1 : p + len;
   }
+  if (t->pager_title) {
+    dr_style(n, theme.dim, theme.bar_bg, 0);
+    dr_text(n, y, x + 2, w - 4, t->pager_title);
+  }
+  struct pager_draw d = {x + 2, y, h, t->help_scroll};
+  pager_lines(t, w - 4, pager_draw_line, &d);
 }
 
 /* ---- the bar's tabs: which of the library and the sync folder the list
@@ -1079,11 +1155,13 @@ static void render(struct tui *t) {
   }
   if (t->rows_n >= 4 && t->cols_n >= 20) {
     int top = 1; /* the bar of tabs */
-    wm_layout(t, (struct rect){top, 0, t->rows_n - 2 - top, t->cols_n});
+    struct bottom b;
+    bottom_wrap(t, &b);
+    wm_layout(t, (struct rect){top, 0, t->rows_n - 1 - b.h - top, t->cols_n});
     wm_draw(t);
     if (top) draw_tabs(t);
-    draw_status(t, t->rows_n - 2);
-    draw_bottom(t, t->rows_n - 1);
+    draw_status(t, t->rows_n - 1 - b.h);
+    draw_bottom(t, t->rows_n - b.h, &b);
     if (t->help) draw_help(t);
     if (t->picker) picker_draw(t);
     sel_draw(t);
