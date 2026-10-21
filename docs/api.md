@@ -7,6 +7,10 @@ Scripts are Lua 5.4 or 5.5 and see one table, `lulibre`.
     lulibre run NAME [args]     the same script with no interface; print goes to stdout
     :tasks   :cancel ID|all
 
+The modules written in Lua are also described one by one, function by
+function, in [the API reference](api/index.html) (so far `lulibre.verify`,
+`lulibre.backup` and `lulibre.offline`).
+
 A script's arguments arrive as `...`. `lulibre.headless` is true when there
 is no interface. Each C module is documented at the top of its
 `src/lua/l_*.c`; this page is the summary. A name that begins with `_`
