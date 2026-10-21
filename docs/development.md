@@ -157,11 +157,11 @@ the API reference from them. `make api` writes the reference to
 Zensical's version). To see the site before pushing:
 
     pip install zensical==0.0.71
-    ldoc -d docs/api .      # the API reference, which the site links to
+    ldoc -d docs/reference .   # the API reference, which the site links to
     zensical serve          # http://localhost:8000; zensical build --strict writes site/
 
 Read the Docs does the same (`.readthedocs.yaml`): it installs LDoc from
-luarocks, writes the reference into `docs/api` (not kept in git), then
+luarocks, writes the reference into `docs/reference` (not kept in git; `docs/api` would clash with the page `api.md`), then
 runs Zensical. The other configuration,
 `tools/readthedocs-ldoc/.readthedocs.yaml`, builds a site of LDoc's
 reference alone. The project's "path for .readthedocs.yaml" setting on Read

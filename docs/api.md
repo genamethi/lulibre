@@ -7,7 +7,7 @@ Scripts are written in Lua 5.4 or 5.5 and use one table, `lulibre`.
     lulibre run NAME [args]     the same script with no interface; print goes to stdout
     :tasks   :cancel ID|all
 
-The [API reference](api/index.html) documents each Lua module and its functions.
+The [API reference](reference/index.html) documents each Lua module and its functions.
 
 A script gets its arguments as `...`. `lulibre.headless` is true when there
 is no interface. Each C module is documented at the top of its
@@ -235,7 +235,7 @@ at startup (`lulibre -C DIR`, or `$LULIBRE_CONFIG_DIR`).
 ## Modules
 
 The part of lulibre written in Lua is under `lua/lulibre/`. The
-[API reference](api/index.html) documents each module in full; this table
+[API reference](reference/index.html) documents each module in full; this table
 sums them up.
 
 | `require` | |
