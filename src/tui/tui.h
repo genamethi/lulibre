@@ -63,6 +63,10 @@ size_t dr_bytes_for_cols(const char *s, size_t len, int cols);
 /* Bytes of s (up to len) that fit in maxw columns, breaking at a space when
  * one is available. Used for wrapping. */
 size_t dr_wrap(const char *s, size_t len, int maxw);
+/* Break s into lines of at most maxw columns: at its own newlines, and at
+ * the last space that fits (dr_wrap). Fills off and len for the first max
+ * lines and returns how many there are, which may be more than max. */
+int dr_lines(const char *s, int maxw, size_t *off, size_t *len, int max);
 
 /* --------------------------------------------------------------- keymap.c */
 
