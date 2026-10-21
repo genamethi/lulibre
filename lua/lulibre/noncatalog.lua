@@ -15,7 +15,7 @@
 --
 -- lulibre stores the mark in its index and writes nothing to calibre.
 --
--- @module lulibre.noncatalog
+-- @judging lulibre.noncatalog
 -- @usage
 -- local noncatalog = require "lulibre.noncatalog"
 -- noncatalog.is(id)                 --> true or false

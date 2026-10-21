@@ -8,7 +8,7 @@
 -- - `authors`: the lines under the title that are names, up to the abstract
 --   or the first affiliation
 --
--- @module lulibre.titlepage
+-- @reading lulibre.titlepage
 -- @usage
 -- local titlepage = require "lulibre.titlepage"
 -- local got = titlepage.classify(lulibre.lines(12, 1))

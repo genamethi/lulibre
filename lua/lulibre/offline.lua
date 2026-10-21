@@ -16,7 +16,7 @@
 -- - `restart` calls `run` when you choose "restart now";
 -- - you run `lulibre offline` yourself while the server is down.
 --
--- @module lulibre.offline
+-- @library lulibre.offline
 -- @usage
 -- local offline = require "lulibre.offline"
 -- offline.queue({ "add_custom_column", "partof", "Part of", "text" }, "the column #partof")

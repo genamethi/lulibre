@@ -1,6 +1,6 @@
 --- Finds identifiers in page text: DOI, ISBN, arXiv id, MSC area.
 --
--- @module lulibre.ids
+-- @reading lulibre.ids
 -- @usage
 -- local ids = require "lulibre.ids"
 -- ids.isbn("ISBN 0-387-90040-3")       --> "0387900403"

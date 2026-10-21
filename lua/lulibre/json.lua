@@ -1,7 +1,7 @@
 --- Encodes and decodes JSON. The codec is small: enough for metadata
 -- services and for reading the .jsonl files the old Python scripts wrote.
 --
--- @module lulibre.json
+-- @services lulibre.json
 -- @usage
 -- local json = require "lulibre.json"
 -- json.decode('{"a": [1, 2]}').a[2]  --> 2

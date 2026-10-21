@@ -39,7 +39,7 @@
 -- what the journal says the library was at that time: changes nobody
 -- logged. These values count as changes made outside lulibre.
 --
--- @module lulibre.snapshots
+-- @library lulibre.snapshots
 -- @usage
 -- local snapshots = require "lulibre.snapshots"
 -- snapshots.observe()                    -- log changes made outside lulibre; how many fields

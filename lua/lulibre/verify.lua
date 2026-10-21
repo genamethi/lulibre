@@ -16,7 +16,7 @@
 -- garbled, every verdict is "unknown", and callers treat the value as
 -- unconfirmed, not as wrong.
 --
--- @module lulibre.verify
+-- @judging lulibre.verify
 -- @usage
 -- local verify = require "lulibre.verify"
 -- local ev = verify.evidence(id)            -- what the pages say, or nil and why not

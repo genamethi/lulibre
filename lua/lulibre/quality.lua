@@ -12,7 +12,7 @@
 -- records, so mistakes in other records are not learned. :good lists the
 -- records by score so you can confirm them.
 --
--- @module lulibre.quality
+-- @judging lulibre.quality
 -- @usage
 -- local quality = require "lulibre.quality"
 -- quality.score(book)         --> 0.82, { "no identifiers", ... }

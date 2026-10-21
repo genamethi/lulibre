@@ -8,7 +8,7 @@
 -- while it goes on, the steps keep their closing lines to themselves, and
 -- when the run is done its proposals open in review as a view of their own.
 --
--- @module lulibre.ui.proposer
+-- @screens lulibre.ui.proposer
 -- @usage
 -- require("lulibre.ui.proposer").run()   -- as :propose-review does
 local form = require "lulibre.ui.form"

@@ -3,7 +3,7 @@
 -- the cursor would do. Going back asks first. The title shows the flags
 -- the rollback would use.
 --
--- @module lulibre.ui.snapshots
+-- @screens lulibre.ui.snapshots
 -- @usage
 -- require("lulibre.ui.snapshots").run()   -- as :snapshots, gz does
 local snapshots = require "lulibre.snapshots"

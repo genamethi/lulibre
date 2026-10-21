@@ -15,7 +15,7 @@
 -- `apply`. Folders in the library that are not calibre's are otherwise left
 -- alone.
 --
--- @module lulibre.orphans
+-- @library lulibre.orphans
 -- @usage
 -- local orphans = require "lulibre.orphans"
 -- local found = orphans.scan()

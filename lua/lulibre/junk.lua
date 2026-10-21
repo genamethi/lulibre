@@ -2,7 +2,7 @@
 -- file names, download error pages, the name of the program that made the
 -- PDF. Every pattern is matched against the value in lower case.
 --
--- @module lulibre.junk
+-- @reading lulibre.junk
 -- @usage
 -- local junk = require "lulibre.junk"
 -- junk.title("Microsoft Word - draft3.docx")  --> true

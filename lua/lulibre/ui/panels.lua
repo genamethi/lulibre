@@ -1,6 +1,6 @@
 --- Opens and arranges the screens built on panels, with the helpers they share.
 --
--- @module lulibre.ui.panels
+-- @screens lulibre.ui.panels
 -- @usage
 -- local panels = require "lulibre.ui.panels"
 -- local p <close> = panels.open("mine", { title = "my screen", rows = rows, keys = keys:own(), pass = panels.PASS })

@@ -15,7 +15,7 @@
 -- are always spelled one way. In a title that is not all capitals, a word
 -- with capitals after its first letter (LaTeX, PDE, McKean) is left alone.
 --
--- @module lulibre.titlecase
+-- @reading lulibre.titlecase
 -- @usage
 -- local tc = require "lulibre.titlecase"
 -- tc.apply("ON THE THEORY OF GROUPS: AN INTRODUCTION")

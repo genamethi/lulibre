@@ -5,7 +5,7 @@
 -- lulibre keeps in its data folder. lulibre offers to add a missing program
 -- to that environment, and asks first, since that runs what pixi fetches.
 --
--- @module lulibre.features
+-- @setup lulibre.features
 -- @usage
 -- local features = require "lulibre.features"
 -- features.list                    -- { {name=, title=, programs=, used_for=, option=, pixi=, packages=} }

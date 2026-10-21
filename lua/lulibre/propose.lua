@@ -17,7 +17,7 @@
 -- someone typed it. Review shows both values side by side, and you decide
 -- there.
 --
--- @module lulibre.propose
+-- @scripting lulibre.propose
 -- @usage
 -- local propose = require "lulibre.propose"
 -- propose.wanted(book, candidates, "sure")   --> { {field=, value=, op=, source=, confidence=, over=}, ... }

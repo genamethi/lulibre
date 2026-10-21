@@ -4,7 +4,7 @@
 -- Zotero, JabRef and BibDesk all read on import. Import parses a .bib file
 -- into entries, for matching against the library.
 --
--- @module lulibre.bib
+-- @services lulibre.bib
 -- @usage
 -- local bib = require "lulibre.bib"
 -- local text, keys = bib.export({ 12, 15 })

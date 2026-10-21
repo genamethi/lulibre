@@ -1,7 +1,7 @@
 --- Shows the edit form: the fields of the selected books, each with ranked
 -- suggestions. Nothing is written until you press w.
 --
--- @module lulibre.ui.edit
+-- @screens lulibre.ui.edit
 -- @usage
 -- require("lulibre.ui.edit").run()   -- as :edit, e does
 local edit = require "lulibre.edit"

@@ -11,7 +11,7 @@
 --   only on list fields (authors, tags, identifiers, and custom fields of the
 --   type list), and leave the field's other items in place.
 --
--- @module lulibre.edit
+-- @scripting lulibre.edit
 -- @usage
 -- local edit = require "lulibre.edit"
 -- local r = edit.apply({ { id = 12, field = "tags", value = "math/topology", op = "add" } },

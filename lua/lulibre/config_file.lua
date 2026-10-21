@@ -13,7 +13,7 @@
 -- An item names an option: `{ name= }` for one of lulibre's options,
 -- `{ ns=, name= }` for a script's.
 --
--- @module lulibre.config_file
+-- @setup lulibre.config_file
 -- @usage
 -- local cf = require "lulibre.config_file"
 -- cf.missing()             --> { core = { names }, scripts = { {ns=, name=}, ... } }

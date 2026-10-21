@@ -20,7 +20,7 @@
 -- superscript q. Those are written _q and ^q, and longer ones _{…}.
 -- The option math_notation = "off" leaves titles as they come.
 --
--- @module lulibre.notation
+-- @reading lulibre.notation
 -- @usage
 -- local m = require "lulibre.notation"
 -- m.render("$a^x+b^y=c^z$")              --> "aˣ + bʸ = cᶻ"

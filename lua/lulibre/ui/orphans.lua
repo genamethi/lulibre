@@ -4,7 +4,7 @@
 -- doesn't fit its columns (the full verdict, the whole path, where a link
 -- points). X expands every row.
 --
--- @module lulibre.ui.orphans
+-- @screens lulibre.ui.orphans
 -- @usage
 -- require("lulibre.ui.orphans").run()   -- as :orphans, go does
 local dupes = require "lulibre.dupes"
