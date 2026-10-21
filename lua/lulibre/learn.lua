@@ -19,7 +19,7 @@
 -- subject ("math/general") teaches only the subjects above it, since a
 -- catch-all says where a book was filed, not what it is about.
 --
--- @module lulibre.learn
+-- @judging lulibre.learn
 -- @usage
 -- local learn = require "lulibre.learn"
 -- learn.run()                        --> { books=, subjects=, terms=, phrases=, seconds= }

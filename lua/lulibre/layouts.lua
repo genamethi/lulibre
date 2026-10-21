@@ -33,7 +33,7 @@
 -- requires. `:run candidates` shows what every layout reads from the book
 -- under the cursor.
 --
--- @module lulibre.layouts
+-- @reading lulibre.layouts
 -- @usage
 -- local layouts = require "lulibre.layouts"
 -- layouts.add { name = "my-series", marks = { "my series" }, fields = { series = "My Series" } }

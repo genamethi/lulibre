@@ -5,7 +5,7 @@
 -- the record an identifier leads to), and what other sources propose for
 -- the field.
 --
--- @module lulibre.ui.context
+-- @screens lulibre.ui.context
 -- @usage
 -- local context = require "lulibre.ui.context"
 -- context.record_of(pr)        --> the kept record a proposal came from or points at, or nil

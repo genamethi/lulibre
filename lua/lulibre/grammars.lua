@@ -60,7 +60,7 @@
 -- which lulibre stores (:parts): part_of (the whole the file is part of),
 -- part (the file's number in the whole) and parts (how many parts there are).
 --
--- @module lulibre.grammars
+-- @reading lulibre.grammars
 -- @usage
 -- local G = require "lulibre.grammars"
 -- G.add { name = "my-notes", lines = { G.line { upper = true, take = "title" } } }

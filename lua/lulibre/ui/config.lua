@@ -9,7 +9,7 @@
 -- editor ($VISUAL, $EDITOR, or else vim or vi), and lulibre reads the file
 -- again when you leave the editor.
 --
--- @module lulibre.ui.config
+-- @screens lulibre.ui.config
 -- @usage
 -- require("lulibre.ui.config").run()   -- as :config, gC, 3 does
 local cf = require "lulibre.config_file"

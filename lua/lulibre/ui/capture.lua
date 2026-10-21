@@ -2,7 +2,7 @@
 -- out of each selected book. Then apply the captured fields, mark the books
 -- that match, or save the pattern as a named rule.
 --
--- @module lulibre.ui.capture
+-- @screens lulibre.ui.capture
 -- @usage
 -- require("lulibre.ui.capture").run()   -- as :capture, gc does
 local edit = require "lulibre.edit"

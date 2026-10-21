@@ -21,7 +21,7 @@
 -- of the three options is changed in the config window. `lulibre units`
 -- shows the plan, and `lulibre units apply` carries it out.
 --
--- @module lulibre.units
+-- @library lulibre.units
 -- @usage
 -- local units = require "lulibre.units"
 -- local p = units.plan()        --> { server = {name=, user=, pid=}, changes = {...} }

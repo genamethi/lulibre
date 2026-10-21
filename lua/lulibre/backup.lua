@@ -9,7 +9,7 @@
 -- whenever you ask. `restore` puts a copy back once nothing has the library
 -- open.
 --
--- @module lulibre.backup
+-- @library lulibre.backup
 -- @usage
 -- local backup = require "lulibre.backup"
 -- local b = backup.take("before rebuilding")  --> { path=, ts=, check= }

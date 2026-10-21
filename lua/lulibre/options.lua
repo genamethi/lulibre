@@ -20,7 +20,7 @@
 -- - `help` is written as a comment in init.lua. An option without help gets
 --   no comment.
 --
--- @module lulibre.options
+-- @scripting lulibre.options
 -- @usage
 -- local opt = lulibre.option("mytags", {
 --   depth = { default = 2, type = "number", help = "how many levels of subject to keep" },

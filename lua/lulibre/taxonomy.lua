@@ -3,7 +3,7 @@
 -- was "math/geometry/algebraic" in one and "math/algebraic-geometry" in
 -- another, and both ended up in the library.)
 --
--- @module lulibre.taxonomy
+-- @judging lulibre.taxonomy
 -- @usage
 -- local taxonomy = require "lulibre.taxonomy"
 -- taxonomy.from_arxiv("math.AG")   --> "math/algebraic-geometry"

@@ -3,7 +3,7 @@
 -- the Lua API page lists both kinds. lulibre loads this file once at
 -- startup, together with the commands written in Lua (lulibre/commands/).
 --
--- @module lulibre
+-- @scripting lulibre
 -- @usage
 -- lulibre.each(lulibre.ids("no:ids"), function(id) ... end, { progress = "looking" })
 -- if lulibre.confirm("remove 3 books?") then ... end

@@ -18,7 +18,7 @@
 --    runs.badge = function() end                              -- no badge at all
 --    runs.on(function(event, run) ... end)    -- "start", "step", "finish", "drop"
 --
--- @module lulibre.runs
+-- @scripting lulibre.runs
 -- @usage
 -- local runs = require "lulibre.runs"
 -- local run = runs.start { ids = ids, label = "my script", steps = { "files", "records" } }

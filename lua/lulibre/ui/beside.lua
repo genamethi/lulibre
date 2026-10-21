@@ -5,7 +5,7 @@
 -- file. The preview shows the file under the cursor. Tab moves to the
 -- library's list, and the preview then shows the book there.
 --
--- @module lulibre.ui.beside
+-- @screens lulibre.ui.beside
 -- @usage
 -- require("lulibre.ui.beside").run()   -- as :beside, gb does
 local sync = require "lulibre.sync"

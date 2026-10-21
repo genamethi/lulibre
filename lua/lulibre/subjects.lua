@@ -2,7 +2,7 @@
 -- subject's indicative terms among the text's 1-, 2- and 3-word sequences.
 -- Terms of more than one word are more specific and count double.
 --
--- @module lulibre.subjects
+-- @judging lulibre.subjects
 -- @usage
 -- local subjects = require "lulibre.subjects"
 -- subjects.score("elliptic curves and modular forms over the primes")[1]

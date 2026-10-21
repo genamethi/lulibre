@@ -6,7 +6,7 @@
 -- lulibre's own file. So at start, lulibre lists each replacing file in the
 -- console once, and again whenever lulibre's own file has changed since.
 --
--- @module lulibre.overrides
+-- @setup lulibre.overrides
 -- @usage
 -- local overrides = require "lulibre.overrides"
 -- overrides.find()   -- { {kind="module"|"script", name=, yours=, bundled=, stamp=}, ... }

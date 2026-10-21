@@ -16,7 +16,7 @@
 -- movement keys take precedence over a screen's own, so a key bound to both
 -- moves.
 --
--- @module lulibre.ui.keys
+-- @screens lulibre.ui.keys
 -- @usage
 -- local keys = require("lulibre.ui.keys").of("review")
 -- keys:action("a")                 --> "accept"

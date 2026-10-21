@@ -30,7 +30,7 @@
 -- Each service has its own module (lulibre/net/*.lua), which adds its
 -- functions to this table. The shared code is in net/core.lua.
 --
--- @module lulibre.net
+-- @services lulibre.net
 -- @usage
 -- local net = require "lulibre.net"
 -- net.arxiv("1012.6008")            net.crossref("10.2307/2118559")

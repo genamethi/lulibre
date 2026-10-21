@@ -3,7 +3,7 @@
 -- and hashes (MD5) only the files that share a size with another file. The
 -- index stores the hashes.
 --
--- @module lulibre.dupes
+-- @library lulibre.dupes
 -- @usage
 -- local dupes = require "lulibre.dupes"
 -- for _, g in ipairs(dupes.scan()) do

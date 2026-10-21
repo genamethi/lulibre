@@ -2,7 +2,7 @@
 -- one copy. You can mark the other copies, merge them into the kept copy,
 -- and remove them.
 --
--- @module lulibre.ui.dupes
+-- @screens lulibre.ui.dupes
 -- @usage
 -- require("lulibre.ui.dupes").run()   -- as :dupes, gd does
 local dupes = require "lulibre.dupes"

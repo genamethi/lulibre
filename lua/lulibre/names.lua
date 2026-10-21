@@ -1,7 +1,7 @@
 --- Recognises and cleans people's names. Tells a name from an institution
 -- or a stray title word, splits lists of authors, and fixes ALL CAPS.
 --
--- @module lulibre.names
+-- @reading lulibre.names
 -- @usage
 -- local names = require "lulibre.names"
 -- names.split("A. Author; B. Author and C. Author")  --> { "A. Author", "B. Author", "C. Author" }

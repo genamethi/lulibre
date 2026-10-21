@@ -11,7 +11,7 @@
 -- Both forms compile to a Lua pattern and a list of field names, so a match
 -- is a table indexed by field name.
 --
--- @module lulibre.template
+-- @reading lulibre.template
 -- @usage
 -- local template = require "lulibre.template"
 -- local c = template.compile("%author% - %title% (%year%)")

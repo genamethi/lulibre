@@ -10,7 +10,7 @@
 -- that still has proposals waiting (lulibre.runs), and "all waiting". h and
 -- l move between views, and D drops the proposals of the view shown.
 --
--- @module lulibre.ui.review
+-- @screens lulibre.ui.review
 -- @usage
 -- require("lulibre.ui.review").run()   -- as :review, gr does
 local context = require "lulibre.ui.context"

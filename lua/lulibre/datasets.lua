@@ -6,7 +6,7 @@
 -- there may be a link to a file kept elsewhere; fetching then renews the
 -- file the link points to.
 --
--- @module lulibre.datasets
+-- @services lulibre.datasets
 -- @usage
 -- local datasets = require "lulibre.datasets"
 -- datasets.list                   -- what can be had: { name=, title=, useful=, size=, from=, renewed=, files= }
