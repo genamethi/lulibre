@@ -25,6 +25,14 @@ file = {
   "lua/lulibre/snapshots.lua",
   "lua/lulibre/calibre.lua",
   "lua/lulibre/units.lua",
+  "lua/lulibre/ids.lua",
+  "lua/lulibre/names.lua",
+  "lua/lulibre/junk.lua",
+  "lua/lulibre/titlecase.lua",
+  "lua/lulibre/notation.lua",
+  "lua/lulibre/subjects.lua",
+  "lua/lulibre/taxonomy.lua",
+  "lua/lulibre/template.lua",
 }
 dir = "build/api"
 format = "markdown"

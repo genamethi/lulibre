@@ -1,5 +1,12 @@
--- People's names: telling a name from an institution or a stray title word,
+--- People's names: telling a name from an institution or a stray title word,
 -- splitting lists of authors, fixing ALL CAPS.
+--
+-- @module lulibre.names
+-- @usage
+-- local names = require "lulibre.names"
+-- names.split("A. Author; B. Author and C. Author")  --> { "A. Author", "B. Author", "C. Author" }
+-- names.titlecase("JEAN-PIERRE SERRE")                --> "Jean-Pierre Serre"
+-- names.clean("Prof. Dr.")                           --> nil
 local M = {}
 
 local function set(words)
@@ -62,6 +69,7 @@ local function is_affiliation(low)
     or low:find("institut") or low:find("e%-?mail") or low:find("@") or low:find("laborator")
     or low:find("acknowledg")
 end
+--- Does the text name an institution, or an e-mail, rather than a person?
 M.is_affiliation = function(s) return is_affiliation(s:lower()) ~= nil end
 
 -- the user's own additions, from the option never_authors; read when it changes
@@ -81,6 +89,8 @@ end
 
 --- Is this something that is never an author: a rank or role among the
 -- built-in ones, or a word or phrase from the option never_authors?
+-- @tparam string name
+-- @treturn boolean
 function M.never(name)
   local flat = " " .. lulibre.fold(name or ""):gsub("[^%w]+", " "):gsub("^ ", ""):gsub(" $", "") .. " "
   local words, titles = 0, 0
@@ -98,6 +108,8 @@ end
 
 --- One person's name, cleaned, or nil if this does not read as a name:
 -- two to four capitalised words or initials, particles allowed, no digits.
+-- @tparam string p
+-- @treturn string|nil
 function M.clean(p)
   for _, m in ipairs(MARKS) do p = p:gsub(m, "") end
   local toks = {}
@@ -132,6 +144,9 @@ end
 -- one of these must hold as well: an initial among the words ("Sidney A.
 -- Morris"), a first word that is a common given name, or an e-mail address
 -- in `text` (the page) that spells the surname.
+-- @tparam string line
+-- @tparam[opt] string text the page
+-- @treturn boolean
 function M.is_person(line, text)
   local name = M.clean(line)
   if not name or name:find("[,;&]") then return false end
@@ -153,6 +168,8 @@ end
 --- Split "A. Author; B. Author and C. Author" into names. Commas separate
 -- people only when every piece is itself more than one word, so
 -- "Knuth, Donald" stays whole.
+-- @tparam string s
+-- @treturn {string,...}
 function M.split(s)
   local out = {}
   s = s:gsub("%f[%a][Aa][Nn][Dd]%f[%A]", ";"):gsub("%s*&%s*", ";"):gsub("%s*·%s*", ";")
@@ -176,6 +193,8 @@ function M.split(s)
 end
 
 --- Does this line read as a list of authors rather than prose?
+-- @tparam string line
+-- @treturn boolean
 function M.looks_like_authors(line)
   local low = line:lower()
   if is_affiliation(low) then return false end
@@ -194,6 +213,8 @@ end
 --- Validated names from the author lines of a title page, in order, without
 -- repeats. Here every comma separates people ("A. ONE, B. TWO, JR., AND C.
 -- THREE"); pieces that are not names are dropped by M.clean.
+-- @tparam {string,...} lines
+-- @treturn {string,...}
 function M.validate(lines)
   local out, seen = {}, {}
   for _, line in ipairs(lines) do
@@ -227,6 +248,8 @@ end
 
 --- "JEAN-PIERRE SERRE" -> "Jean-Pierre Serre". Text that is not all capitals
 -- is returned unchanged.
+-- @tparam string s
+-- @treturn string
 function M.titlecase(s)
   if not s or s:find("%l") or not s:find("%u") then return s end
   return (s:gsub("[^%s%-']+", function(w)
@@ -239,6 +262,8 @@ local SMALL = set("a an the of in on and for to with by at from via or nor as de
 
 --- Title-style capitals for an ALL CAPS title: small words stay lower case
 -- except at the start. Mixed-case text is returned unchanged.
+-- @tparam string s
+-- @treturn string
 function M.title_caps(s)
   local t = M.titlecase(s)
   if t == s then return s end

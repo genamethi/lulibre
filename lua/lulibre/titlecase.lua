@@ -1,4 +1,4 @@
--- Title case, after the APA Publication Manual (7th edition):
+--- Title case, after the APA Publication Manual (7th edition):
 --
 --   * the first word of the title, and of a subtitle (after a colon, a dash
 --     or the end of a sentence), is capitalised;
@@ -15,12 +15,14 @@
 -- word that already has capitals past its first letter (LaTeX, PDE, McKean)
 -- is left alone.
 --
---   local tc = require "lulibre.titlecase"
---   tc.apply("ON THE THEORY OF GROUPS: AN INTRODUCTION")
---     --> "On the Theory of Groups: An Introduction"
---   tc.is_caps("SIEVE METHODS")      --> true
---   tc.minor["with"] = true          -- treat "with" as a minor word too
---   tc.keep["cw"] = "CW"             -- always spell it CW
+-- @module lulibre.titlecase
+-- @usage
+-- local tc = require "lulibre.titlecase"
+-- tc.apply("ON THE THEORY OF GROUPS: AN INTRODUCTION")
+--   --> "On the Theory of Groups: An Introduction"
+-- tc.is_caps("SIEVE METHODS")      --> true
+-- tc.minor["with"] = true          -- treat "with" as a minor word too
+-- tc.keep["cw"] = "CW"             -- always spell it CW
 local M = {}
 
 local function set(words)
@@ -29,15 +31,15 @@ local function set(words)
   return out
 end
 
--- lower case unless first: articles, conjunctions and prepositions of three
+--- lower case unless first: articles, conjunctions and prepositions of three
 -- letters or fewer
 M.minor = set "a an the and as but for if nor or so yet at by in of off on per to up via"
 
--- a prefix before a hyphen: the word after it stays in lower case
+--- a prefix before a hyphen: the word after it stays in lower case
 M.prefixes = set [[anti co counter de extra hyper inter intra macro micro mid mini multi non over post pre pro
   pseudo quasi re semi sub super trans ultra un under]]
 
--- words spelled one way whatever the title does; the key is the word in lower case
+--- words spelled one way whatever the title does; the key is the word in lower case
 M.keep = {
   pde = "PDE", pdes = "PDEs", ode = "ODE", odes = "ODEs", sde = "SDE", sdes = "SDEs",
   usa = "USA", uk = "UK", ussr = "USSR", ieee = "IEEE", acm = "ACM", ams = "AMS", siam = "SIAM",
@@ -53,6 +55,8 @@ local upper = function(s) return lulibre.upper(s) end
 
 --- Is the text set in capitals? True when it has at least two letters and
 -- none of them is in lower case.
+-- @tparam string s
+-- @treturn boolean
 function M.is_caps(s)
   if type(s) ~= "string" then return false end
   local letters = 0
@@ -131,6 +135,8 @@ local function word(core, caps, first)
 end
 
 --- The title in title case.
+-- @tparam string s
+-- @treturn string
 function M.apply(s)
   if type(s) ~= "string" or s == "" then return s end
   local caps = M.is_caps(s)
@@ -160,6 +166,8 @@ end
 -- Algebra: Ii. Linear Algebra") back in capitals. Only numerals of two
 -- letters or more, and not "Xi" (a name, a Greek letter) nor "Vi" unless
 -- a full stop follows it.
+-- @tparam string s
+-- @treturn string
 function M.numerals(s)
   if type(s) ~= "string" then return s end
   return (s:gsub("%f[%a](%u[ivx]+)%f[%A](%.?)", function(w, dot)
@@ -171,6 +179,8 @@ end
 
 --- The title as it should be proposed: in title case when it was found in
 -- capitals and the option title_case allows; otherwise as it is.
+-- @tparam string s
+-- @treturn string
 function M.proposed(s)
   if lulibre.o.title_case ~= "never" and M.is_caps(s) then return M.apply(s) end
   return s

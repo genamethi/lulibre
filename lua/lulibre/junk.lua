@@ -1,6 +1,13 @@
--- Titles and authors that are artefacts, not metadata: build file names,
+--- Titles and authors that are artefacts, not metadata: build file names,
 -- download error pages, the name of the program that made the PDF.
 -- All patterns are matched against the lower-cased value.
+--
+-- @module lulibre.junk
+-- @usage
+-- local junk = require "lulibre.junk"
+-- junk.title("Microsoft Word - draft3.docx")  --> true
+-- junk.author("pdfTeX-1.40.21")              --> true
+-- junk.unlikely_title("tensorprod")          --> true
 local M = {}
 
 local title_patterns = {
@@ -67,6 +74,8 @@ local function good_titles()
 end
 
 --- Is the title one the user has listed as fine (the option good_titles)?
+-- @tparam string t
+-- @treturn boolean
 function M.vouched(t)
   return good_titles()[(t or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")] == true
 end
@@ -77,6 +86,8 @@ end
 -- name. The option one_word_titles says how single words are taken: "check"
 -- (the default) keeps a capitalised word of letters, "ok" keeps any, "junk"
 -- none. A title listed in good_titles is never unlikely.
+-- @tparam string t
+-- @treturn boolean
 function M.unlikely_title(t)
   t = (t or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if M.vouched(t) then return false end
@@ -96,6 +107,10 @@ function M.unlikely_title(t)
   return false
 end
 
+--- Is the title an artefact (a file name, an error page, a generic heading),
+-- or nothing? One listed in good_titles never is.
+-- @tparam string|nil t
+-- @treturn boolean
 function M.title(t)
   if not t then return true end
   t = t:gsub("^%s+", ""):gsub("%s+$", "")
@@ -108,6 +123,9 @@ function M.title(t)
   return generic[low] or low:find("^list of") ~= nil or not low:find("%a") or any(low, title_patterns)
 end
 
+--- Is the author an artefact (the program that made the file, a web site), or nothing?
+-- @tparam string|nil a
+-- @treturn boolean
 function M.author(a)
   if not a then return true end
   a = a:gsub("%s+", " "):gsub("^[ ,;]+", ""):gsub("[ ,;]+$", "")
