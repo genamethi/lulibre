@@ -33,6 +33,15 @@ file = {
   "lua/lulibre/subjects.lua",
   "lua/lulibre/taxonomy.lua",
   "lua/lulibre/template.lua",
+  "lua/lulibre/learn.lua",
+  "lua/lulibre/refs.lua",
+  "lua/lulibre/datasets.lua",
+  "lua/lulibre/features.lua",
+  "lua/lulibre/overrides.lua",
+  "lua/lulibre/bib.lua",
+  "lua/lulibre/json.lua",
+  "lua/lulibre/detex.lua",
+  "lua/lulibre/parts.lua",
 }
 dir = "build/api"
 format = "markdown"

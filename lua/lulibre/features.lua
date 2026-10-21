@@ -1,18 +1,21 @@
--- Features and the programs they need. lulibre needs none of these to run:
+--- Features and the programs they need. lulibre needs none of these to run:
 -- each comes in when the feature that uses it is turned on, and is looked
 -- for then. A program is found on $PATH or, with the option pixi_deps = true,
 -- in an environment lulibre keeps with pixi in its data folder, to which it
 -- offers to add a missing one (asking first: that runs what pixi fetches).
 --
---   local features = require "lulibre.features"
---   features.list                    -- { {name=, title=, programs=, used_for=, option=, pixi=, packages=} }
---   features.find("pdftotext")       -- its path, or nil
---   features.status(f)               -- { here=, missing = {...}, enabled= }
---   features.need("poppler")         -- the paths of its programs (by name), or nil and how to get them;
---                                    -- may offer to add them to lulibre's pixi environment
---   features.declare{ name=, ... }   -- a script's own feature, listed with the rest
+-- @module lulibre.features
+-- @usage
+-- local features = require "lulibre.features"
+-- features.list                    -- { {name=, title=, programs=, used_for=, option=, pixi=, packages=} }
+-- features.find("pdftotext")       -- its path, or nil
+-- features.status(f)               -- { here=, missing = {...}, enabled= }
+-- features.need("poppler")         -- the paths of its programs (by name), or nil and how to get them;
+--                                  -- may offer to add them to lulibre's pixi environment
+-- features.declare{ name=, ... }   -- a script's own feature, listed with the rest
 local M = {}
 
+--- The features: `{ name=, title=, programs=, used_for=, option=, pixi=, packages= }`.
 M.list = {
   { name = "poppler", title = "poppler's pdftotext", programs = { "pdftotext" },
     used_for = "reading garbled pages of a PDF again (:run reread, the option text_fallback)",
@@ -32,6 +35,7 @@ M.list = {
 }
 
 --- A feature of a script's own, listed and looked for like these.
+-- @tparam table f as an item of `list`
 function M.declare(f)
   assert(f.name and (f.programs or f.modules), "a feature has a name and the programs or modules it needs")
   for i, g in ipairs(M.list) do
@@ -58,6 +62,7 @@ local function by_name(name)
 end
 
 --- The folder of lulibre's own pixi environment.
+-- @treturn string
 function M.pixi_dir()
   return lulibre.settings.paths().data_dir .. "/pixi"
 end
@@ -74,6 +79,8 @@ end
 
 --- Where a program is: on $PATH, else (pixi_deps = true) in lulibre's
 -- pixi environment. nil when it is in neither.
+-- @tparam string program
+-- @treturn string|nil
 function M.find(program)
   for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
     if executable(dir .. "/" .. program) then return dir .. "/" .. program end
@@ -94,6 +101,9 @@ local function enabled(f)
   return not (v == "off" or v == "never" or v == 0 or v == false or v == "")
 end
 
+--- Whether a feature's programs are here, which are not, and whether its option turns it on.
+-- @tparam table f
+-- @treturn table `{ here=, missing = {...}, enabled= }`
 function M.status(f)
   if type(f) == "string" then f = by_name(f) end
   local missing, paths = {}, {}
@@ -110,6 +120,8 @@ function M.status(f)
 end
 
 --- How to get a feature's programs, in a sentence.
+-- @tparam table f
+-- @treturn string
 function M.how(f)
   local parts = {}
   for _, k in ipairs { "pacman", "apt", "dnf", "brew", "luarocks" } do
@@ -129,6 +141,10 @@ end
 --- The feature's programs, found ({ name = path }), or nil and how to get
 -- them. With pixi_deps = true, where someone can be asked, it offers to add
 -- the feature to lulibre's pixi environment.
+-- @tparam string name
+-- @treturn[1] table `{ program = path }`
+-- @treturn[2] nil
+-- @treturn[2] string how to get them
 function M.need(name)
   local f = by_name(name)
   if not f then return nil, "no feature " .. tostring(name) end
