@@ -58,6 +58,20 @@ file = {
   "lua/lulibre/ui/form.lua",
   "lua/lulibre/ui/context.lua",
   "lua/lulibre/ui/dialogs.lua",
+  "lua/lulibre/ui/beside.lua",
+  "lua/lulibre/ui/browse.lua",
+  "lua/lulibre/ui/capture.lua",
+  "lua/lulibre/ui/config.lua",
+  "lua/lulibre/ui/dupes.lua",
+  "lua/lulibre/ui/edit.lua",
+  "lua/lulibre/ui/good.lua",
+  "lua/lulibre/ui/help.lua",
+  "lua/lulibre/ui/orphans.lua",
+  "lua/lulibre/ui/proposer.lua",
+  "lua/lulibre/ui/review.lua",
+  "lua/lulibre/ui/snapshots.lua",
+  "lua/lulibre/ui/terms.lua",
+  "lua/lulibre/ui/weights.lua",
 }
 dir = "build/api"
 format = "markdown"

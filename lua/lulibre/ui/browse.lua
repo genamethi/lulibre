@@ -1,8 +1,13 @@
--- The library as a tree, in a column on the left: authors, the subject
+--- The library as a tree, in a column on the left: authors, the subject
 -- hierarchy, series, publishers, years or formats, each with its count.
 -- Moving through it narrows the list beside it; Tab crosses to the list.
+--
+-- @module lulibre.ui.browse
+-- @usage
+-- require("lulibre.ui.browse").run()   -- as :browse, gt does
 local M = {}
 
+--- The ways the tree groups the library, in the order f steps through them.
 M.facets = { "author", "subject", "series", "publisher", "year", "format" }
 
 local keys = require("lulibre.ui.keys").of("browse")
@@ -79,6 +84,8 @@ local function subjects()
   return roots
 end
 
+--- Open the tree.
+-- @tparam[opt] string args a facet ("author", "subject" ...); the last one used when not given
 function M.run(args)
   local facet = (args or ""):match("%S+") or lulibre.store("SELECT value FROM kv WHERE key = 'browse:facet'")[1]
   if type(facet) == "table" then facet = facet.value end

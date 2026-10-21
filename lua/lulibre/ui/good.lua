@@ -1,6 +1,10 @@
--- Known good: the records by how complete and clean they look, for
+--- Known good: the records by how complete and clean they look, for
 -- confirming the ones that are right. What lulibre learns about subjects
 -- (:learn) it learns from the confirmed ones.
+--
+-- @module lulibre.ui.good
+-- @usage
+-- require("lulibre.ui.good").run()   -- as :good, gk does
 local edit = require "lulibre.edit"
 local keys = require("lulibre.ui.keys").of("good")
 local panels = require "lulibre.ui.panels"
@@ -10,6 +14,7 @@ local M = {}
 
 local VIEWS = { "to confirm", "confirmed", "all" }
 
+--- Open the records by score.
 function M.run()
   local view = 1
   local ranked, shown
