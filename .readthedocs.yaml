@@ -1,6 +1,6 @@
 # Read the Docs: the site from docs/, built with Zensical (zensical.toml).
 # As Read the Docs documents it (docs.readthedocs.com, "Deploying Zensical").
-# The API reference is made by LDoc (config.ld) into docs/api first, and
+# The API reference is made by LDoc (config.ld) into docs/reference first, and
 # Zensical copies it into the site (a failing ldoc fails the build; Zensical
 # does not check links to it, which are to HTML, not to a page of its own).
 version: 2
@@ -17,7 +17,7 @@ build:
       - luarocks --local install ldoc
     build:
       html:
-        - ~/.luarocks/bin/ldoc -d docs/api .
+        - ~/.luarocks/bin/ldoc -d docs/reference .
         - zensical build --strict
     post_build:
       - mkdir -p $READTHEDOCS_OUTPUT/html/
