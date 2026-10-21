@@ -663,7 +663,7 @@ M.add {
     local name, number = M.series_line(text)
     return { series = name, series_index = number }
   end,
-  confidence = 0.75,
+  confidence = 0.8,
 }
 
 -- ---- dates ----
@@ -747,7 +747,7 @@ M.add {
     end
     return {}
   end,
-  confidence = 0.7,
+  confidence = 0.75,
 }
 
 -- A paper, a set of notes or a magazine article with its date on a line of
@@ -780,7 +780,7 @@ M.add {
     end
     return {}
   end,
-  confidence = 0.7,
+  confidence = 0.75,
 }
 
 local DASH = "[%-\226]" -- a hyphen, or the first byte of an en or em dash
@@ -841,7 +841,7 @@ M.add {
       local book = lulibre.book(doc.id)
       house = book and M.known_house(book.publisher)
     end
-    return { pubdate = tostring(j.year), publisher = M.with_journal(house, j.journal), confidence = { publisher = 0.82 } }
+    return { pubdate = tostring(j.year), publisher = M.with_journal(house, j.journal), confidence = { publisher = 0.87 } }
   end,
   confidence = 0.8,
 }
@@ -985,7 +985,7 @@ M.add {
   read = function(text)
     local year = copyright_year(text)
     local holder, known = M.copyright_holder(text)
-    return { pubdate = year and tostring(year) or nil, publisher = holder, confidence = { publisher = known and 0.8 or 0.65 } }
+    return { pubdate = year and tostring(year) or nil, publisher = holder, confidence = { publisher = known and 0.85 or 0.7 } }
   end,
   confidence = 0.75,
 }
