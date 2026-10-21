@@ -1,18 +1,19 @@
---- The file decides: does a book's own text bear a value out?
+--- Checks a value against the text of the book's own file.
 --
--- A catalogue's record, a title search's hit, an identifier read off a page:
--- each is somebody's word that this file is a certain work. The file itself
--- is the one witness that cannot be about another work. So a title is
--- believed when its words stand in the opening pages, authors when their
--- family names do, an identifier when it stands there as the book's own
--- (not in a reference list), and a record when the book's pages show its
--- title or its people, and the file is about as long as the work the record
--- describes (a 30-page file is not a 900-page handbook, but may be a
--- chapter of it).
+-- A catalogue record, a title search result and an identifier found on a
+-- page each claim that the file is a certain work. Only the file itself is
+-- sure to be about this work. So lulibre accepts:
 --
--- Only a file whose text could be read can decide. Where it cannot (no
--- text, too little, or garbled) every verdict is "unknown", and callers
--- treat the value as unconfirmed rather than as wrong.
+-- - a title if its words appear on the opening pages;
+-- - authors if their family names appear there;
+-- - an identifier if it appears there as the book's own, not in a reference list;
+-- - a record if the pages show its title or its authors, and the file is
+--   about as long as the work the record describes. A 30-page file is not a
+--   900-page handbook, but it may be a chapter of one.
+--
+-- Only a file with readable text can decide. If the text is missing, too
+-- short or garbled, every verdict is "unknown", and callers treat the value
+-- as unconfirmed, not as wrong.
 --
 -- @module lulibre.verify
 -- @usage
@@ -29,15 +30,16 @@ local M = {}
 
 --- How many pages from the start count as the opening.
 M.FRONT = 6
---- A share of words at or above this is "shown".
+--- The share of words at or above which a value is "shown".
 M.SHOWN = 0.8
---- A share of words at or above this (and below SHOWN) is "partly".
+--- The share of words at or above which (and below SHOWN) a value is "partly" shown.
 M.PARTLY = 0.5
---- A text with more unreadable characters than this is garbled
--- (mathematics set in fonts with symbols in the private-use area comes to
--- 2-3 per cent).
+--- The share of unreadable characters above which a text is garbled.
+-- Mathematics set in fonts with symbols in the private-use area comes to
+-- 2-3 per cent.
 M.GARBLED = 0.04
---- A file this much shorter than the edition a record describes is a part of it.
+--- The length ratio below which a file is a part of the edition a record
+-- describes.
 M.PART = 0.4
 
 local STOP = {}
@@ -58,7 +60,7 @@ local function each_word(text, fn)
   for w in t:gmatch("%d+") do fn(w) end
 end
 
---- The words of a text, folded (case and accents gone), as a set.
+--- Returns the words of a text as a set, folded (without case and accents).
 -- @tparam string text
 -- @treturn {[string]=true,...} each word once
 function M.words(text)
@@ -78,7 +80,8 @@ local function telling(title)
   end)
   return list
 end
---- The telling words of a title: no little words, no single letters.
+--- Returns the significant words of a title, leaving out short common
+-- words and single letters.
 -- @function telling
 -- @tparam string title
 -- @treturn {string,...} folded, each once, in order
@@ -98,9 +101,9 @@ local function garbled(text)
   local len = utf8.len(text) or #text
   return bad / math.max(1, len)
 end
---- The share of a text that is no text: the replacement character,
--- private use and control characters left by a font that could not be
--- read; a run of eight or more counts as one.
+--- Returns the share of a text that is unreadable. Unreadable characters
+-- are the replacement character, and private-use and control characters
+-- left by a font that could not be read. A run of eight or more counts as one.
 -- @function garbled
 -- @tparam string text
 -- @treturn number between 0 and 1 (1 for an empty text)
@@ -108,14 +111,14 @@ M.garbled = garbled
 
 local cache, whys = {}, {}
 
---- What a book's file says.
--- The book's file read best (a PDF first), as the index holds it.
+--- Returns the text of a book's file, as the index holds it. The file with
+-- the best text is used, a PDF first.
 -- @tparam integer id the book
 -- @treturn[1] table `{ id=, path=, text=, words=, pages=, all=, refs= }`:
--- `text` the opening pages, `words` their words as a set, `pages` the
--- file's length, `all` every page the index holds, `refs` its reference
--- list if read
--- @treturn[2] nil when there is nothing that can be read
+-- `text` is the opening pages, `words` their words as a set, `pages` the
+-- file's length, `all` every page the index holds, and `refs` the
+-- reference list, if it was read
+-- @treturn[2] nil if no file can be read
 -- @treturn[2] string why not
 function M.evidence(id)
   if cache[id] ~= nil then return cache[id] or nil, whys[id] end
@@ -147,14 +150,14 @@ function M.evidence(id)
   return ev, why
 end
 
---- Forget what was read (after the index has changed).
+--- Clears the cached text. Call it after the index has changed.
 function M.forget() cache, whys = {}, {} end
 
---- Do the opening pages show a title?
+--- Checks whether the opening pages show a title.
 -- @tparam table ev evidence (`evidence`)
 -- @tparam string title
 -- @treturn string "shown", "partly", "absent" or "unknown"
--- @treturn number|nil the share of its telling words that stand there
+-- @treturn number|nil the share of the title's significant words found there
 function M.title(ev, title)
   if not ev then return "unknown", nil end
   local words = telling(title)
@@ -167,14 +170,15 @@ function M.title(ev, title)
   return share >= M.SHOWN and "shown" or share >= M.PARTLY and "partly" or "absent", share
 end
 
---- How much of a title stands on the opening pages as it is written: the
--- longest run of its telling words that follows the same run in the text
--- (little words between are passed over), as a share of its words. "On
--- Predicate Logic as Modal Logic" over a book whose pages say "Modal
--- Predicate Logic" shares every word, but its longest run is two of four.
+--- Returns how much of a title appears on the opening pages in its own
+-- word order. This is the longest run of the title's significant words that
+-- appears in the same order in the text, as a share of its words. Short
+-- common words in between are skipped. For example, "On Predicate Logic as
+-- Modal Logic" against pages that say "Modal Predicate Logic" shares every
+-- word, but its longest run is two of four.
 -- @tparam table ev evidence, or any table with `text`
 -- @tparam string title
--- @treturn number|nil the share, nil when the title has no words
+-- @treturn number|nil the share, or nil if the title has no words
 function M.phrase(ev, title)
   if not ev then return nil end
   local want = {}
@@ -213,17 +217,18 @@ function M.phrase(ev, title)
   return best / #want
 end
 
---- How many pages from the start `headline` reads type sizes from.
+--- How many pages from the start `headline` reads font sizes from.
 M.HEADLINE_PAGES = 3
 
---- How much of a title stands in the largest type of the opening pages
--- (the lines set at least four fifths as large as the largest on each of
--- the first three), as M.phrase reckons it. A title page sets the title so;
--- a section heading inside ("Motivation and Background") is smaller than
--- the title above it, and a file name is in no type at all.
+--- Returns how much of a title appears in the largest font of the opening
+-- pages, measured as `phrase` measures it. The largest font means the lines
+-- at least four fifths as large as the largest line on each of the first
+-- `HEADLINE_PAGES` pages. A title page sets the title in the largest font.
+-- A section heading such as "Motivation and Background" is smaller than the
+-- title above it, and a file name is not in the text at all.
 -- @tparam table ev evidence (`evidence`)
 -- @tparam string title
--- @treturn number|nil the share, as `phrase`; nil when no type was read
+-- @treturn number|nil the share, as `phrase` gives it, or nil if no font sizes were read
 function M.headline(ev, title)
   if not ev then return nil end
   if not ev.head then
@@ -254,17 +259,17 @@ local function family(name)
   end)
   return last
 end
---- A person's family name, folded: "Given Family", "Family, Given", "G. Family".
+--- Returns a person's family name, folded. Names may be written "Given
+-- Family", "Family, Given" or "G. Family".
 -- @function family
 -- @tparam string name
 -- @treturn string|nil
 M.family = family
 
---- Do the opening pages name these people? names: a list, or a string with
--- " & " between them. Returns the verdict ("shown" when every one is,
--- "partly", "absent", "unknown"), how many are shown, and how many named.
+--- Checks whether the opening pages name these people. The verdict is
+-- "shown" if every person is named, or "partly", "absent" or "unknown".
 -- @tparam table ev evidence (`evidence`)
--- @tparam {string,...}|string names
+-- @tparam {string,...}|string names a list, or a string with " & " between the names
 -- @treturn string the verdict
 -- @treturn integer how many are shown
 -- @treturn integer how many are named
@@ -291,12 +296,15 @@ function M.authors(ev, names)
   return shown == named and "shown" or shown > 0 and "partly" or "absent", shown, named
 end
 
---- Where an identifier stands in the file: "own" (named in the file's own
--- metadata, or standing as the file's own by ids.doi_in's reading),
--- "front" (in the opening pages), "inside" (further in), "cited" (only in
--- the reference list), "absent", or "unknown".
+--- Returns where an identifier appears in the file:
+--
+-- - "own": in the file's own metadata, or `ids.doi_in` reads it as the file's own
+-- - "front": on the opening pages
+-- - "inside": further in
+-- - "cited": only in the reference list
+-- - "absent" or "unknown"
 -- @tparam table ev evidence (`evidence`)
--- @tparam string ident `kind:value`, as `doi:10.1007/...`
+-- @tparam string ident `kind:value`, such as `doi:10.1007/...`
 -- @treturn string
 function M.ident(ev, ident)
   if not ev then return "unknown" end
@@ -334,12 +342,16 @@ function M.ident(ev, ident)
   return "absent"
 end
 
---- Is the file about as long as the work a record describes? rec.pages is
--- the edition's length (Open Library) or the article's page range
--- (CrossRef). Returns "part" (the file is much shorter: a chapter of it, a
--- part of the whole the record is of), "larger" (the file is much longer:
--- the record is of one piece in it), "whole", or nil when there is no
--- telling; and why.
+--- Checks whether the file is about as long as the work a record describes.
+-- `rec.pages` is the edition's length (Open Library) or the article's page
+-- range (CrossRef). Returns:
+--
+-- - "part": the file is much shorter, such as a chapter of the work
+-- - "larger": the file is much longer, and the record describes one piece of it
+-- - "whole": about the same length
+-- - nil if the lengths can't be compared
+--
+-- The second value says why.
 -- @tparam table|number ev evidence, or the file's length in pages
 -- @tparam table rec a record: `pages`, `type`
 -- @treturn string|nil
@@ -364,14 +376,15 @@ function M.size(ev, rec)
   return nil
 end
 
---- Judge a record against the book's file. Returns a table:
---   title, authors: the verdicts for the record's title and people
---   size: as M.size
---   another: the pages show neither the record's title nor any of its
---            people: it is another work's record
---   part:    the file is part of the work the record is of; its title,
---            people and identifiers are the whole's, not the file's
---   unread:  the file could not be read; nothing is known either way
+--- Checks a record against the book's file. Returns a table:
+--
+-- - `title`, `authors`: the verdicts for the record's title and authors
+-- - `size`: as `size` gives it
+-- - `another`: the pages show neither the record's title nor any of its
+--   authors, so the record is of another work
+-- - `part`: the file is part of the work the record describes, so the
+--   record's title, authors and identifiers belong to the whole work, not the file
+-- - `unread`: the file could not be read, so nothing is known either way
 -- @tparam table|nil ev evidence (`evidence`)
 -- @tparam table rec a record: `title`, `authors`, `pages`, `type`
 -- @treturn table
@@ -389,11 +402,10 @@ function M.record(ev, rec)
   return out
 end
 
---- A book's own title, authors and identifiers, judged by its file:
--- { unread= why, title = { value=, verdict=, share= }, authors = { value=, verdict=, shown=, named= },
---   idents = { { ident=, where= }, ... } }
+--- Checks a book's own title, authors and identifiers against its file.
 -- @tparam integer id the book
--- @treturn table|nil nil when there is no such book
+-- @treturn table|nil `{ unread= why, title = { value=, verdict=, share= }, authors = { value=, verdict=, shown=, named= },
+-- idents = { { ident=, where= }, ... } }`, or nil if there is no such book
 function M.book(id)
   local book = lulibre.book(id)
   if not book then return nil end
@@ -419,10 +431,13 @@ local DATED = { "copyright", "(c)", "published", "publication", "edition", "prin
   "received", "submitted", "accepted", "revised", "arxiv", "january", "february", "march", "april", "may",
   "june", "july", "august", "september", "october", "november", "december" }
 
---- Does a date stand on the opening pages? "stated": its year on a line
--- where a book says when it is from; "mentioned": its year elsewhere on
--- them (a year in a paper's text is often another's); "absent"; "unknown"
--- when there is no year to look for or no text.
+--- Checks whether a date appears on the opening pages:
+--
+-- - "stated": its year is on a line where a book gives its date
+-- - "mentioned": its year is elsewhere on those pages. A year in a paper's
+--   text often refers to another work.
+-- - "absent"
+-- - "unknown": there is no year to look for, or no text
 -- @tparam table ev evidence (`evidence`)
 -- @tparam string value a date, or anything with a year in it
 -- @treturn string
@@ -450,9 +465,9 @@ for w in ("press university publishing publishers publisher verlag books inc ltd
   TRADE[w] = true
 end
 
---- Does a publisher's name stand on the opening pages? Its telling words
--- less the trade's own ("Press", "Verlag", "University" ...), unless that
--- is all it has.
+--- Checks whether a publisher's name appears on the opening pages. The
+-- check uses the name's significant words, leaving out common publishing
+-- words ("Press", "Verlag", "University" ...) unless the name has no others.
 -- @tparam table ev evidence (`evidence`)
 -- @tparam string value a publisher's name
 -- @treturn string "shown", "partly", "absent" or "unknown"
@@ -476,9 +491,9 @@ end
 -- a number in a series, a language, a summary are not written as such
 local SILENT = { tags = true, series_index = true, languages = true, comments = true, rating = true }
 
---- Do the pages show a value of any field?
--- "unknown" when there is no text, or for a field pages cannot settle
--- (tags, series_index, languages, comments, rating).
+--- Checks whether the pages show a value of any field. Returns "unknown" if
+-- there is no text, or for a field the pages cannot settle (tags,
+-- series_index, languages, comments, rating).
 -- @tparam table ev evidence (`evidence`)
 -- @tparam string field
 -- @tparam string value
@@ -511,24 +526,25 @@ function M.shows(ev, field, value)
   return "unknown"
 end
 
---- The levels of `judge`, as numbers to sort by: higher is better borne out.
+--- The levels of `judge` as numbers to sort by. Higher means better supported.
 M.LEVELS = { better = 6, more = 5, both = 4, partly = 3, silent = 2, neither = 1, against = 0 }
 
---- How far a book's pages bear a proposal out.
--- The level is one of (best first):
+--- Returns how well a book's pages support a proposal.
+-- The level is one of these, best first:
 --
--- - "better": they show it, and not what the book has now (or it has nothing)
--- - "more": they show it, and it is what the book has now and more
--- - "both": they show it and what the book has now
--- - "partly": they show part of it
--- - "silent": they cannot tell: no text, or a field they cannot settle
--- - "neither": they show neither it nor what the book has now
--- - "against": they show what the book has now, and not it
+-- - "better": the pages show the proposed value and not the current one
+--   (or the book has no value now)
+-- - "more": the pages show the proposed value, which is the current one and more
+-- - "both": the pages show both the proposed and the current value
+-- - "partly": the pages show part of the proposed value
+-- - "silent": the pages can't tell: there is no text, or the pages can't settle the field
+-- - "neither": the pages show neither value
+-- - "against": the pages show the current value and not the proposed one
 --
--- For a removal it is the other way about: the pages showing what is
--- taken away is against it.
+-- For a removal it is the reverse: pages that show the value being removed
+-- count against the proposal.
 -- @tparam table pr a proposal: `book`, `field`, `value`, `op`
--- @treturn table `{ level =, says = }`, says being the level in words
+-- @treturn table `{ level =, says = }`, where `says` is the level in words
 function M.judge(pr)
   local edit = require "lulibre.edit"
   local book = lulibre.book(pr.book)
