@@ -133,8 +133,8 @@ with `@module lulibre.NAME` and an `@usage` example; each function a module
 exports has a `---` comment with `@tparam`, `@treturn` (and `[opt]`,
 `[1]`/`[2]` for optional arguments and alternative returns). A setting or
 list a module exports (`M.SHOWN`, `M.STOP`) gets a `---` line of its own.
-Done so far: `lulibre.verify`, `lulibre.backup`, `lulibre.offline`; the
-others are listed in `config.ld` as they are done.
+The modules done so far are the ones `config.ld` lists; each is added
+there as it is done.
 
 ## The documentation site
 

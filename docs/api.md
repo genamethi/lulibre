@@ -8,8 +8,8 @@ Scripts are Lua 5.4 or 5.5 and see one table, `lulibre`.
     :tasks   :cancel ID|all
 
 The modules written in Lua are also described one by one, function by
-function, in [the API reference](api/index.html) (so far `lulibre.verify`,
-`lulibre.backup` and `lulibre.offline`).
+function, in [the API reference](api/index.html) (the modules done so far:
+the list is `config.ld`'s).
 
 A script's arguments arrive as `...`. `lulibre.headless` is true when there
 is no interface. Each C module is documented at the top of its

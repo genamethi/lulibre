@@ -1,6 +1,16 @@
--- Everything lulibre can infer about a book from its file, as candidates:
--- { field=, value=, source=, confidence= }. Nothing here changes the library;
--- candidates are for showing, ranking and (once accepted) applying.
+--- Everything lulibre can infer about a book from its file, as candidates.
+-- A candidate is `{ field=, value=, source=, confidence= }`: the title and
+-- authors the file's own metadata and its title page give, identifiers in
+-- the text, the layouts and grammars of known publications, subjects from
+-- the vocabulary. Nothing here changes the library; candidates are for
+-- showing, ranking and (once accepted) proposing.
+--
+-- @module lulibre.extract
+-- @usage
+-- local extract = require "lulibre.extract"
+-- for _, c in ipairs(extract.candidates(12)) do
+--   print(c.field, c.value, c.source, c.confidence)
+-- end
 local ids = require "lulibre.ids"
 local junk = require "lulibre.junk"
 local names = require "lulibre.names"
@@ -15,10 +25,12 @@ local function join(list)
   return table.concat(list, " & ")
 end
 
---- Candidates from what a file contains. doc is
--- { path=, title=, author=, pages={ lines, lines, ... }, text= }: the
--- embedded title and author, the tagged lines of the leading pages (or
--- lines= for page 1 alone), and the text of those pages.
+--- Candidates from what a file contains.
+-- @tparam table doc `{ id=, path=, title=, author=, pages = { lines, lines, ... }, text=, texts= }`:
+-- the file's embedded title and author, the tagged lines of the leading
+-- pages (`lulibre.lines`; or `lines=` for page 1 alone), the text of those
+-- pages, and that text page by page
+-- @treturn {table,...} the candidates, by field, surest first
 function M.from_doc(doc)
   local out = {}
   -- How often a person's name stands in the leading pages: in an e-mail
@@ -190,7 +202,9 @@ function M.from_doc(doc)
   return out
 end
 
---- Candidates for a book in the library, from the index.
+--- Candidates for a book in the library, from what the index holds of its file.
+-- @tparam integer id
+-- @treturn {table,...} as `from_doc`; empty for a book without a file
 function M.candidates(id)
   local file = lulibre.files(id)[1]
   if not file then return {} end
