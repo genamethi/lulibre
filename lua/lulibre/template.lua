@@ -1,4 +1,4 @@
--- Patterns that pull named fields out of a string, and put them back.
+--- Patterns that pull named fields out of a string, and put them back.
 --
 -- Two spellings are accepted wherever a pattern is asked for:
 --
@@ -10,6 +10,13 @@
 --
 -- Both compile to a Lua pattern plus a list of field names, so a match is a
 -- table indexed by field name.
+--
+-- @module lulibre.template
+-- @usage
+-- local template = require "lulibre.template"
+-- local c = template.compile("%author% - %title% (%year%)")
+-- template.match(c, "Serre - Trees (1980)")  --> { author = "Serre", title = "Trees", year = "1980" }
+-- template.format("%author% - %title%", book) --> "Jean-Pierre Serre - Trees"
 local M = {}
 
 -- what a field may look like when the template does not say
@@ -25,6 +32,8 @@ end
 --- What is wrong with a Lua pattern, or nil. Lua only reports a malformed
 -- pattern when matching happens to reach the bad part, so this looks at its
 -- structure instead: escapes, sets and captures all closed.
+-- @tparam string pat
+-- @treturn string|nil what is wrong
 function M.check(pat)
   local depth, i, n = 0, 1, #pat
   while i <= n do
@@ -56,6 +65,10 @@ end
 
 --- Compile a template or "pattern => fields". Returns
 -- { pattern=, fields={...}, spec= } or nil, message.
+-- @tparam string spec
+-- @treturn[1] table `{ pattern=, fields=, spec= }`
+-- @treturn[2] nil
+-- @treturn[2] string the message
 function M.compile(spec)
   spec = trim(spec or "")
   if spec == "" then return nil, "empty pattern" end
@@ -88,6 +101,9 @@ end
 
 --- Match s against a compiled pattern: { field = value, ... } or nil.
 -- Field names are as written; M.canonical maps them to calibre's.
+-- @tparam table compiled
+-- @tparam string s
+-- @treturn table|nil
 function M.match(compiled, s)
   local caps = table.pack(pcall(string.match, s, compiled.pattern))
   if not caps[1] then return nil end -- a pattern Lua rejects matches nothing
@@ -108,6 +124,10 @@ end
 
 --- calibre field and value for a captured name: "year", "1996" ->
 -- "pubdate", "1996"; "doi", "10.1/x" -> "identifiers", "doi:10.1/x".
+-- @tparam string name
+-- @tparam string value
+-- @treturn string the field
+-- @treturn string the value
 function M.canonical(name, value)
   local field = alias[name] or name
   if field == "identifiers" and name ~= "identifiers" then value = name .. ":" .. value end
@@ -117,6 +137,9 @@ end
 --- Fill a template from a book: M.format("%author% - %title% (%year%)", book).
 -- Missing fields become "unknown"; slashes are replaced so the result is
 -- safe as a file name.
+-- @tparam string spec
+-- @tparam table book
+-- @treturn string
 function M.format(spec, book)
   local values = {
     title = book.title, author = book.author, authors = book.author,

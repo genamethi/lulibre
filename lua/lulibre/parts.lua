@@ -1,18 +1,24 @@
--- Books that are parts of a whole: a chapter of a handbook, of the Stacks
+--- Books that are parts of a whole: a chapter of a handbook, of the Stacks
 -- project, of a book the library also holds whole. They are custom fields
 -- (lulibre.custom): #partof (the whole), #part (its number in it) and #parts
 -- (how many there are), set by the grammars of publications
 -- (lulibre.grammars) or by hand like any field, and filtered by is:part,
 -- #partof:handbook.
 --
---   local parts = require "lulibre.parts"
---   parts.set{ { id=, whole=, part=, parts= }, ... }   -- as one change (journaled); returns edit.apply's summary
---   parts.of(id)            -- { whole=, part=, parts= } or nil
---   parts.wholes()          -- { { whole=, parts=, books = { {id=, part=}, ... }, missing = { n, ... } }, ... }
+-- @module lulibre.parts
+-- @usage
+-- local parts = require "lulibre.parts"
+-- parts.set{ { id=, whole=, part=, parts= }, ... }   -- as one change (journaled); returns edit.apply's summary
+-- parts.of(id)            -- { whole=, part=, parts= } or nil
+-- parts.wholes()          -- { { whole=, parts=, books = { {id=, part=}, ... }, missing = { n, ... } }, ... }
 local custom = require "lulibre.custom"
 
 local M = {}
 
+--- Set the whole, number and count of several books, as one change (journaled).
+-- @tparam {table,...} list `{ id=, whole=, part=, parts= }`
+-- @tparam[opt] string label
+-- @treturn table `lulibre.edit.apply`'s result
 function M.set(list, label)
   local changes = {}
   for _, p in ipairs(list) do
@@ -24,6 +30,9 @@ function M.set(list, label)
   return require("lulibre.edit").apply(changes, { label = label or "parts" })
 end
 
+--- What a book is a part of.
+-- @tparam integer id
+-- @treturn table|nil `{ whole=, part=, parts= }`
 function M.of(id)
   local whole = custom.get(id, "#partof")
   if whole == "" then return nil end
@@ -32,6 +41,7 @@ end
 
 --- Each whole, its parts in order, and the numbers it is known to have that
 -- the library does not (when how many there are is known).
+-- @treturn {table,...}
 function M.wholes()
   local by, order = {}, {}
   for _, r in ipairs(lulibre.sql([[SELECT w.book, w.value AS whole,

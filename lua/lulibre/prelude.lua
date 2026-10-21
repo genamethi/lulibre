@@ -1,5 +1,20 @@
--- The part of the lulibre API that is written in Lua. Loaded once at startup.
+--- The part of the `lulibre` table that is written in Lua.
+-- The rest of it is C (src/lua/l_*.c; the Lua API page sums all of it up).
+-- Loaded once at startup, with the commands written in Lua
+-- (lulibre/commands/).
+--
+-- @module lulibre
+-- @usage
+-- lulibre.each(lulibre.ids("no:ids"), function(id) ... end, { progress = "looking" })
+-- if lulibre.confirm("remove 3 books?") then ... end
+-- lulibre.propose(12, "title", "Knot Theory", { source = "my script", confidence = 0.7 })
+-- print(lulibre.inspect(lulibre.book(12)))
+
 --- A readable rendering of any value, for :lua and for debugging.
+-- @param v any value
+-- @tparam[opt] string indent
+-- @tparam[opt] table seen the tables shown already (a table that holds itself is shown once)
+-- @treturn string
 function lulibre.inspect(v, indent, seen)
   indent, seen = indent or "", seen or {}
   if type(v) == "string" then return string.format("%q", v) end
@@ -26,6 +41,7 @@ function lulibre.inspect(v, indent, seen)
   return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
 end
 --- :lua runs this: evaluate as an expression if possible, else as statements.
+-- @local
 function lulibre._eval(code)
   local f, err = load("return " .. code, "=:lua")
   if not f then f, err = load(code, "=:lua") end
@@ -39,6 +55,8 @@ function lulibre._eval(code)
   else print(text) end
 end
 --- Ask a yes/no question on the bottom line. Waits; true only for y or yes.
+-- @tparam string question "[y/N]" is added
+-- @treturn boolean
 function lulibre.confirm(question)
   local a = lulibre.input({ prompt = question .. " [y/N] " })
   return a ~= nil and (a:lower() == "y" or a:lower() == "yes")
@@ -46,6 +64,9 @@ end
 --- Whether to do something lulibre may do on its own, as the option of that
 -- name says: "auto" yes, "never" no, "ask" puts the question (and means no
 -- where there is nobody to ask).
+-- @tparam string name the option: "auto", "ask" or "never"
+-- @tparam string question
+-- @treturn boolean
 function lulibre.policy(name, question)
   local v = lulibre.o[name]
   if v == "auto" then return true end
@@ -53,6 +74,7 @@ function lulibre.policy(name, question)
   return false
 end
 --- Set several options at once: lulibre.setup{ pages = 8, ocr = "auto" }.
+-- @tparam table opts `{ name = value, ... }`
 function lulibre.setup(opts)
   for k, v in pairs(opts) do lulibre.o[k] = v end
 end
@@ -64,6 +86,9 @@ end
 -- Tasks take turns, and a turn can end between any two Lua operations, so
 -- fn must not count in a shared variable (`n = n + 1` can lose a count).
 -- Put results on the item, or use table.insert, which cannot be interrupted.
+-- @tparam table items
+-- @tparam function fn `fn(item, index)`
+-- @tparam[opt] table opts `jobs`, `progress`
 function lulibre.each(items, fn, opts)
   opts = opts or {}
   local total = #items
@@ -97,6 +122,8 @@ function lulibre.each(items, fn, opts)
 end
 --- For a message that names a key: the key a command line is bound to now,
 -- or ":command" when it has none.
+-- @tparam string command
+-- @treturn string
 function lulibre.hint(command)
   return lulibre.key(command) or (":" .. command)
 end
@@ -116,21 +143,35 @@ do
   end
 end
 --- Propose a change for later review; see lulibre.proposals.
+-- @tparam integer id
+-- @tparam string field
+-- @tparam string value
+-- @tparam[opt] table opts as `lulibre.proposals.add` takes them
+-- @return what `lulibre.proposals.add` returns
 function lulibre.propose(id, field, value, opts)
   return require("lulibre.proposals").add(id, field, value, opts)
 end
 --- Apply changes now: lulibre.apply{ {id=, field=, value=, op=}, ... }. Waits.
+-- @tparam {table,...} changes
+-- @tparam[opt] table opts as `lulibre.edit.apply` takes them
+-- @treturn table its result
 function lulibre.apply(changes, opts)
   return require("lulibre.edit").apply(changes, opts)
 end
 --- A title in title case (APA style); see lulibre.titlecase.
+-- @tparam string s
+-- @treturn string
 function lulibre.titlecase(s)
   return require("lulibre.titlecase").apply(s)
 end
 -- ---- options of scripts, and the configuration file ----
+
 --- lulibre.option(namespace, { name = { default=, type=, choices=, help= }, ... }):
 -- declare a script's options; returns the namespace to read them from. See
 -- lulibre.options.
+-- @tparam string ns
+-- @tparam[opt] table defs
+-- @treturn table
 function lulibre.option(ns, defs)
   return require("lulibre.options").option(ns, defs)
 end
@@ -229,9 +270,13 @@ table.insert(package.searchers, 2, function(name)
   end
   return ("\n\tno module '%s' in the luarocks tree %s"):format(name, tree)
 end)
---- require a module, offering (when the option rocks_install is on, and
+--- Require a module, offering (when the option rocks_install is true, and
 -- someone can be asked) to install the rock that has it into rocks_tree.
 -- rock: the rock's name when it is not the module's.
+-- @tparam string module
+-- @tparam[opt] string rock
+-- @return the module
+-- @raise when it is not installed and is not to be
 function lulibre.require_rock(module, rock)
   local ok, m = pcall(require, module)
   if ok then return m end

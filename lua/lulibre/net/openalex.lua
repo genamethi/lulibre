@@ -1,6 +1,8 @@
--- OpenAlex: records by DOI.
+--- OpenAlex: records by DOI.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 local json = require "lulibre.json"
 local unescape, encode = M._unescape, M._encode
@@ -9,6 +11,10 @@ local unescape, encode = M._unescape, M._encode
 
 --- OpenAlex's record for a DOI: title, authors and date, for works CrossRef
 -- does not have.
+-- @tparam string doi
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.openalex(doi)
   local body, err = M.fetch("openalex", doi:lower(), "https://api.openalex.org/works/doi:" .. encode(doi))
   if not body then return nil, err end

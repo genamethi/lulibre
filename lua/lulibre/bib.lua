@@ -1,8 +1,16 @@
--- BibTeX out and in.
+--- BibTeX out and in.
 --
 -- Out: entries with stable cite keys and a `file` field, which Zotero,
 -- JabRef and BibDesk all understand on import. In: a .bib file parsed into
 -- entries, for matching against the library.
+--
+-- @module lulibre.bib
+-- @usage
+-- local bib = require "lulibre.bib"
+-- local text, keys = bib.export({ 12, 15 })
+-- bib.key(book)                         --> "connes2006walk"
+-- bib.last_first("Gerard van der Geer")  --> "van der Geer, Gerard"
+-- bib.parse(io.open("refs.bib"):read("a"))[1].fields.title
 local M = {}
 
 local PARTICLE = {}
@@ -29,6 +37,8 @@ end
 --- "Gerard van der Geer" -> "van der Geer, Gerard". Names that already have
 -- a comma, and names that are not people ("The PARI group"), are braced so
 -- BibTeX leaves them alone.
+-- @tparam string name
+-- @treturn string
 function M.last_first(name)
   if name:find(",") then return name end
   local t = {}
@@ -57,6 +67,9 @@ end
 --- The cite key for a book: first author's surname, year, first telling word
 -- of the title, e.g. connes2006walk. opts.key is a template over %auth%,
 -- %year%, %word%, %id%.
+-- @tparam table book
+-- @tparam[opt] table opts `key`
+-- @treturn string
 function M.key(book, opts)
   local tpl = opts and opts.key or "%auth%%year%%word%"
   local auth, first = "", people_of(book)[1]
@@ -75,6 +88,10 @@ function M.key(book, opts)
 end
 
 --- One entry as text. opts.file = false leaves the file field out.
+-- @tparam table book
+-- @tparam string key
+-- @tparam[opt] table opts `file`
+-- @treturn string
 function M.entry(book, key, opts)
   opts = opts or {}
   local ids = book.idents
@@ -107,6 +124,10 @@ end
 
 --- Entries for a list of ids; keys are made unique with a, b, c. Returns
 -- the text and the keys in order.
+-- @tparam {integer,...} ids
+-- @tparam[opt] table opts as for `key` and `entry`
+-- @treturn string
+-- @treturn {string,...} the keys
 function M.export(ids, opts)
   local used, out, keys = {}, {}, {}
   for _, id in ipairs(ids) do
@@ -136,6 +157,8 @@ end
 --- Parse .bib text: { {type=, key=, fields={name=value}, raw={name=text}}, ... }.
 -- Field names are lower-cased; braces and escapes are removed from values
 -- (raw keeps them as written).
+-- @tparam string text
+-- @treturn {table,...}
 function M.parse(text)
   local entries, pos = {}, 1
   while true do
@@ -180,6 +203,8 @@ end
 
 --- "Last, First and Last, First" -> { "First Last", ... }. A name written
 -- in its own braces ("{The Stacks project authors}") is one name as it stands.
+-- @tparam string author_field
+-- @treturn {string,...}
 function M.people(author_field)
   local out = {}
   for person in ((author_field or "") .. " and "):gmatch("(.-)%s+and%s+") do
@@ -195,6 +220,9 @@ end
 --- The files an entry names, as absolute paths. Understands a plain path and
 -- the JabRef / Zotero forms "desc:path:type;desc:path:type". Relative paths
 -- are taken from `dir`, the folder the .bib file is in.
+-- @tparam table entry
+-- @tparam string dir
+-- @treturn {string,...}
 function M.files(entry, dir)
   local out = {}
   for piece in (entry.fields.file or ""):gmatch("[^;]+") do
@@ -212,6 +240,8 @@ end
 --- What an entry says, in the library's terms: { title=, authors=, pubdate=,
 -- publisher=, series=, series_index=, tags=, identifiers = { "doi:…", … } }.
 -- Fields the entry does not have are absent.
+-- @tparam table entry
+-- @treturn table
 function M.metadata(entry)
   local f, m = entry.fields, { identifiers = {} }
   m.title = f.title
@@ -241,6 +271,8 @@ end
 --- Metadata that travels with files: every entry of the .bib files in a
 -- folder (or of one .bib file) that names a file, keyed by that file's
 -- absolute path. This is how a build can say what its own output is.
+-- @tparam string path a folder or a .bib file
+-- @treturn table `{ [path] = entry }`
 function M.sidecar(path)
   local uv = require "luv"
   local bibs, st = {}, uv.fs_stat(path)

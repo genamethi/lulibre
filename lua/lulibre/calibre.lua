@@ -1,4 +1,4 @@
--- Which calibre programs are running, from the outside: nothing is opened,
+--- Which calibre programs are running, from the outside: nothing is opened,
 -- locked or asked. calibre keeps one program at a time on a user's
 -- libraries with a lock that on Linux is an abstract unix socket, per user
 -- (not per library): calibre-singleinstance-<uid>-db, held by its program,
@@ -6,18 +6,20 @@
 -- program also holds ...-GUI. /proc/net/unix lists them. (Binding the name
 -- to test it would be taking the lock: the program could not start.)
 --
---   local calibre = require "lulibre.calibre"
---   calibre.running()   -- { db = bool, gui = bool }, or nil where it cannot be told
---   calibre.holds()     -- something has the library open (db), or nil
---   calibre.server()    -- calibre's server run through calibre-server-opf.py:
---                          its status { pid=, opf_thread=, error=, calibre=, libraries= }, or nil
---   calibre.opf()       -- who keeps the books' metadata.opf files current now:
---                          { by = "program" | "server" | nil, behind = n, why = "..." }
---   calibre.wait_for_program(what)
---                          while calibre's program is open, wait (saying so); true if it
---                          waited. Called before each step of something the program
---                          could be doing too (a direct calibredb run, a file moved
---                          out of a book's folder): pause while it is open, resume after.
+-- @module lulibre.calibre
+-- @usage
+-- local calibre = require "lulibre.calibre"
+-- calibre.running()   -- { db = bool, gui = bool }, or nil where it cannot be told
+-- calibre.holds()     -- something has the library open (db), or nil
+-- calibre.server()    -- calibre's server run through calibre-server-opf.py:
+--                        its status { pid=, opf_thread=, error=, calibre=, libraries= }, or nil
+-- calibre.opf()       -- who keeps the books' metadata.opf files current now:
+--                        { by = "program" | "server" | nil, behind = n, why = "..." }
+-- calibre.wait_for_program(what)
+--                        while calibre's program is open, wait (saying so); true if it
+--                        waited. Called before each step of something the program
+--                        could be doing too (a direct calibredb run, a file moved
+--                        out of a book's folder): pause while it is open, resume after.
 local M = {}
 
 local function uid()
@@ -26,9 +28,11 @@ local function uid()
   return p and p.uid
 end
 
--- where the sockets are listed (a test points it elsewhere)
+--- Where the sockets are listed (a test points it elsewhere).
 M.SOCKETS = "/proc/net/unix"
 
+--- Which of calibre's locks are held: by any program on the library (db), by its program (gui).
+-- @treturn table|nil `{ db=, gui= }`; nil where it cannot be told
 function M.running()
   local id = uid()
   local f = id and io.open(M.SOCKETS)
@@ -39,12 +43,15 @@ function M.running()
   return { db = text:find(base .. "db%f[%s%z]") ~= nil, gui = text:find(base .. "GUI%f[%s%z]") ~= nil }
 end
 
+--- Does something have the library open?
+-- @treturn boolean|nil
 function M.holds()
   local r = M.running()
   return r and r.db
 end
 
--- where contrib/calibre-server-opf.py says how it is doing
+--- Where contrib/calibre-server-opf.py says how it is doing.
+-- @treturn string
 function M.status_file()
   local dir = os.getenv("XDG_STATE_HOME")
   if not dir or dir == "" then dir = (os.getenv("HOME") or "") .. "/.local/state" end
@@ -53,6 +60,7 @@ end
 
 --- The status of calibre's server started through calibre-server-opf.py,
 -- if one is running (the process the file names is alive and is it).
+-- @treturn table|nil `{ pid=, opf_thread=, error=, calibre=, libraries= }`
 function M.server()
   local f = io.open(M.status_file())
   if not f then return nil end
@@ -69,6 +77,7 @@ end
 
 --- Who keeps the opf files current, and how many books' files are behind
 -- their record (as the mirror last saw calibre's database).
+-- @treturn table `{ by = "program" | "server" | nil, behind = n, why= }`
 function M.opf()
   local behind = tonumber((lulibre.sql("SELECT value FROM meta WHERE key = 'calibre_opf_behind'")[1] or {}).value)
   local r = M.running()
@@ -87,6 +96,8 @@ end
 
 --- Pause while calibre's program is open; resume once it is gone. From a
 -- task (it sleeps); outside one it only says whether the program is open.
+-- @tparam string what what is waiting, for the message
+-- @treturn boolean it waited
 function M.wait_for_program(what)
   local r = M.running()
   if not (r and r.gui) then return false end

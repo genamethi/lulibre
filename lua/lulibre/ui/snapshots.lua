@@ -1,6 +1,10 @@
--- The snapshot browser (:snapshots, gz): the snapshots along the bottom, and
+--- The snapshot browser (:snapshots, gz): the snapshots along the bottom, and
 -- where the list is, what going back to the one under the cursor would do.
 -- Going back asks first; the flags it would go back with are in the title.
+--
+-- @module lulibre.ui.snapshots
+-- @usage
+-- require("lulibre.ui.snapshots").run()   -- as :snapshots, gz does
 local snapshots = require "lulibre.snapshots"
 local panels = require "lulibre.ui.panels"
 
@@ -36,6 +40,7 @@ function M.context(snap, plan)
   return rows
 end
 
+--- Open the browser.
 function M.run()
   local flags = { exact = false, unsync = false, fields = false }
   local all = false

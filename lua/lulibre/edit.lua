@@ -1,29 +1,49 @@
--- Changing the library. Every change goes to calibre through calibredb (and
--- through the content server when one is configured), is recorded in the
--- journal with the old value, and can be undone.
+--- Changing the library.
+-- Every change goes to calibre through calibredb (through the content
+-- server when one answers), is recorded in the journal with the old value,
+-- and can be undone.
 --
--- A change is { id=, field=, value=, op= }. op is "set" (default), or for
--- the list fields authors, tags and identifiers, "add" or "remove", which
--- leave a book's other values alone.
+-- A change is `{ id=, field=, value=, op= }`. op is "set" (the default),
+-- or for the list fields authors, tags and identifiers (and a custom field
+-- of the type list), "add" or "remove", which leave a book's other values
+-- alone. A field is one of `fields`, or a custom field ("#partof",
+-- `lulibre.custom`).
+--
+-- @module lulibre.edit
+-- @usage
+-- local edit = require "lulibre.edit"
+-- local r = edit.apply({ { id = 12, field = "tags", value = "math/topology", op = "add" } },
+--   { label = "a subject" })
+-- print(edit.summary(r))          --> "changed 1 book  (u undoes)"
+-- edit.undo()                     --> puts that batch back
 local M = {}
 
+--- calibre's fields a change can name, in the order forms show them.
 M.fields = { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "identifiers", "languages" }
--- how the items of a list field are separated when shown and typed
+--- How the items of a list field are separated when shown and typed,
+-- by field: authors " & ", tags and identifiers ", ".
 M.separator = { authors = " & ", tags = ", ", identifiers = ", " }
 
--- how an empty value is shown where one is about to be written
+--- How an empty value is shown where one is about to be written.
 M.BLANK = "(blank)"
 
 local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+--- Is this calibre's placeholder for no author ("Unknown", or nothing)?
+-- @function is_unknown
+-- @tparam string|nil author
+-- @treturn boolean
 local function is_unknown(author)
   return author == nil or author == "" or author == "Unknown" or author == "()"
 end
 M.is_unknown = is_unknown
 
---- A list field's text as items.
+--- A list field's text as items: authors by " & " (or ";"), the others by commas.
+-- @tparam string field
+-- @tparam string|nil text
+-- @treturn {string,...}
 function M.split(field, text)
   local out = {}
   text = text or ""
@@ -40,7 +60,12 @@ function M.split(field, text)
   return out
 end
 
---- A book's current value of a field, in the form edits use.
+--- A book's current value of a field, as text in the form changes use:
+-- a list field joined by its separator, identifiers as "type:value", sorted;
+-- "" for an unknown author, and for a series index without a series.
+-- @tparam table book from `lulibre.book(id)`
+-- @tparam string field
+-- @treturn string
 function M.current(book, field)
   -- a custom field (#partof): kept by lulibre.custom, not calibre
   if field:sub(1, 1) == "#" then return require("lulibre.custom").get(book.id, field) end
@@ -71,7 +96,14 @@ local function key_of(field, item)
   return lulibre.fold(item)
 end
 
---- The value a field ends up with after a change.
+--- The value a field ends up with after a change. A bare year for pubdate
+-- is the first of January; an add or remove keeps the other items.
+-- @tparam table book
+-- @tparam string field
+-- @tparam[opt] string op "set" when not given
+-- @tparam string value
+-- @treturn string in the form `current` gives
+-- @raise when the op does not apply to the field, or the value cannot be one (a malformed date)
 function M.resolve(book, field, op, value)
   op = op or "set"
   local custom = field:sub(1, 1) == "#" and require("lulibre.custom")
@@ -134,8 +166,12 @@ function M.resolve(book, field, op, value)
   return finish(items)
 end
 
---- Turn what was typed for a field into changes. For list fields "+x, -y"
--- adds and removes; anything else replaces the value.
+--- Turn what was typed for a field into changes. For a list field,
+-- "+x, -y" adds and removes; anything else replaces the value.
+-- @tparam integer id the book
+-- @tparam string field
+-- @tparam string text
+-- @treturn {table,...} changes
 function M.typed(id, field, text)
   if M.separator[field] and text:find("^%s*[+-]") then
     local out = {}
@@ -176,7 +212,9 @@ end
 local probe = { at = 0 }
 
 --- Whether something is listening where the content server should be.
--- Waits up to 400 ms.
+-- Waits up to 400 ms; true when it cannot tell (no luv).
+-- @tparam string url "http://host:port"
+-- @treturn boolean
 function M.server_up(url)
   local ok, uv = pcall(require, "luv")
   if not ok then return true end -- cannot tell; let calibredb find out
@@ -198,7 +236,10 @@ function M.server_up(url)
   return up
 end
 
---- How a change would reach calibre right now: "server" or "direct".
+--- How a change would reach calibre right now, as `write_via` says: with
+-- "auto", the server when it answers (asked at most every 5 seconds).
+-- @treturn string "server" or "direct"
+-- @raise when `write_via` is "server" and no server is set
 function M.route()
   local o = lulibre.o
   local via = o.write_via
@@ -219,17 +260,19 @@ function M.route()
   return probe.up and "server" or "direct"
 end
 
---- How many calibredb processes may run at once. Straight to the folder
--- they would contend for the same database, so one.
+--- How many calibredb processes may run at once: `write_jobs`, or one
+-- straight to the folder, where they would contend for the same database.
+-- @treturn integer
 function M.write_jobs()
   return M.route() == "direct" and 1 or math.max(1, lulibre.o.write_jobs)
 end
 
---- The start of every calibredb command for this library.
--- A file that holds a secret should be readable by its owner alone. lulibre
--- never reads the password itself (calibredb is handed the file's name), but
--- it can tell when others on the machine could: said once, as a warning.
 local warned = {}
+--- Is a file that holds a secret readable by its owner alone? lulibre never
+-- reads the password itself (calibredb is handed the file's name), but it
+-- can tell when others on the machine could: said once, as a warning.
+-- @tparam string path
+-- @treturn boolean|nil false when others can read it; nil when it was said already
 function M.check_secret(path)
   if warned[path] then return end
   local ok, uv = pcall(require, "luv")
@@ -243,6 +286,11 @@ function M.check_secret(path)
   return true
 end
 
+--- The start of every calibredb command for this library: through the
+-- server (user, password file) or straight to the folder, as `route` says.
+-- Straight to the folder, it first waits for calibre's program to close.
+-- @treturn {string,...} the command's words so far, to add calibredb's own to
+-- @raise when the password file is missing
 function M.calibredb()
   -- every change to the library starts here: the first says so when the
   -- newest copy of calibre's database is too old (lulibre.backup)
@@ -278,7 +326,7 @@ end
 
 --- After lulibre has changed the library straight in its folder (no
 -- server, no program open): calibre's backup_metadata writes the opf files
--- of the books changed, as nothing else will (backup_metadata option).
+-- of the books changed, as nothing else will (option `backup_metadata`).
 -- Errors are logged, not raised: the change itself is made.
 function M.after_direct()
   if not lulibre.o.backup_metadata or M.route() ~= "direct" then return end
@@ -286,6 +334,12 @@ function M.after_direct()
   if not ok then lulibre.log("the books' opf files were not written: " .. tostring(err), "warn") end
 end
 
+--- What went wrong with a calibredb run, in words: the content server not
+-- answering, a refused account, the library held by another calibre program.
+-- @function failure
+-- @tparam table|nil r `lulibre.system`'s result
+-- @tparam[opt] string err its error when there is no result
+-- @treturn string
 local function failure(r, err)
   if not r then return err or "could not run calibredb" end
   if r.timed_out then return "calibredb timed out" end
@@ -306,10 +360,12 @@ local function failure(r, err)
 end
 M.failure = failure
 
---- Apply changes. Waits; shows progress. Returns
--- { batch=, books=, applied=, unchanged=, failed={ {id=, error=}, ... } }.
--- opts.label names the batch in the history; opts.jobs is how many
--- calibredb processes run at once (default: the write_jobs option).
+--- Apply changes, as one batch in the journal. Waits; shows progress.
+-- @tparam {table,...} changes `{ id=, field=, value=, op= }`
+-- @tparam[opt] table opts `label` (the batch's name in the history), `jobs` (calibredb processes
+-- at once; `write_jobs` by default)
+-- @treturn table `{ batch=, books=, applied=, unchanged=, failed = { {id=, error=}, ... }, links= }`
+-- (links: symbolic links repaired after calibre renamed folders)
 function M.apply(changes, opts)
   opts = opts or {}
   local by_book, order = {}, {}
@@ -463,8 +519,9 @@ function M.apply(changes, opts)
 end
 
 --- Symbolic links in folders of your own inside the library break when
--- calibre renames the folder they point into. Point them at the files again,
--- as the repair_links option allows. Returns how many were repaired.
+-- calibre renames the folder they point into. Point them at the files
+-- again, as the option `repair_links` allows (asking when it says "ask").
+-- @treturn integer how many were repaired
 function M.repair_links()
   if lulibre.o.repair_links == "never" then return 0 end
   local orphans = require "lulibre.orphans"
@@ -485,7 +542,12 @@ function M.repair_links()
   return orphans.relink(fixable)
 end
 
---- Like M.resolve, but starting from a value instead of a book.
+--- `resolve`, starting from a value instead of a book.
+-- @tparam string current the field's value now
+-- @tparam string field
+-- @tparam[opt] string op
+-- @tparam string value
+-- @treturn string
 function M.resolve_from(current, field, op, value)
   local fake = { title = current, author = current, tags = M.split("tags", current), series = current,
     series_index = tonumber(current), publisher = current, pubdate = current, lang = current, idents = {} }
@@ -501,6 +563,11 @@ end
 -- The journal's field name for a removed book; `old` holds what it was.
 local REMOVED = "(removed)"
 
+--- What a book's record says, field by field, as the journal keeps it for a
+-- removed book: `{ title=, formats=, <each of fields>= }`.
+-- @function state
+-- @tparam table book
+-- @treturn table
 local function snapshot(book)
   local snap = { title = book.title, formats = book.formats }
   for _, field in ipairs(M.fields) do snap[field] = M.current(book, field) end
@@ -510,10 +577,12 @@ M.state = snapshot
 
 --- Remove books from the library. Waits. calibre moves them to its recycle
 -- bin (.caltrash in the library folder) rather than deleting them, and each
--- removal is journaled with what the record said, so M.undo can bring the
--- book back for as long as calibre keeps it there. opts.label names the
--- batch in the history. Returns how many were removed, and an error message
--- if calibredb failed.
+-- removal is journaled with what the record said, so `undo` can bring the
+-- book back for as long as calibre keeps it there.
+-- @tparam {integer,...} ids library books (not files staged from the sync folder)
+-- @tparam[opt] table opts `label`: the batch's name in the history
+-- @treturn integer how many were removed
+-- @treturn[opt] string why not all, when calibredb failed
 function M.remove(ids, opts)
   local removed = 0
   for _, id in ipairs(ids) do
@@ -631,9 +700,13 @@ end
 
 --- Bring back a book a journal row says was removed, and log it: the row
 -- is marked undone and says which book it came back as, and a "(restored)"
--- row for the new book says which one it was. label names the batch.
--- Returns the new id (and a warning if not all of its metadata came back),
--- or nil and why not.
+-- row for the new book says which one it was.
+-- @tparam table row the journal's row
+-- @tparam[opt] string label the batch's name
+-- @treturn[1] integer the new id
+-- @treturn[1] string|nil a warning, when not all of its metadata came back
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.restore_removed(row, label)
   local new, why = restore(row.book, require("lulibre.json").decode(row.old))
   if new then
@@ -648,7 +721,9 @@ function M.restore_removed(row, label)
   return new, why
 end
 
---- One line for the message area about what apply() did.
+--- One line for the message area about what `apply` did.
+-- @tparam table r `apply`'s result
+-- @treturn string
 function M.summary(r)
   if r.books == 0 then return "nothing to change" end
   local s = ("changed %d book%s"):format(r.applied, r.applied == 1 and "" or "s")
@@ -659,8 +734,9 @@ function M.summary(r)
   return r.applied > 0 and s .. ("  (%s undoes)"):format(lulibre.hint("undo")) or s
 end
 
---- Recent batches, newest first:
--- { {batch=, label=, ts=, books=, fields=, failed=, undone=}, ... }
+--- Recent batches, newest first.
+-- @tparam[opt] integer limit 50 when not given
+-- @treturn {table,...} `{ batch=, label=, ts=, books=, fields=, failed=, undone=, removed= }`
 function M.history(limit)
   return lulibre.store([[SELECT batch, max(label) AS label, max(ts) AS ts, count(DISTINCT book) AS books,
       count(*) AS fields, sum(status = 'failed') AS failed, min(undone) AS undone,
@@ -668,8 +744,13 @@ function M.history(limit)
     FROM journal GROUP BY batch ORDER BY batch DESC LIMIT ?]], limit or 50)
 end
 
---- Put back what a batch changed (default: the latest one not yet undone).
+--- Put back what a batch changed: fields, removed books (out of calibre's
+-- recycle bin), a PDF replaced by OCR, a file dropped from the sync folder.
 -- A field someone has changed again since is left alone and counted.
+-- @tparam[opt] integer batch the latest one not yet undone when not given
+-- @treturn[1] table `apply`'s result, with `skipped=`, `undid=` (the batch) and `restored=` (ids)
+-- @treturn[2] nil
+-- @treturn[2] string why not ("nothing to undo")
 function M.undo(batch)
   if not batch then
     local last = lulibre.store([[SELECT batch FROM journal WHERE undone = 0 AND status = 'applied'

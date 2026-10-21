@@ -1,4 +1,4 @@
--- lulibre's part in the systemd units around calibre's content server, as
+--- lulibre's part in the systemd units around calibre's content server, as
 -- three options ask for it:
 --
 --   server_hook = true          lulibre.service, run before each start of the
@@ -21,17 +21,22 @@
 -- the three options is changed in the configuration window; `lulibre units`
 -- shows the plan, `lulibre units apply` makes it.
 --
---   local units = require "lulibre.units"
---   local p = units.plan()        --> { server = {name=, user=, pid=}, changes = {...} }
---   units.describe(p)             --> lines
---   units.apply(p, confirm)       --> lines; confirm(question) answers a question
+-- @module lulibre.units
+-- @usage
+-- local units = require "lulibre.units"
+-- local p = units.plan()        --> { server = {name=, user=, pid=}, changes = {...} }
+-- units.describe(p)             --> lines
+-- units.apply(p, confirm)       --> lines; confirm(question) answers a question
 local M = {}
 
 local uv = require "luv"
 
+--- The unit run before the server starts (`server_hook`).
 M.HOOK = "lulibre.service"
+--- The drop-in on the server's unit (`opf_writer = "server"`).
 M.DROPIN = "lulibre-opf-writer.conf"
-M.OLD_DROPIN = "lulibre-opf.conf" -- `lulibre server-unit`'s, before these options
+--- The drop-in's name before these options, as `lulibre server-unit` wrote it.
+M.OLD_DROPIN = "lulibre-opf.conf"
 M.TIMER, M.TIMER_SERVICE = "lulibre-restart.timer", "lulibre-restart.service"
 
 local function readfile(path)
@@ -84,9 +89,12 @@ local function running_units()
   return out
 end
 
+--- Where a user's units are written: ~/.config/systemd/user.
+-- @treturn string
 function M.user_dir()
   return (os.getenv("HOME") or "") .. "/.config/systemd/user"
 end
+--- Where system units are written.
 M.SYSTEM_DIR = "/etc/systemd/system"
 
 -- units whose files start calibre-server, running or not
@@ -111,6 +119,7 @@ end
 
 --- The units that run calibre-server: those running it now, else those
 -- whose files start it. `{ {name=, user=, pid=}, ... }`.
+-- @treturn {table,...}
 function M.find()
   local units = running_units()
   if #units == 0 then units = unit_files() end
@@ -303,6 +312,7 @@ end
 -- changes = { {feature=, option=, files = { {path=, text=} }, remove = { path, ... },
 -- after = { {systemctl args}, ... }, restart=, manual=, cannot=, note=, from_tree= }, ... } }`.
 -- A change with `manual` or `cannot` is not made: it is shown.
+-- @treturn table
 function M.plan()
   local p = { changes = {} }
   local found = M.find()
@@ -399,6 +409,8 @@ local function sc_line(user, args)
 end
 
 --- The plan, in lines.
+-- @tparam table p the plan
+-- @treturn {string,...}
 function M.describe(p)
   local out = {}
   if not p.server then
@@ -491,6 +503,9 @@ end
 --- Make the plan's changes. confirm(question) is asked before a system
 -- unit's changes (sudo) and before restarting the server; nil: nothing is
 -- asked, and only a user unit's changes are made. Returns the lines said.
+-- @tparam table p the plan
+-- @tparam[opt] function confirm `confirm(question)` -> boolean
+-- @treturn {string,...}
 function M.apply(p, confirm)
   local out = {}
   if not p.server or p.why then

@@ -1,10 +1,14 @@
--- The configuration window (the bar's tab 3, :config, gC): in the list's
+--- The configuration window (the bar's tab 3, :config, gC): in the list's
 -- place until tab 1 or 2 is chosen, every option, lulibre's own under their
 -- headings and each script's under its name, with its value, its default
 -- and where it is set; under it, what the option under the cursor does. A value changed here takes effect now and is written to
 -- init.lua (which is kept as init.lua.bak first). E opens init.lua itself
 -- in your editor ($VISUAL, $EDITOR, else vim or vi), and what you write
 -- there is read again when you leave it.
+--
+-- @module lulibre.ui.config
+-- @usage
+-- require("lulibre.ui.config").run()   -- as :config, gC, 3 does
 local cf = require "lulibre.config_file"
 local options = require "lulibre.options"
 local panels = require "lulibre.ui.panels"
@@ -40,6 +44,9 @@ end
 
 --- What the panel under the window shows for an option: rows of
 -- { label, text, style = }. Replace it in init.lua to show it your way.
+-- @tparam table it the option, as the window lists it
+-- @tparam[opt] string line the line of init.lua that names it
+-- @treturn {table,...}
 function M.context(it, line)
   local rows = { { it.ns and ("%s.%s"):format(it.ns, it.name) or it.name, it.group, style = "head" } }
   rows[#rows + 1] = { "value", show(it.value) }
@@ -65,6 +72,7 @@ end
 
 local open_now -- the window while it is open: the bar's tab opens it once
 
+--- Open the window; when it is open, nothing more.
 function M.run()
   if open_now and open_now:is_open() then return end
   local only_changed = false

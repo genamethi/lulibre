@@ -1,11 +1,16 @@
--- The phrases that mark each subject, as learned from the confirmed records
+--- The phrases that mark each subject, as learned from the confirmed records
 -- (:learn), for review: drop the ones that do not belong, add your own.
+--
+-- @module lulibre.ui.terms
+-- @usage
+-- require("lulibre.ui.terms").run()   -- as :terms does
 local keys = require("lulibre.ui.keys").of("terms")
 local learn = require "lulibre.learn"
 
 local M = {}
 
 --- Open the list. args: a subject to keep it to.
+-- @tparam[opt] string args
 function M.run(args)
   local only = type(args) == "string" and args ~= "" and args or nil
   local at -- row -> { subject=, term= } ; term is nil on a subject's own line

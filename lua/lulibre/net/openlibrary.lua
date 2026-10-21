@@ -1,6 +1,8 @@
--- Open Library: records by ISBN, from its API or its dumps on this machine.
+--- Open Library: records by ISBN, from its API or its dumps on this machine.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 local json = require "lulibre.json"
 local taxonomy = require "lulibre.taxonomy"
@@ -11,7 +13,7 @@ local trim, in_batches, file_time, forename_first, lines_with, missed = M._trim,
 local MONTHS = { january = 1, february = 2, march = 3, april = 4, may = 5, june = 6, july = 7, august = 8, september = 9,
   october = 10, november = 11, december = 12 }
 
--- how many ISBNs go in one request to Open Library
+--- how many ISBNs go in one request to Open Library
 M.OPENLIBRARY_BATCH = 20
 
 local function plain_isbn(isbn)
@@ -21,6 +23,8 @@ end
 --- Ask Open Library about many ISBNs in as few requests as it takes, keeping
 -- each answer; M.openlibrary then answers from what was kept. Returns how
 -- many were newly fetched.
+-- @tparam {string,...} isbns
+-- @treturn integer
 function M.openlibrary_prefetch(isbns)
   local keys = {}
   for i, isbn in ipairs(isbns) do keys[i] = plain_isbn(isbn) end
@@ -43,6 +47,10 @@ end
 --- Open Library's record for an ISBN: a book's title, authors, publisher and
 -- year, the series when the title carries it in brackets, and its subject
 -- from the class number libraries shelve it under.
+-- @tparam string isbn
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.openlibrary(isbn)
   isbn = plain_isbn(isbn)
   local body, err = M.fetch("openlibrary", isbn,
@@ -128,6 +136,10 @@ end
 -- found is kept as an answer from Open Library; an ISBN the dump does not
 -- hold is not looked for in it again until the file changes. Returns how
 -- many were found, or nil and why.
+-- @tparam {string,...} isbns
+-- @treturn[1] integer
+-- @treturn[2] nil
+-- @treturn[2] string why
 function M.openlibrary_dump(isbns)
   local datasets = require "lulibre.datasets"
   local ids = require "lulibre.ids"

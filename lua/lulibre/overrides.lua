@@ -1,4 +1,4 @@
--- Your own modules and scripts that are used in place of lulibre's own.
+--- Your own modules and scripts that are used in place of lulibre's own.
 -- Yours are looked for first, by design (~/.config/lulibre/lua/ and
 -- scripts/), so you can replace any part of lulibre that is written in
 -- Lua. But a copy of one of lulibre's files, changed and then forgotten,
@@ -6,9 +6,11 @@
 -- in the console at start: once for each such file, and again whenever
 -- lulibre's own file has changed since.
 --
---   local overrides = require "lulibre.overrides"
---   overrides.find()   -- { {kind="module"|"script", name=, yours=, bundled=, stamp=}, ... }
---   overrides.warn()   -- say so of those not said of yet (lulibre does at each start); returns them
+-- @module lulibre.overrides
+-- @usage
+-- local overrides = require "lulibre.overrides"
+-- overrides.find()   -- { {kind="module"|"script", name=, yours=, bundled=, stamp=}, ... }
+-- overrides.warn()   -- say so of those not said of yet (lulibre does at each start); returns them
 local M = {}
 
 local uv = require "luv"
@@ -49,6 +51,7 @@ local function digest(path)
 end
 
 --- Your files that are used in place of lulibre's own, by path.
+-- @treturn {table,...} `{ kind=, name=, yours=, bundled=, stamp= }`
 function M.find()
   local p = lulibre.settings.paths()
   local bundled = p.bundled or {}
@@ -86,6 +89,7 @@ end
 --- Say in the console which of your files are used in place of lulibre's
 -- own, of those not said of yet or whose lulibre file has changed since.
 -- Returns those. A replaceable function.
+-- @treturn {table,...}
 function M.warn()
   local found = M.find()
   local ok, seen = pcall(json.decode, read(seen_path()) or "{}")

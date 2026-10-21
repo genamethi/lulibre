@@ -1,6 +1,8 @@
--- CrossRef: records by DOI, in batches, and a search by title.
+--- CrossRef: records by DOI, in batches, and a search by title.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 local json = require "lulibre.json"
 local trim, unescape, encode, in_batches = M._trim, M._unescape, M._encode, M._in_batches
@@ -50,6 +52,10 @@ local function mailto(sep)
 end
 
 --- CrossRef's record for a DOI.
+-- @tparam string doi
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.crossref(doi)
   local body, err = M.fetch("crossref", doi:lower(), "https://api.crossref.org/works/" .. encode(doi) .. mailto("?"))
   if not body then return nil, err end
@@ -60,13 +66,15 @@ function M.crossref(doi)
   return rec
 end
 
--- how many DOIs go in one request to CrossRef
+--- how many DOIs go in one request to CrossRef
 M.CROSSREF_BATCH = 20
 
 --- Ask CrossRef about many DOIs in as few requests as it takes (its `filter`
 -- takes several, and `select` leaves out the reference lists and the rest
 -- that is not wanted), keeping each answer; M.crossref then answers from
 -- what was kept. Returns how many were newly fetched.
+-- @tparam {string,...} dois
+-- @treturn integer
 function M.crossref_prefetch(dois)
   local keys = {}
   for _, doi in ipairs(dois) do
@@ -93,6 +101,11 @@ end
 --- Search CrossRef by title; the record only if it is that work (title_match
 -- says how). authors: the book's, when it has any worth the name. The
 -- record carries `trust`: how far the match can be believed.
+-- @tparam string title
+-- @tparam[opt] {string,...} authors
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.crossref_search(title, authors)
   local body, err = M.fetch("crossref-title", lulibre.fold(title),
     "https://api.crossref.org/works?rows=3&query.bibliographic=" .. encode(title) .. mailto("&"))

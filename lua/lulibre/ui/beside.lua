@@ -1,9 +1,13 @@
--- The sync folder beside the library: the files waiting to be added in a
+--- The sync folder beside the library: the files waiting to be added in a
 -- column on the left, and beside it the library's own list, which follows
 -- the file under the cursor: to the book that is the very same file, when
 -- the library holds it already, else narrowed to the books that look like
 -- it. The preview shows the file under the cursor; Tab crosses to the
 -- library's list, and the preview then shows the book there.
+--
+-- @module lulibre.ui.beside
+-- @usage
+-- require("lulibre.ui.beside").run()   -- as :beside, gb does
 local sync = require "lulibre.sync"
 local edit = require "lulibre.edit"
 
@@ -18,6 +22,8 @@ local SMALL = { the = 1, ["and"] = 1, ["for"] = 1, with = 1, from = 1, into = 1,
 --- A filter for the library's books that look like a title: its three
 -- longest words, all of which must be in a book's title, authors or tags.
 -- nil when the title has nothing to go by.
+-- @tparam string title
+-- @treturn string|nil
 function M.likely(title)
   local words, seen = {}, {}
   -- (dashes and quotes that are not ASCII part words like any other punctuation)
@@ -39,6 +45,7 @@ function M.likely(title)
   return table.concat(out, " ")
 end
 
+--- Open the screen on the waiting files.
 function M.run()
   if (lulibre.o.sync_dir or "") == "" then
     lulibre.notify('no sync folder is set: lulibre.o.sync_dir = "~/some/folder" in init.lua', "error")

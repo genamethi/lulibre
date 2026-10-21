@@ -1,4 +1,4 @@
--- Read a title page the way a person does: by the role of each line. Works on
+--- Read a title page the way a person does: by the role of each line. Works on
 -- the tagged lines the index keeps (text, font size, superscript, rotation).
 --
 --   subject   the arXiv class in the margin stamp, else the MSC footnote
@@ -6,6 +6,13 @@
 --             the same with its mathematics marked up, when it has any
 --   authors   the lines under the title that read as names, up to the
 --             abstract or the first affiliation
+--
+-- @module lulibre.titlepage
+-- @usage
+-- local titlepage = require "lulibre.titlepage"
+-- local got = titlepage.classify(lulibre.lines(12, 1))
+-- print(got.title, table.concat(got.authors, " & "))
+-- titlepage.byline("by A. Name")   --> "A. Name"
 local ids = require "lulibre.ids"
 local names = require "lulibre.names"
 local taxonomy = require "lulibre.taxonomy"
@@ -82,6 +89,8 @@ end
 -- "A. Name"), "" for "by" standing alone above the names, or nil. A
 -- sentence that happens to begin with "by" is told apart by its length, its
 -- lower-case words, and brackets or figures in it.
+-- @tparam string text
+-- @treturn string|nil
 function M.byline(text)
   local t = trim(text or "")
   if t:lower() == "by" then return "" end
@@ -106,6 +115,8 @@ end
 --   byline=, name_first= } (byline: the authors were named by a "by" line,
 -- which is the page's own word for it; name_first: the page opens with the
 -- author's name and has its title further down).
+-- @tparam {table,...} lines
+-- @treturn table
 function M.classify(lines)
   local r = { authors = {} }
 
@@ -294,6 +305,8 @@ end
 --- The same, trying each of several pages in turn (scanned books often open
 -- on a blank or a cover): the first page that yields a title wins, and the
 -- subject may come from any of them.
+-- @tparam {{table,...},...} pages each page's lines
+-- @treturn table as `classify`
 function M.classify_pages(pages)
   local best
   for _, lines in ipairs(pages) do
@@ -310,31 +323,6 @@ function M.classify_pages(pages)
   return best or { authors = {} }
 end
 
---- What a cover sheet states outright, in "Label: value" lines, as the
--- sheets JSTOR and other archives put in front of an article do:
---
---   What is an Answer?
---   Author(s): Herbert S. Wilf
---   Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292
---   Published by: Mathematical Association of America
---   Stable URL: http://www.jstor.org/stable/2321713
---
--- or with each label on a line of its own and its value under it, as a
--- university's repository puts in front of what it holds:
---
---   Unifying Labeling under Minimal Search ...
---   Item Type
---   Article; text
---   Authors
---   Epstein, Samuel D.; Kitahara, Hisatsugu; Seely, T. Daniel
---   Publisher
---   University of Arizona Linguistics Circle (Tucson, Arizona)
---   Journal
---   Coyote Papers
---
--- Returns nil when the page has no author label, else { title=, authors=,
--- year=, source=, publisher=, journal=, url=, jstor=, labels= } with whatever
--- was found; labels counts the labelled lines, which is how sure one can be.
 -- label -> what it gives, and how many lines its value may run to
 local STACKED = { ["item type"] = { "type", 1 }, ["authors"] = { "authors", 12 }, ["author"] = { "authors", 12 },
   ["publisher"] = { "publisher", 1 }, ["journal"] = { "journal", 1 }, ["rights"] = { "rights", 1 },
@@ -391,6 +379,33 @@ local function stacked(text)
   return out
 end
 
+--- What a cover sheet states outright, in "Label: value" lines, as the
+-- sheets JSTOR and other archives put in front of an article do:
+--
+--   What is an Answer?
+--   Author(s): Herbert S. Wilf
+--   Source: The American Mathematical Monthly, Vol. 89, No. 5 (May, 1982), pp. 289-292
+--   Published by: Mathematical Association of America
+--   Stable URL: http://www.jstor.org/stable/2321713
+--
+-- or with each label on a line of its own and its value under it, as a
+-- university's repository puts in front of what it holds:
+--
+--   Unifying Labeling under Minimal Search ...
+--   Item Type
+--   Article; text
+--   Authors
+--   Epstein, Samuel D.; Kitahara, Hisatsugu; Seely, T. Daniel
+--   Publisher
+--   University of Arizona Linguistics Circle (Tucson, Arizona)
+--   Journal
+--   Coyote Papers
+--
+-- Returns nil when the page has no author label, else { title=, authors=,
+-- year=, source=, publisher=, journal=, url=, jstor=, labels= } with whatever
+-- was found; labels counts the labelled lines, which is how sure one can be.
+-- @tparam {table|string,...} lines a page's lines, `lulibre.lines` or text
+-- @treturn table|nil
 function M.labelled(lines)
   local text = {}
   for i, l in ipairs(lines or {}) do
@@ -464,6 +479,8 @@ end
 --
 -- Returns nil unless the page reads like a thesis cover, else a table with
 -- whichever of those were found.
+-- @tparam {table|string,...} lines
+-- @treturn table|nil
 function M.thesis(lines)
   local text, low = {}, {}
   for _, l in ipairs(lines or {}) do
