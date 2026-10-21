@@ -245,7 +245,7 @@ its own documentation.
 | `lulibre.features` | the programs features need: `find(program)`, `status(f)`, `need(name)` (may offer pixi), `declare{ name=, programs=, used_for=, packages=, pixi= }` |
 | `lulibre.in_terminal(argv)` | run a program in the terminal, handed over to it as for the editor (headless: on the terminal lulibre runs in): its exit status, or nil and a message |
 | `lulibre.edit_file(path)` | open a file in `$VISUAL`/`$EDITOR` (vim, vi), handing over the terminal; the exit status |
-| `lulibre.require_rock(module [, rock])` | require, offering to install into `rocks_tree` when `rocks_install = "on"` |
+| `lulibre.require_rock(module [, rock])` | require, offering to install into `rocks_tree` when `rocks_install = true` |
 | `lulibre.grammars` | grammars of publications: `add{ name=, kind=, lines = { G.line{...}, G.skip(n), G.opt(r), G.either{...} }, text=, pages=, read=, noncatalog=, confidence= }`, `remove(name)`, `match(doc)` → `{ {grammar=, fields=} }`, `doc(id)` |
 | `lulibre.ids` | identifiers in page text: DOIs, ISBNs, arXiv numbers, MSC areas |
 | `lulibre.junk` | titles and authors that are artefacts (build file names, error pages, the PDF's producer), against lower-cased values |

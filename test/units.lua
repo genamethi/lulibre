@@ -457,6 +457,16 @@ do
   eq("settings.info", { info.type, info.default, info.choices, info.help ~= "" },
     { "string", "ask", { "auto", "ask", "never" }, true })
   eq("settings.info of a number", { S.info("pages").type, S.info("pages").default }, { "number", 6 })
+  eq("an option of two values is a boolean", { S.info("server_hook").type, S.info("server_hook").default,
+    lulibre.o.server_hook, lulibre.o.backup_metadata }, { "boolean", false, false, true })
+  lulibre.o.weigh_sources = true
+  eq("set to true", lulibre.o.weigh_sources, true)
+  lulibre.o.weigh_sources = "off"
+  eq("and from on and off, as they were written before", lulibre.o.weigh_sources, false)
+  lulibre.o.weigh_sources = "on"
+  eq("on is true", lulibre.o.weigh_sources, true)
+  eq("anything else is refused", { (pcall(S.set, "weigh_sources", "maybe")), lulibre.o.weigh_sources }, { false, true })
+  S.reset("weigh_sources")
   eq("unknown options are errors", { (pcall(S.get, "nope")), (pcall(S.set, "nope", 1)), (pcall(S.info, "nope")) },
     { false, false, false })
   eq("a refused value changes nothing", { (pcall(S.set, "write_via", "carrier pigeon")), S.get("write_via") },

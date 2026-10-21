@@ -1,6 +1,6 @@
 -- Features and the programs they need. lulibre needs none of these to run:
 -- each comes in when the feature that uses it is turned on, and is looked
--- for then. A program is found on $PATH or, with the option pixi_deps = "on",
+-- for then. A program is found on $PATH or, with the option pixi_deps = true,
 -- in an environment lulibre keeps with pixi in its data folder, to which it
 -- offers to add a missing one (asking first: that runs what pixi fetches).
 --
@@ -72,13 +72,13 @@ local function executable(path)
   return uv.fs_access(path, "X") == true
 end
 
---- Where a program is: on $PATH, else (pixi_deps = "on") in lulibre's
+--- Where a program is: on $PATH, else (pixi_deps = true) in lulibre's
 -- pixi environment. nil when it is in neither.
 function M.find(program)
   for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
     if executable(dir .. "/" .. program) then return dir .. "/" .. program end
   end
-  if lulibre.o.pixi_deps == "on" then
+  if lulibre.o.pixi_deps then
     local p = M.pixi_dir() .. "/.pixi/envs/default/bin/" .. program
     if executable(p) then return p end
   end
@@ -120,27 +120,27 @@ function M.how(f)
   for _, m in ipairs(f.modules or {}) do names[#names + 1] = "the Lua module " .. m end
   local s = ("%s is not installed (%s)"):format(table.concat(names, ", "), table.concat(parts, "; "))
   if f.pixi then
-    s = s .. (lulibre.o.pixi_deps == "on" and "; lulibre can add it to its own pixi environment"
-      or '; or set pixi_deps = "on" and lulibre can add it to an environment of its own')
+    s = s .. (lulibre.o.pixi_deps and "; lulibre can add it to its own pixi environment"
+      or '; or set pixi_deps = true and lulibre can add it to an environment of its own')
   end
   return s
 end
 
 --- The feature's programs, found ({ name = path }), or nil and how to get
--- them. With pixi_deps = "on", where someone can be asked, it offers to add
+-- them. With pixi_deps = true, where someone can be asked, it offers to add
 -- the feature to lulibre's pixi environment.
 function M.need(name)
   local f = by_name(name)
   if not f then return nil, "no feature " .. tostring(name) end
   local st = M.status(f)
   if st.here then return st.paths end
-  -- a rock: lulibre.require_rock offers to install it (rocks_install = "on")
+  -- a rock: lulibre.require_rock offers to install it (rocks_install = true)
   if f.rock and #(f.programs or {}) == 0 then
     local ok, mod = pcall(lulibre.require_rock, f.modules[1], f.rock)
     if ok then return { [f.modules[1]] = mod } end
     return nil, M.how(f)
   end
-  if lulibre.o.pixi_deps == "on" and f.pixi and not lulibre.headless and lulibre.task_id() then
+  if lulibre.o.pixi_deps and f.pixi and not lulibre.headless and lulibre.task_id() then
     local pixi = M.find("pixi")
     if pixi and lulibre.confirm(("%s needs %s; add %s to lulibre's pixi environment (%s)? pixi fetches it from conda-forge"):format(
         f.used_for, table.concat(st.missing, ", "), f.pixi, M.pixi_dir())) then

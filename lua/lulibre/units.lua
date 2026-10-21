@@ -1,7 +1,7 @@
 -- lulibre's part in the systemd units around calibre's content server, as
 -- three options ask for it:
 --
---   server_hook = "on"          lulibre.service, run before each start of the
+--   server_hook = true          lulibre.service, run before each start of the
 --                               server's unit (lulibre offline: the copy of
 --                               calibre's database, the opf files, the changes
 --                               that wait for the server to be stopped)
@@ -243,7 +243,7 @@ local function hook_text(server, user, as_user)
   -- (added, not left nil in the list: table.concat stops at a nil)
   if not user then lines[#lines + 1] = "User=" .. as_user end
   for _, l in ipairs { "", "[Install]", "WantedBy=" .. server.name, "" } do lines[#lines + 1] = l end
-  return header("server_hook = on") .. table.concat(lines, "\n")
+  return header("server_hook = true") .. table.concat(lines, "\n")
 end
 
 local function timer_texts(server, user, at)
@@ -331,15 +331,15 @@ function M.plan()
 
   -- server_hook: lulibre.service
   local hook = dir .. "/" .. M.HOOK
-  local want = lulibre.o.server_hook == "on"
+  local want = lulibre.o.server_hook
   local text = hook_text(server, user, as_user)
   local have = readfile(hook)
   if want and have ~= text then
-    p.changes[#p.changes + 1] = { feature = "lulibre.service", option = "server_hook = on",
+    p.changes[#p.changes + 1] = { feature = "lulibre.service", option = "server_hook = true",
       files = { { path = hook, text = text } }, after = { { "daemon-reload" }, { "enable", M.HOOK } },
       from_tree = exe_tree and "this lulibre runs from a source tree: the unit would run it from there" or nil }
   elseif not want and have and have:find("Written by lulibre", 1, true) then
-    p.changes[#p.changes + 1] = { feature = "lulibre.service", option = "server_hook = off",
+    p.changes[#p.changes + 1] = { feature = "lulibre.service", option = "server_hook = false",
       remove = { hook }, before = { { "disable", M.HOOK } }, after = { { "daemon-reload" } } }
   end
 

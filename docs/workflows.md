@@ -439,7 +439,7 @@ confirmed (`gk`) only, which is the better measure once there are a few
 dozen: a field the library itself has wrong for many books (dates taken
 from the files, say) makes the sources that are right look bad.
 
-With the option `weigh_sources = "on"` (or its box in the dialog) a
+With the option `weigh_sources = true` (or its box in the dialog) a
 proposal's confidence is no longer what its rule claims but what the
 sources that agree on it come to, each taken for what it was measured to be
 worth. It is off unless you turn it on.
@@ -1023,7 +1023,7 @@ the next time the server is stopped. They are done the same way whatever
 stopped it:
 
 - `lulibre.service`, run before each start of the server's systemd unit:
-  set `server_hook = "on"` and lulibre installs and enables it for the unit
+  set `server_hook = true` and lulibre installs and enables it for the unit
   that runs your server (see "lulibre's systemd units" below).
 - "restart now": lulibre stops the server with the option `server_stop`,
   does them, and starts it with `server_start`
@@ -1195,7 +1195,7 @@ calibre's content server, and lulibre keeps the units as they say:
 
 | Option | What lulibre installs |
 |---|---|
-| `server_hook = "on"` | `lulibre.service`, run before each start of the server's unit (`lulibre offline`), enabled for it |
+| `server_hook = true` | `lulibre.service`, run before each start of the server's unit (`lulibre offline`), enabled for it |
 | `opf_writer = "server"` | the drop-in `<unit>.d/lulibre-opf-writer.conf`: the server started through the launcher, with calibre's opf writer in it |
 | `server_restart_at = "HH:MM"` | `lulibre-restart.timer` and `lulibre-restart.service`: the server restarted every day at that time |
 
@@ -1424,13 +1424,13 @@ needs it is used, and `:features` says which are installed and on.
 | ocrmypdf | `ocrmypdf` | giving PDFs a text layer (`ocr_write`) |
 | lpeg | the Lua module `lpeg` (a rock) | grammars written with LPeg patterns |
 
-When one is missing, lulibre says how to install it. With `pixi_deps = "on"`
+When one is missing, lulibre says how to install it. With `pixi_deps = true`
 it can also keep an environment of its own with pixi (under
 `~/.local/share/lulibre/pixi`) and offers to add the program there, asking
 first. That is off by default, since it means running what pixi fetches.
 
 Scripts may need Lua modules: `rocks_tree` names a luarocks tree whose modules
-`require` finds (before the usual places), and with `rocks_install = "on"`, `lulibre.require_rock(module
+`require` finds (before the usual places), and with `rocks_install = true`, `lulibre.require_rock(module
 [, rock])` offers to install a missing one there (off by default, for the same
 reason).
 

@@ -30,7 +30,7 @@ struct config {
   char *review_rows;   /* field | all: one row per field in review, or one per proposal */
   int review_context;  /* 1: review shows what a proposal rests on in the main view */
   char *review_reject; /* once | always: does a rejected value stay out of later proposals? */
-  char *weigh_sources; /* off | on: confidences from measured source weights */
+  int weigh_sources; /* confidences from measured source weights */
   char *title_case;    /* auto | never: give titles proposed in capitals title case */
   char *math_notation; /* unicode | off: mathematics in proposed titles (lulibre.notation) */
   char *propose_over;  /* gaps | sure | any: propose for a field that already has a value? */
@@ -58,18 +58,18 @@ struct config {
   char *write_via;      /* auto | server | direct: how changes reach calibre */
   char *server_stop;    /* shell command that stops the content server; empty = lulibre cannot */
   char *server_start;   /* and the one that starts it again */
-  char *server_hook;    /* on | off: lulibre.service before each start of the server */
+  int server_hook; /* lulibre.service before each start of the server */
   char *opf_writer;     /* off | server: calibre's opf writer in the server (a drop-in) */
   char *server_restart_at; /* HH:MM: a daily restart of the server (lulibre-restart.timer); "" none */
   char *backup_restart; /* always | next | never | N days: copy metadata.db before the server starts */
   int backup_keep;      /* copies kept */
   char *backup_too_old; /* warn | false */
   int backup_max_age;   /* days */
-  char *backup_metadata; /* on | off: backup_metadata whenever the server is stopped, after direct writes */
+  int backup_metadata; /* backup_metadata whenever the server is stopped, after direct writes */
   char *log_file;       /* every log entry is also appended here; empty = no file */
-  char *pixi_deps;      /* off | on: programs features need may come from lulibre's own pixi environment */
+  int pixi_deps; /* programs features need may come from lulibre's own pixi environment */
   char *rocks_tree;     /* a luarocks tree whose modules scripts may require */
-  char *rocks_install;  /* off | on: lulibre may install a rock a script needs into that tree (asking) */
+  int rocks_install; /* lulibre may install a rock a script needs into that tree (asking) */
   char *config_add_core;    /* auto | ask | never: put options missing from init.lua in it */
   char *config_add_scripts; /* auto | ask | never: the same for options scripts declare */
   char *config_add_as;      /* commented | set: how an option added to init.lua is written */
@@ -77,7 +77,9 @@ struct config {
   char *config_dir;     /* where init.lua, scripts/ and lua/ are; empty = the XDG default */
 };
 
-enum opt_type { OPT_STR, OPT_PATH, OPT_INT };
+/* OPT_BOOL: true or false, kept as an int; set from "true" or "false"
+ * (and, as script options are, "on"/"off", "yes"/"no", "1"/"0") */
+enum opt_type { OPT_STR, OPT_PATH, OPT_INT, OPT_BOOL };
 
 struct opt_def {
   const char *name;
@@ -98,6 +100,7 @@ void config_free(struct config *c);
 int config_set(struct config *c, const char *name, const char *val, char **err);
 /* propose_min and learned_tags_min, in percent, as last set */
 extern int config_propose_min, config_learned_tags_min;
+/* an OPT_BOOL reads as "true" or "false" here, and as 1 or 0 from config_int */
 const char *config_str(const struct config *c, const struct opt_def *o);
 int config_int(const struct config *c, const struct opt_def *o);
 

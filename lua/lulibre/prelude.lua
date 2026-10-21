@@ -236,7 +236,7 @@ function lulibre.require_rock(module, rock)
   local ok, m = pcall(require, module)
   if ok then return m end
   local tree = lulibre.o.rocks_tree or ""
-  if lulibre.o.rocks_install ~= "on" or tree == "" then
+  if not lulibre.o.rocks_install or tree == "" then
     error(("the Lua module %s is not installed (luarocks install %s%s)"):format(module, rock or module,
       tree ~= "" and (" --tree " .. tree) or ""), 2)
   end

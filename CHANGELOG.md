@@ -33,6 +33,10 @@ written in `src/version.h`.
   heading's qualifier ("Rings (Algebra)").
 - New: while typing (a field, the `:` and `/` prompts, the pickers),
   Ctrl or Alt with Left and Right moves a word at a time, as `b` and `w`.
+- Changed: the options with two values are `true` or `false`, read in Lua
+  as booleans: `server_hook`, `backup_metadata`, `weigh_sources`,
+  `pixi_deps`, `rocks_install`. "on" and "off" are still taken when
+  setting them, so an init.lua that says `"off"` goes on working.
 - Fixed: `server_hook = "on"` wrote a lulibre.service with no `[Install]`
   section, so enabling it did nothing and it never ran before the server.
 - Fixed: lulibre's systemd units were made as the options say by every

@@ -11,7 +11,7 @@
  *   lulibre.settings.names()            the option names, in the order
  *                                       `lulibre config` writes them
  *   lulibre.settings.info(name)         { name=, value=, default=, type=
- *                                       "number" | "string" | "path",
+ *                                       "number" | "boolean" | "string" | "path",
  *                                       choices = { ... } or nil, help=,
  *                                       group= (the heading it is under) }
  *   lulibre.settings.paths()            where things are: { config_dir=, init=,
@@ -46,6 +46,8 @@
 static void push_value(lua_State *L, const struct config *c, const struct opt_def *o) {
   if (o->type == OPT_INT) {
     lua_pushinteger(L, config_int(c, o));
+  } else if (o->type == OPT_BOOL) {
+    lua_pushboolean(L, config_int(c, o));
   } else if (!strcmp(o->name, "config_dir")) {
     char *dir = config_dir_path(c);
     lua_pushstring(L, dir);
@@ -158,9 +160,10 @@ static int s_info_ui(lua_State *L) {
   push_value(L, &lapi_app(L)->cfg, o);
   lua_setfield(L, -2, "value");
   if (o->type == OPT_INT) lua_pushinteger(L, atoi(o->def));
+  else if (o->type == OPT_BOOL) lua_pushboolean(L, !strcmp(o->def, "true"));
   else lua_pushstring(L, o->def);
   lua_setfield(L, -2, "default");
-  lua_pushstring(L, o->type == OPT_INT ? "number" : o->type == OPT_PATH ? "path" : "string");
+  lua_pushstring(L, o->type == OPT_INT ? "number" : o->type == OPT_BOOL ? "boolean" : o->type == OPT_PATH ? "path" : "string");
   lua_setfield(L, -2, "type");
   lua_pushstring(L, o->help);
   lua_setfield(L, -2, "help");
