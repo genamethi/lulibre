@@ -1,14 +1,19 @@
---- Orphans: what the library's records and the library's folder disagree on.
---   records with no file   the book is in calibre but its file is gone
---   files with no record   a file sits in one of calibre's folders that
---                          calibre does not know about
---   broken links           a symbolic link in a folder of your own inside the
---                          library (a reading list, say) points at a book file
---                          that has moved; calibre renames a book's folder
---                          whenever its title or author changes
---   empty folders          reported, never touched
--- Each gets a verdict and a suggested action; nothing happens until apply().
--- Folders in the library that are not calibre's are otherwise left alone.
+--- Finds where the library's records and the library's folder disagree,
+-- and fixes what you choose.
+--
+-- `scan` finds four kinds of orphans:
+--
+-- - records with no file: the book is in calibre, but its file is gone;
+-- - files with no record: a file in one of calibre's folders that calibre
+--   does not know about;
+-- - broken links: a symbolic link in your own folder inside the library (a
+--   reading list, for example) that points at a book file that has moved.
+--   calibre renames a book's folder whenever the book's title or author changes.
+-- - empty folders: reported, never touched.
+--
+-- Each orphan gets a verdict and a suggested action. Nothing changes until
+-- `apply`. Folders in the library that are not calibre's are otherwise left
+-- alone.
 --
 -- @module lulibre.orphans
 -- @usage
@@ -78,11 +83,11 @@ local function relative(from_dir, to)
   return table.concat(out, "/")
 end
 
---- What became of each dangling link: calibre's folder names end in the
--- book's id, which says where the file is now.
+--- Works out where each dangling link's file is now. calibre's folder
+-- names end in the book's id, which gives the file's current folder.
 -- @tparam string root the library folder
 -- @tparam {table,...} dangling `{ path=, target= }`
--- @treturn {table,...} as `scan().links`
+-- @treturn {table,...} in the form of `scan().links`
 function M.describe_links(root, dangling)
   local links = {}
   for _, path in ipairs(dangling) do
@@ -112,8 +117,8 @@ local function calibre_folders()
   return calibres
 end
 
---- Only the links: every symbolic link in a folder of your own inside the
--- library that leads nowhere, described as in scan().links.
+--- Returns only the broken links: every symbolic link in your own folders
+-- inside the library that leads nowhere, in the form of `scan().links`.
 -- @treturn {table,...}
 function M.broken_links()
   local root = library()
@@ -121,10 +126,9 @@ function M.broken_links()
   return M.describe_links(root, dangling)
 end
 
---- Point links (as described above, with .to set) at their files again.
--- Returns how many were repaired.
--- @tparam {table,...} links
--- @treturn integer
+--- Points links at their files again.
+-- @tparam {table,...} links in the form of `scan().links`, with `.to` set
+-- @treturn integer how many links were repaired
 function M.relink(links)
   local n = 0
   for _, l in ipairs(links) do
@@ -133,13 +137,18 @@ function M.relink(links)
   return n
 end
 
---- Look for orphans: records with no file, files with no record, broken
--- links, empty folders. Each found has a verdict (what was found; brief,
--- where there is one, is a shorter wording for a narrow column) and an
--- action, one of "keep", "remove" (the record), "reattach" (give the record
--- the file found for it), "move" (take the stray file out of the library),
--- "add" (make the stray file a book), "relink" (point the link at where the
--- book's file is now) or "unlink" (delete the link).
+--- Finds orphans: records with no file, files with no record, broken links
+-- and empty folders. Each orphan has a verdict, which says what was found,
+-- and an action. `brief`, where there is one, is a shorter verdict for a
+-- narrow column. The action is one of:
+--
+-- - "keep"
+-- - "remove": remove the record
+-- - "reattach": give the record the file found for it
+-- - "move": move the stray file out of the library
+-- - "add": add the stray file as a book
+-- - "relink": point the link at the book file's current place
+-- - "unlink": delete the link
 -- @treturn table `{ records = { {book=, verdict=, brief=, action=, actions=, stray=, twin=}, ... },
 -- strays = { {path=, rel=, size=, verdict=, action=, actions=, twin=}, ... },
 -- links = { {path=, rel=, target=, book=, to=, verdict=, action=, actions=}, ... },
@@ -245,7 +254,7 @@ function M.scan()
   return { records = records, strays = loose, links = links, empty = empty, root = root }
 end
 
---- How many of each action a scan result now holds.
+--- Returns how many of each action a scan result holds now.
 -- @tparam table found `scan`'s result
 -- @treturn table `{ [action] = n, ... }`
 function M.counts(found)
@@ -256,8 +265,8 @@ function M.counts(found)
   return n
 end
 
---- What the records about to be removed know that their surviving copies
--- do not, as changes to the survivors (see dupes.gather).
+--- Returns what the records about to be removed know and their surviving
+-- copies don't, as changes to the survivors (see `dupes.gather`).
 -- @tparam table found
 -- @treturn {table,...} changes
 function M.gather(found)
@@ -295,10 +304,10 @@ local function set_aside(path, rel, holding)
   return to
 end
 
---- Carry out the actions. Waits. Returns { reattached=, removed=, moved=,
--- added=, relinked=, unlinked=, failed = { "what: why", ... }, holding = folder or nil }.
--- @tparam table found `scan`'s result, actions as chosen
--- @treturn table
+--- Carries out the chosen actions and waits for them to finish.
+-- @tparam table found `scan`'s result, with the actions chosen
+-- @treturn table `{ reattached=, removed=, moved=, added=, relinked=, unlinked=,
+-- failed = { "what: why", ... }, holding = folder or nil }`
 function M.apply(found)
   local out = { reattached = 0, removed = 0, moved = 0, added = 0, relinked = 0, unlinked = 0, failed = {} }
   local base = lulibre.o.orphans_dir
@@ -371,7 +380,7 @@ function M.apply(found)
   return out
 end
 
---- One line about what apply() did.
+--- Returns one line about what `apply` did.
 -- @tparam table out `apply`'s result
 -- @treturn string
 function M.summary(out)
