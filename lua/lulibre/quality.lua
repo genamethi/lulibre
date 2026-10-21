@@ -1,4 +1,4 @@
--- How far a book's record can be trusted, and which records the user has
+--- How far a book's record can be trusted, and which records the user has
 -- confirmed as right.
 --
 -- Two different things. The score is lulibre's own estimate, from what the
@@ -11,9 +11,11 @@
 -- learned from good records, so that mistakes in the others are not taught
 -- back. :good shows the records by score for confirming.
 --
---   local quality = require "lulibre.quality"
---   quality.score(book)         --> 0.82, { "no identifiers", ... }
---   quality.set_good({ 12, 15 }, true)     quality.is_good(12)     quality.good_ids()
+-- @module lulibre.quality
+-- @usage
+-- local quality = require "lulibre.quality"
+-- quality.score(book)         --> 0.82, { "no identifiers", ... }
+-- quality.set_good({ 12, 15 }, true)     quality.is_good(12)     quality.good_ids()
 local edit = require "lulibre.edit"
 local junk = require "lulibre.junk"
 local names = require "lulibre.names"
@@ -28,6 +30,8 @@ local catch_text, catch_extra
 
 --- Is the subject a catch-all (math/general, linguistics/papers): one that
 -- says where a book was put, not what it is about?
+-- @tparam string subject
+-- @treturn boolean
 function M.catchall(subject)
   local text = lulibre.o.subject_catchall or ""
   if text ~= catch_text then
@@ -52,6 +56,9 @@ end
 
 --- A record's score, 0 to 1, and what holds it down. A score of 0.85 or
 -- more is a record with nothing visibly wrong.
+-- @tparam table book
+-- @treturn number 0 to 1
+-- @treturn {string,...} what holds it down
 function M.score(book)
   local s, why = 0, {}
   local title = book.title or ""
@@ -112,11 +119,15 @@ function M.score(book)
 end
 
 --- Has the user confirmed this record?
+-- @tparam integer id
+-- @treturn boolean
 function M.is_good(id)
   return lulibre.sql("SELECT 1 AS x FROM good WHERE book = ?", id)[1] ~= nil
 end
 
 --- Confirm records as good, or take the confirmation back.
+-- @tparam {integer,...} ids
+-- @tparam boolean on
 function M.set_good(ids, on)
   for _, id in ipairs(ids) do
     if on then lulibre.store("INSERT OR IGNORE INTO good(book, ts) VALUES(?, ?)", id, os.time())
@@ -125,6 +136,7 @@ function M.set_good(ids, on)
 end
 
 --- The ids confirmed as good that are still in the library.
+-- @treturn {integer,...}
 function M.good_ids()
   local out = {}
   for i, r in ipairs(lulibre.sql("SELECT g.book AS id FROM good g JOIN books b ON b.id = g.book ORDER BY g.book")) do out[i] = r.id end
@@ -134,6 +146,8 @@ end
 --- Every library book with its score, best first: { {book=, score=, why=, good=}, ... }.
 -- opts.min: leave out those below a score; opts.good: only confirmed (true)
 -- or only unconfirmed (false).
+-- @tparam[opt] table opts `min`, `good`
+-- @treturn {table,...} `{ book=, score=, why=, good= }`
 function M.ranked(opts)
   opts = opts or {}
   local good = {}

@@ -1,6 +1,10 @@
--- Pattern capture: type a pattern, see what it pulls out of each selected
+--- Pattern capture: type a pattern, see what it pulls out of each selected
 -- book, then apply the captured fields, mark the books that match, or keep
 -- the pattern as a named rule.
+--
+-- @module lulibre.ui.capture
+-- @usage
+-- require("lulibre.ui.capture").run()   -- as :capture, gc does
 local edit = require "lulibre.edit"
 local json = require "lulibre.json"
 local proposals = require "lulibre.proposals"
@@ -52,6 +56,7 @@ local function source_named(name)
 end
 
 --- Saved rules: { name = { source=, spec= }, ... }
+-- @treturn table
 function M.rules()
   local out = {}
   for _, row in ipairs(lulibre.store("SELECT key, value FROM kv WHERE key LIKE 'rule:%' ORDER BY key")) do
@@ -61,6 +66,10 @@ function M.rules()
   return out
 end
 
+--- Keep a rule under a name, for the next time.
+-- @tparam string name
+-- @tparam string source what it is matched against
+-- @tparam string spec the pattern
 function M.save_rule(name, source, spec)
   lulibre.store("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", "rule:" .. name,
     json.encode({ source = source, spec = spec }))
@@ -68,6 +77,10 @@ end
 
 --- Run a pattern over books without the screen: returns
 -- { { id=, text=, fields={name=value} or nil }, ... }.
+-- @tparam {integer,...} ids
+-- @tparam string source_name what is matched: "filename", "title", "authors", "embedded title", "first line" ...
+-- @tparam string spec the pattern
+-- @treturn {table,...}
 function M.capture(ids, source_name, spec)
   local compiled, err = template.compile(spec)
   if not compiled then return nil, err end
@@ -96,6 +109,8 @@ local function changes_of(results)
   return out
 end
 
+--- Open on the selected books.
+-- @tparam[opt] string args a pattern to start with
 function M.run(args)
   local ids = lulibre.selection()
   if #ids == 0 then

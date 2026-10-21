@@ -1,11 +1,16 @@
--- How much each kind of source is believed about each field: as measured
+--- How much each kind of source is believed about each field: as measured
 -- against the library (:weigh), and as set by hand where you know better.
+--
+-- @module lulibre.ui.weights
+-- @usage
+-- require("lulibre.ui.weights").run()   -- as :weights, <Leader>w does
 local consensus = require "lulibre.consensus"
 
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("weights")
 
+--- Open the table of weights.
 function M.run()
   if not consensus.ready() then
     if not lulibre.confirm("the sources have not been measured against the library yet; measure them now? (some seconds)") then return end

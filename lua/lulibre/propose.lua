@@ -1,4 +1,4 @@
--- Deciding what to propose for a book from what its file says.
+--- Deciding what to propose for a book from what its file says.
 --
 -- A field that is empty, or holds what is plainly not a value (a file name
 -- for a title), is a gap, and the file's best candidate is proposed for it.
@@ -17,9 +17,11 @@
 -- than the file's because someone typed it: review shows both side by side
 -- and the decision is made there.
 --
---   local propose = require "lulibre.propose"
---   propose.wanted(book, candidates, "sure")   --> { {field=, value=, op=, source=, confidence=, over=}, ... }
---   propose.book(id, { over = "any", again = true })   --> proposals added, how many replace a value
+-- @module lulibre.propose
+-- @usage
+-- local propose = require "lulibre.propose"
+-- propose.wanted(book, candidates, "sure")   --> { {field=, value=, op=, source=, confidence=, over=}, ... }
+-- propose.book(id, { over = "any", again = true })   --> proposals added, how many replace a value
 local edit = require "lulibre.edit"
 local extract = require "lulibre.extract"
 local junk = require "lulibre.junk"
@@ -29,7 +31,7 @@ local quality = require "lulibre.quality"
 
 local M = {}
 
--- how sure the file must be to be proposed over a value, under "sure"
+--- How sure the file must be to be proposed over a value, under "sure".
 M.SURE = 0.8
 
 -- a value reduced to what matters when asking "do these say the same?":
@@ -81,6 +83,9 @@ end
 --- Is a subject a finer one under a subject the book has, and not one it
 -- has already? tags: the book's, as "a, b/c". ("cs/ml" refines "cs"; not
 -- when the book has "cs/ml" or "cs/ml/theory" too.)
+-- @tparam string tags the book's, as "a, b/c"
+-- @tparam string subject
+-- @treturn boolean
 function M.refines(tags, subject)
   local under = false
   for raw in (tags or ""):gmatch("[^,]+") do
@@ -96,6 +101,10 @@ end
 -- what the book has, b what is offered: the same people named less fully
 -- ("S. Joffily" for "Sérgio Joffily") say nothing new, named more fully
 -- they do.
+-- @tparam string field
+-- @tparam string a what the book has
+-- @tparam string b what is offered
+-- @treturn boolean
 function M.same(field, a, b)
   if field == "authors" then
     local function names(s)
@@ -126,6 +135,10 @@ end
 -- has no claim to stay, and whatever the file offers is proposed for it.
 -- id: the book, when known. A record confirmed as good (:good) has no junk:
 -- its values were looked at and stand.
+-- @tparam string field
+-- @tparam string cur the value
+-- @tparam[opt] integer id the book
+-- @treturn boolean
 function M.is_gap(field, cur, id)
   if cur == "" then return true end
   if id and quality.is_good(id) then return false end
@@ -140,7 +153,7 @@ function M.is_gap(field, cur, id)
 end
 local is_gap = M.is_gap
 
--- the letters and names a field goes by, for --only and for review's filter
+--- The letters and names a field goes by, as `only` (propose's fields) and review's filter take them.
 M.FIELD = { t = "title", title = "title", a = "authors", author = "authors", authors = "authors", s = "tags",
   subject = "tags", tags = "tags", tag = "tags", i = "identifiers", id = "identifiers", ids = "identifiers",
   identifiers = "identifiers", identifier = "identifiers", d = "pubdate", date = "pubdate", pubdate = "pubdate",
@@ -149,6 +162,10 @@ M.FIELD = { t = "title", title = "title", a = "authors", author = "authors", aut
 
 --- "title,authors" or "t,a" as a set of field names; nil and the offending
 -- word when one is not a field.
+-- @tparam string list
+-- @treturn[1] table `{ [field] = true }`
+-- @treturn[2] nil
+-- @treturn[2] string the word that is not a field
 function M.fields(list)
   local set = {}
   for word in (list or ""):gmatch("[^,%s]+") do
@@ -167,6 +184,10 @@ local SINGLE = { title = true, authors = true, pubdate = true, publisher = true,
 -- over = true when it would replace a value the book has.
 -- opts (in place of over, a table): over as above; only: a set of fields to
 -- keep to; fresh: propose as if the fields were empty, whatever they hold.
+-- @tparam table book
+-- @tparam {table,...} candidates
+-- @tparam[opt] string|table over "gaps", "sure", "any", or opts `{ over=, only=, fresh= }`
+-- @treturn {table,...} `{ field=, value=, op=, source=, confidence=, over= }`
 function M.wanted(book, candidates, over)
   local opts = type(over) == "table" and over or { over = over }
   over = opts.over or lulibre.o.propose_over
@@ -229,6 +250,10 @@ end
 --- Propose for one book from its file. opts.over, opts.only and opts.fresh
 -- as for M.wanted; opts.again proposes even what was barred before. Returns how many
 -- proposals were added, and how many of them replace a value the book has.
+-- @tparam integer id
+-- @tparam[opt] table opts `over`, `only`, `fresh`, `again`
+-- @treturn integer proposals added
+-- @treturn integer how many of them replace a value
 function M.book(id, opts)
   opts = opts or {}
   local book = lulibre.book(id)

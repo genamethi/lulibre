@@ -1,4 +1,4 @@
--- Review proposed changes: accept, reject or correct each, then write the
+--- Review proposed changes: accept, reject or correct each, then write the
 -- accepted ones as one batch. The list and preview follow the cursor, so the
 -- book's title page is in view while you decide.
 --
@@ -9,6 +9,10 @@
 -- Review has views, shown as tabs in its bar: one for each run of proposing
 -- that still has something waiting (lulibre.runs), and "all waiting". h and
 -- l step through them; D drops what the one in view holds.
+--
+-- @module lulibre.ui.review
+-- @usage
+-- require("lulibre.ui.review").run()   -- as :review, gr does
 local context = require "lulibre.ui.context"
 local edit = require "lulibre.edit"
 local proposals = require "lulibre.proposals"
@@ -39,6 +43,9 @@ M.single = { title = true, authors = true, pubdate = true, publisher = true, ser
 -- { label, text, style = }. pr: the proposal; others: the other proposals
 -- waiting for that book and field. Replace it in init.lua to show something
 -- else:  require("lulibre.ui.review").context = function(pr, others) return { { "source", pr.source } } end
+-- @tparam table pr
+-- @tparam {table,...} others
+-- @treturn {table,...}
 function M.context(pr, others)
   return context.rows(pr, others)
 end
@@ -56,6 +63,9 @@ end
 -- key(action) gives the key an action of review is on now. Return nil for no
 -- line. Replace this function in init.lua to say it your way, or not at all:
 --   require("lulibre.ui.review").banner = function() end
+-- @tparam table view
+-- @tparam function key
+-- @treturn string|nil
 function M.banner(view, key)
   local run = view.run
   if not run then return nil end
@@ -77,6 +87,7 @@ local session
 -- view; otherwise it opens on a run that is going on or has not been looked
 -- at yet, if there is one, and else on everything waiting for what the list
 -- is showing. The other views are a key away either way.
+-- @tparam[opt] string|table args a filter, `{ ids = {...} }` or `{ run = run }`
 function M.run(args)
   local before = M.live
   local r = table.pack(pcall(session, args))
@@ -87,6 +98,7 @@ end
 
 --- Bring a run's proposals into view: in the review that is open, if one
 -- is, and in a new one otherwise.
+-- @tparam table run
 function M.show_run(run)
   if M.live and pcall(M.live.show, "run:" .. run.id) then return end
   return M.run { run = run }

@@ -1,5 +1,9 @@
--- The edit form: the fields of the selected book or books, each with ranked
+--- The edit form: the fields of the selected book or books, each with ranked
 -- suggestions. Nothing is written until w.
+--
+-- @module lulibre.ui.edit
+-- @usage
+-- require("lulibre.ui.edit").run()   -- as :edit, e does
 local edit = require "lulibre.edit"
 local junk = require "lulibre.junk"
 local suggest = require "lulibre.suggest"
@@ -15,6 +19,7 @@ local function is_gap(field, value)
 end
 
 --- Open the form. args.ids: the books to edit; otherwise the selection.
+-- @tparam[opt] table args `{ ids = {...} }`
 function M.run(args)
   local ids = type(args) == "table" and args.ids or lulibre.selection()
   if #ids == 0 then

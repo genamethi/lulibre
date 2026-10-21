@@ -1,8 +1,15 @@
--- Guess a subject from the words on the first pages: count each subject's
+--- Guess a subject from the words on the first pages: count each subject's
 -- indicative terms among the text's 1-, 2- and 3-word sequences. Multi-word
 -- terms are more specific and count double.
+--
+-- @module lulibre.subjects
+-- @usage
+-- local subjects = require "lulibre.subjects"
+-- subjects.score("elliptic curves and modular forms over the primes")[1]
+--   --> { subject = "math/number-theory", score = 5 }
 local M = {}
 
+--- Each subject's indicative terms, by subject.
 M.lexicon = {
   ["math/number-theory"] = { "prime", "primes", "modular form", "modular forms", "elliptic curve",
     "elliptic curves", "zeta function", "l-function", "l-functions", "diophantine", "arithmetic",
@@ -86,6 +93,8 @@ local function build()
 end
 
 --- Ranked { {subject=, score=}, ... } for a piece of text; best first.
+-- @tparam string text
+-- @treturn {table,...}
 function M.score(text)
   if not index then build() end
   local words = {}

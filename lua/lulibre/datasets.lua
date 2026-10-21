@@ -1,20 +1,23 @@
--- Databases kept on this machine, so that books can be looked up without
+--- Databases kept on this machine, so that books can be looked up without
 -- asking anybody: what there is to have, whether it is here, and how it is
 -- fetched. `lulibre datasets` (scripts/datasets.lua) is the way in.
 --
---   local datasets = require "lulibre.datasets"
---   datasets.list                   -- what can be had: { name=, title=, useful=, size=, from=, renewed=, files= }
---   datasets.path("arxiv.json")     -- where a file of one is, if it is here
---   datasets.status(ds)             -- { here=, bytes=, age=, missing={...} }
---   datasets.fetch(ds, { force= })  -- fetch it; true, or nil and why not
---   datasets.adopt("/some/ol_dump_editions_2026-09-30.txt.gz")   -- use a file fetched by other means
---
 -- They live in lulibre's data folder, beside the index. A file there may be
 -- a link to one kept elsewhere; fetching then renews the file it points to.
+--
+-- @module lulibre.datasets
+-- @usage
+-- local datasets = require "lulibre.datasets"
+-- datasets.list                   -- what can be had: { name=, title=, useful=, size=, from=, renewed=, files= }
+-- datasets.path("arxiv.json")     -- where a file of one is, if it is here
+-- datasets.status(ds)             -- { here=, bytes=, age=, missing={...} }
+-- datasets.fetch(ds, { force= })  -- fetch it; true, or nil and why not
+-- datasets.adopt("/some/ol_dump_editions_2026-09-30.txt.gz")   -- use a file fetched by other means
 local uv = require "luv"
 
 local M = {}
 
+--- What can be had: `{ name=, title=, useful=, size=, from=, renewed=, files= }`.
 M.list = {
   {
     name = "arxiv",
@@ -49,6 +52,8 @@ M.list = {
 }
 
 --- The dataset of a name, or nil.
+-- @tparam string name
+-- @treturn table|nil
 function M.get(name)
   for _, ds in ipairs(M.list) do
     if ds.name == name then return ds end
@@ -57,11 +62,14 @@ function M.get(name)
 end
 
 --- The folder they are kept in.
+-- @treturn string
 function M.dir()
   return lulibre.settings.paths().data_dir
 end
 
 --- Where a file of a dataset is, if it is here (a link is followed).
+-- @tparam string name a file's
+-- @treturn string|nil
 function M.path(name)
   local path = M.dir() .. "/" .. name
   return uv.fs_stat(path) and path or nil
@@ -69,6 +77,8 @@ end
 
 --- What is here of a dataset: { here = all its files are, bytes =, age = of
 -- the oldest in days, missing = { names } }.
+-- @tparam table ds
+-- @treturn table
 function M.status(ds)
   local st = { here = true, bytes = 0, age = nil, missing = {} }
   for _, f in ipairs(ds.files) do
@@ -91,6 +101,8 @@ local function size(bytes)
 end
 
 --- A dataset's state in a few words: "here: 5.6 GB, 3 days old".
+-- @tparam table ds
+-- @treturn string
 function M.state(ds)
   local st = M.status(ds)
   if st.bytes == 0 then return "not here" end
@@ -180,6 +192,12 @@ end
 -- here is as new as its source; opts.with: the program to fetch from Kaggle
 -- with; opts.say(text): told what happens. Returns true, or nil and why not;
 -- a dataset that is here and fresh is left alone (true, "fresh").
+-- @tparam table ds
+-- @tparam[opt] table opts `force`, `with`, `say`
+-- @treturn[1] boolean true
+-- @treturn[1] string|nil "fresh" when it was left alone
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.fetch(ds, opts)
   opts = opts or {}
   local say = opts.say or print
@@ -205,6 +223,11 @@ end
 --- Use a file that was fetched by other means: it is linked into the data
 -- folder under the name its dataset knows it by. Returns the dataset and the
 -- name, or nil and why not.
+-- @tparam string path
+-- @treturn[1] table the dataset
+-- @treturn[1] string the name
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.adopt(path)
   local real = uv.fs_realpath(path)
   if not real or not uv.fs_stat(real) then return nil, ("there is no file %s"):format(path) end

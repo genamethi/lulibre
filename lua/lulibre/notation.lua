@@ -1,4 +1,4 @@
--- Mathematics in titles, written in Unicode: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], X³ − 5.
+--- Mathematics in titles, written in Unicode: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], X³ − 5.
 --
 -- It comes from three places:
 --
@@ -15,16 +15,18 @@
 -- Search is not affected: lulibre.fold, and calibre's own search, read
 -- SL₂(ℤ) as SL2(Z).
 --
---   local m = require "lulibre.notation"
---   m.render("$a^x+b^y=c^z$")              --> "aˣ + bʸ = cᶻ"
---   m.notation("Representations of SL2(Z)") --> "Representations of SL₂(ℤ)"
---   m.title("COMPACT SUBGROUPS OF $GL_{n}(\\mathbf{Q}_{p})$", require("lulibre.names").title_caps)
---     --> "Compact Subgroups of GLₙ(ℚₚ)"
---   table.insert(m.groups, "PU")           -- PU2 as PU₂
---
 -- Unicode has no subscript for some letters (b c d f g q w y z) nor a
 -- superscript q: those are written _q and ^q, and longer ones _{…}.
 -- The option math_notation = "off" leaves titles as they come.
+--
+-- @module lulibre.notation
+-- @usage
+-- local m = require "lulibre.notation"
+-- m.render("$a^x+b^y=c^z$")              --> "aˣ + bʸ = cᶻ"
+-- m.notation("Representations of SL2(Z)") --> "Representations of SL₂(ℤ)"
+-- m.title("COMPACT SUBGROUPS OF $GL_{n}(\\mathbf{Q}_{p})$", require("lulibre.names").title_caps)
+--   --> "Compact Subgroups of GLₙ(ℚₚ)"
+-- table.insert(m.groups, "PU")           -- PU2 as PU₂
 local M = {}
 
 local function map(keys, values)
@@ -42,10 +44,12 @@ local function chars(s)
   return out
 end
 
+--- Superscripts in Unicode, by the character they raise.
 M.sup = map(chars "0123456789+-=()abcdefghijklmnoprstuvwxyzABDEGHIJKLMNOPRTUVW",
   "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁⱽᵂ")
 M.sup["−"], M.sup["α"], M.sup["β"], M.sup["γ"], M.sup["δ"], M.sup["θ"], M.sup["φ"], M.sup["χ"], M.sup["′"] =
   "⁻", "ᵅ", "ᵝ", "ᵞ", "ᵟ", "ᶿ", "ᵠ", "ᵡ", "′"
+--- Subscripts in Unicode, by the character they lower.
 M.sub = map(chars "0123456789+-=()aehijklmnoprstuvx", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ")
 M.sub["−"], M.sub["β"], M.sub["γ"], M.sub["ρ"], M.sub["φ"], M.sub["χ"] = "₋", "ᵦ", "ᵧ", "ᵨ", "ᵩ", "ᵪ"
 
@@ -68,9 +72,10 @@ local function letter_in(alphabet, c)
   return c
 end
 
--- the number systems, which are set in bold as often as in blackboard
+--- the number systems, which are set in bold as often as in blackboard
 M.bold = { Z = "ℤ", Q = "ℚ", R = "ℝ", C = "ℂ", N = "ℕ" }
 
+--- TeX's commands for letters and symbols, by name, as Unicode.
 M.symbols = {
   alpha = "α", beta = "β", gamma = "γ", delta = "δ", epsilon = "ϵ", varepsilon = "ε", zeta = "ζ", eta = "η",
   theta = "θ", vartheta = "ϑ", iota = "ι", kappa = "κ", lambda = "λ", mu = "μ", nu = "ν", xi = "ξ", pi = "π",
@@ -176,6 +181,8 @@ end
 --- One formula (what stands between dollars) in Unicode, or nil when it
 -- holds something that has none (a fraction, a matrix, a command lulibre
 -- does not know).
+-- @tparam string tex
+-- @treturn string|nil
 function M.unicode(tex)
   local out, i, ok = {}, 1, true
   local function put(s) out[#out + 1] = s end
@@ -251,6 +258,9 @@ end
 --- Text with its formulas ($…$) in Unicode; a formula that has no Unicode
 -- form keeps its dollars. opts.notes: drop the footnote marks the page
 -- set after a word (Semirings∗, Title¹) or alone.
+-- @tparam string s
+-- @tparam[opt] table opts `notes`
+-- @treturn string
 function M.render(s, opts)
   if type(s) ~= "string" or not s:find("$", 1, true) then return s end
   local notes = opts and opts.notes
@@ -269,6 +279,8 @@ end
 
 --- Does s hold mathematics in Unicode, or a formula? (Title case leaves such
 -- a word alone.)
+-- @tparam string s
+-- @treturn boolean
 function M.has_math(s)
   if type(s) ~= "string" or not s:find("[$\194-\244]") then return false end
   if s:find("$", 1, true) then return true end
@@ -284,12 +296,17 @@ end
 -- ---- the glossary: plain text where the scripts were lost ----
 
 --- A subscript or a superscript in Unicode, or _q, ^{…} where it has none.
+-- @tparam string s
+-- @treturn string
 function M.subscript(s) return script(M.sub, "_", s) end
+--- A superscript in Unicode, or ^q, ^{…} where it has none.
+-- @tparam string s
+-- @treturn string
 function M.superscript(s) return script(M.sup, "^", s) end
 local subs, sups = M.subscript, M.superscript
 local function bb(c) return M.bold[c] or c end
 
--- the groups whose index is written below: SL₂, GLₙ, PSL₂, SO₃
+--- the groups whose index is written below: SL₂, GLₙ, PSL₂, SO₃
 M.groups = { "SL", "GL", "PSL", "PGL", "SO", "SU", "Sp", "PSp", "GSp", "PSO", "PSU", "sl", "gl" }
 
 -- a ring after a group, in brackets: (Z), (Qp), (Fq), (R)
@@ -381,6 +398,8 @@ M.glossary = {
 
 --- Plain text with the glossary's notation in Unicode. Formulas ($…$) are
 -- left to M.render.
+-- @tparam string s
+-- @treturn string
 function M.notation(s)
   if type(s) ~= "string" or s == "" or lulibre.o.math_notation == "off" then return s end
   local parts = {}
@@ -398,6 +417,9 @@ end
 -- the formulas held aside; the glossary is given what is outside them; and
 -- the formulas are written in Unicode. With math_notation = "off", the
 -- title is as case has it and its formulas in TeX.
+-- @tparam string s
+-- @tparam[opt] function case `case(words)` -> words
+-- @treturn string
 function M.title(s, case)
   if type(s) ~= "string" then return s end
   local held = {}

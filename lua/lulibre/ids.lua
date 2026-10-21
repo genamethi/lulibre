@@ -1,4 +1,12 @@
--- Identifiers found in page text: DOI, ISBN, arXiv id, MSC area.
+--- Identifiers found in page text: DOI, ISBN, arXiv id, MSC area.
+--
+-- @module lulibre.ids
+-- @usage
+-- local ids = require "lulibre.ids"
+-- ids.isbn("ISBN 0-387-90040-3")       --> "0387900403"
+-- ids.isbn13("0387900403")              --> "9780387900407"
+-- ids.doi_in(text)                      --> "10.1007/...", true (its own)
+-- ids.arxiv("arXiv:1012.6008v1 [math.CO]") --> "1012.6008", "math.CO"
 local M = {}
 
 -- A DOI runs to the first space, comma, quote or bracket; a parenthesis is
@@ -13,10 +21,16 @@ local function trim_doi(d)
   return (d:gsub("[%.]+$", ""))
 end
 
+--- The first DOI in a text, its trailing punctuation trimmed.
+-- @tparam string text
+-- @treturn string|nil
 function M.doi(text)
   local d = text:match(DOI)
   return d and trim_doi(d) or nil
 end
+
+--- Bytes from the start of a text that count as its top (`doi_in`).
+M.DOI_TOP = 4000
 
 --- The DOI in a text, and whether it reads as the text's own rather than
 -- that of a work it cites. Its own: near the top (a journal's heading, a
@@ -25,7 +39,10 @@ end
 -- references has begun. One that follows other words on its line further
 -- down ("... Linearization for Dylan: https://doi.org/10...") or stands
 -- among the references is a citation.
-M.DOI_TOP = 4000 -- bytes from the start that count as the top
+-- @tparam string text
+-- @treturn[1] string the DOI
+-- @treturn[1] boolean is it the text's own
+-- @treturn[2] nil when there is none
 function M.doi_in(text)
   local s, e = text:find(DOI)
   if not s then return nil end
@@ -46,6 +63,8 @@ end
 -- crossmark:DOI, dc:identifier (with a doi or isbn scheme or prefix), and
 -- an Info entry named doi or a "doi:" in its Subject. Returns a list of
 -- { kind=, value=, where= } ("XMP", "PDF info", "EPUB package").
+-- @tparam string text `lulibre.doc_metadata`'s
+-- @treturn {table,...}
 function M.from_metadata(text)
   local out, seen = {}, {}
   if not text or text == "" then return out end
@@ -112,6 +131,8 @@ end
 
 --- An ISBN of ten figures as one of thirteen ("0387900403" is
 -- "9780387900407"), or nil if it is not one.
+-- @tparam string isbn
+-- @treturn string|nil
 function M.isbn13(isbn)
   local d = tostring(isbn):gsub("[^%dXx]", ""):upper()
   if #d == 13 then return isbn13_ok(d) and d or nil end
@@ -123,6 +144,8 @@ end
 
 --- An ISBN of thirteen figures as one of ten, where there is one (those
 -- that begin 978), or nil.
+-- @tparam string isbn
+-- @treturn string|nil
 function M.isbn10(isbn)
   local d = tostring(isbn):gsub("[^%dXx]", ""):upper()
   if #d == 10 then return isbn10_ok(d) and d or nil end
@@ -135,6 +158,8 @@ end
 
 --- The first ISBN whose check digit is right. The Python version accepted
 -- any 13 digits starting 97, which let page ranges and phone numbers through.
+-- @tparam string text
+-- @treturn string|nil
 function M.isbn(text)
   for cand in text:gmatch("97[89][%d%- ]+") do
     local d = cand:gsub("%D", "")
@@ -150,6 +175,10 @@ function M.isbn(text)
 end
 
 --- The margin stamp "arXiv:1012.6008v1 [math.CO] 29 Dec 2010": id and class.
+-- @tparam string text
+-- @treturn[1] string the id
+-- @treturn[1] string the class
+-- @treturn[2] nil
 function M.arxiv_stamp(text)
   local id, class = text:match("arXiv:%s*(%S-)%s*%[([%w%.%-]+)%]")
   if not id then return nil end
@@ -157,6 +186,10 @@ function M.arxiv_stamp(text)
 end
 
 --- An arXiv id from page text, else from a file name that is nothing but one.
+-- @tparam string text
+-- @tparam[opt] string filename
+-- @treturn string|nil the id
+-- @treturn[opt] string its class, where the margin stamp gives one
 function M.arxiv(text, filename)
   local id, class = M.arxiv_stamp(text)
   if id then return id, class end
@@ -170,6 +203,8 @@ function M.arxiv(text, filename)
 end
 
 --- Year an arXiv id was assigned: 1012.6008 -> 2010, math/0601054 -> 2006.
+-- @tparam string id
+-- @treturn integer|nil
 function M.arxiv_year(id)
   local yy = id:match("^(%d%d)%d%d%.") or id:match("/(%d%d)%d%d%d%d%d$")
   if not yy then return nil end
@@ -178,6 +213,8 @@ function M.arxiv_year(id)
 end
 
 --- Two-digit MSC area from a "Mathematics Subject Classification" footnote.
+-- @tparam string text
+-- @treturn string|nil
 function M.msc(text)
   local i = text:find("[Ss]ubject%s+[Cc]lassif") or text:find("MSC%s*%d*%s*[:%(]")
   if not i then return nil end

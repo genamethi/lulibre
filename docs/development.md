@@ -133,8 +133,10 @@ with `@module lulibre.NAME` and an `@usage` example; each function a module
 exports has a `---` comment with `@tparam`, `@treturn` (and `[opt]`,
 `[1]`/`[2]` for optional arguments and alternative returns). A setting or
 list a module exports (`M.SHOWN`, `M.STOP`) gets a `---` line of its own.
-Done so far: `lulibre.verify`, `lulibre.backup`, `lulibre.offline`; the
-others are listed in `config.ld` as they are done.
+Every module in `lua/lulibre/` is in `config.ld` (not `commands/`, which
+only registers commands); a new one is added there. A `--` inside a doc
+comment (`--only`, written in its text) makes LDoc leave the item out
+without a warning: write it otherwise.
 
 ## The documentation site
 

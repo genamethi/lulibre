@@ -1,7 +1,14 @@
--- The one place subject names are decided. The Python scripts kept six maps
+--- The one place subject names are decided. The Python scripts kept six maps
 -- that disagreed (math.AG was "math/geometry/algebraic" in one and
 -- "math/algebraic-geometry" in another, and both ended up in the library);
 -- everything that needs a subject now asks here.
+--
+-- @module lulibre.taxonomy
+-- @usage
+-- local taxonomy = require "lulibre.taxonomy"
+-- taxonomy.from_arxiv("math.AG")   --> "math/algebraic-geometry"
+-- taxonomy.from_lcc("QA247 .S47")  --> "math/number-theory"
+-- taxonomy.canonical(tag)          --> the tag, or the one it is an alias of
 local M = {}
 
 --- arXiv primary class -> subject tag
@@ -78,6 +85,9 @@ local archive = {
   econ = "economics",
 }
 
+--- The subject an arXiv class stands for ("math.AG"), or its archive's.
+-- @tparam string|nil class
+-- @treturn string|nil
 function M.from_arxiv(class)
   if not class then return nil end
   return M.arxiv[class] or archive[class:match("^[^.]+")]
@@ -129,6 +139,8 @@ local LCC = {
 
 --- The subject a Library of Congress class number stands for
 -- ("QA247 .S47", "QA387.L35"), or nil.
+-- @tparam string class
+-- @treturn string|nil
 function M.from_lcc(class)
   local letters, number = (class or ""):upper():match("^%s*(%u%u?)%s*(%d+%.?%d*)")
   local ranges = letters and LCC[letters]
@@ -149,6 +161,8 @@ local DEWEY = { { "511.3", "math/logic" }, { "511.5", "math/combinatorics" }, { 
   { "41", "linguistics" }, { "1", "philosophy" } }
 
 --- The subject a Dewey number stands for ("512'.55", "516.3/5"), or nil.
+-- @tparam string number
+-- @treturn string|nil
 function M.from_dewey(number)
   local n = (number or ""):gsub("['/ ]", "")
   if not n:match("^%d%d%d") then return nil end
@@ -165,6 +179,9 @@ M.alias = {
   ["math/topology/algebraic"] = "math/topology",
 }
 
+--- The tag a tag is an alias of (`alias`), or the tag itself.
+-- @tparam string tag
+-- @treturn string
 function M.canonical(tag)
   return M.alias[tag] or tag
 end

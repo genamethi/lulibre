@@ -1,10 +1,15 @@
--- Dialogs over things lulibre already does, each one a pane of boxes and
+--- Dialogs over things lulibre already does, each one a pane of boxes and
 -- choices (lulibre.ui.form) that says what will happen before it does:
 --
 --   M.enrich()     look books up: what would be asked of whom, which services, then go
 --   M.change()     one change to every selected book: add or remove a subject, set a field
 --   M.datasets()   the databases kept on this machine: tick which to fetch
 --   M.sync()       the waiting files that are selected: add, add and remove, or drop
+--
+-- @module lulibre.ui.dialogs
+-- @usage
+-- require("lulibre.ui.dialogs").change()   -- one change to every selected book
+-- require("lulibre.ui.dialogs").sync()     -- the selected waiting files
 local form = require "lulibre.ui.form"
 
 local M = {}

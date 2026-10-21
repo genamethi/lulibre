@@ -1,4 +1,4 @@
--- Snapshots: points in the history of the library that it can be put back to.
+--- Snapshots: points in the history of the library that it can be put back to.
 --
 -- The history (a file of its own beside the index, attached as `history`)
 -- is the journal of every change: each field lulibre wrote, with what it
@@ -32,26 +32,28 @@
 -- says the library was at that time: changes nobody logged. Those count as
 -- changes made outside lulibre.
 --
---   local snapshots = require "lulibre.snapshots"
---   snapshots.observe()                    -- log changes made outside lulibre; how many fields
---   snapshots.added(id, from, label)       -- log a book lulibre has just added to calibre
---   snapshots.take(name)                   -- the new snapshot's row
---   snapshots.list{ all = }                -- { {id=, name=, ts=, upto=, auto=, retired=, books=, changes=}, ... }
---   snapshots.find("3" or "a name")        -- one row, or nil and why
---   snapshots.retire(id, on)               -- take one out of the list (on = false puts it back)
---   snapshots.plan(id, { exact=, unsync= }) -- what a rollback would do, writing nothing
---   snapshots.rollback(id, opts)           -- do it; a summary
---   snapshots.import(path, name)           -- a snapshot from another copy of calibre's metadata.db
+-- @module lulibre.snapshots
+-- @usage
+-- local snapshots = require "lulibre.snapshots"
+-- snapshots.observe()                    -- log changes made outside lulibre; how many fields
+-- snapshots.added(id, from, label)       -- log a book lulibre has just added to calibre
+-- snapshots.take(name)                   -- the new snapshot's row
+-- snapshots.list{ all = }                -- { {id=, name=, ts=, upto=, auto=, retired=, books=, changes=}, ... }
+-- snapshots.find("3" or "a name")        -- one row, or nil and why
+-- snapshots.retire(id, on)               -- take one out of the list (on = false puts it back)
+-- snapshots.plan(id, { exact=, unsync= }) -- what a rollback would do, writing nothing
+-- snapshots.rollback(id, opts)           -- do it; a summary
+-- snapshots.import(path, name)           -- a snapshot from another copy of calibre's metadata.db
 local edit = require "lulibre.edit"
 local json = require "lulibre.json"
 
 local M = {}
 
--- fields a snapshot puts back
+--- The fields a snapshot puts back.
 M.fields = edit.fields
 -- the journal's names for what happened to a whole book
 M.ADDED, M.REMOVED, M.RESTORED, M.DROPPED = "(added)", "(removed)", "(restored)", "(dropped)"
--- the folder under the sync folder that books taken back out of the library go to
+--- The folder under the sync folder that books taken back out of the library go to.
 M.UNSYNCED = "unsynced"
 
 local function kv(key)
@@ -75,6 +77,8 @@ end
 --- A row of the books table (or of mirror_prev, or of another calibre
 -- database) as the values the journal keeps, field by field: the same
 -- spelling edit.current gives.
+-- @tparam table row
+-- @treturn table `{ [field] = value }`
 function M.values(row)
   local series = row.series or ""
   return {
@@ -90,7 +94,10 @@ function M.values(row)
   }
 end
 
--- what the journal keeps of a whole book: its values, title and formats
+--- What the journal keeps of a whole book: its values, title and formats.
+-- @function state
+-- @tparam table row
+-- @treturn table
 local function state(row)
   local s = M.values(row)
   s.formats = {}
@@ -105,6 +112,8 @@ local BOOK_COLS = "id, title, authors, tags, series, series_index, publisher, pu
 -- one batch labelled "outside". Changes lulibre made itself in the meantime
 -- are in the journal already and are told apart by it. Returns how many
 -- fields (and books) were logged.
+-- @treturn integer fields
+-- @treturn integer books
 function M.observe()
   pcall(lulibre.reload) -- picks up a changed metadata.db; nothing when it has not changed
   if not kv("history:pending") then return 0 end
@@ -166,6 +175,10 @@ end
 -- before anything else looks. from: where its file came from; label names
 -- the batch. What it came with is noted now if the index has it already,
 -- else the next look (observe) notes it.
+-- @tparam integer id
+-- @tparam string from
+-- @tparam[opt] string label
+-- @tparam[opt] integer batch
 function M.added(id, from, label, batch)
   local row = lulibre.sql("SELECT * FROM books WHERE id = ?", id)[1]
   local came = row and state(row) or nil
@@ -178,6 +191,9 @@ function M.added(id, from, label, batch)
 end
 
 --- Take a snapshot: the library as it is now. Returns its row.
+-- @tparam[opt] string name
+-- @tparam[opt] table opts
+-- @treturn table the row
 function M.take(name, opts)
   opts = opts or {}
   M.observe()
@@ -190,6 +206,8 @@ end
 
 --- The snapshots, newest first, each with how many books and fields have
 -- changed since. opts.all: the retired ones too.
+-- @tparam[opt] table opts `all`
+-- @treturn {table,...} `{ id=, name=, ts=, upto=, auto=, retired=, books=, changes= }`
 function M.list(opts)
   opts = opts or {}
   return lulibre.sql([[SELECT s.*,
@@ -200,6 +218,10 @@ end
 
 --- A snapshot by number or name (the newest of that name). Returns the row,
 -- or nil and why not.
+-- @tparam string|integer what
+-- @treturn[1] table the row
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.find(what)
   what = tostring(what or ""):match("^%s*(.-)%s*$")
   if what == "" then return nil, "which snapshot? (:snapshots lists them)" end
@@ -211,6 +233,8 @@ end
 
 --- Retire a snapshot (on = false brings it back). Nothing is lost: the
 -- journal stays, and a retired snapshot is still listed with all = true.
+-- @tparam integer id
+-- @tparam[opt] boolean on
 function M.retire(id, on)
   local _, n = lulibre.store("UPDATE snapshots SET retired = ? WHERE id = ?", on ~= false and os.time() or nil, id)
   return n > 0
@@ -220,8 +244,13 @@ end
 
 local function key(book, field) return book .. "\0" .. field end
 
--- calibre keeps one spelling of an author or tag whatever its case ("math/topology"
--- written where "math/Topology" exists is stored as the latter), so those compare without it
+--- Do two values of a field say the same? Authors and tags compare without case,
+-- as calibre keeps one spelling of each whatever its case.
+-- @function same
+-- @tparam string field
+-- @tparam string a
+-- @tparam string b
+-- @treturn boolean
 local function same(field, a, b)
   if field == "authors" or field == "tags" then return (a or ""):lower() == (b or ""):lower() end
   return a == b
@@ -235,6 +264,9 @@ M.same = same
 -- Returns { snap=, changes = { {id=, field=, value=, op="set"} }, restore = { journal rows },
 --   remove = { ids }, unsync = { ids }, undrop = { journal rows },
 --   kept = { outside=, since=, unknown_added = { ids }, gone = { ids } }, books= }
+-- @tparam integer|string|table id
+-- @tparam[opt] table opts `exact`, `unsync`, `fields`
+-- @treturn table
 function M.plan(id, opts)
   opts = opts or {}
   local snap = type(id) == "table" and id or assert(M.find(id))
@@ -361,6 +393,8 @@ function M.plan(id, opts)
 end
 
 --- A few lines on what a plan would do.
+-- @tparam table plan
+-- @treturn {string,...}
 function M.describe(plan)
   local out = {}
   local function line(...) out[#out + 1] = string.format(...) end
@@ -426,6 +460,9 @@ end
 -- snapshot first, so that going back to it rolls forward. opts as for plan,
 -- and opts.dry: only say what would be done. Returns { before=, plan=,
 -- applied=, failed = { {id=, error=} }, restored=, removed=, unsynced= }.
+-- @tparam integer|string|table id
+-- @tparam[opt] table opts
+-- @treturn table
 function M.rollback(id, opts)
   opts = opts or {}
   local snap, why = type(id) == "table" and id or M.find(id)
@@ -483,6 +520,8 @@ function M.rollback(id, opts)
 end
 
 --- One line about what rollback() did.
+-- @tparam table out `rollback`'s result
+-- @treturn string
 function M.summary(out)
   local parts = {}
   if out.applied > 0 then parts[#parts + 1] = ("%d book%s put back"):format(out.applied, out.applied == 1 and "" or "s") end
@@ -502,6 +541,10 @@ end
 -- time falls (its newest change); where the copy differs from what the
 -- journal says the library was then, those values go with the snapshot.
 -- Returns the snapshot's row and { values=, gone=, since= } counts.
+-- @tparam string path a metadata.db
+-- @tparam[opt] string name
+-- @treturn table the row
+-- @treturn table `{ values=, gone=, since= }`
 function M.import(path, name)
   local theirs = lulibre.calibre_books(path)
   if #theirs == 0 then return nil, path .. " holds no books" end

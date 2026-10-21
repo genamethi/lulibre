@@ -1,4 +1,4 @@
--- Metadata services: what arXiv, CrossRef, zbMATH Open, Open Library and
+--- Metadata services: what arXiv, CrossRef, zbMATH Open, Open Library and
 -- OpenAlex say about a work that has an identifier. None of them needs an
 -- account or a key.
 --
@@ -20,19 +20,22 @@
 --
 -- with whatever the service knows, or nil and why not.
 --
---   net.arxiv("1012.6008")            net.crossref("10.2307/2118559")
---   net.zbmath { doi = "10.2307/2118559" }     net.zbmath { arxiv = "1012.6008" }
---   net.openlibrary("9780387900407")  net.openalex("10.2307/2118559")
---   net.arxiv_prefetch { "1012.6008", "hep-th/9711200" }    -- many in one request;
---   net.crossref_prefetch(dois)  net.openlibrary_prefetch(isbns)   -- likewise
---   net.offline = true                -- answer from what is kept, or not at all
---
 -- The option contact_email, when set, is sent with each request (in the
 -- User-Agent, and as CrossRef's `mailto`): CrossRef and Open Library give
 -- more room to callers they can reach. It is empty unless you set it.
 --
 -- The services are each in a module of their own (lulibre/net/*.lua), which
 -- adds its functions to this one table; what they share is in net/core.lua.
+--
+-- @module lulibre.net
+-- @usage
+-- local net = require "lulibre.net"
+-- net.arxiv("1012.6008")            net.crossref("10.2307/2118559")
+-- net.zbmath { doi = "10.2307/2118559" }     net.zbmath { arxiv = "1012.6008" }
+-- net.openlibrary("9780387900407")  net.openalex("10.2307/2118559")
+-- net.arxiv_prefetch { "1012.6008", "hep-th/9711200" }    -- many in one request;
+-- net.crossref_prefetch(dois)  net.openlibrary_prefetch(isbns)   -- likewise
+-- net.offline = true                -- answer from what is kept, or not at all
 local M = require "lulibre.net.core"
 require "lulibre.net.match"
 require "lulibre.net.arxiv"

@@ -1,4 +1,4 @@
--- Learning what marks a subject, from the records the user has confirmed.
+--- Learning what marks a subject, from the records the user has confirmed.
 --
 -- Every book's indexed pages are cut into phrases of two and three words
 -- (lulibre.phrases). A phrase marks a subject when books of that subject use
@@ -18,22 +18,29 @@
 -- subject ("math/general") teaches only the ones above it, since it says
 -- where a book was put and not what it is about.
 --
---   local learn = require "lulibre.learn"
---   learn.run()                        --> { books=, subjects=, terms=, phrases=, seconds= }
---   learn.terms("math/number-theory")  --> { {term=, score=, books=, state=}, ... }
---   learn.classify(text)               --> { {subject=, score=, matched={...}}, ... } best first
---   learn.suggest(text)                --> subject, confidence, { phrases } or nil
+-- @module lulibre.learn
+-- @usage
+-- local learn = require "lulibre.learn"
+-- learn.run()                        --> { books=, subjects=, terms=, phrases=, seconds= }
+-- learn.terms("math/number-theory")  --> { {term=, score=, books=, state=}, ... }
+-- learn.classify(text)               --> { {subject=, score=, matched={...}}, ... } best first
+-- learn.suggest(text)                --> subject, confidence, { phrases } or nil
 local quality = require "lulibre.quality"
 
 local M = {}
 
-M.MIN_BOOKS = 6     -- a subject needs this many confirmed books before anything is learned for it
-M.MIN_SHARE = 0.08  -- a marking phrase stands in at least this share of the subject's books ...
-M.MIN_IN = 3        -- ... and in at least this many of them
-M.MIN_LIFT = 2.5    -- ... and that much more often than in books of other subjects
-M.MIN_AUTHORS = 3   -- ... by at least this many different authors (fewer for a subject of few books)
+--- A subject needs this many confirmed books before anything is learned for it.
+M.MIN_BOOKS = 6
+--- A marking phrase stands in at least this share of the subject's books ...
+M.MIN_SHARE = 0.08
+--- ... and in at least this many of them ...
+M.MIN_IN = 3
+--- ... and this much more often than in books of other subjects ...
+M.MIN_LIFT = 2.5
+--- ... by at least this many different authors (fewer for a subject of few books).
+M.MIN_AUTHORS = 3
 
--- Phrases that say how a book was published and not what it is about. They
+--- Phrases that say how a book was published and not what it is about. They
 -- stand in the front matter of one publisher's series, so the subjects that
 -- series serves use them far more than the others do; and the library holds
 -- titles that are such headings ("Handbook of Algebra: Editorial Board"),
@@ -47,7 +54,7 @@ for _, g in ipairs { "editorial board", "series editors", "series editor", "mana
   M.FURNITURE[g] = true
 end
 
--- Text that many books share word for word says nothing of any one of
+--- Text that many books share word for word says nothing of any one of
 -- them: a publisher's imprint, the list of a series, a journal's notice to
 -- readers. It is found by counting whole lines across the library (copies of
 -- one book counted once, by title) and left out wherever phrases are read.
@@ -89,6 +96,9 @@ local IMPRINT = { "isbn", "rights reserved", "rights are reserved", "copyright",
 --- The text of a book that speaks for the book: its indexed pages, without
 -- those that are imprint and without the lines it shares with other books.
 -- quick: leave the second out, which needs the whole library read once.
+-- @tparam integer id
+-- @tparam[opt] boolean quick
+-- @treturn string
 function M.text(id, quick)
   local text = lulibre.text(id)
   if not text then return nil end
@@ -109,6 +119,8 @@ end
 -- Learned subjects are a judgement from a handful of phrases, and have
 -- proved poor at it: what the phrases come to is halved, and never more
 -- than 0.3.
+-- @tparam integer id
+-- @treturn table|nil
 function M.candidate(id)
   if lulibre.o.learned_tags == "off" or not M.ready() then return nil end
   local text = M.text(id, true)
@@ -131,6 +143,8 @@ local function title_phrases()
 end
 
 --- A subject and those above it: "a/b/c" gives { "a/b/c", "a/b", "a" }.
+-- @tparam string subject
+-- @treturn {string,...}
 function M.lineage(subject)
   local out = { subject }
   local up = subject
@@ -160,6 +174,7 @@ end
 -- A phrase common to the whole library marks nothing, whatever the
 -- confirmed books do with it. Waits. Returns what work() takes as
 -- opts.census.
+-- @treturn table
 function M.census()
   M.forget()
   local counter, ids = lulibre.counter(), lulibre.ids("in:library")
@@ -183,6 +198,10 @@ end
 -- { terms = { [subject] = { {term=, score=, books=}, ... strongest first },
 -- books=, read=, subjects=, nterms=, phrases= }, or nil and why nothing
 -- could be learned. Phrases dropped in :terms are left out, as run() does.
+-- @tparam[opt] table opts `from`, `census`
+-- @treturn[1] table
+-- @treturn[2] nil
+-- @treturn[2] string why
 function M.work(opts)
   opts = opts or {}
   local from = opts.from or quality.good_ids()
@@ -316,6 +335,10 @@ end
 -- couple of thousand books). opts.from: the ids to learn from (default: the
 -- confirmed records). Returns { books=, read=, subjects=, terms=, phrases=,
 -- seconds= }, or nil and why nothing could be.
+-- @tparam[opt] table opts `from`
+-- @treturn[1] table
+-- @treturn[2] nil
+-- @treturn[2] string why
 function M.run(opts)
   local t0 = os.time()
   local got, why = M.work(opts)
@@ -339,6 +362,9 @@ end
 --- A subject's marking phrases, strongest first (kept ones before learned),
 -- or every subject's when none is named. Dropped ones are left out unless
 -- all is set.
+-- @tparam[opt] string subject
+-- @tparam[opt] boolean all
+-- @treturn {table,...} `{ term=, score=, books=, state= }`
 function M.terms(subject, all)
   local where, args = {}, {}
   if subject then
@@ -354,6 +380,9 @@ end
 --- Add a phrase to a subject by hand, drop one for good, or let one go back
 -- to being learned or not as the books decide. state: "kept", "dropped", or
 -- nil to forget what was decided about it.
+-- @tparam string subject
+-- @tparam string term
+-- @tparam string|nil state
 function M.set(subject, term, state)
   term = lulibre.fold(term):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "") -- as phrases are spelled
   if state then
@@ -378,6 +407,8 @@ end
 
 --- What classify and suggest go by, for a result of work() that was not
 -- kept: its phrases, and those added by hand in :terms.
+-- @tparam table got `work`'s result
+-- @treturn table
 function M.model(got)
   local by = {}
   for _, r in ipairs(lulibre.sql("SELECT subject, term, score FROM terms WHERE state = 'kept'")) do
@@ -392,6 +423,7 @@ function M.model(got)
 end
 
 --- Has anything been learned?
+-- @treturn boolean
 function M.ready()
   return next(load()) ~= nil
 end
@@ -399,6 +431,9 @@ end
 --- The subjects whose marking phrases a text holds, best first:
 -- { {subject=, score=, matched={ phrase, ... }}, ... }. model: go by that
 -- (see model) and not by what has been learned and kept.
+-- @tparam string text
+-- @tparam[opt] table model
+-- @treturn {table,...}
 function M.classify(text, model)
   local by = model or load()
   local has = {}
@@ -435,6 +470,12 @@ end
 -- nil when its phrases mark nothing, or too little. At least two marking
 -- phrases are wanted; of a subject and one below it that both fit, the more
 -- particular is taken when it fits nearly as well. model: as for classify.
+-- @tparam string text
+-- @tparam[opt] table model
+-- @treturn[1] string the subject
+-- @treturn[1] number how sure
+-- @treturn[1] {string,...} the phrases
+-- @treturn[2] nil
 function M.suggest(text, model)
   local ranked = M.classify(text, model)
   local best

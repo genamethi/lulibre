@@ -1,16 +1,19 @@
--- TeX as it turns up in records of papers, put into plain text: arXiv and
+--- TeX as it turns up in records of papers, put into plain text: arXiv and
 -- zbMATH hold titles and names as their authors typed them ("Erd\H{o}s",
 -- "Bal\'azs", "$p$-adic").
 --
---   local detex = require "lulibre.detex"
---   detex.plain("A proof of the Erd\\H{o}s primitive set conjecture")
---     --> "A proof of the Erdős primitive set conjecture", true
---   detex.plain("On $\\mathbb{Z}_p$-extensions")
---     --> "On $\\mathbb{Z}_p$-extensions", false      -- mathematics is left as it is
---
 -- The second value says whether no TeX is left.
+--
+-- @module lulibre.detex
+-- @usage
+-- local detex = require "lulibre.detex"
+-- detex.plain("A proof of the Erd\\H{o}s primitive set conjecture")
+--   --> "A proof of the Erdős primitive set conjecture", true
+-- detex.plain("On $\\mathbb{Z}_p$-extensions")
+--   --> "On $\\mathbb{Z}_p$-extensions", false      -- mathematics is left as it is
 local M = {}
 
+--- TeX's accent commands, by the letter that names them.
 M.accents = {
   ["'"] = { a = "á", e = "é", i = "í", o = "ó", u = "ú", y = "ý", c = "ć", n = "ń", s = "ś", z = "ź", l = "ĺ", r = "ŕ",
     A = "Á", E = "É", I = "Í", O = "Ó", U = "Ú", Y = "Ý", C = "Ć", N = "Ń", S = "Ś", Z = "Ź" },
@@ -30,10 +33,14 @@ M.accents = {
   r = { a = "å", u = "ů", A = "Å", U = "Ů" },
 }
 
+--- TeX's commands for letters of their own (\\o, \\ss, \\l ...).
 M.letters = { o = "ø", O = "Ø", ss = "ß", l = "ł", L = "Ł", ae = "æ", AE = "Æ", oe = "œ", OE = "Œ", aa = "å", AA = "Å",
   i = "ı", j = "ȷ" }
 
 --- The text without its TeX, and whether none is left.
+-- @tparam string s
+-- @treturn string
+-- @treturn boolean no TeX is left
 function M.plain(s)
   if type(s) ~= "string" or not s:find("[\\${}~`]") then return s, true end
   local function accent(mark, letter)

@@ -1,6 +1,8 @@
--- arXiv: its API, its snapshot of every paper's record, titles looked up in it.
+--- arXiv: its API, its snapshot of every paper's record, titles looked up in it.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 local detex = require "lulibre.detex"
 local json = require "lulibre.json"
@@ -80,6 +82,8 @@ end
 -- without a version ("1012.6008v2" is "1012.6008") and, for the numbers of
 -- before April 2007, without the subject class ("math.AG/0601001" is
 -- "math/0601001").
+-- @tparam string id
+-- @treturn string|nil
 function M.arxiv_id(id)
   id = trim(tostring(id)):gsub("^[aA][rR][xX][iI][vV]:", ""):gsub("v%d+$", "")
   if id:match("^%d%d%d%d%.%d%d%d%d%d?$") then return id end
@@ -95,6 +99,8 @@ end
 
 --- The requests arXiv would be sent for these numbers: one URL for each
 -- M.ARXIV_BATCH of them, with the numbers each asks for.
+-- @tparam {string,...} ids
+-- @treturn {table,...} `{ url=, ids= }`
 function M.arxiv_urls(ids)
   local out = {}
   for from = 1, #ids, M.ARXIV_BATCH do
@@ -110,6 +116,9 @@ end
 --- Take what an answer from arXiv holds for the numbers that were asked for:
 -- each record is kept, and a number it has no record of is remembered as
 -- such, but only when the answer is a whole one. Returns how many records.
+-- @tparam {string,...} asked
+-- @tparam string body
+-- @treturn integer
 function M.arxiv_take(asked, body)
   local seen, got = {}, 0
   for entry in body:gmatch("<entry>(.-)</entry>") do
@@ -140,6 +149,8 @@ end
 -- answer; M.arxiv then answers from what was kept. Returns how many were
 -- newly fetched. A request that fails is not made again, and none of its
 -- numbers is asked for one by one.
+-- @tparam {string,...} ids
+-- @treturn integer
 function M.arxiv_prefetch(ids)
   local want, have = {}, {}
   for _, raw in ipairs(ids) do
@@ -264,6 +275,7 @@ end
 -- arxiv_snapshot, else a file named arxiv-metadata-oai-snapshot.json,
 -- arxiv.json or arxiv.zip in lulibre's data folder (beside the index; a link
 -- to the file will do). nil when there is none.
+-- @treturn string|nil
 function M.arxiv_snapshot_path()
   local set = lulibre.o.arxiv_snapshot or ""
   if set ~= "" then return set end
@@ -292,6 +304,14 @@ end
 -- newer than the file) and not looked for again until the file changes.
 -- progress(text): called now and then with how far the reading is. Returns
 -- how many were found and how many papers were passed, or nil and why.
+--- Read records out of a file of arXiv's, asking nobody.
+-- @tparam string path
+-- @tparam {string,...} ids
+-- @tparam[opt] function progress
+-- @treturn[1] integer found
+-- @treturn[1] integer papers passed
+-- @treturn[2] nil
+-- @treturn[2] string why
 function M.arxiv_snapshot(path, ids, progress)
   local zip = path:lower():match("%.zip$") ~= nil
   local function open()
@@ -347,6 +367,8 @@ end
 
 --- A title as compared when looking papers up by it: folded, every run of
 -- what is not a letter or a figure one space.
+-- @tparam string title
+-- @treturn string
 function M.title_key(title)
   return (lulibre.fold(title or ""):gsub("%$", ""):gsub("[^%w\128-\255]+", " "):gsub("^ ", ""):gsub(" $", ""))
 end
@@ -356,6 +378,13 @@ end
 -- { [M.title_key(title)] = true }. Every record whose title is one of them
 -- is kept as arXiv's answer for its number. Returns { [key] = { id, ... } }
 -- and how many papers were passed, or nil and why.
+-- @tparam string path
+-- @tparam table wanted
+-- @tparam[opt] function progress
+-- @treturn[1] table
+-- @treturn[1] integer papers passed
+-- @treturn[2] nil
+-- @treturn[2] string why
 function M.arxiv_by_title(path, wanted, progress)
   local f, err = io.open(path, "r")
   if not f then return nil, ("cannot read %s: %s"):format(path, tostring(err)) end
@@ -390,6 +419,9 @@ end
 --- The record kept for a work, read from what was kept and asking nobody:
 -- kind is "doi" (CrossRef, else OpenAlex), "isbn" (Open Library) or "arxiv".
 -- nil when nothing was kept. It neither waits nor reads the arXiv snapshot.
+-- @tparam string kind
+-- @tparam string value
+-- @treturn table|nil
 function M.kept_record(kind, value)
   if not value or value == "" then return nil end
   local tries
@@ -417,6 +449,10 @@ function M.kept_record(kind, value)
 end
 
 --- arXiv's record for a number ("1012.6008", "hep-th/9711200"; a version is ignored).
+-- @tparam string raw
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.arxiv(raw)
   local id = M.arxiv_id(raw)
   if not id then return nil, ("'%s' is not an arXiv number"):format(tostring(raw)) end
@@ -443,6 +479,10 @@ end
 -- paper's first page names its authors in order): by where each family name
 -- first stands in the text. Returns the names, and whether every one of
 -- them was found (so that the order can be trusted).
+-- @tparam {string,...} authors
+-- @tparam string text
+-- @treturn {string,...}
+-- @treturn boolean every one was found
 function M.in_order_of(authors, text)
   local folded = lulibre.fold(text or "")
   local at, all = {}, true

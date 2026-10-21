@@ -1,4 +1,4 @@
--- Propose, then review, from one dialog: which books, what is asked (the
+--- Propose, then review, from one dialog: which books, what is asked (the
 -- files, the records kept here, the services, the bibliographies), which
 -- fields, how what is there already is treated, and what review then shows.
 -- Everything here can also be done by hand with :propose, :enrich, :refs and
@@ -7,6 +7,10 @@
 -- What it starts is a run (lulibre.runs): the status line says so while it
 -- goes on, the steps keep their closing lines to themselves, and when it is
 -- done its proposals come up in review as a view of their own.
+--
+-- @module lulibre.ui.proposer
+-- @usage
+-- require("lulibre.ui.proposer").run()   -- as :propose-review does
 local form = require "lulibre.ui.form"
 local proposals = require "lulibre.proposals"
 local runs = require "lulibre.runs"
@@ -44,6 +48,7 @@ local function count(sql, ...)
   return row and row.n or 0
 end
 
+--- Open the dialog.
 function M.run()
   -- what is selected is asked before the dialog takes the cursor
   local scope = lulibre.source()

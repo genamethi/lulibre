@@ -1,4 +1,4 @@
--- Help: the keys, by what they are for, under headings that open and close,
+--- Help: the keys, by what they are for, under headings that open and close,
 -- with a search over all of them; and the guides, by topic.
 --
 --   ?              the keys: Enter opens a heading, / searches, K (or Enter on
@@ -8,6 +8,10 @@
 --                  `:help filters`, `:help group`
 --
 -- The guides are the files of docs/, installed beside lulibre's Lua code.
+--
+-- @module lulibre.ui.help
+-- @usage
+-- require("lulibre.ui.help").run()   -- as :help, ? does
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("help")
@@ -108,6 +112,7 @@ local function start()
 end
 
 --- The folder the guides are in, or nil: docs/ beside the lua/ this file is under.
+-- @treturn string|nil
 function M.docs_dir()
   local src = debug.getinfo(1, "S").source:gsub("^@", "")
   local root = src:match("^(.*)/lua/lulibre/ui/help%.lua$")
@@ -129,6 +134,8 @@ M.guides = { { "workflows", "what lulibre does and how: editing, proposals, revi
 
 --- Markdown as plain lines for the pager: links as their text, tables as
 -- columns, fences dropped.
+-- @tparam string text
+-- @treturn {string,...}
 function M.plain(text)
   local out, fenced = {}, false
   for raw in (text .. "\n"):gmatch("(.-)\n") do
@@ -210,6 +217,8 @@ end
 
 --- What the guides say about a word: the parts whose heading holds it, the
 -- nearest first. Returns { {guide=, title=, text=}, ... }.
+-- @tparam string word
+-- @treturn {table,...}
 function M.find(word)
   local want = lulibre.fold(word)
   local found = {}
@@ -230,6 +239,7 @@ function M.find(word)
 end
 
 --- Show what the guides say about a word (a guide's own name shows all of it).
+-- @tparam string word
 function M.topic(word)
   word = (word or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("^:", "")
   if not M.docs_dir() then
@@ -335,6 +345,8 @@ local function gather()
   return sections
 end
 
+--- Open help, or the guides on a word.
+-- @tparam[opt] string args a word: what the guides say about it
 function M.run(args)
   if type(args) == "string" and args:match("%S") then return M.topic(args) end
   local sections = gather()

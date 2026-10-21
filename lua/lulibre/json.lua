@@ -1,5 +1,11 @@
--- A small JSON codec: enough for metadata services and for reading the
+--- A small JSON codec: enough for metadata services and for reading the
 -- .jsonl files the old Python scripts wrote.
+--
+-- @module lulibre.json
+-- @usage
+-- local json = require "lulibre.json"
+-- json.decode('{"a": [1, 2]}').a[2]  --> 2
+-- json.encode({ a = { 1, 2 } })        --> '{"a":[1,2]}'
 local M = {}
 
 local escapes = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
@@ -87,6 +93,8 @@ function decode_value(s, i)
 end
 
 --- Decode one JSON value. null becomes nil.
+-- @tparam string s
+-- @return the value
 function M.decode(s)
   local v = decode_value(s, 1)
   return v
@@ -127,6 +135,9 @@ local function encode(v, out)
   end
 end
 
+--- Encode a value as JSON.
+-- @param v
+-- @treturn string
 function M.encode(v)
   local out = {}
   encode(v, out)

@@ -1,5 +1,9 @@
--- Duplicates: books whose files are byte for byte the same. Each group
+--- Duplicates: books whose files are byte for byte the same. Each group
 -- keeps one copy; the others can be marked, merged into it and removed.
+--
+-- @module lulibre.ui.dupes
+-- @usage
+-- require("lulibre.ui.dupes").run()   -- as :dupes, gd does
 local dupes = require "lulibre.dupes"
 local edit = require "lulibre.edit"
 
@@ -8,6 +12,7 @@ local M = {}
 local keys = require("lulibre.ui.keys").of("dupes")
 local panels = require "lulibre.ui.panels"
 
+--- Scan for duplicates and open the screen on them.
 function M.run()
   local groups, stats = dupes.scan()
   if #groups == 0 then

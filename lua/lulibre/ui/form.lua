@@ -1,29 +1,35 @@
--- A dialog: a pane of boxes to tick, choices to step through, values to
+--- A dialog: a pane of boxes to tick, choices to step through, values to
 -- type and things to do, under headings. It takes the keys while it is up,
 -- and gives back what was set when one of its actions is chosen.
 --
---   local form = require "lulibre.ui.form"
---   local did, v = form.run {
---     title = "propose and review",
---     sections = {
---       { title = "Fields", items = {
---           { id = "title", kind = "check", label = "title", value = true },
---           { id = "order", kind = "choice", label = "order", choices = { "surest first", "by id" }, value = 1 },
---           { id = "floor", kind = "number", label = "show nothing below", value = 0 },
---           { id = "learned", kind = "check", label = "learned subjects", off = "nothing learned yet: :learn" },
---       } },
---       { title = "", items = { { id = "go", kind = "action", label = "Propose, then review" } } },
---     },
---   }
---   -- did: the id of the action chosen, or nil when the dialog was closed
---   -- v: { title = true, order = 1, floor = 0, learned = false }
---
 -- An item with `off` set is shown greyed, with why, and cannot be changed.
 -- kinds: check, choice, number, text, action, note (a line of words).
+--
+-- @module lulibre.ui.form
+-- @usage
+-- local form = require "lulibre.ui.form"
+-- local did, v = form.run {
+--   title = "propose and review",
+--   sections = {
+--     { title = "Fields", items = {
+--         { id = "title", kind = "check", label = "title", value = true },
+--         { id = "order", kind = "choice", label = "order", choices = { "surest first", "by id" }, value = 1 },
+--         { id = "floor", kind = "number", label = "show nothing below", value = 0 },
+--         { id = "learned", kind = "check", label = "learned subjects", off = "nothing learned yet: :learn" },
+--     } },
+--     { title = "", items = { { id = "go", kind = "action", label = "Propose, then review" } } },
+--   },
+-- }
+-- -- did: the id of the action chosen, or nil when the dialog was closed
+-- -- v: { title = true, order = 1, floor = 0, learned = false }
 local M = {}
 
 local keys = require("lulibre.ui.keys").of("form")
 
+--- Show the dialog, and wait for one of its actions or for it to be closed.
+-- @tparam table spec `{ title=, sections = { {title=, items = {...}}, ... } }`
+-- @treturn string|nil the id of the action chosen; nil when it was closed
+-- @treturn table each item's value, by id
 function M.run(spec)
   local at -- row -> item
   local function build()

@@ -1,4 +1,4 @@
--- Grammars of publications: how a kind of document sets its opening page.
+--- Grammars of publications: how a kind of document sets its opening page.
 --
 -- Keith Conrad's handouts put the title in capitals and KEITH CONRAD, smaller,
 -- under it; a chapter of the Stacks project its title in capitals and then
@@ -45,18 +45,31 @@
 -- Fields are the book's (title, authors, tags, ...) and three of their own:
 -- part_of (the whole the file is a part of), part (its number in it) and
 -- parts (how many there are), which lulibre keeps (:parts).
+--
+-- @module lulibre.grammars
+-- @usage
+-- local G = require "lulibre.grammars"
+-- G.add { name = "my-notes", lines = { G.line { upper = true, take = "title" } } }
+-- G.match(G.doc(12))   --> { {grammar=, fields=}, ... }
 local M = {}
 
+--- The grammars, in the order they are tried.
 M.list = {}
 
 --- LPeg, when it is installed (and loads: lulibre refuses a C module built
 -- for another Lua); nil and why not otherwise.
+-- @treturn[1] table lpeg
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.lpeg()
   local ok, lpeg = pcall(require, "lpeg")
   if ok then return lpeg end
   return nil, "LPeg is not installed for " .. _VERSION .. " (luarocks install lpeg, or the option rocks_tree): " .. tostring(lpeg):match("[^\n]*$")
 end
 
+--- Add a grammar, or replace the one of the same name.
+-- @tparam table g
+-- @treturn table g
 function M.add(g)
   assert(type(g) == "table" and type(g.name) == "string", "a grammar is a table with a name")
   assert(g.lines or g.read or g.text or g.peg, "a grammar needs lines, peg, text or read to say what it looks for")
@@ -70,6 +83,9 @@ function M.add(g)
   return g
 end
 
+--- Take a grammar out.
+-- @tparam string name
+-- @treturn table|nil the grammar taken out
 function M.remove(name)
   for i, x in ipairs(M.list) do
     if x.name == name then return table.remove(M.list, i) end
@@ -78,19 +94,31 @@ end
 
 -- ---- rules ----
 
+--- A rule for one line (see above for what it may ask for and take).
+-- @tparam table t
+-- @treturn table the rule
 function M.line(t)
   t.kind = "line"
   return t
 end
 
+--- A rule that lets up to n lines go by.
+-- @tparam[opt] integer n 1 when not given
+-- @treturn table the rule
 function M.skip(n)
   return { kind = "skip", n = n or 1 }
 end
 
+--- A rule that may be missing.
+-- @tparam table rule
+-- @treturn table the rule
 function M.opt(rule)
   return { kind = "opt", rule = rule }
 end
 
+--- A rule that is one or another of several.
+-- @tparam {table,...} rules
+-- @treturn table the rule
 function M.either(rules)
   return { kind = "either", rules = rules }
 end
@@ -199,6 +227,8 @@ end
 
 --- What the document is, by the grammars: a list of { grammar=, fields= }.
 -- doc: { id=, lines = (the first page's lines), texts = { page texts }, pages = the file's length }.
+-- @tparam table doc
+-- @treturn {table,...}
 function M.match(doc)
   local out = {}
   local lines = {}
@@ -243,6 +273,8 @@ function M.match(doc)
 end
 
 --- The document of a book, as M.match wants it.
+-- @tparam integer id
+-- @treturn table
 function M.doc(id)
   local f = lulibre.sql("SELECT id, npages FROM files WHERE book = ? AND status = 1 ORDER BY id LIMIT 1", id)[1]
   if not f then return nil end

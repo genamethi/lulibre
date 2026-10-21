@@ -1,4 +1,4 @@
--- References: what a book cites, read from the bibliography at its end, and
+--- References: what a book cites, read from the bibliography at its end, and
 -- what books that cite the same things have in common.
 --
 -- The index holds each file's first pages; a bibliography is on its last.
@@ -14,11 +14,13 @@
 --
 -- The keys are kept in the table `refs`. Nothing here needs the network.
 --
---   local refs = require "lulibre.refs"
---   refs.index_book(id)             --> how many entries were found (waits: it reads the file)
---   refs.of(id)                     --> { {key=, raw=}, ... }
---   refs.coupled(id)                --> { {book=, shared=, weight=}, ... } the books that cite the same works
---   refs.subject(id)                --> subject, confidence, how many books say so; or nil
+-- @module lulibre.refs
+-- @usage
+-- local refs = require "lulibre.refs"
+-- refs.index_book(id)             --> how many entries were found (waits: it reads the file)
+-- refs.of(id)                     --> { {key=, raw=}, ... }
+-- refs.coupled(id)                --> { {book=, shared=, weight=}, ... } the books that cite the same works
+-- refs.subject(id)                --> subject, confidence, how many books say so; or nil
 local ids = require "lulibre.ids"
 local quality = require "lulibre.quality"
 
@@ -36,6 +38,8 @@ end
 --- Is the line the heading of a bibliography? A short line that is one of the
 -- usual words and nothing else, numbered or not ("7. References",
 -- "REFERENCES"); not a line of a table of contents ("References 213").
+-- @tparam string text
+-- @treturn boolean
 function M.is_heading(text)
   local t = trim(text or ""):lower():gsub("^[%divxlc]+[.)]?%s+", ""):gsub("[.:]$", "")
   return #t <= 30 and HEADS[t] == true
@@ -44,6 +48,9 @@ end
 --- The lines under the last bibliography heading of a file's closing pages.
 -- pages: as lulibre.extract gives them ({ {lines = { {text=, x0=, size=}, ... }}, ... }).
 -- Returns the lines (nil when no heading is found) and the page it is on.
+-- @tparam {table,...} pages
+-- @treturn {table,...}|nil the lines
+-- @treturn[opt] integer the page
 function M.find(pages)
   local at_page, at_line
   for p, page in ipairs(pages) do
@@ -72,6 +79,8 @@ end
 -- told apart by their numbering ("[1]", "[Se73]", "1.") when most have one,
 -- else by the hanging indent: the first line of each stands further left
 -- than the lines that continue it.
+-- @tparam {table,...} lines
+-- @treturn {string,...}
 function M.entries(lines)
   if #lines == 0 then return {} end
   local numbered, left = 0, math.huge
@@ -106,6 +115,8 @@ local NOT_SURNAME = { ["and"] = true, ["the"] = true, ["von"] = true, ["van"] = 
 
 --- The key of one entry, by which the same work is known in another list;
 -- nil for a line that is not a reference at all.
+-- @tparam string entry
+-- @treturn string|nil
 function M.key(entry)
   local doi = ids.doi(entry)
   if doi then return "doi:" .. doi:lower() end
@@ -148,6 +159,11 @@ end
 --- Read a book's bibliography from its file and keep its keys. Waits.
 -- opts.pages: how many closing pages to read (default: the option
 -- refs_pages). Returns how many entries were kept, or nil and why none.
+-- @tparam integer id
+-- @tparam[opt] table opts `pages`
+-- @treturn[1] integer
+-- @treturn[2] nil
+-- @treturn[2] string why none
 function M.index_book(id, opts)
   local file = lulibre.files(id)[1]
   if not file then return nil, "no file" end
@@ -170,11 +186,15 @@ function M.index_book(id, opts)
 end
 
 --- Has the book's bibliography been looked for already?
+-- @tparam integer id
+-- @treturn boolean
 function M.done(id)
   return lulibre.sql("SELECT 1 AS x FROM kv WHERE key = ?", "refs:" .. id)[1] ~= nil
 end
 
 --- What a book cites, as it was read: { {key=, raw=}, ... }.
+-- @tparam integer id
+-- @treturn {table,...}
 function M.of(id)
   return lulibre.sql("SELECT key, raw FROM refs WHERE book = ? ORDER BY key", id)
 end
@@ -182,6 +202,9 @@ end
 --- The books that cite works this one cites, the most telling first:
 -- { {book=, shared=, weight=}, ... }. A work half the library cites counts
 -- for little; one cited by two books counts for much.
+-- @tparam integer id
+-- @tparam[opt] integer limit
+-- @treturn {table,...}
 function M.coupled(id, limit)
   return lulibre.sql([[
     SELECT o.book AS book, count(*) AS shared,
@@ -193,6 +216,11 @@ end
 --- The subject of the books that cite what this one cites: the subject, how
 -- sure, and how many books speak for it; nil when too few do. Two books that
 -- share at least two works with this one are wanted.
+-- @tparam integer id
+-- @treturn[1] string
+-- @treturn[1] number how sure
+-- @treturn[1] integer how many books
+-- @treturn[2] nil
 function M.subject(id)
   local score, books = {}, {}
   for _, c in ipairs(M.coupled(id, 30)) do
@@ -220,6 +248,9 @@ end
 -- first author. People cite themselves: a name read off a title page that
 -- also heads several of the book's own references is less likely a
 -- misreading.
+-- @tparam integer id
+-- @tparam string name
+-- @treturn integer
 function M.cites(id, name)
   local surname = lulibre.fold((name or ""):match("([%a\128-\255'%-]+)%s*$") or ""):gsub("[^%a]", "")
   if #surname < 3 then return 0 end
@@ -229,6 +260,9 @@ end
 --- The authors of the books that share the most references with this one,
 -- for a book whose author is not known: { {name=, shared=, book=}, ... }.
 -- A hint, not a finding: who writes on the same things, not who wrote this.
+-- @tparam integer id
+-- @tparam[opt] integer limit
+-- @treturn {table,...}
 function M.neighbours(id, limit)
   local out, seen = {}, {}
   for _, c in ipairs(M.coupled(id, 12)) do
@@ -246,6 +280,8 @@ function M.neighbours(id, limit)
 end
 
 --- The subject shared references point to, as a candidate, or nil.
+-- @tparam integer id
+-- @treturn table|nil
 function M.candidate(id)
   if lulibre.o.learned_tags == "off" then return nil end
   local subject, confidence, n = M.subject(id)
