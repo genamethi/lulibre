@@ -42,6 +42,14 @@ file = {
   "lua/lulibre/json.lua",
   "lua/lulibre/detex.lua",
   "lua/lulibre/parts.lua",
+  "lua/lulibre/net.lua",
+  "lua/lulibre/net/core.lua",
+  "lua/lulibre/net/match.lua",
+  "lua/lulibre/net/arxiv.lua",
+  "lua/lulibre/net/crossref.lua",
+  "lua/lulibre/net/openalex.lua",
+  "lua/lulibre/net/openlibrary.lua",
+  "lua/lulibre/net/zbmath.lua",
 }
 dir = "build/api"
 format = "markdown"

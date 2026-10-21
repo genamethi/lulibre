@@ -1,6 +1,8 @@
--- zbMATH Open: records by DOI or arXiv number, and its table of links to arXiv.
+--- zbMATH Open: records by DOI or arXiv number, and its table of links to arXiv.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 local json = require "lulibre.json"
 local taxonomy = require "lulibre.taxonomy"
@@ -11,6 +13,10 @@ local encode, forename_first, lines_with = M._encode, M._forename_first, M._line
 --- zbMATH Open's record for a work, by { doi = } or { arxiv = }: what gives
 -- a mathematics paper or book its subject, since each is classified by hand
 -- (the MSC codes), besides its title, authors, year and Zbl number.
+-- @tparam table by `{ doi= }` or `{ arxiv= }`
+-- @treturn[1] table the record
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.zbmath(by)
   local key, param
   if by.doi then key, param = "doi:" .. by.doi:lower(), "DOI=" .. encode(by.doi)
@@ -51,6 +57,8 @@ end
 -- full texts (zbmath-oa_links.csv in the data folder: "zbmath_id,link", the
 -- link mostly "https://arxiv.org/pdf/1111.2222.pdf"). Returns { [arXiv
 -- number] = zbMATH number }; an empty table when the file is not there.
+-- @tparam {string,...} arxiv_ids
+-- @treturn table
 function M.zbmath_links(arxiv_ids)
   local path = require("lulibre.datasets").path("zbmath-oa_links.csv")
   local out, wanted, strings = {}, {}, {}

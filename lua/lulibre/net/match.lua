@@ -1,10 +1,15 @@
--- Is a service's record this book? Titles and people held against each other.
+--- Is a service's record this book? Titles and people held against each other.
 -- Part of lulibre.net: require that, not this (it adds these functions to
 -- lulibre.net's table; lulibre/net/core.lua has what they share).
+--
+-- @submodule lulibre.net
 local M = require "lulibre.net.core"
 
 --- Are two titles the same work? Deliberately strict: a wrong match would
 -- put someone else's authors on a book.
+-- @tparam string a
+-- @tparam string b
+-- @treturn boolean
 function M.same_title(a, b)
   local stop = { the = 1, a = 1, an = 1, of = 1, ["in"] = 1, on = 1, ["for"] = 1, ["and"] = 1, to = 1, with = 1,
     by = 1, from = 1, at = 1, is = 1, are = 1 }
@@ -93,12 +98,18 @@ end
 
 --- Has a record none of the people a book has? (False when either names
 -- nobody.) Its authors are then not offered over the book's as if sure.
+-- @tparam {string,...} mine
+-- @tparam {string,...} theirs
+-- @treturn boolean
 function M.other_people(mine, theirs)
   return people_in_common(mine, theirs) == false
 end
 
 --- Does a record name some of the people a book has and nobody else: the
 -- first author alone, where the book has all three? Catalogues often do.
+-- @tparam {string,...} mine
+-- @tparam {string,...} theirs
+-- @treturn boolean
 function M.fewer_people(mine, theirs)
   local fa, na = family_names(mine)
   local fb, nb = family_names(theirs)
@@ -111,6 +122,9 @@ end
 
 --- Is a record's title the book's with words left out ("Extending Python"
 -- for "Extending and Embedding Python")? Not something to put over it.
+-- @tparam string mine
+-- @tparam string theirs
+-- @treturn boolean
 function M.shorter_title(mine, theirs)
   local a, sa = title_words(mine)
   local b = title_words(theirs)
@@ -136,6 +150,11 @@ end
 -- counts only when an author's family name is in the record too. Agreeing
 -- authors add to the confidence; authors on both sides with no name in
 -- common mean another work, whatever the titles say.
+-- @tparam string mine
+-- @tparam string theirs
+-- @tparam {string,...} my_authors
+-- @tparam {string,...} their_authors
+-- @treturn number|nil
 function M.title_match(mine, theirs, my_authors, their_authors)
   local a, sa = title_words(mine)
   local b, sb = title_words(theirs)
@@ -177,6 +196,14 @@ end
 -- is not one to put over the book's.
 -- Returns true, or false and whether both title and authors speak
 -- against it (the identifier is then very likely another work's).
+-- @tparam table rec
+-- @tparam {string,...} titles
+-- @tparam {string,...} authors
+-- @tparam[opt] string head
+-- @treturn[1] boolean true
+-- @treturn[1] string|nil "people" when only an author is in common
+-- @treturn[2] boolean false
+-- @treturn[2] boolean both title and authors speak against it
 function M.fits(rec, titles, authors, head)
   if not rec.title or (#(titles or {}) == 0 and #(authors or {}) == 0) then return true end
   local agree = people_in_common(authors, rec.authors)
