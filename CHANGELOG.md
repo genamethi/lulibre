@@ -5,6 +5,16 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: what is read from a book's own pages is more confident. A plain
+  reading of the title page (its largest lines, the names under them) is
+  0.75, up from 0.55, so review shows it under the default `propose_min`
+  and it fills an empty field; it is proposed over a value only with a
+  by-line (now 0.9), a first line (0.8) or, for a by-line or first line, a
+  name given twice. Agreement raises a plain reading to at most 0.79.
+  Thesis covers, a DOI on the page, the series line, received and dated
+  pages, and the publisher on a copyright line or a journal header are each
+  0.05 higher. The dates of received and dated pages and of the copyright
+  line stay under 0.8, so they still only fill an empty date.
 - Changed: the API reference and the guides are rewritten in plain words.
   Each function's description starts with what the function does, and
   lists and code examples in the reference render as lists and code. The

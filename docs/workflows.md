@@ -441,7 +441,7 @@ it works out:
 
 - the **value** with most of the weight behind it;
 - how many sources **agree** on it, shown in review beside the source:
-  `title page 0.55  [2/3]`;
+  `title page 0.75  [2/3]`;
 - the **disagreement**: 0 if every source says the same, towards 1 if they
   say unrelated things. `s` in review puts the books whose sources disagree
   most first, where a look is most needed.
