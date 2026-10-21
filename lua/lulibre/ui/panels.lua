@@ -1,4 +1,4 @@
---- What the screens built on panels share.
+--- Opens and arranges the screens built on panels, with the helpers they share.
 --
 -- @module lulibre.ui.panels
 -- @usage
@@ -8,14 +8,14 @@
 -- local about <close> = panels.about(p, { fill = function(row) return { { "row", tostring(row) } } end })
 local M = {}
 
---- The global commands whose keys still work with the cursor in a screen that
--- follows the list: paging and scrolling the preview, the page as an image
--- (P), copying (yy, yb ...), the console, and the tabs along the top (1 2 3:
--- source, config), so a screen left open is there again on coming back.
+--- The global commands whose keys still work in a screen that follows the
+-- list: paging and scrolling the preview, the page as an image (P), copying
+-- (yy, yb ...), the console, and the tabs along the top (1 2 3: source,
+-- config). So a screen left open is still there when you come back.
 M.PASS = "preview yank console source config"
 
---- Lines for a screen's ? overlay saying which of the list's keys work there
--- too, by the keys they are on now.
+--- Returns lines for a screen's ? overlay that list which of the list's
+-- keys also work in the screen, with their current keys.
 -- @treturn {string,...}
 function M.also()
   return {
@@ -44,8 +44,8 @@ local function alive(q)
   return ok and open
 end
 
---- Open screen `name`'s panel, lulibre.panel(spec); or, when that screen is
--- open already, put the cursor in it, say so, and return nil.
+--- Opens screen `name`'s panel with lulibre.panel(spec). If the screen is
+-- already open, moves the cursor to it, says so, and returns nil.
 -- @tparam string name
 -- @tparam table spec as `lulibre.panel` takes it
 -- @treturn table|nil the panel
@@ -70,9 +70,9 @@ function M.open(name, spec)
   return p
 end
 
---- Run fn(...) with leave to open a screen that is open already.
+--- Runs fn(...) and lets it open a second copy of a screen that is already open.
 -- @tparam function fn
--- @param ... its arguments
+-- @param ... fn's arguments
 -- @return what fn returns
 function M.again(fn, ...)
   local task = lulibre.task_id()
@@ -86,13 +86,13 @@ end
 -- the "about" panel each screen has open (M.about), by the screen's panel
 local abouts = setmetatable({}, { __mode = "k" })
 
---- Run fn(...) on top of panel p: p leaves the screen while fn's own panel is
--- up, so the list and preview keep their room, and comes back afterwards
--- with the cursor where it was, whether fn returned or failed. Its "about"
--- panel goes and comes back with it.
+--- Runs fn(...) on top of panel p. Panel p leaves the screen while fn's own
+-- panel is open, so the list and preview keep their room. Afterwards p
+-- comes back with the cursor where it was, whether fn returned or failed.
+-- p's "about" panel leaves and comes back with it.
 -- @tparam table p the panel
 -- @tparam function fn
--- @param ... its arguments
+-- @param ... fn's arguments
 -- @return what fn returns
 function M.over(p, fn, ...)
   local about = abouts[p]
@@ -105,19 +105,19 @@ function M.over(p, fn, ...)
   return table.unpack(r, 2, r.n)
 end
 
---- What the row under the cursor of a screen's panel p is about, shown where
--- the list is, as review shows what a proposal rests on: the list is
--- covered while it is up and comes back when it goes. spec: title (the
--- panel's, or a function of the row), columns ({ {name, width}, ... }, two
--- by default), fill(row) -> rows (and a title). It opens at once when the
--- option review_context is 1; the screen's "about" key (i) shows it or hides
--- it. Returns a handle: :update(row), :toggle(row), :hide(), :show(),
--- :close(), and :open() (is it up?). Close it with the screen, in a <close>
--- variable.
+--- Opens an "about" panel for the row under the cursor in panel p, in place
+-- of the list, the way review shows what a proposal is based on. The list
+-- is covered while the about panel is open, and comes back when it closes.
+-- The about panel opens at once if the option review_context is 1. The
+-- screen's "about" key (i) shows or hides it. Close the handle together
+-- with the screen, in a <close> variable.
 -- @tparam table p
--- @tparam table spec `{ title=, columns=, fill=, keys= }`
+-- @tparam table spec `{ title=, columns=, fill=, keys= }`: `title` is the panel's title or a
+-- function of the row; `columns` is `{ {name, width}, ... }` (two by default); `fill(row)`
+-- returns the rows (and a title)
 -- @tparam[opt] integer row
--- @treturn table the handle
+-- @treturn table the handle: `:update(row)`, `:toggle(row)`, `:hide()`, `:show()`, `:close()`,
+-- and `:open()`, which returns true if the panel is shown
 function M.about(p, spec, row)
   local h = { spec = spec }
   local ctx
@@ -157,10 +157,10 @@ function M.about(p, spec, row)
   return h
 end
 
---- A function that gives the preview room: it shrinks p to a few rows, and
--- puts it back to `normal` (its share of the screen) when called again.
+--- Returns a function that makes room for the preview. The function shrinks
+-- p to a few rows, and restores p's normal size when called again.
 -- @tparam table p
--- @tparam number normal its share of the screen
+-- @tparam number normal p's normal share of the screen
 -- @treturn function
 function M.peeker(p, normal)
   local small = false
@@ -171,11 +171,11 @@ function M.peeker(p, normal)
   end
 end
 
---- Bring a list of books up to date after something may have changed them:
--- each table keeps what else it carried, gets the record's fields afresh,
--- and those whose book is gone are taken out. Returns how many went.
+--- Updates a list of books after something may have changed them. Each
+-- book's table gets fresh record fields and keeps its other fields. Books
+-- that no longer exist are removed from the list.
 -- @tparam {table,...} books
--- @treturn integer
+-- @treturn integer how many books were removed
 function M.refresh_books(books)
   local gone = 0
   for i = #books, 1, -1 do
