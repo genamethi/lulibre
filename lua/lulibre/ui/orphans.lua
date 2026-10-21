@@ -1,7 +1,8 @@
---- Orphans: records with no file, and files with no record. Each row carries
--- a verdict and what would be done about it; Space changes that, w does it.
--- x opens a row up: what does not fit its columns (the verdict in full, the
--- whole path, where a link points) is shown beneath it. X does so for all.
+--- Shows the orphans: records with no file, and files with no record. Each
+-- row has a verdict and the action that would be taken. Space changes the
+-- action, and w carries the actions out. x expands a row to show what
+-- doesn't fit its columns (the full verdict, the whole path, where a link
+-- points). X expands every row.
 --
 -- @module lulibre.ui.orphans
 -- @usage
@@ -18,7 +19,7 @@ local SIGN = { keep = "", remove = "×", reattach = "↩", move = "→", add = "
 local WORD = { keep = "keep", remove = "remove record", reattach = "re-attach file", move = "move out", add = "add as book",
   relink = "repair link", unlink = "delete link" }
 
---- Look for orphans and open the screen on them.
+--- Looks for orphans and opens the screen on them.
 function M.run()
   local found = orphans.scan()
   if #found.records + #found.strays + #found.links + #found.empty == 0 then

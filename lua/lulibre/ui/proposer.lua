@@ -1,12 +1,12 @@
---- Propose, then review, from one dialog: which books, what is asked (the
--- files, the records kept here, the services, the bibliographies), which
--- fields, how what is there already is treated, and what review then shows.
--- Everything here can also be done by hand with :propose, :enrich, :refs and
--- :review and their flags; the dialog puts them in one place and in order.
+--- Proposes and then reviews, from one dialog. The dialog sets which books,
+-- what to consult (the files, the stored records, the services, the
+-- bibliographies), which fields, how existing values are treated, and what
+-- review then shows. :propose, :enrich, :refs and :review with their flags
+-- can do all of this by hand; the dialog puts it in one place and in order.
 --
--- What it starts is a run (lulibre.runs): the status line says so while it
--- goes on, the steps keep their closing lines to themselves, and when it is
--- done its proposals come up in review as a view of their own.
+-- The dialog starts a run (lulibre.runs). The status line shows the run
+-- while it goes on, the steps keep their closing lines to themselves, and
+-- when the run is done its proposals open in review as a view of their own.
 --
 -- @module lulibre.ui.proposer
 -- @usage
@@ -48,7 +48,7 @@ local function count(sql, ...)
   return row and row.n or 0
 end
 
---- Open the dialog.
+--- Opens the dialog.
 function M.run()
   -- what is selected is asked before the dialog takes the cursor
   local scope = lulibre.source()
