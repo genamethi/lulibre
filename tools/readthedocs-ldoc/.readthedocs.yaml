@@ -1,0 +1,19 @@
+# Read the Docs, the other way: the site is LDoc's API reference alone
+# (config.ld), without the guides. To use it, set the project's path for
+# .readthedocs.yaml (Settings, Advanced) to
+#   tools/readthedocs-ldoc/.readthedocs.yaml
+# and back to the one at the top of the tree for the Zensical site, which has
+# the reference under /api/. Paths here are from the top of the tree.
+version: 2
+build:
+  os: ubuntu-26.04
+  tools:
+    python: latest # (Read the Docs wants one tool named; LDoc needs none of it)
+  apt_packages:
+    - luarocks # with the Lua it uses, which LDoc runs on
+  jobs:
+    install:
+      - luarocks --local install ldoc
+    build:
+      html:
+        - ~/.luarocks/bin/ldoc -d "$READTHEDOCS_OUTPUT/html" .

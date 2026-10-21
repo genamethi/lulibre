@@ -147,7 +147,10 @@ version). To see it before pushing:
     zensical serve          # http://localhost:8000; zensical build --strict writes site/
 
 Read the Docs does the same (`.readthedocs.yaml`): LDoc from luarocks,
-written into `docs/api` (not kept in git), then Zensical.
+written into `docs/api` (not kept in git), then Zensical. The other
+configuration, `tools/readthedocs-ldoc/.readthedocs.yaml`, makes the site of
+LDoc's reference alone; which one is used is the project's "path for
+.readthedocs.yaml" on Read the Docs.
 
 A new page goes in `nav` in `zensical.toml`. Links between pages are
 relative (`[Keys](keys.md)`); a link to a file outside `docs/` (the README,
