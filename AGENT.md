@@ -33,9 +33,10 @@ it happens, not assumed away.
   binary run from a source tree reads its Lua files from that tree as it
   needs them, so checking out or merging there breaks the program while it
   runs. Branch work happens in a separate worktree; the other checkout
-  changes only by a merge, gated on lulibre not running there and the tree
-  being clean:
-  `if pgrep -x lulibre >/dev/null; then ...; elif [ -n "$(git status --short)" ]; then ...; else git merge --no-ff ... && make; fi`.
+  changes only by a merge, gated on no lulibre running from that tree (an
+  installed lulibre reads its Lua files from where `make install` put them,
+  so it doesn't count) and the tree being clean. Run in that tree:
+  `if pgrep -x lulibre | xargs -r -I{} readlink /proc/{}/exe | grep -q "^$PWD/"; then ...; elif [ -n "$(git status --short)" ]; then ...; else git merge --no-ff ... && make; fi`.
   A check that only prints is no check.
 - Run `make check` and `make e2e` and read the results before the merge,
   not in the same pipeline as it.
