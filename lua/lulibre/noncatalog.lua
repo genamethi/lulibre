@@ -1,4 +1,4 @@
--- Works no catalogue has a record of: a handout, the notes of a course, a
+--- Works no catalogue has a record of: a handout, the notes of a course, a
 -- chapter of the Stacks project, a page saved from the web. Such a work has
 -- no DOI and no ISBN of its own, so one that stands in its file is that of
 -- a work it cites, and a record found by searching for its title is
@@ -12,18 +12,20 @@
 --     marked, and taking off a DOI or ISBN it holds is proposed, for review.
 -- The mark is lulibre's own, kept in its index; nothing is written to calibre.
 --
---   local noncatalog = require "lulibre.noncatalog"
---   noncatalog.is(id)                 --> true or false
---   noncatalog.set(ids, true)         --> { withdrawn =, removals = }
---   noncatalog.ids()                  --> the marked books still in the library
---   :noncatalog add | remove          for the selection;  is:noncatalog  in a filter
+-- @module lulibre.noncatalog
+-- @usage
+-- local noncatalog = require "lulibre.noncatalog"
+-- noncatalog.is(id)                 --> true or false
+-- noncatalog.set(ids, true)         --> { withdrawn =, removals = }
+-- noncatalog.ids()                  --> the marked books still in the library
+-- :noncatalog add | remove          for the selection;  is:noncatalog  in a filter
 local M = {}
 
--- the services whose records are a catalogue's: what a source begins with
+--- The services whose records are a catalogue's: what a source begins with
 M.RECORDS = { "CrossRef ", "Open Library ", "OpenAlex ", "zbMATH " }
--- the identifiers a catalogue gives
+--- The identifiers a catalogue gives.
 M.KINDS = { "doi", "isbn" }
--- what a proposal to take one of them off says of where it comes from
+--- What a proposal to take one of them off says of where it comes from
 M.SOURCE = "non-catalog: no catalogue has a record of it"
 
 local set -- the marked books, read once and kept up as they change
@@ -37,6 +39,8 @@ local function load()
 end
 
 --- Is the book marked as non-catalog?
+-- @tparam integer id
+-- @treturn boolean
 function M.is(id)
   return id ~= nil and load()[id] == true
 end
@@ -47,6 +51,7 @@ function M.reload()
 end
 
 --- The marked books that are still in the library.
+-- @treturn {integer,...}
 function M.ids()
   local out = {}
   for i, r in ipairs(lulibre.sql("SELECT n.book AS id FROM noncatalog n JOIN books b ON b.id = n.book ORDER BY n.book")) do out[i] = r.id end
@@ -71,6 +76,9 @@ end
 -- proposes taking off each DOI and ISBN they hold. Taking the mark back
 -- withdraws those proposals again, and nothing else: propose or enrich
 -- anew for what the catalogues say. Returns { withdrawn =, removals = }.
+-- @tparam {integer,...} ids
+-- @tparam boolean on
+-- @treturn table `{ withdrawn=, removals= }`
 function M.set(ids, on)
   local proposals = require "lulibre.proposals"
   local out = { withdrawn = 0, removals = 0 }

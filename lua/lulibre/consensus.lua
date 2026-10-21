@@ -1,4 +1,4 @@
--- How far a book's sources agree, and how much each is to be believed.
+--- How far a book's sources agree, and how much each is to be believed.
 --
 -- A book is described by several sources at once: its title page, a
 -- cataloguing block, the metadata inside the file, an arXiv record, its
@@ -13,19 +13,22 @@
 -- global section is what Robinson calls the consistency radius; here it is
 -- `disagreement`.)
 --
---   local consensus = require "lulibre.consensus"
---   consensus.distance("title", a, b)        --> 0 (the same) .. 1 (nothing in common)
---   consensus.fuse(candidates, "title")      --> { value=, confidence=, disagreement=, agree=, sources= }
---   consensus.book(id)                       --> { fields = { title = {...}, ... }, disagreement = }
---   consensus.learn()                        -- measure each kind of source against the library as it stands
---   consensus.weight("title page", "title")  --> how often that source has been right about that field here
---   consensus.set("title page", "title", 0.5)   -- say so yourself; nil gives it back to the measurement
+-- @module lulibre.consensus
+-- @usage
+-- local consensus = require "lulibre.consensus"
+-- consensus.distance("title", a, b)        --> 0 (the same) .. 1 (nothing in common)
+-- consensus.fuse(candidates, "title")      --> { value=, confidence=, disagreement=, agree=, sources= }
+-- consensus.book(id)                       --> { fields = { title = {...}, ... }, disagreement = }
+-- consensus.learn()                        -- measure each kind of source against the library as it stands
+-- consensus.weight("title page", "title")  --> how often that source has been right about that field here
+-- consensus.set("title page", "title", 0.5)   -- say so yourself; nil gives it back to the measurement
 local json = require "lulibre.json"
 
 local M = {}
 
+--- The fields whose sources are compared.
 M.fields = { "title", "authors", "pubdate", "publisher", "series", "tags" }
--- two values this close say the same thing
+--- Two values this close say the same thing.
 M.NEAR = 0.25
 
 local function words(s)
@@ -56,6 +59,10 @@ end
 
 --- How far apart two values of a field are: 0 when they say the same, 1
 -- when they have nothing in common.
+-- @tparam string field
+-- @tparam string a
+-- @tparam string b
+-- @treturn number 0 to 1
 function M.distance(field, a, b)
   a, b = tostring(a or ""), tostring(b or "")
   if a == b then return 0 end
@@ -89,6 +96,8 @@ end
 
 --- The kind of source a proposal's source names: "arXiv 1012.6008" is "arXiv
 -- record", "vocabulary (22)" is "vocabulary", "by-line, named twice" is "by-line".
+-- @tparam string source
+-- @treturn string
 function M.kind(source)
   local s = tostring(source or "?")
   s = s:gsub("%s*%b()", ""):gsub(",.*$", ""):gsub("%s+$", "")
@@ -120,6 +129,7 @@ function M.reload()
 end
 
 --- Have the sources been measured here?
+-- @treturn boolean
 function M.ready()
   load()
   return next(measured) ~= nil
@@ -128,6 +138,9 @@ end
 --- How much a kind of source is believed about a field: the share of times
 -- it agreed with the library's own records (when measured, and often
 -- enough to count), or what you set. nil when nothing is known of it.
+-- @tparam string kind
+-- @tparam string field
+-- @treturn number|nil 0 to 1
 function M.weight(kind, field)
   load()
   local key = kind .. "\t" .. field
@@ -138,6 +151,9 @@ function M.weight(kind, field)
 end
 
 --- Set a weight by hand (0..1), or give it back to the measurement with nil.
+-- @tparam string kind
+-- @tparam string field
+-- @tparam number|nil w 0 to 1; nil: the measurement again
 function M.set(kind, field, w)
   load()
   manual[kind .. "\t" .. field] = w and math.max(0, math.min(1, w)) or nil
@@ -145,6 +161,7 @@ function M.set(kind, field, w)
 end
 
 --- Every weight there is: { {kind=, field=, n=, agree=, measured=, manual=, weight=}, ... }, by field then kind.
+-- @treturn {table,...}
 function M.table()
   load()
   local seen, out = {}, {}
@@ -182,6 +199,9 @@ end
 -- sure that is with every source that agrees counted, disagreement = 0 (all
 -- agree) .. 1, sources = how many spoke, agree = how many of them for the
 -- value, by = { {source=, value=, confidence=, agrees=}, ... } }.
+-- @tparam {table,...} candidates
+-- @tparam string field
+-- @treturn table|nil
 function M.fuse(candidates, field)
   local said = {}
   for _, c in ipairs(candidates) do
@@ -217,6 +237,9 @@ end
 
 --- A book's sources, field by field, and how far they disagree at worst
 -- (over the fields that more than one source speaks of).
+-- @tparam integer id
+-- @tparam[opt] {table,...} candidates read from the file when not given
+-- @treturn table `{ fields = { title = <fuse>, ... }, disagreement= }`
 function M.book(id, candidates)
   candidates = candidates or require("lulibre.extract").candidates(id)
   local out = { fields = {}, disagreement = 0 }
@@ -235,6 +258,8 @@ end
 -- does what the source says agree with it? Waits (some seconds). ids: the
 -- books to measure on (default: all of them). Returns how many books were
 -- used. The measurements are kept in the index.
+-- @tparam[opt] {integer,...} ids every book when not given
+-- @treturn integer how many books were used
 function M.learn(ids)
   local extract, edit, propose = require "lulibre.extract", require "lulibre.edit", require "lulibre.propose"
   ids = ids or lulibre.ids("")

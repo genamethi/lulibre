@@ -1,13 +1,8 @@
--- Runs: one go of proposing for some books, as the "propose, then review"
+--- Runs: one go of proposing for some books, as the "propose, then review"
 -- dialog starts (a script of your own can start one the same way). A run is
 -- remembered for as long as proposals wait for its books, so that review can
 -- show it by itself, apart from everything else that waits, and so that it
 -- can be dropped as a whole.
---
---   local runs = require "lulibre.runs"
---   local run = runs.start { ids = ids, label = "my script", steps = { "files", "records" } }
---   runs.step(run, "files") ... runs.step(run, "records") ...
---   runs.finish(run)
 --
 -- A script that may be one step of somebody else's run joins it instead:
 --
@@ -24,11 +19,19 @@
 --   runs.badge = function(run) return "busy", "error" end   -- other words, another colour
 --   runs.badge = function() end                              -- no badge at all
 --   runs.on(function(event, run) ... end)    -- "start", "step", "finish", "drop"
+--
+-- @module lulibre.runs
+-- @usage
+-- local runs = require "lulibre.runs"
+-- local run = runs.start { ids = ids, label = "my script", steps = { "files", "records" } }
+-- runs.step(run, "files") ... runs.step(run, "records") ...
+-- runs.finish(run)
 local json = require "lulibre.json"
 
 local M = {}
 
-M.KEEP = 6 -- finished runs remembered at most; what older ones proposed still waits under "all"
+--- Finished runs remembered at most; what older ones proposed still waits under "all".
+M.KEEP = 6
 
 local live = {}      -- runs going on now, the newest first
 local listeners = {}
@@ -44,6 +47,7 @@ end
 
 --- Call fn(event, run) when a run starts, moves to its next step, finishes
 -- or is dropped.
+-- @tparam function fn `fn(event, run)`, event "start", "step", "finish" or "drop"
 function M.on(fn)
   listeners[#listeners + 1] = fn
 end
@@ -84,6 +88,9 @@ end
 
 --- Does proposal pr belong to the run: is it for one of its books, in one of
 -- its fields, and not below the confidence it was asked to show?
+-- @tparam table run
+-- @tparam table pr a proposal
+-- @treturn boolean
 function M.covers(run, pr)
   if not run.books then
     run.books = {}
@@ -96,12 +103,17 @@ end
 --- Did the run itself make proposal pr (a row of the proposals table)? A
 -- run's view also holds what waited for its books before it began; this
 -- tells the two apart, so that dropping a run takes only what it added.
+-- @tparam table run
+-- @tparam table pr
+-- @treturn boolean
 function M.own(run, pr)
   return M.covers(run, pr) and pr.id >= (run.first or math.huge) and (pr.created or 0) >= run.started
     and (not run.finished or (pr.created or 0) <= run.finished)
 end
 
 --- How many proposals wait for the run's books: to be decided, or written.
+-- @tparam table run
+-- @treturn integer
 function M.waiting(run)
   local n = 0
   local proposals = require "lulibre.proposals"
@@ -115,6 +127,8 @@ end
 -- something waiting, the newest first. scope ("library" or "sync") keeps to
 -- the runs with a book on that side. A finished run nothing waits for any
 -- more is forgotten here.
+-- @tparam[opt] string scope
+-- @treturn {table,...} runs
 function M.list(scope)
   local out = {}
   for _, run in ipairs(live) do out[#out + 1] = run end
@@ -145,6 +159,8 @@ end
 
 --- The run review opens on when it is not told what to show: one that is
 -- going on, or the newest finished one that has not been looked at yet.
+-- @tparam[opt] string scope
+-- @treturn table|nil
 function M.fresh(scope)
   for _, run in ipairs(M.list(scope)) do
     if not run.finished or not run.seen then return run end
@@ -152,6 +168,7 @@ function M.fresh(scope)
 end
 
 --- The run has been looked at: review no longer opens on it by itself.
+-- @tparam table run
 function M.seen(run)
   if run.seen or not run.finished then return end
   run.seen = true
@@ -165,6 +182,7 @@ function M.seen(run)
 end
 
 --- The run going on now (the newest, if there are several), or nil.
+-- @treturn table|nil
 function M.running()
   return live[1]
 end
@@ -173,6 +191,8 @@ end
 -- how many books when omitted), fields (a set, when not all), min and sort
 -- (what review is to show, and in what order), steps (their names, in
 -- order, for the badge). Returns the run; give it to step and finish.
+-- @tparam table t `{ ids=, label=, fields=, min=, sort=, steps= }`
+-- @treturn table the run: `{ id=, started=, ids=, label=, steps=, at=, step=, ... }`
 function M.start(t)
   local now = os.time()
   local id = math.max(last + 1, now)
@@ -192,6 +212,8 @@ end
 -- handle with :step(name), to be kept in a <close> variable: when it goes
 -- out of scope a run it started is finished, as done if :done() was called
 -- and as stopped otherwise; a run it only joined is left to whoever began it.
+-- @tparam table t
+-- @treturn table the handle: `:step(name)`, `:done()`, `.run`
 function M.join(t)
   local task = lulibre.task_id and lulibre.task_id() or nil
   local run, mine
@@ -214,6 +236,8 @@ function M.join(t)
 end
 
 --- The run has reached the step of that name.
+-- @tparam table run
+-- @tparam string name
 function M.step(run, name)
   run.step = name
   for i, s in ipairs(run.steps) do
@@ -225,6 +249,8 @@ end
 --- The run is over: "done" (remembered while its proposals wait), or
 -- "failed" or "cancelled" (not remembered; what it had proposed still waits
 -- under "all"). Safe to call twice.
+-- @tparam table run
+-- @tparam[opt] string state "done" when not given
 function M.finish(run, state)
   if run.finished then return end
   run.finished, run.state, run.step = os.time(), state or "done", nil
@@ -256,6 +282,8 @@ end
 -- (not rejected: they may be proposed again), and it is forgotten. What
 -- waited for its books before it began stays. A run still going on is
 -- stopped first. Returns how many proposals went.
+-- @tparam table run
+-- @treturn integer how many proposals went
 function M.drop(run)
   if not run.finished then
     if run.task and lulibre.cancel then lulibre.cancel(run.task) end
@@ -280,6 +308,9 @@ end
 --- What the status line says while a run is going on: the text of the badge
 -- and its style (accent ok warn error dim). Return nothing for no badge.
 -- Replace this function to say it your way.
+-- @tparam table run
+-- @treturn[opt] string the text
+-- @treturn[opt] string its style
 function M.badge(run)
   local where = run.step and (#run.steps > 1 and ("%s, step %d of %d"):format(run.step, run.at, #run.steps) or run.step) or "starting"
   return ("⟳ PROPOSING  %d book%s: %s"):format(#run.ids, #run.ids == 1 and "" or "s", where), "warn"

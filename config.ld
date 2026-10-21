@@ -14,6 +14,11 @@ file = {
   "lua/lulibre/custom.lua",
   "lua/lulibre/options.lua",
   "lua/lulibre/config_file.lua",
+  "lua/lulibre/propose.lua",
+  "lua/lulibre/runs.lua",
+  "lua/lulibre/quality.lua",
+  "lua/lulibre/noncatalog.lua",
+  "lua/lulibre/consensus.lua",
 }
 dir = "build/api"
 format = "markdown"
