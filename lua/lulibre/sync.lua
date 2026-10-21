@@ -1,4 +1,4 @@
--- The sync folder: files waiting to be added to the library.
+--- The sync folder: files waiting to be added to the library.
 --
 -- Each ebook file under lulibre.o.sync_dir is "staged": it has a row in the
 -- index's `staged` table holding the metadata it will be added to calibre
@@ -7,6 +7,12 @@
 -- do on library books (edits change the staged row; nothing reaches calibre).
 -- add() then hands the files to calibre with that metadata, and can delete
 -- them from the folder once calibre holds the same bytes.
+--
+-- @module lulibre.sync
+-- @usage
+-- local sync = require "lulibre.sync"
+-- local r = sync.scan()            --> { total=, new=, gone=, held= }, the new ids
+-- print(sync.summary(sync.add(lulibre.ids("in:sync"), { remove = true })))
 local bib = require "lulibre.bib"
 local dupes = require "lulibre.dupes"
 local edit = require "lulibre.edit"
@@ -25,6 +31,9 @@ local EXT = { pdf = true, djvu = true, djv = true, epub = true, mobi = true, azw
   cbz = true, txt = true, ps = true }
 
 --- The sync folder, or nil and why not.
+-- @treturn[1] string
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.dir()
   local dir = lulibre.o.sync_dir
   if dir == "" then return nil, 'no sync folder is set (lulibre.o.sync_dir = "~/some/folder" in init.lua)' end
@@ -65,6 +74,8 @@ end
 -- by file name), vanished ones dropped, and each is checked against the
 -- library by content. Waits. Returns { total=, new=, gone=, held= } where
 -- held counts files the library already has, and the ids of the new ones.
+-- @treturn table
+-- @treturn {integer,...} the new ids
 function M.scan()
   local dir, why = M.dir()
   if not dir then error(why, 0) end
@@ -136,6 +147,8 @@ local COLUMN = { title = "title", authors = "authors", tags = "tags", series = "
 
 --- Store edited fields of a staged file: fields is { {field=, new=}, ... }.
 -- The caller refreshes (lulibre.stage_refresh) once it has written them all.
+-- @tparam integer id a staged (negative) id
+-- @tparam {table,...} fields
 function M.write(id, fields)
   for _, f in ipairs(fields) do
     local col = COLUMN[f.field] or error("staged files have no field " .. tostring(f.field))
@@ -154,6 +167,9 @@ end
 -- opts.remove deletes each file from the sync folder once calibre holds the
 -- same bytes. A file the library already has is not added again. Waits.
 -- Returns { added=, held=, removed=, kept = { "why", ... }, failed = { "why", ... } }.
+-- @tparam {integer,...} ids
+-- @tparam[opt] table opts `remove`
+-- @treturn table
 function M.add(ids, opts)
   opts = opts or {}
   local out = { added = 0, held = 0, removed = 0, kept = {}, failed = {} }
@@ -292,6 +308,8 @@ end
 -- folder (dropped/ under lulibre's data directory) and forgotten, with what
 -- had been worked out for it. Journaled, so `u` puts the file and its staged
 -- metadata back. Returns { dropped=, failed = { "why", ... }, holding= }.
+-- @tparam {integer,...} ids
+-- @treturn table
 function M.drop(ids)
   local json = require "lulibre.json"
   local dir = M.dir() or ""
@@ -324,6 +342,10 @@ end
 
 --- Put a dropped file back (what undo does with a "(dropped)" journal row):
 -- row is the staged record as drop() saved it. Returns true, or nil and why.
+-- @tparam table row
+-- @treturn[1] boolean true
+-- @treturn[2] nil
+-- @treturn[2] string why not
 function M.undrop(row)
   if uv.fs_stat(row.path) then return nil, row.path .. " exists again; the dropped copy stays in " .. row.held end
   local ok, err = move(row.held, row.path)
@@ -336,6 +358,8 @@ function M.undrop(row)
 end
 
 --- One line about what add() did.
+-- @tparam table out `add`'s result
+-- @treturn string
 function M.summary(out)
   local parts = {}
   if out.added > 0 then parts[#parts + 1] = ("added %d to the library"):format(out.added) end

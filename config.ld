@@ -19,6 +19,12 @@ file = {
   "lua/lulibre/quality.lua",
   "lua/lulibre/noncatalog.lua",
   "lua/lulibre/consensus.lua",
+  "lua/lulibre/dupes.lua",
+  "lua/lulibre/orphans.lua",
+  "lua/lulibre/sync.lua",
+  "lua/lulibre/snapshots.lua",
+  "lua/lulibre/calibre.lua",
+  "lua/lulibre/units.lua",
 }
 dir = "build/api"
 format = "markdown"

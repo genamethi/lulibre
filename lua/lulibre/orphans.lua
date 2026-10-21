@@ -1,4 +1,4 @@
--- Orphans: what the library's records and the library's folder disagree on.
+--- Orphans: what the library's records and the library's folder disagree on.
 --   records with no file   the book is in calibre but its file is gone
 --   files with no record   a file sits in one of calibre's folders that
 --                          calibre does not know about
@@ -9,6 +9,13 @@
 --   empty folders          reported, never touched
 -- Each gets a verdict and a suggested action; nothing happens until apply().
 -- Folders in the library that are not calibre's are otherwise left alone.
+--
+-- @module lulibre.orphans
+-- @usage
+-- local orphans = require "lulibre.orphans"
+-- local found = orphans.scan()
+-- found.records[1].action = "remove"
+-- print(orphans.summary(orphans.apply(found)))
 local dupes = require "lulibre.dupes"
 local edit = require "lulibre.edit"
 local uv = require "luv"
@@ -71,8 +78,11 @@ local function relative(from_dir, to)
   return table.concat(out, "/")
 end
 
--- What became of each dangling link: calibre's folder names end in the
+--- What became of each dangling link: calibre's folder names end in the
 -- book's id, which says where the file is now.
+-- @tparam string root the library folder
+-- @tparam {table,...} dangling `{ path=, target= }`
+-- @treturn {table,...} as `scan().links`
 function M.describe_links(root, dangling)
   local links = {}
   for _, path in ipairs(dangling) do
@@ -104,6 +114,7 @@ end
 
 --- Only the links: every symbolic link in a folder of your own inside the
 -- library that leads nowhere, described as in scan().links.
+-- @treturn {table,...}
 function M.broken_links()
   local root = library()
   local _, dangling = walk(root, calibre_folders())
@@ -112,6 +123,8 @@ end
 
 --- Point links (as described above, with .to set) at their files again.
 -- Returns how many were repaired.
+-- @tparam {table,...} links
+-- @treturn integer
 function M.relink(links)
   local n = 0
   for _, l in ipairs(links) do
@@ -120,17 +133,17 @@ function M.relink(links)
   return n
 end
 
---- Look. Returns
--- (verdict says what was found; brief, where there is one, is a shorter
--- wording for a narrow column)
--- { records = { {book=, verdict=, brief=, action=, actions=, stray=, twin=}, ... },
---   strays  = { {path=, rel=, size=, verdict=, action=, actions=, twin=}, ... },
---   links   = { {path=, rel=, target=, book=, to=, verdict=, action=, actions=}, ... },
---   empty   = { path, ... }, root = }
--- action is one of "keep", "remove" (the record), "reattach" (give the record
+--- Look for orphans: records with no file, files with no record, broken
+-- links, empty folders. Each found has a verdict (what was found; brief,
+-- where there is one, is a shorter wording for a narrow column) and an
+-- action, one of "keep", "remove" (the record), "reattach" (give the record
 -- the file found for it), "move" (take the stray file out of the library),
 -- "add" (make the stray file a book), "relink" (point the link at where the
 -- book's file is now) or "unlink" (delete the link).
+-- @treturn table `{ records = { {book=, verdict=, brief=, action=, actions=, stray=, twin=}, ... },
+-- strays = { {path=, rel=, size=, verdict=, action=, actions=, twin=}, ... },
+-- links = { {path=, rel=, target=, book=, to=, verdict=, action=, actions=}, ... },
+-- empty = { path, ... }, root= }`
 function M.scan()
   local root = library()
   local known = {}
@@ -233,6 +246,8 @@ function M.scan()
 end
 
 --- How many of each action a scan result now holds.
+-- @tparam table found `scan`'s result
+-- @treturn table `{ [action] = n, ... }`
 function M.counts(found)
   local n = { keep = 0, remove = 0, reattach = 0, move = 0, add = 0, relink = 0, unlink = 0 }
   for _, r in ipairs(found.records) do n[r.action] = n[r.action] + 1 end
@@ -243,6 +258,8 @@ end
 
 --- What the records about to be removed know that their surviving copies
 -- do not, as changes to the survivors (see dupes.gather).
+-- @tparam table found
+-- @treturn {table,...} changes
 function M.gather(found)
   local groups = {}
   for _, r in ipairs(found.records) do
@@ -280,6 +297,8 @@ end
 
 --- Carry out the actions. Waits. Returns { reattached=, removed=, moved=,
 -- added=, relinked=, unlinked=, failed = { "what: why", ... }, holding = folder or nil }.
+-- @tparam table found `scan`'s result, actions as chosen
+-- @treturn table
 function M.apply(found)
   local out = { reattached = 0, removed = 0, moved = 0, added = 0, relinked = 0, unlinked = 0, failed = {} }
   local base = lulibre.o.orphans_dir
@@ -353,6 +372,8 @@ function M.apply(found)
 end
 
 --- One line about what apply() did.
+-- @tparam table out `apply`'s result
+-- @treturn string
 function M.summary(out)
   local parts = {}
   local function say(n, what)

@@ -1,12 +1,22 @@
--- Books whose files hold exactly the same bytes. Two files can only be the
+--- Books whose files hold exactly the same bytes. Two files can only be the
 -- same if they are the same size, so only files that share a size with
 -- another are read and hashed (MD5); the hashes are remembered in the index.
+--
+-- @module lulibre.dupes
+-- @usage
+-- local dupes = require "lulibre.dupes"
+-- for _, g in ipairs(dupes.scan()) do
+--   print(g.md5, #g.books, "keep", g.keep)
+-- end
+-- dupes.propose(dupes.gather(groups), "duplicate")   -- what the others know, for review
 local edit = require "lulibre.edit"
 local junk = require "lulibre.junk"
 
 local M = {}
 
 --- How much a record says about its book; the richest copy is the one kept.
+-- @tparam table book
+-- @treturn number
 function M.score(book)
   local s = 0
   if not edit.is_unknown(book.author) then s = s + 3 end
@@ -40,6 +50,8 @@ end
 -- { { md5=, size=, books = { book, ... }, keep = id }, ... }, biggest waste
 -- first. Each book also carries .file (its path) and .score. opts.all hashes
 -- every file, not only those that share a size. Waits; shows progress.
+-- @tparam[opt] table opts `all`
+-- @treturn {table,...} the groups
 function M.scan(opts)
   opts = opts or {}
   local files = library_files()
@@ -96,6 +108,8 @@ function M.scan(opts)
 end
 
 --- The books that would go if each group kept only its chosen copy.
+-- @tparam {table,...} groups as `scan` gives them
+-- @treturn {table,...} the books
 function M.surplus(groups)
   local ids = {}
   for _, g in ipairs(groups) do
@@ -110,6 +124,8 @@ end
 
 --- What the copies to be removed know that the kept one does not, as changes
 -- to the kept book: empty fields are filled, tags and identifiers are added.
+-- @tparam {table,...} groups
+-- @treturn {table,...} changes `{ id=, field=, value=, op= }`
 function M.gather(groups)
   local changes = {}
   for _, g in ipairs(groups) do
@@ -146,6 +162,9 @@ end
 -- identifiers are proposed as additions). Nothing is written: the
 -- proposals wait in review, where each is accepted or not. Returns how many
 -- were made.
+-- @tparam table from a book
+-- @tparam table to a book
+-- @treturn integer
 function M.pull(from, to)
   local proposals = require "lulibre.proposals"
   local n = 0
@@ -165,6 +184,9 @@ end
 --- Turn gathered changes into proposals, so that removing a record loses
 -- nothing it knew. `what` names where they came from ("duplicate", "record
 -- with no file"). Returns how many proposals were new.
+-- @tparam {table,...} changes
+-- @tparam string what
+-- @treturn integer
 function M.propose(changes, what)
   if #changes == 0 then return 0 end
   if not lulibre.policy("carry_metadata", ("keep what the %s records being removed know (%d values) as proposals?"):format(
@@ -183,6 +205,8 @@ end
 
 --- The books in the library whose file has this hash (only files that have
 -- been hashed are found; M.scan hashes them).
+-- @tparam string md5
+-- @treturn {integer,...} ids
 function M.books_with(md5)
   local ids = {}
   for _, r in ipairs(lulibre.sql([[SELECT DISTINCT f.book FROM files f JOIN hashes h
@@ -194,6 +218,8 @@ end
 
 --- The library books that already hold the bytes of the file at path
 -- (usually none or one). Reads only library files of exactly that size.
+-- @tparam string path
+-- @treturn {integer,...} ids
 function M.holders(path)
   local ok, uv = pcall(require, "luv")
   local st = ok and uv.fs_stat(path)
@@ -218,10 +244,15 @@ function M.holders(path)
 end
 
 --- The first of M.holders(path), or nil.
+-- @tparam string path
+-- @treturn integer|nil
 function M.twin(path)
   return M.holders(path)[1]
 end
 
+--- A size in bytes as people read it: "1.2 GB", "340.0 MB", "12 kB".
+-- @tparam number bytes
+-- @treturn string
 function M.human(bytes)
   if bytes >= 2 ^ 30 then return ("%.1f GB"):format(bytes / 2 ^ 30) end
   if bytes >= 2 ^ 20 then return ("%.1f MB"):format(bytes / 2 ^ 20) end
