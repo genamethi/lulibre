@@ -13,5 +13,6 @@ nav = [
   { "Keys and commands" = "keys.md" },
   { "Configuration" = "configuration.md" },
   { "Lua API" = "api.md" },
+  { "API Reference (via LDoc)" = "reference/index.html" },
   { "Development" = "development.md" },
 ]
