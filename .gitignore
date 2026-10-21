@@ -6,4 +6,4 @@
 /stage/
 /site/
 # the API reference, made by LDoc for the site (.readthedocs.yaml)
-/docs/api/
+/docs/reference/
