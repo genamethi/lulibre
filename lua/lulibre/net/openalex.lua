@@ -1,6 +1,6 @@
---- OpenAlex: records by DOI.
--- Part of lulibre.net: require that, not this (it adds these functions to
--- lulibre.net's table; lulibre/net/core.lua has what they share).
+--- Looks works up in OpenAlex by DOI.
+-- This file is part of lulibre.net. Require lulibre.net, which adds this
+-- file's functions to its table; the shared code is in lulibre/net/core.lua.
 --
 -- @submodule lulibre.net
 local M = require "lulibre.net.core"
@@ -9,8 +9,8 @@ local unescape, encode = M._unescape, M._encode
 
 -- ---- OpenAlex ----
 
---- OpenAlex's record for a DOI: title, authors and date, for works CrossRef
--- does not have.
+--- Returns OpenAlex's record for a DOI: title, authors and date. Used for
+-- works CrossRef does not have.
 -- @tparam string doi
 -- @treturn[1] table the record
 -- @treturn[2] nil

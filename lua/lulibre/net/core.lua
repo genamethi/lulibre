@@ -1,15 +1,16 @@
---- The part of lulibre.net that its services share: the pace each service
--- is asked at, what was kept of its answers, fetching, the helpers the
--- services use. lulibre.net is the module to require; it is this table,
--- with each service's functions added (lulibre/net/*.lua).
+--- Holds the code lulibre.net's services share: how often each service is
+-- asked, the stored answers, fetching, and helpers. Require lulibre.net,
+-- not this file: lulibre.net is this table, with each service's functions
+-- added from lulibre/net/*.lua.
 --
 -- @submodule lulibre.net
 
 local M = {}
 
---- Seconds between two requests to one service, counted from the end of one
--- to the start of the next; one request at a time. Each is well inside what
--- the service asks of callers who do not identify themselves:
+--- The seconds between two requests to one service, counted from the end
+-- of one request to the start of the next. Only one request runs at a time.
+-- Each pace is well within what the service asks of callers who do not
+-- identify themselves:
 --   arXiv         "no more than one request every three seconds", "a single connection at a time"
 --                 (https://info.arxiv.org/help/api/tou.html)
 --   CrossRef      public pool: 5 requests a second, one at a time; "Back off if the response times start to increase"
@@ -21,25 +22,26 @@ local M = {}
 --   zbMATH Open   "keeping the number of HTTP requests per second to a reasonable rate"; when it is
 --                 "heavily loaded ... the use has to be retried" (its API's terms of June 2021,
 --                 https://static.zbmath.org/legal/api-terms-and-conditions.html; the data is CC-BY-SA 4.0)
--- A request that was slow to be answered is followed by a pause as long as
--- it took, so that a service under load is asked less.
+-- A slow answer is followed by a pause as long as the request took, so a
+-- service under load is asked less.
 M.PACE = { arxiv = 5, crossref = 1, zbmath = 2, openlibrary = 2, openalex = 1 }
 
---- A service that answers "too many requests" (HTTP 429) or "unavailable"
--- (503) is not asked again for this many seconds, or for as long as it says
--- (Retry-After) if that is longer. Nothing is retried in the meantime: the
--- books it was wanted for are picked up by the next run.
+--- How many seconds a service is left alone after it answers "too many
+-- requests" (HTTP 429) or "unavailable" (503). If the service's Retry-After
+-- is longer, that is used. Nothing is retried in the meantime; the next run
+-- picks up the books.
 M.HOLD = { arxiv = 1800, default = 300 }
 
---- how many arXiv numbers go in one request
+--- How many arXiv numbers go in one request.
 M.ARXIV_BATCH = 40
 
---- "no such record" is believed for this many days, then asked again
+--- How many days a "no such record" answer is trusted before the service
+-- is asked again.
 M.FORGET_DAYS = 30
 
---- When true, answers come only from what is kept: nothing is asked.
+--- If true, answers come only from storage, and no service is asked.
 M.offline = false
---- requests made, answers found already kept, and requests by service
+--- Counts of requests made, answers found in storage, and requests by service.
 M.stats = { asked = 0, kept = 0, by = {} }
 
 local function trim(s)
@@ -54,19 +56,18 @@ local function encode(s)
   return (s:gsub("[^%w%-%._~]", function(c) return ("%%%02X"):format(c:byte()) end))
 end
 
---- What requests say they come from.
+--- Returns the User-Agent that requests send.
 -- @treturn string the User-Agent
 function M.agent()
   local mail = lulibre.o.contact_email or ""
   return ("lulibre/%s (library metadata lookup%s)"):format(lulibre.version, mail ~= "" and "; mailto:" .. mail or "")
 end
 
---- GET a URL. Returns the body, the HTTP status and what the Retry-After
--- header said (if anything), or nil and a message when nothing came back.
+--- Fetches a URL with GET. Returns nil and a message if nothing came back.
 -- @tparam string url
 -- @treturn[1] string the body
 -- @treturn[1] integer the HTTP status
--- @treturn[1] string|nil Retry-After
+-- @treturn[1] string|nil the Retry-After header, if any
 -- @treturn[2] nil
 -- @treturn[2] string the message
 function M.get(url)
@@ -112,8 +113,8 @@ local function done(service)
   busy[service] = nil
 end
 
---- Until when a service is not to be asked (a time, as os.time gives it), or
--- nil when it may be.
+--- Returns the time until which a service is left alone (as os.time gives
+-- it), or nil if the service may be asked now.
 -- @tparam string service
 -- @treturn integer|nil
 function M.held(service)
@@ -121,9 +122,9 @@ function M.held(service)
   return till and till > os.time() and till or nil
 end
 
---- Stop asking a service for a number of seconds (0: ask again).
+--- Leaves a service alone for a number of seconds.
 -- @tparam string service
--- @tparam number seconds
+-- @tparam number seconds 0 allows asking again
 function M.hold(service, seconds)
   if seconds <= 0 then
     lulibre.store("DELETE FROM kv WHERE key = ?", "net.hold." .. service)
@@ -136,9 +137,9 @@ local function paused(service, till)
   return ("%s asked for a pause: it is not asked again before %s"):format(service, os.date("%H:%M", till))
 end
 
---- One request to a service, in its turn. Returns the body and the status,
--- or nil and why. A service that says it is being asked too much is left
--- alone for a while (M.HOLD), and says so here until then.
+--- Makes one request to a service, waiting for the service's turn. A
+-- service that says it is asked too much is left alone for a while (see
+-- `HOLD`); until then, `request` returns nil and says so.
 -- @tparam string service
 -- @tparam string url
 -- @treturn[1] string the body
@@ -166,9 +167,9 @@ function M.request(service, url)
   return body, status
 end
 
---- What is kept for a key of a service: the body, or false when the service
--- was asked and had nothing; nil when it has not been asked (or said "nothing"
--- so long ago that it is worth asking again).
+--- Returns what is stored for a service's key: the body, or false if the
+-- service was asked and had nothing. Returns nil if the service has not
+-- been asked, or said "nothing" long enough ago to be asked again.
 -- @tparam string service
 -- @tparam string key
 -- @treturn string|false|nil
@@ -180,7 +181,7 @@ function M.kept(service, key)
   return false
 end
 
---- Keep an answer.
+--- Stores an answer.
 -- @tparam string service
 -- @tparam string key
 -- @tparam integer status
@@ -203,8 +204,8 @@ local function give_up(service, key)
   unanswered[service .. "\0" .. key] = monotonic()
 end
 
---- The body a service gives for a key: from what is kept if it has been
--- asked before, else from `url` (and kept). nil and why when there is none.
+--- Returns the body a service gives for a key: from storage if the service
+-- was asked before, or else fetched from `url` and stored.
 -- @tparam string service
 -- @tparam string key
 -- @tparam string url

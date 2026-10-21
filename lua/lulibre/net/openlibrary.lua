@@ -1,6 +1,7 @@
---- Open Library: records by ISBN, from its API or its dumps on this machine.
--- Part of lulibre.net: require that, not this (it adds these functions to
--- lulibre.net's table; lulibre/net/core.lua has what they share).
+--- Looks books up in Open Library by ISBN, through its API or in its dumps
+-- on this machine.
+-- This file is part of lulibre.net. Require lulibre.net, which adds this
+-- file's functions to its table; the shared code is in lulibre/net/core.lua.
 --
 -- @submodule lulibre.net
 local M = require "lulibre.net.core"
@@ -13,18 +14,17 @@ local trim, in_batches, file_time, forename_first, lines_with, missed = M._trim,
 local MONTHS = { january = 1, february = 2, march = 3, april = 4, may = 5, june = 6, july = 7, august = 8, september = 9,
   october = 10, november = 11, december = 12 }
 
---- how many ISBNs go in one request to Open Library
+--- How many ISBNs go in one request to Open Library.
 M.OPENLIBRARY_BATCH = 20
 
 local function plain_isbn(isbn)
   return (isbn:gsub("[^%dXx]", ""):upper())
 end
 
---- Ask Open Library about many ISBNs in as few requests as it takes, keeping
--- each answer; M.openlibrary then answers from what was kept. Returns how
--- many were newly fetched.
+--- Asks Open Library about many ISBNs in as few requests as possible, and
+-- stores each answer, so `openlibrary` then answers from storage.
 -- @tparam {string,...} isbns
--- @treturn integer
+-- @treturn integer how many records were newly fetched
 function M.openlibrary_prefetch(isbns)
   local keys = {}
   for i, isbn in ipairs(isbns) do keys[i] = plain_isbn(isbn) end
@@ -44,9 +44,9 @@ function M.openlibrary_prefetch(isbns)
   end)
 end
 
---- Open Library's record for an ISBN: a book's title, authors, publisher and
--- year, the series when the title carries it in brackets, and its subject
--- from the class number libraries shelve it under.
+--- Returns Open Library's record for an ISBN: the book's title, authors,
+-- publisher and year, the series if the title gives it in brackets, and
+-- the subject from the book's library class number.
 -- @tparam string isbn
 -- @treturn[1] table the record
 -- @treturn[2] nil
@@ -128,16 +128,18 @@ function M.openlibrary(isbn)
   return rec
 end
 
---- Read books' records out of Open Library's dumps instead of asking it: the
--- editions (ol_dump_editions_latest.txt.gz) for a book by its ISBN, and the
--- authors (ol_dump_authors_latest.txt.gz) for their names, which an edition
--- holds only keys to. Both are looked for in lulibre's data folder (see
--- lulibre.datasets); with no editions there, nothing is done. Each record
--- found is kept as an answer from Open Library; an ISBN the dump does not
--- hold is not looked for in it again until the file changes. Returns how
--- many were found, or nil and why.
+--- Reads books' records from Open Library's dumps instead of asking Open
+-- Library. The editions dump (ol_dump_editions_latest.txt.gz) gives a book
+-- by its ISBN. The authors dump (ol_dump_authors_latest.txt.gz) gives the
+-- authors' names, since an edition holds only keys to them. Both dumps are
+-- looked for in lulibre's data folder (see lulibre.datasets). Without the
+-- editions dump, nothing is done.
+--
+-- Each record found is stored as an answer from Open Library. An ISBN the
+-- dump does not have is not looked for in the dump again until the file
+-- changes.
 -- @tparam {string,...} isbns
--- @treturn[1] integer
+-- @treturn[1] integer how many records were found
 -- @treturn[2] nil
 -- @treturn[2] string why
 function M.openlibrary_dump(isbns)
