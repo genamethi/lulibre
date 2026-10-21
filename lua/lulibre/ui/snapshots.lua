@@ -62,11 +62,12 @@ function M.run()
       #on > 0 and table.concat(on, " ") or "lulibre's changes only")
   end
   load()
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("snapshots", {
     title = title(), help = keys:hint("back", "take", "retire", "exact", "unsync"), height = 0.35, moves = true,
     keys = keys:own(), pass = panels.PASS, rows = rows(),
     columns = { { "#", 5 }, { "taken", 17 }, { "name", -2 }, { "changed since", 22 }, { "", 16 } },
-  }
+  })
+  if not p then return end
   local ctx
   local closing <close> = setmetatable({}, { __close = function()
     if ctx then pcall(ctx.close, ctx) end

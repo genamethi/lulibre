@@ -146,7 +146,7 @@ end
 Methods: `p:rows(rows)`, `p:title(s)`, `p:help(s)`, `p:columns(cols)`,
 `p:cursor([row])`, `p:wait()`, `p:close()`, `p:is_open()`, `p:hide()` and
 `p:show()` (off the screen and back, around a panel opened on top of it),
-`p:height(share)`, `p:keys(list)`, `p:tabs(names, current)`, `p:send(key
+`p:focus()` (the cursor to it), `p:height(share)`, `p:keys(list)`, `p:tabs(names, current)`, `p:send(key
 [, row])`. Row styles: `dim
 accent ok warn error`, and `head` and `note`, which show their first cell
 across the whole width (a heading; text too long for a column). With `moves = true`, `wait()` also returns
@@ -239,6 +239,7 @@ its own documentation.
 | `net.kept_record(kind, value)` | the record kept for a doi, isbn or arXiv number, asking nobody; `net.arxiv_by_title(path, {[net.title_key(t)]=true})` looks papers up by title in arXiv's snapshot |
 | `lulibre.panel{ side = "main" }` | a panel in the list's window for a while, the list coming back when it closes; the focus stays where it was |
 | `lulibre.panel{ preview = id or text }`, `p:preview(v)` | what the preview shows while the panel is up, whatever row the cursor is on: a book, or a note in place of one; `nil` gives it back to the rows |
+| `require("lulibre.ui.panels").open(name, spec)` | a screen's panel, `lulibre.panel(spec)`, one of each name at a time: when that screen is open already, the cursor goes to it, it is said, and nil is returned (the screen returns). `panels.again(fn, ...)` runs fn with leave for another, as `:new` does |
 | `require("lulibre.ui.panels").about(p, {fill=, columns=, title=, keys=}, row)` | a screen's "about this" panel where the list is, as review's: `fill(row)` returns its rows and title; `:update(row)`, `:toggle(row)`; it steps aside with `panels.over` |
 | `lulibre.option(ns, { name = { default=, type=, choices=, help= } })` | declare a script's options; returns the namespace to read them from. `lulibre.cfg.NS.NAME` reads or sets one; `require "lulibre.options"`: `declare`, `get`, `set(ns, name, v, "file"|"script"|"session")`, `reset`, `from`, `list`, `namespaces` |
 | `lulibre.config_file` | init.lua as lulibre writes it: `missing()`, `add(items)`, `write_value(item, v)` (nil: back to the default), `line_of(item)` |

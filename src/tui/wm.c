@@ -162,7 +162,8 @@ struct node *wm_find(struct tui *t, const struct view_class *cls) {
 
 int wm_split(struct tui *t, char dir, const char *view) {
   const struct view_class *cls = view && *view ? wm_class(view) : t->focus->cls;
-  if (!cls) return -1;
+  /* a panel is a script's, not something a window can be made of */
+  if (!cls || !cls->create) return -1;
   struct node *old = t->focus;
   /* the focused leaf becomes a split holding itself and the new view */
   struct node *moved = xcalloc(1, sizeof *moved);

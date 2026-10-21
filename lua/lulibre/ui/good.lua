@@ -46,13 +46,14 @@ function M.run()
     lulibre.notify("the library is empty")
     return
   end
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("good", {
     title = title(), help = keys:hint("confirm", "confirm_above", "view", "learn"), follow = true, height = 0.5,
     keys = keys:own(), pass = panels.PASS, reloads = true,
     columns = { { "", 1 }, { "Score", 5 }, { "Id", 6 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 },
       { "Holding it down", -3 } },
     rows = build(),
-  }
+  })
+  if not p then return end
   local peek = panels.peeker(p, 0.5)
 
   while true do

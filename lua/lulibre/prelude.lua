@@ -282,6 +282,20 @@ function lulibre._after_init()
     end
   end)
 end
+-- each command's function by its name, as it is defined, for :new
+do
+  local command, fns = lulibre.command, {}
+  function lulibre.command(name, fn, help)
+    fns[name] = fn
+    return command(name, fn, help)
+  end
+  lulibre.command("new", function(args)
+    local name, rest = (args or ""):match("^%s*(%S+)%s*(.-)%s*$")
+    local fn = name and fns[name]
+    if not fn then error(name and ("no command " .. name .. " to open another of") or "new: which command? (:new review)", 0) end
+    require("lulibre.ui.panels").again(fn, rest ~= "" and rest or nil)
+  end, "command [args]  run a command that opens a screen, as another one when that screen is open already")
+end
 -- the commands (lulibre/commands/*.lua)
 require "lulibre.commands.screens"
 require "lulibre.commands.library"

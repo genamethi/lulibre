@@ -74,11 +74,12 @@ function M.run()
     lulibre.notify(("nothing is waiting in %s"):format(seen.dir))
     return
   end
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("beside", {
     title = title(), help = keys:hint("add", "drop", "edit", "match"), side = "left", width = 0.42, follow = true, moves = true,
     reloads = true, keys = keys:own(), pass = panels.PASS,
     columns = { { "", 7 }, { "title", -1 }, { "author", 16 }, { "file", 22 } }, rows = build(),
-  }
+  })
+  if not p then return end
 
   local narrowed, matching = nil, true
   -- bring the library's list beside the file under the cursor

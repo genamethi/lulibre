@@ -133,10 +133,11 @@ function M.run(args)
     return ("browse  %s  (%d)"):format(facet, #shown - 1)
   end
   local rows = build()
-  local p <close> = lulibre.panel {
+  local p <close> = require("lulibre.ui.panels").open("browse", {
     title = title(), help = keys:hint("open", "find", "facet"), side = "left", width = 0.27, moves = true,
     columns = { { facet, -1 }, { "", 5 } }, rows = rows,
-  }
+  })
+  if not p then return end
 
   local applied
   local function apply(node)

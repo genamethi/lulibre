@@ -44,12 +44,13 @@ function M.run()
     return ("duplicates  %d groups, %d surplus books, %s"):format(#groups, n, dupes.human(bytes))
   end
 
-  local p <close> = lulibre.panel {
+  local p <close> = panels.open("dupes", {
     title = title(), help = keys:hint("keep", "edit", "about", "remove"), follow = true, height = 0.5,
     keys = keys:own(), pass = panels.PASS, reloads = true, moves = true,
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Year", 4 } },
     rows = build(),
-  }
+  })
+  if not p then return end
   p:cursor(2)
   local peek = panels.peeker(p, 0.5)
   -- where the list is: the group's copies side by side, field by field
