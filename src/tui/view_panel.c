@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "match/fold.h"
 #include "tui/tui.h"
 
 struct prow {
@@ -40,6 +41,8 @@ struct panel {
   char *pass; /* first words of the global commands that may be reached from here */
   panel_event_fn *event;
   void *event_ud;
+  char *search;    /* what / looks for in the rows, folded; NULL for nothing */
+  int search_from; /* the row the cursor was on when / was pressed */
 };
 
 static void free_rows(struct panel *p) {
@@ -77,6 +80,7 @@ void panel_unref(struct panel *p) {
   free(p->own);
   free(p->pass);
   free(p->pv_note);
+  free(p->search);
   free(p);
 }
 
@@ -371,6 +375,104 @@ void panel_wheel(struct panel *p, int delta) {
   moved(p, before);
 }
 
+/* ---- / in a panel, as in the list: the rows holding the text (case and
+ * accents aside) are marked, the cursor goes to the next one as it is typed,
+ * n and N step through them. A key the screen handles itself stays the
+ * screen's (help's own /, review's N). */
+
+static int owns(const struct panel *p, uint32_t key) {
+  for (int i = 0; i < p->nown; i++)
+    if (p->own[i] == key) return 1;
+  return 0;
+}
+
+static int row_matches(const struct panel *p, int i) {
+  if (!p->search || !*p->search) return 0;
+  const struct prow *row = &p->rows[i];
+  for (int c = 0; c < row->ncells; c++) {
+    sbuf f = SBUF_INIT;
+    fold_utf8(&f, row->cells[c], strlen(row->cells[c]));
+    int hit = f.s && strstr(f.s, p->search);
+    sb_free(&f);
+    if (hit) return 1;
+  }
+  return 0;
+}
+
+/* the cursor to the first match from row `from` on, in direction dir,
+ * coming round at the end; 0 when no row matches */
+static int search_go(struct panel *p, int from, int dir) {
+  for (int k = 0; k < p->nrows; k++) {
+    int i = ((from + dir * k) % p->nrows + p->nrows) % p->nrows;
+    if (row_matches(p, i)) {
+      panel_set_cursor(p, i);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void search_say(struct panel *p) {
+  int n = 0, at = 0;
+  for (int i = 0; i < p->nrows; i++)
+    if (row_matches(p, i)) {
+      n++;
+      if (i <= p->cur) at = n;
+    }
+  char *m = n ? xasprintf("/%s: %d of %d rows", p->search, at, n) : xasprintf("/%s: no row holds it", p->search);
+  tui_show_msg(p->t, !n, m);
+  free(m);
+}
+
+static void search_set(struct panel *p, const char *text) {
+  free(p->search);
+  p->search = NULL;
+  if (text && *text) {
+    sbuf f = SBUF_INIT;
+    fold_utf8(&f, text, strlen(text));
+    p->search = sb_take(&f);
+  }
+}
+
+static void search_typed(struct tui *t, const char *text, void *ud) {
+  struct panel *p = ud;
+  if (!p->open) return;
+  search_set(p, text);
+  if (!p->search || !search_go(p, p->search_from, 1)) panel_set_cursor(p, p->search_from);
+  tui_dirty(t);
+}
+
+static void search_done(struct tui *t, const char *text, void *ud) {
+  struct panel *p = ud;
+  if (p->open) {
+    int from = p->search_from;
+    search_set(p, text); /* Esc (NULL): back where it was, nothing marked */
+    if (!p->search || !search_go(p, from, 1)) panel_set_cursor(p, from);
+    if (p->search) search_say(p);
+    moved(p, from);
+    tui_dirty(t);
+  }
+  panel_unref(p);
+}
+
+static int search_key(struct tui *t, struct panel *p, uint32_t key) {
+  if (owns(p, key)) return 0;
+  if (key == '/') {
+    p->refs++; /* until the line is done with it */
+    p->search_from = p->cur;
+    tui_input(t, "/", "", search_done, p);
+    tui_input_on_change(t, search_typed);
+    return 1;
+  }
+  if ((key == 'n' || key == 'N') && p->search) {
+    int before = p->cur;
+    if (search_go(p, p->cur + (key == 'n' ? 1 : -1), key == 'n' ? 1 : -1)) moved(p, before);
+    search_say(p);
+    return 1;
+  }
+  return 0;
+}
+
 int panel_key(struct tui *t, struct panel *p, uint32_t key) {
   int before = p->cur;
   int action = ctx_feed(KC_PANEL, &p->pending, key);
@@ -387,6 +489,7 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     wm_focus_back(t);
     return 1;
   }
+  if (search_key(t, p, key)) return 1;
   switch (key) {
     /* these stay global, so the list and preview remain reachable */
     case NCKEY_TAB:
@@ -523,6 +626,10 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     int bg = current ? (focused ? theme.cursor_bg : theme.cursor_bg_blur) : C_DEFAULT;
     dr_style(n, C_DEFAULT, bg, 0);
     if (current) dr_fill(n, y, r.x, r.w);
+    if (row_matches(p, p->top + i)) {
+      dr_style(n, theme.accent, bg, A_BOLD);
+      dr_text(n, y, r.x, 1, "›");
+    }
     dr_style(n, style_color(row->style), bg, row->style == PSTYLE_HEAD ? A_BOLD : 0);
     if (row->style == PSTYLE_HEAD || row->style == PSTYLE_NOTE) { /* these span the row */
       dr_text(n, y, x[0], r.w - 2, row->ncells ? row->cells[0] : "");

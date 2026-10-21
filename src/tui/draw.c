@@ -159,3 +159,28 @@ size_t dr_wrap(const char *s, size_t len, int maxw) {
   }
   return len;
 }
+
+int dr_lines(const char *s, int maxw, size_t *off, size_t *len, int max) {
+  int n = 0;
+  size_t end = strlen(s), i = 0;
+  while (end > 0 && s[end - 1] == '\n') end--;
+  for (;;) {
+    const char *nl = memchr(s + i, '\n', end - i);
+    size_t para = nl ? (size_t)(nl - s) : end;
+    do {
+      size_t k = dr_wrap(s + i, para - i, maxw), shown = k;
+      /* a line broken at a space doesn't show the space */
+      if (i + k < para)
+        while (shown > 0 && s[i + shown - 1] == ' ') shown--;
+      if (n < max) {
+        off[n] = i;
+        len[n] = shown;
+      }
+      n++;
+      i += k;
+      while (i < para && s[i] == ' ') i++; /* a wrapped line starts at a word */
+    } while (i < para);
+    if (!nl) return n;
+    i = para + 1;
+  }
+}
