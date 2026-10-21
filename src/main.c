@@ -155,9 +155,19 @@ int main(int argc, char **argv) {
   if (confdir && confdir[0] && config_set(&app.cfg, "config_dir", confdir, &err)) die("%s", err);
   app.loop = uv_default_loop();
   /* with the interface, Lua gets a loop and (once it is up) a thread of its own */
-  bridge_init(&app, i >= argc && !want_optlist);
+  int interface = i >= argc && !want_optlist;
+  bridge_init(&app, interface);
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
+  /* known before init.lua, so that what it and the prelude do at start can
+   * tell: the systemd units are made as the options say in the interface
+   * only, never by a command (lulibre offline, run from one of them) */
+  if (!interface) {
+    lua_getglobal(app.L, "lulibre");
+    lua_pushboolean(app.L, 1);
+    lua_setfield(app.L, -2, "headless");
+    lua_pop(app.L, 1);
+  }
   char *mismatch = lstate_tree_mismatch();
   if (mismatch) warnf("%s", mismatch);
   free(mismatch);

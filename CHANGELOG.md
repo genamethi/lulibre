@@ -33,6 +33,13 @@ written in `src/version.h`.
   heading's qualifier ("Rings (Algebra)").
 - New: while typing (a field, the `:` and `/` prompts, the pickers),
   Ctrl or Alt with Left and Right moves a word at a time, as `b` and `w`.
+- Fixed: `server_hook = "on"` wrote a lulibre.service with no `[Install]`
+  section, so enabling it did nothing and it never ran before the server.
+- Fixed: lulibre's systemd units were made as the options say by every
+  command, not only the interface: `lulibre units` (meant only to show),
+  `lulibre run`, and `lulibre offline` as lulibre.service runs it. A command
+  with other options than the interface's (another init.lua, `-C`) could
+  remove the units the interface had made.
 - Fixed: a question on the bottom line was cut at half the screen's
   width, and its choices ("[y/N]") with it; a message was cut at one line,
   and the pager (help, what `lulibre.show` shows: what was done after the

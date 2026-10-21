@@ -14,7 +14,10 @@ trap '$T kill-server 2>/dev/null || true; rm -rf "$t"' EXIT
 lib=$t/lib
 sh "$(dirname "$0")/mklib.sh" "$lib"
 
-export XDG_DATA_HOME="$t/data"
+# (all of them: a crash's report goes to the state directory, and lulibre's
+# systemd units are found under HOME)
+export XDG_DATA_HOME="$t/data" XDG_STATE_HOME="$t/state" XDG_CONFIG_HOME="$t/config" HOME="$t/home"
+mkdir -p "$HOME"
 run() { "$bin" --clean -L "$lib" "$@"; }
 
 fails=0

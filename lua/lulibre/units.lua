@@ -227,7 +227,7 @@ end
 
 local function hook_text(server, user, as_user)
   local exe = lulibre_exe()
-  return header("server_hook = on") .. table.concat({
+  local lines = {
     "[Unit]",
     "Description=lulibre: before calibre's content server starts (a copy of its database, the opf files, waiting changes)",
     "Before=" .. server.name,
@@ -239,12 +239,11 @@ local function hook_text(server, user, as_user)
     -- back for ever; writing every book's opf file the first time can take
     -- minutes, and this is far beyond that
     "TimeoutStartSec=30min",
-    not user and ("User=" .. as_user) or nil,
-    "",
-    "[Install]",
-    "WantedBy=" .. server.name,
-    "",
-  }, "\n")
+  }
+  -- (added, not left nil in the list: table.concat stops at a nil)
+  if not user then lines[#lines + 1] = "User=" .. as_user end
+  for _, l in ipairs { "", "[Install]", "WantedBy=" .. server.name, "" } do lines[#lines + 1] = l end
+  return header("server_hook = on") .. table.concat(lines, "\n")
 end
 
 local function timer_texts(server, user, at)
