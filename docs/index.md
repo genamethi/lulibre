@@ -1,18 +1,18 @@
 # lulibre
 
-A fast, modal terminal workbench for the metadata of a
-[calibre](https://calibre-ebook.com) library: a full-text index over the
-first pages of every book, a filter language, batch editing with undo, and
-Lua scripting. C, notcurses, libuv.
+lulibre is a fast, modal terminal program for fixing the metadata of a
+[calibre](https://calibre-ebook.com) library. It has a full-text index of
+the first pages of every book, a filter language, batch editing with undo,
+and Lua scripting. It is written in C with notcurses and libuv.
 
-**Alpha.** It works and is tested, but it is young: try changes on a few
-books before a few hundred. Every change is journaled and `u` undoes it,
-removals included.
+**Beta.** lulibre works and is tested, but it is young, so try a change on
+a few books before a few hundred. The journal records every change, and
+`u` undoes it, including removals.
 
-Installing and a first look: the
-[README](https://github.com/genamethi/lulibre#readme). What changed in each
-version: the
-[changelog](https://github.com/genamethi/lulibre/blob/main/CHANGELOG.md).
+The [README](https://github.com/genamethi/lulibre#readme) covers installing
+and a first look. The
+[changelog](https://github.com/genamethi/lulibre/blob/main/CHANGELOG.md)
+lists what changed in each version.
 
 - [Workflows](workflows.md) — editing, review, capture, duplicates, orphans,
   the sync folder, BibTeX, OCR, copies of calibre's database
