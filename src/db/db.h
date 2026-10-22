@@ -21,6 +21,9 @@ enum file_status { FILE_PENDING = 0, FILE_OK = 1, FILE_ERROR = 2, FILE_MISSING =
  * page_put and files (its order), the preview, and verify's evidence all
  * go by it, so whatever is read from a book is read from one file. p is
  * the files table's alias with its dot ("f.") or "". */
+/* How long a statement waits for another connection's write lock. */
+#define DB_BUSY_MS 5000
+
 #define DB_BOOK_FILE_ORDER(p) "(" p "status = 1) DESC, (" p "format = 'PDF') DESC, " p "id"
 
 int db_open(struct db *db, const char *path, char **err);

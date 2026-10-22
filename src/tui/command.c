@@ -302,18 +302,15 @@ static void c_index(struct tui *t, const char *args) {
 }
 
 static void c_reload(struct tui *t, const char *args) {
-  char *err = NULL;
   if (t->ix) {
     tui_msg(t, 1, "indexing is running; try again when it finishes");
     return;
   }
-  if (db_mirror(&t->app->db, t->app->cfg.library, 1, &err) < 0) {
-    tui_msg(t, 1, "%s", err);
-    free(err);
+  if (t->mirroring) {
+    tui_msg(t, 1, "calibre's database is being read already");
     return;
   }
-  rows_reload(t);
-  tui_msg(t, 0, "reloaded from calibre");
+  tui_mirror(t, 1, 1);
 }
 
 static void c_set(struct tui *t, const char *args) {

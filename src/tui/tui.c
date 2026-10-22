@@ -52,12 +52,6 @@ void tui_progress(struct tui *t, const char *text) {
 }
 
 void tui_reload(struct tui *t) {
-  char *err = NULL;
-  /* while the indexer holds a transaction the periodic check picks this up */
-  if (!t->ix && db_mirror(&t->app->db, t->app->cfg.library, 0, &err) < 0) {
-    tui_msg(t, 1, "%s", err);
-    free(err);
-  }
   rows_reload(t);
 }
 
@@ -1248,15 +1242,47 @@ int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const stru
  * lulibre): pick it up without being asked. */
 static void tick_cb(uv_timer_t *h) {
   struct tui *t = h->data;
-  char *err = NULL;
-  if (t->ix || t->quit) return; /* the indexer holds a write transaction */
-  int rc = db_mirror(&t->app->db, t->app->cfg.library, 0, &err);
-  if (rc > 0) {
-    rows_reload(t);
-    tui_start_index(t, 0);
-  } else if (rc < 0) {
-    free(err);
+  if (t->ix || t->quit) return; /* the indexer would change it under the mirror */
+  tui_mirror(t, 0, 0);
+}
+
+struct remirror {
+  struct tui *t;
+  int force, told, rc;
+  char *err;
+};
+
+static void remirror_done(void *arg) { /* interface thread */
+  struct remirror *m = arg;
+  struct tui *t = m->t;
+  t->mirroring = 0;
+  if (!t->quit) {
+    if (m->rc < 0) {
+      if (m->told) tui_msg(t, 1, "%s", m->err);
+    } else {
+      if (m->rc > 0 || m->force) rows_reload(t);
+      if (m->told) tui_msg(t, 0, "reloaded from calibre");
+      else if (m->rc > 0) tui_start_index(t, 0);
+    }
   }
+  free(m->err);
+  free(m);
+}
+
+static void remirror_lua(struct app *app, void *arg) { /* Lua thread, between tasks */
+  struct remirror *m = arg;
+  m->rc = db_mirror(app->ldb ? app->ldb : &app->db, app->cfg.library, m->force, &m->err);
+  bridge_ui(app, remirror_done, m);
+}
+
+void tui_mirror(struct tui *t, int force, int told) {
+  if (t->mirroring) return;
+  t->mirroring = 1;
+  struct remirror *m = xcalloc(1, sizeof *m);
+  m->t = t;
+  m->force = force;
+  m->told = told;
+  bridge_lua(t->app, remirror_lua, m);
 }
 
 /* -------------------------------------------------------------------- run */

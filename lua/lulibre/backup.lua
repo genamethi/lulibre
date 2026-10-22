@@ -33,6 +33,12 @@ local function exists(path)
   return uv.fs_stat(path) ~= nil
 end
 
+-- A file removed when the variable holding this goes out of scope, however
+-- it goes (an error, or the task cancelled while it waits).
+local function removed_after(path)
+  return setmetatable({}, { __close = function() uv.fs_unlink(path) end })
+end
+
 local function mkdirs(path)
   local at = ""
   for part in path:gmatch("[^/]+") do
@@ -358,15 +364,10 @@ end
 local function with_now(fn)
   mkdirs(M.dir())
   local tmp = ("%s/.now-%d-%d.db"):format(M.dir(), uv.os_getpid(), uv.hrtime())
+  local _ <close> = removed_after(tmp)
   local ok, err = lulibre.copy_db(live(), tmp)
-  if not ok then
-    uv.fs_unlink(tmp)
-    error("reading calibre's database: " .. err, 0)
-  end
-  local done, r = pcall(fn, tmp)
-  uv.fs_unlink(tmp)
-  if not done then error(r, 0) end
-  return r
+  if not ok then error("reading calibre's database: " .. err, 0) end
+  return fn(tmp)
 end
 
 --- Returns what putting a copy back would change, compared with calibre's
@@ -508,6 +509,7 @@ function M.put_back(path)
   if held and held.db then error("a calibre program has the library open: nothing was put back", 0) end
   local before = M.take(("before putting back the copy of %s"):format(path:match("([^/]+)$")), { raw = true })
   local staged = ("%s/.staged-%d.db"):format(M.dir(), uv.os_getpid())
+  local _ <close> = removed_after(staged)
   local out = { before = before, moved = 0, dirty = 0 }
   -- fitted to the folders, if calibre's database as it was can be read
   local fitted, d = pcall(differ, copy, before.path .. "/metadata.db")
@@ -525,15 +527,9 @@ function M.put_back(path)
     out.unfitted_why = tostring(d)
     ok, err = lulibre.copy_db(copy, staged)
   end
-  if not ok then
-    uv.fs_unlink(staged)
-    error("staging the copy: " .. err, 0)
-  end
+  if not ok then error("staging the copy: " .. err, 0) end
   held = calibre.running()
-  if held and held.db then
-    uv.fs_unlink(staged)
-    error("a calibre program opened the library meanwhile: nothing was put back", 0)
-  end
+  if held and held.db then error("a calibre program opened the library meanwhile: nothing was put back", 0) end
   local lib = lulibre.o.library
   -- SQLite's own backup, into calibre's database: what a journal left by a
   -- crash would undo is undone first, as SQLite does on opening
@@ -546,18 +542,15 @@ function M.put_back(path)
     local tmp = lib .. "/metadata.db.lulibre-new"
     local copied, cerr = uv.fs_copyfile(staged, tmp)
     if not copied then
-      uv.fs_unlink(staged)
       error(("putting the copy back: %s; and copying it in: %s"):format(err, cerr), 0)
     end
     uv.fs_unlink(lib .. "/metadata.db-journal")
     local renamed, rerr = uv.fs_rename(tmp, lib .. "/metadata.db")
     if not renamed then
-      uv.fs_unlink(staged)
       error(("putting the copy back: %s; and in its place: %s"):format(err, rerr), 0)
     end
     out.how = "in place of the damaged file (" .. err .. ")"
   end
-  uv.fs_unlink(staged)
   return out
 end
 

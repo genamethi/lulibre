@@ -67,7 +67,7 @@ static void m_work(uv_work_t *req) {
 static void m_after(uv_work_t *req, int status) {
   (void)status;
   struct mjob *j = req->data;
-  lua_State *L = sched_end_wait(j->task);
+  lua_State *L = sched_end_job(j->task);
   if (L) {
     if (j->text) {
       lua_pushstring(L, j->text);
@@ -94,7 +94,7 @@ static int l_doc_metadata(lua_State *L) {
     struct mjob *j = xcalloc(1, sizeof *j);
     j->path = xstrdup(path);
     j->req.data = j;
-    j->task = sched_begin_wait(L);
+    j->task = sched_begin_job(L);
     uv_queue_work(lapi_loop(L), &j->req, m_work, m_after);
     return lua_yield(L, 0);
   }
@@ -240,7 +240,7 @@ static void x_after(uv_work_t *req, int status) {
   static const char *const meta[DOC_META_N] = {"title", "author", "subject",
                                                "keywords", "creator", "producer"};
   struct xjob *j = req->data;
-  lua_State *L = sched_end_wait(j->task);
+  lua_State *L = sched_end_job(j->task);
   if (L) {
     struct doc_info *d = &j->info;
     if (d->error) {
@@ -307,7 +307,7 @@ static int l_extract(lua_State *L) {
   j->path = xstrdup(path);
   j->format = xstrdup(path_ext(path));
   j->req.data = j;
-  j->task = sched_begin_wait(L);
+  j->task = sched_begin_job(L);
   uv_queue_work(app->lloop, &j->req, x_work, x_after);
   return lua_yield(L, 0);
 }
@@ -329,7 +329,7 @@ static void r_work(uv_work_t *req) {
 
 static void r_after(uv_work_t *req, int status) {
   struct rjob *j = req->data;
-  lua_State *L = sched_end_wait(j->task);
+  lua_State *L = sched_end_job(j->task);
   if (L) {
     if (j->img.error || !j->img.rgba) {
       lua_pushnil(L);
@@ -365,7 +365,7 @@ static int l_render(lua_State *L) {
   j->page = page;
   j->width = width;
   j->req.data = j;
-  j->task = sched_begin_wait(L);
+  j->task = sched_begin_job(L);
   uv_queue_work(lapi_loop(L), &j->req, r_work, r_after);
   return lua_yield(L, 0);
 }

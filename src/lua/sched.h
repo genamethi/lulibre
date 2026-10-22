@@ -40,6 +40,11 @@ struct task *sched_begin_wait(struct lua_State *L);
 void sched_abort_wait(struct task *t); /* the operation could not start */
 struct lua_State *sched_end_wait(struct task *t);
 void sched_wake(struct task *t, int nargs);
+/* The same for a job on a worker thread (uv_queue_work): counted, so that
+ * the loop is not stopped while one runs (bridge_stop waits for them). */
+struct task *sched_begin_job(struct lua_State *L);
+struct lua_State *sched_end_job(struct task *t);
+int sched_jobs(const struct app *app); /* jobs begun and not yet ended */
 /* Raise a Lua error unless L is a task that may wait. */
 void sched_require_task(struct lua_State *L);
 

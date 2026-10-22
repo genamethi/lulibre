@@ -200,7 +200,7 @@ A script can open the edit form or review for given books:
 | `lulibre.lower(s)` `lulibre.upper(s)` | change case beyond ASCII: accented Latin, Greek, Cyrillic |
 | `lulibre.titlecase(s)` | the title in title case (APA) |
 | `lulibre.phrases(text)` | the distinct two- and three-word phrases of a text |
-| `lulibre.counter()` | counts phrases, or whole lines, over many texts: `c:add(text)`, `c:prune(min [, max])`, `c:of(text)`, `c:count(phrase)`, `c:add_lines(text [, same])`, `c:strip(text, min)` |
+| `lulibre.counter()` | counts phrases, or whole lines, over many texts: `c:add(text)`, `c:prune(min [, max])`, `c:of(text)`, `c:count(phrase)`, `c:add_lines(text [, same])`, `c:strip(text, min)`, `c:close()` (frees its memory now; Lua's collector does not see it) |
 | `lulibre.fuzzy(query, candidate)` | a score, or nil |
 | `lulibre.inspect(value)` | any value as readable text |
 | `lulibre.uv`, `require "luv"` | libuv, on the loop Lua runs on |

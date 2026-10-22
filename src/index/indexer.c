@@ -32,6 +32,12 @@ struct indexer {
   int in_txn, since_commit;
   double last_commit;
 
+  /* Extracted and not yet stored: another connection had the write lock.
+   * They still count as in flight, so extraction waits with them. */
+  struct job **held;
+  int nheld, capheld;
+  uv_timer_t *retry;
+
   struct index_stats st;
 };
 
@@ -42,12 +48,18 @@ static void job_free(struct job *j) {
   free(j);
 }
 
-static void txn_begin(struct indexer *ix) {
-  if (ix->in_txn) return;
-  sqlite3_exec(ix->db->h, "BEGIN IMMEDIATE", NULL, NULL, NULL);
+/* Without waiting: the indexer runs on the interface's thread, and a
+ * script's transaction may hold the write lock for a while. -1 if it does. */
+static int txn_begin(struct indexer *ix) {
+  if (ix->in_txn) return 0;
+  sqlite3_busy_timeout(ix->db->h, 0);
+  int rc = sqlite3_exec(ix->db->h, "BEGIN IMMEDIATE", NULL, NULL, NULL);
+  sqlite3_busy_timeout(ix->db->h, DB_BUSY_MS);
+  if (rc != SQLITE_OK) return -1;
   ix->in_txn = 1;
   ix->since_commit = 0;
   ix->last_commit = now_s();
+  return 0;
 }
 
 static void txn_commit(struct indexer *ix) {
@@ -67,9 +79,9 @@ static void run(sqlite3_stmt *st) {
   sqlite3_clear_bindings(st);
 }
 
+/* Inside a transaction (txn_begin). */
 static void store(struct indexer *ix, struct job *j) {
   struct doc_info *d = &j->info;
-  txn_begin(ix);
 
   sqlite3_bind_int64(ix->del_pages, 1, j->file);
   run(ix->del_pages);
@@ -127,9 +139,17 @@ static void store(struct indexer *ix, struct job *j) {
 
 static void dispatch(struct indexer *ix);
 
+static void retry_closed(uv_handle_t *h) {
+  free(h);
+}
+
 static void finish(struct indexer *ix) {
   if (ix->finished) return;
   ix->finished = 1;
+  if (ix->retry) {
+    uv_close((uv_handle_t *)ix->retry, retry_closed);
+    ix->retry = NULL;
+  }
   txn_commit(ix);
   ix->st.elapsed = now_s() - ix->st.started;
   ix->st.last_path = ix->st.last_error = NULL;
@@ -141,20 +161,60 @@ static void work_cb(uv_work_t *req) {
   doc_extract(j->path, j->format, &j->ix->dopts, &j->info);
 }
 
+static void stored(struct indexer *ix, struct job *j) {
+  ix->inflight--;
+  store(ix, j);
+  ix->st.done++;
+  ix->st.elapsed = now_s() - ix->st.started;
+  ix->st.last_path = j->path;
+  ix->st.last_error = j->info.error;
+  if (ix->progress) ix->progress(ix, &ix->st, ix->ud);
+  ix->st.last_path = ix->st.last_error = NULL; /* they are the job's, freed next */
+  job_free(j);
+}
+
+static void retry_cb(uv_timer_t *h) {
+  struct indexer *ix = h->data;
+  int n = ix->nheld;
+  if (txn_begin(ix)) {
+    if (!ix->cancelled) return; /* still held: try again on the next tick */
+    /* leaving: what was not stored is extracted again on the next run */
+    for (int i = 0; i < n; i++) job_free(ix->held[i]);
+    ix->inflight -= n;
+  } else {
+    for (int i = 0; i < n; i++) stored(ix, ix->held[i]);
+  }
+  ix->nheld = 0;
+  uv_timer_stop(h);
+  dispatch(ix);
+}
+
+static void hold(struct indexer *ix, struct job *j) {
+  if (ix->nheld == ix->capheld) {
+    ix->capheld = ix->capheld ? ix->capheld * 2 : 8;
+    ix->held = xrealloc(ix->held, (size_t)ix->capheld * sizeof *ix->held);
+  }
+  ix->held[ix->nheld++] = j;
+  if (!ix->retry) {
+    ix->retry = xmalloc(sizeof *ix->retry);
+    uv_timer_init(ix->loop, ix->retry);
+    ix->retry->data = ix;
+  }
+  if (!uv_is_active((uv_handle_t *)ix->retry)) uv_timer_start(ix->retry, retry_cb, 50, 50);
+}
+
 static void after_cb(uv_work_t *req, int status) {
   struct job *j = req->data;
   struct indexer *ix = j->ix;
-  ix->inflight--;
-  if (status == 0) {
-    store(ix, j);
-    ix->st.done++;
-    ix->st.elapsed = now_s() - ix->st.started;
-    ix->st.last_path = j->path;
-    ix->st.last_error = j->info.error;
-    if (ix->progress) ix->progress(ix, &ix->st, ix->ud);
-    ix->st.last_path = ix->st.last_error = NULL; /* they are the job's, freed next */
+  if (status != 0) {
+    ix->inflight--;
+    job_free(j);
+  } else if (ix->nheld || txn_begin(ix)) {
+    hold(ix, j); /* in order, after those already waiting */
+    return;
+  } else {
+    stored(ix, j);
   }
-  job_free(j);
   dispatch(ix);
 }
 
@@ -243,8 +303,8 @@ static int plan(struct indexer *ix, char **err) {
 
   if (nmissing) {
     sqlite3_stmt *m;
-    if (db_prepare(ix->db, "UPDATE files SET status = 3 WHERE id = ?", &m, err) == 0) {
-      txn_begin(ix);
+    /* marked on a later run if the write lock is taken now */
+    if (txn_begin(ix) == 0 && db_prepare(ix->db, "UPDATE files SET status = 3 WHERE id = ?", &m, err) == 0) {
       for (int i = 0; i < nmissing; i++) {
         sqlite3_bind_int64(m, 1, missing[i]);
         run(m);
@@ -313,6 +373,8 @@ void indexer_free(struct indexer *ix) {
   for (int i = ix->next; i < ix->njobs; i++)
     if (ix->jobs[i]) job_free(ix->jobs[i]);
   free(ix->jobs);
+  for (int i = 0; i < ix->nheld; i++) job_free(ix->held[i]);
+  free(ix->held);
   sqlite3_finalize(ix->del_pages);
   sqlite3_finalize(ix->del_lines);
   sqlite3_finalize(ix->ins_page);
