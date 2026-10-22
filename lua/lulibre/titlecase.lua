@@ -178,6 +178,60 @@ function M.numerals(s)
   end))
 end
 
+--- Returns a catalogue's title in title case, keeping the book's own
+-- spelling of each word where the opening pages show the title (ignoring
+-- case and spacing). Catalogues write titles their own way: Open Library and
+-- zbMATH in sentence case ("The analysis of linear partial differential
+-- operators"), where the title page says "The Analysis of Linear Partial
+-- Differential Operators".
+--
+-- Word by word: a word the page capitalises, or writes with capitals inside
+-- it (LaTeX, McKean, SL), is taken as the page writes it. A word the page
+-- writes all in lower case (running text) or all in capitals (a title set in
+-- capitals) is put in title case. With `title_case = "never"`, only the
+-- page's own spelling is taken.
+-- @tparam string title the catalogue's title
+-- @tparam[opt] string text the book's opening pages
+-- @treturn string
+-- @treturn string|nil "page" if any word was taken from the pages, "title case", or nil if unchanged
+function M.as_on_page(title, text)
+  if type(title) ~= "string" or title == "" then return title end
+  local function squash(s) return (s:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+  local cased = lulibre.o.title_case ~= "never" and M.numerals(M.apply(squash(title))) or squash(title)
+  local found
+  if text and text ~= "" then
+    local page = squash(text)
+    local lower = lulibre.lower(page)
+    -- the pages' own letters are taken only where lowering kept every byte in place
+    if #lower == #page then
+      local from, to = lower:find(lulibre.lower(squash(title)), 1, true)
+      if from then found = page:sub(from, to) end
+    end
+  end
+  local how = cased ~= title and "title case" or nil
+  if found then
+    -- a word the page sets in capitals goes through the rules for a title in
+    -- capitals, in its place in the title: SL2 and PDE stay, OF is "of"
+    local mine, theirs, capped = {}, {}, {}
+    for w in cased:gmatch("%S+") do mine[#mine + 1] = w end
+    for w in found:gmatch("%S+") do theirs[#theirs + 1] = w end
+    for w in M.apply(lulibre.upper(found)):gmatch("%S+") do capped[#capped + 1] = w end
+    if #mine == #theirs and #capped == #theirs then
+      for i, w in ipairs(theirs) do
+        local low, up = lulibre.lower(w), lulibre.upper(w)
+        if w ~= low and w == up and low ~= up then
+          if lulibre.o.title_case ~= "never" then mine[i] = capped[i] end
+        elseif w ~= low then
+          mine[i] = w
+        end
+      end
+      cased, how = table.concat(mine, " "), "page"
+    end
+  end
+  if cased == title then return title end
+  return cased, how
+end
+
 --- Returns the title as it should be proposed: in title case if it was
 -- found in capitals and the option `title_case` allows; otherwise unchanged.
 -- @tparam string s
