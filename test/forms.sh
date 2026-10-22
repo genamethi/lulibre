@@ -100,6 +100,14 @@ shown "and how to clear it"                   "<BS> shows all"
 k BSpace
 shown "Backspace shows everything again"      "all books"
 
+# a change made outside lulibre is picked up without being asked (the check
+# every 2 s, which reads calibre's database on the scripts' thread)
+$cdb set_metadata 2 --field title:"Sieve Changed Outside" >/dev/null 2>&1
+shown "a title changed by calibredb shows up"  "Sieve Changed Outside"
+$cdb set_metadata 2 --field title:Sieve >/dev/null 2>&1
+i=0; while screen | grep -q "Sieve Changed Outside" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+expect "and so does changing it back"          "" "$(screen | grep -o 'Sieve Changed Outside')"
+
 # ---- while typing, Ctrl and Alt with the arrows move a word at a time
 k :; lit "echo one two"; k C-Left; lit "X"
 shown "C-Left goes back a word"               ":echo one Xtwo"
