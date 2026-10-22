@@ -12,6 +12,8 @@ t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 sh "$src/mklib.sh" "$t/lib"
 export XDG_DATA_HOME="$t/data" XDG_CONFIG_HOME="$t/config"
+# units.lua runs only on this library (it writes to the index)
+export LULIBRE_UNITS_LIBRARY="$t/lib"
 
 "$bin" --clean -L "$t/lib" index >/dev/null 2>&1
 out=$("$bin" --clean -L "$t/lib" run "$src/units.lua" 2>&1) || { echo "$out" | tail -20; exit 1; }
