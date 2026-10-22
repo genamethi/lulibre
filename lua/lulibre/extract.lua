@@ -53,6 +53,9 @@ function M.from_doc(doc)
     -- a title set in capitals is offered in title case (option title_case)
     if field == "title" and value then value = titlecase.proposed(value) end
     if field == "authors" and value then
+      -- people set apart by bullets ("Hans Grauert • Reinhold Remmert") are several
+      -- (each is several bytes in UTF-8, so no character class can name them)
+      value = value:gsub("%s*\u{2022}%s*", " & "):gsub("%s*\u{00B7}%s*", " & ")
       -- ranks, roles and whatever the option never_authors lists are not people
       local people, twice = {}, true
       for _, a in ipairs(edit.split("authors", value)) do
@@ -187,7 +190,12 @@ function M.from_doc(doc)
     local grammars = require "lulibre.grammars"
     local book = lulibre.book(doc.id)
     local f = lulibre.sql("SELECT npages FROM files WHERE book = ? AND status = 1 ORDER BY id LIMIT 1", doc.id)[1]
-    local ok, found = pcall(grammars.match, { id = doc.id, lines = doc.pages and doc.pages[1] or doc.lines, texts = doc.texts,
+    -- (the first page that has lines: a cover set as an image has none)
+    local first = doc.lines
+    for _, p in ipairs(doc.pages or {}) do
+      if #p > 0 then first = p; break end
+    end
+    local ok, found = pcall(grammars.match, { id = doc.id, lines = first, texts = doc.texts,
       pages = f and f.npages, idents = book and book.idents or {} })
     for _, m in ipairs(ok and found or {}) do
       for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "identifiers" } do
@@ -210,6 +218,24 @@ function M.from_doc(doc)
     if a.field ~= b.field then return a.field < b.field end
     return a.confidence > b.confidence
   end)
+  return out
+end
+
+--- Returns other readings of a book's title page, for choosing by hand
+-- (Space in the edit form): each block of its first two pages that could be
+-- the title, largest type first (`lulibre.titlepage.blocks`). These are never
+-- proposed: proposing and the agreement of sources go by `candidates`.
+-- @tparam integer id
+-- @treturn {string,...}
+function M.title_alternatives(id)
+  local out, seen = {}, {}
+  for n = 1, 2 do
+    local lines = lulibre.lines(id, n)
+    for _, t in ipairs(#lines > 0 and titlepage.blocks(lines) or {}) do
+      local k = lulibre.fold(t)
+      if not seen[k] then seen[k] = true; out[#out + 1] = t end
+    end
+  end
   return out
 end
 

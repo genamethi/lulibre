@@ -5,6 +5,15 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- New: Space in the edit form also offers the title page's other blocks
+  for the title (runs of lines in one size, each read as one line, largest
+  type first), for a title the reading got wrong. They are never proposed.
+- New: `G.block{ ... }` in grammars matches one or more consecutive lines
+  set in one size as one line, so a title over one line or two is one step
+  and the rules after it go on from the line after it. Grammars read the
+  first page that has lines (a cover set as an image has none).
+- Fixed: people set apart by bullets ("Hans Grauert • Reinhold Remmert")
+  are read as several, and a name with a curly apostrophe stays whole.
 - Changed: the title page is read by the role of each line, the series
   first. A line that is a series' name (one lulibre knows, or one the
   library already uses) is the series, not the title, and is proposed as
