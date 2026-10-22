@@ -5,6 +5,10 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: marking and unmarking say what they did. `\ Space` says "12
+  unmarked", not "0 marked"; unmarking several of the marked books says how
+  many were unmarked and how many are still marked; unmarking one, or
+  marking, says how many are marked now.
 - Changed: what is read from a book's own pages is more confident. A plain
   reading of the title page (its largest lines, the names under them) is
   0.75, up from 0.55, so review shows it under the default `propose_min`

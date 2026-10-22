@@ -189,12 +189,34 @@ static void c_visual(struct tui *t, const char *args) {
   tui_dirty(t);
 }
 
+/* What a mark command did, said as what happened: unmarking every book says
+ * how many were unmarked, unmarking some how many and what is still marked,
+ * and marking (or unmarking one) how many are marked now. */
+static void mark_said(struct tui *t, int marked, int unmarked) {
+  int now = t->rows.nmarks;
+  if (marked && unmarked) tui_msg(t, 0, "%d marked, %d unmarked", marked, unmarked);
+  else if (unmarked && now == 0) tui_msg(t, 0, "%d unmarked", unmarked);
+  else if (unmarked > 1) tui_msg(t, 0, "%d unmarked, %d still marked", unmarked, now);
+  else if (!marked && !unmarked && now == 0) tui_msg(t, 0, "no books were marked");
+  else tui_msg(t, 0, "%d marked", now);
+}
+
 static void c_mark(struct tui *t, const char *args) {
   struct rows *r = &t->rows;
-  if (arg_is(args, "all")) rows_mark_all(t, 1);
-  else if (arg_is(args, "none")) rows_mark_all(t, 0);
-  else if (arg_is(args, "invert")) rows_mark_all(t, -1);
-  else if (t->mode == MODE_VISUAL && r->anchor >= 0) {
+  int before = r->nmarks, marked = 0, unmarked = 0;
+  if (arg_is(args, "all")) {
+    rows_mark_all(t, 1);
+    marked = r->nmarks - before;
+  } else if (arg_is(args, "none")) {
+    rows_mark_all(t, 0);
+    unmarked = before;
+  } else if (arg_is(args, "invert")) {
+    int in_list = 0;
+    for (int i = 0; i < r->nall; i++) in_list += rows_marked(t, r->all[i]);
+    rows_mark_all(t, -1);
+    unmarked = in_list;
+    marked = r->nmarks - (before - in_list);
+  } else if (t->mode == MODE_VISUAL && r->anchor >= 0) {
     /* a range: mark it all, unless it is all marked already */
     int n;
     sqlite3_int64 *ids = rows_selection(t, &n);
@@ -202,6 +224,8 @@ static void c_mark(struct tui *t, const char *args) {
     for (int i = 0; i < n; i++) all = all && rows_marked(t, ids[i]);
     for (int i = 0; i < n; i++) rows_mark(t, ids[i], !all);
     free(ids);
+    if (all) unmarked = before - r->nmarks;
+    else marked = r->nmarks - before;
     c_visual(t, "");
   } else if (rows_head(t, r->cur)) {
     /* a heading: every book under it, unless they all are already */
@@ -209,12 +233,16 @@ static void c_mark(struct tui *t, const char *args) {
     int all = 1;
     for (int i = 0; i < h->nbooks; i++) all = all && rows_marked(t, r->all[h->books[i]]);
     for (int i = 0; i < h->nbooks; i++) rows_mark(t, r->all[h->books[i]], !all);
+    if (all) unmarked = before - r->nmarks;
+    else marked = r->nmarks - before;
     rows_move(t, r->cur + 1);
   } else if (rows_current(t)) {
     rows_mark(t, rows_current(t), -1);
+    if (r->nmarks < before) unmarked = 1;
+    else marked = 1;
     rows_move(t, r->cur + 1);
   }
-  tui_msg(t, 0, "%d marked", r->nmarks);
+  mark_said(t, marked, unmarked);
 }
 
 static void c_focus(struct tui *t, const char *args) {
