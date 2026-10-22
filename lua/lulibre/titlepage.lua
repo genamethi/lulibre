@@ -66,17 +66,16 @@ local function with_math(parts, lines)
   return (table.concat(out, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", ""))
 end
 
--- words that may stand in lower case inside a name
--- The series a line names, if it is nothing but a series' name: one of the
--- series lulibre knows (lulibre.layouts), or one the library already uses.
--- The library's series are read once, built in a local and put in place in
--- one step (tasks may share the module).
 -- A line with its bullets (• and ·, which are several bytes each in UTF-8,
 -- so no character class can name them) turned into "|".
 local function bullets(t)
   return (t:gsub("%s*\u{2022}%s*", "|"):gsub("%s*\u{00B7}%s*", "|"))
 end
 
+-- The series a line names, if it is nothing but a series' name: one of the
+-- series lulibre knows (lulibre.layouts), or one the library already uses.
+-- The library's series are read once, built in a local and put in place in
+-- one step (tasks may share the module).
 local library_series
 local function series_of(t)
   local low = t:lower():gsub("%s+", " "):gsub("[ .,:;]+$", "")
@@ -93,6 +92,7 @@ local function series_of(t)
   return library_series[low]
 end
 
+-- words that may stand in lower case inside a name
 local PARTICLE = {}
 for w in ("and de del della der den di da dos du la le van von zu y e"):gmatch("%S+") do PARTICLE[w] = true end
 
@@ -293,7 +293,14 @@ function M.classify(lines)
   -- comes the title, whose words have a name's shape as often as not)
   local named, tail = {}, {}
   if series_here and #title > 1 and a_name(title[1]) then named[1] = table.remove(title, 1) end
-  while #title > 1 and names.is_person(title[#title], everything) do table.insert(tail, 1, table.remove(title)) end
+  -- (a title that runs on into a name keeps it: "The Collected Papers of / John von Neumann")
+  local function runs_on(t)
+    local w = (t:lower():match("(%a+)%W*$") or "")
+    return w == "of" or w == "by" or w == "to" or w == "and" or w == "for" or w == "on" or w == "in" or w == "the" or w == "with" or w == "from"
+  end
+  while #title > 1 and names.is_person(title[#title], everything) and not runs_on(title[#title - 1]) do
+    table.insert(tail, 1, table.remove(title))
+  end
   for _, t in ipairs(tail) do named[#named + 1] = t end
   -- Under a series line, a run that is nothing but names is the author line,
   -- and the title is the lines after it, read as one, up to the next name
@@ -325,10 +332,8 @@ function M.classify(lines)
   -- further down in the next largest type. It is taken for that layout only
   -- when the first line reads as one person's name, the next most prominent
   -- line does not, and no by-line says otherwise.
-  local all_text = {}
-  for _, l in ipairs(lines) do all_text[#all_text + 1] = l.text end
   -- (a person's name on more than its shape: see names.is_person)
-  if #title == 1 and last == 1 and names.is_person(cand, table.concat(all_text, "\n")) then
+  if #title == 1 and last == 1 and names.is_person(cand, everything) then
     -- the whole page counts here: the title stands below the affiliation,
     -- which is where the front matter above was cut off
     local page, sizes = {}, {}
@@ -430,6 +435,7 @@ function M.classify_pages(pages)
     if not best then best = r end
     if not best.subject and r.subject then best.subject, best.subject_source = r.subject, r.subject_source end
     if not best.arxiv and r.arxiv then best.arxiv, best.class = r.arxiv, r.class end
+    if not best.series and r.series then best.series, best.series_index = r.series, r.series_index end
     if not best.title and r.title then
       best.title, best.authors, best.byline, best.name_first = r.title, r.authors, r.byline, r.name_first
       best.title_math = r.title_math

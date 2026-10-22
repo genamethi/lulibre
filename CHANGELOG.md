@@ -17,7 +17,7 @@ written in `src/version.h`.
   These rules may change in 0.3, which is to read a page's typesetting more
   systematically.
 - Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
-  is proposed in title case, and keeps the book's own spelling of each word
+  for a book in English (or of no stated language) is proposed in title case, and keeps the book's own spelling of each word
   where the opening pages show the title: "The analysis of linear partial
   differential operators" is proposed as the title page writes it, "The
   Analysis of Linear Partial Differential Operators". Words the pages set in

@@ -64,19 +64,20 @@ function M.from_doc(doc)
         end
       end
       value = join(people)
-      -- agreement ranks a plain reading of the title page higher, but does not
-      -- carry it over a value the book has (0.8): measured, what it adds there
-      -- is mostly a cited person or a list cut short
+      -- Agreement raises a reading, never lowers it. A plain reading of the
+      -- title page is raised to 0.79 at most, below the 0.8 at which it would
+      -- replace a value the book has; one that starts higher stays where it is.
       local top = source == "title page" and 0.79 or 0.95
+      local function raised(by) return math.max(confidence, math.min(top, confidence + by)) end
       if #people > 0 and twice and source ~= "embedded" and source ~= "cover sheet" then
-        source, confidence = source .. ", named twice", math.min(top, confidence + 0.15)
+        source, confidence = source .. ", named twice", raised(0.15)
       end
       -- and one who heads entries of the book's own bibliography (people
       -- cite themselves), where the bibliography has been read (:refs)
       if #people > 0 and doc.id and (source:find("title page", 1, true) or source:find("first line", 1, true)) then
         local ok, n = pcall(function() return require("lulibre.refs").cites(doc.id, people[1]) end)
         if ok and n >= 2 then
-          source, confidence = ("%s, cited %d times in its references"):format(source, n), math.min(top, confidence + 0.1)
+          source, confidence = ("%s, cited %d times in its references"):format(source, n), raised(0.1)
         end
       end
     end

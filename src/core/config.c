@@ -143,7 +143,8 @@ static const struct opt_def opts[] = {
       "are not learned from as a topic and not suggested ahead of real ones",
       NULL),
   OPT(title_case, OPT_STR, "auto", "auto|never",
-      "a title found in CAPITALS is proposed in title case (APA style); never leaves it as found",
+      "a title found in CAPITALS, and a catalogue's title for a book in English, is proposed in title "
+      "case (APA style); never leaves titles as found",
       NULL),
   OPT(math_notation, OPT_STR, "unicode", "unicode|off",
       "mathematics in proposed titles is written in Unicode (SL₂(ℤ), GLₙ(ℚₚ)); off leaves it as found",

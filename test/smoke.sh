@@ -489,7 +489,7 @@ LUA
   $T send-keys -t t g g Enter
   shown "Enter opens the one under the cursor" "▾ Getting started"
   $T send-keys -t t q
-  i=0; while screen | grep -q "Start here" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  i=0; while screen | grep -q "Getting started" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   $T send-keys -t t : ; $T send-keys -t t -l "help filters" ; $T send-keys -t t Enter
   shown ":help with a guide's name shows it" "help: filters"
   $T send-keys -t t q
