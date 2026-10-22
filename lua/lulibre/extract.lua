@@ -150,6 +150,7 @@ function M.from_doc(doc)
     else add("authors", join(people), "title page", conf) end
   end
   if tp.subject then add("tags", tp.subject, tp.subject_source, 0.9) end
+  if tp.series then add("series", tp.series, "title page", 0.8) end
 
   -- identifiers anywhere in the leading pages
   local text = doc.text or ""
