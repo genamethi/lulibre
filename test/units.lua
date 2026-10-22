@@ -822,6 +822,10 @@ do
   eq("one line under a series line is a title", { got.title, got.authors }, { "Lie Groups and Lie Algebras, Part I", {} })
   got = titlepage.classify { line("Graduate Texts in Mathematics", 12), line("Editors", 10), line("S. Axler", 10), line("K.A. Ribet", 10) }
   eq("the series' own page gives the series and no title", { got.series, got.title }, { "Graduate Texts in Mathematics", nil })
+  eq("the page's blocks that could be a title, largest first, without names, series or prose",
+    titlepage.blocks { line("Graduate Texts in Mathematics", 12), line("Algebraic", 24), line("Geometry", 24), line("Robin Hartshorne", 14),
+      line("An Introduction", 16), line("written permission of the publisher", 9), line("IX, 167 Seiten. 1972. DM 18,-", 9) },
+    { "Algebraic Geometry", "An Introduction" })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
   got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),

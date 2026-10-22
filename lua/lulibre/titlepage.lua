@@ -407,6 +407,57 @@ function M.classify(lines)
   return r
 end
 
+--- Returns the blocks of a page that could be its title, for choosing
+-- between them by hand: runs of consecutive lines set in one size (within
+-- half a point), each read as one line, largest type first. A line that is
+-- a person's name, a list of people, a series' name or a by-line ends a
+-- run and is left out. Left out too: a block longer than a title runs (12
+-- words), a sentence, a publisher, a page number, a lone short word.
+-- @tparam {table,...} lines a page's lines, as `lulibre.lines` gives them
+-- @treturn {string,...}
+function M.blocks(lines)
+  local everything = {}
+  for _, l in ipairs(lines) do everything[#everything + 1] = l.text end
+  everything = table.concat(everything, "\n")
+  local function people(t)
+    return names.is_person(t, everything) or #names.validate { (t:gsub("%s*[•·]%s*", ", ")) } >= 2
+  end
+  local runs, run = {}, nil
+  for _, l in ipairs(lines) do
+    local t = trim(l.text)
+    if t ~= "" and not l.rotated and not t:find("^%d+$") then
+      if any(t:lower(), STOP) then break end
+      if people(t) or series_of(t) or M.byline(t) then
+        run = nil
+      elseif run and math.abs(run.size - l.size) <= 0.5 and #run.parts < 4 then
+        run.parts[#run.parts + 1] = t
+      else
+        run = { size = l.size, parts = { t }, at = #runs + 1 }
+        runs[#runs + 1] = run
+      end
+    end
+  end
+  table.sort(runs, function(a, b) if a.size ~= b.size then return a.size > b.size end return a.at < b.at end)
+  local out, seen = {}, {}
+  for _, r in ipairs(runs) do
+    local text = table.concat(r.parts, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ ,]+$", "")
+    local low = text:lower()
+    local words = select(2, text:gsub("%S+", ""))
+    local sentence = words > 6 and text:find("%l%.$") ~= nil
+    -- (a fragment of running text starts in lower case; a price or a page
+    -- count is mostly figures and stops)
+    local letters = select(2, text:gsub("%a", ""))
+    local fragment = text:find("^%l") ~= nil or letters < #text / 2
+    if words >= 1 and words <= 12 and not sentence and not fragment and low:find("%a") and not seen[low]
+      and not (words == 1 and #text <= 3) and not any(low, PUBLISHER) and not JUNK[low]
+      and not names.is_affiliation(text) then
+      seen[low] = true
+      out[#out + 1] = (text:gsub("[ .]+$", ""))
+    end
+  end
+  return out
+end
+
 --- Does what `classify` does, trying several pages in turn, since scanned
 -- books often start with a blank page or a cover. The first page with a
 -- title wins, and the subject may come from any page.

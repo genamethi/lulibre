@@ -213,6 +213,24 @@ function M.from_doc(doc)
   return out
 end
 
+--- Returns other readings of a book's title page, for choosing by hand
+-- (Space in the edit form): each block of its first two pages that could be
+-- the title, largest type first (`lulibre.titlepage.blocks`). These are never
+-- proposed: proposing and the agreement of sources go by `candidates`.
+-- @tparam integer id
+-- @treturn {string,...}
+function M.title_alternatives(id)
+  local out, seen = {}, {}
+  for n = 1, 2 do
+    local lines = lulibre.lines(id, n)
+    for _, t in ipairs(#lines > 0 and titlepage.blocks(lines) or {}) do
+      local k = lulibre.fold(t)
+      if not seen[k] then seen[k] = true; out[#out + 1] = t end
+    end
+  end
+  return out
+end
+
 --- Returns the candidates for a book in the library, from what the index
 -- holds of its file.
 -- @tparam integer id

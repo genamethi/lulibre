@@ -64,6 +64,13 @@ function M.for_field(field, ids)
     end
   end
 
+  -- other blocks of the title page, for a title the reading got wrong
+  if field == "title" then
+    for i = 1, math.min(#ids, 8) do
+      for _, t in ipairs(extract.title_alternatives(ids[i])) do add(t, "title page, another block", "candidate") end
+    end
+  end
+
   -- the subject its phrases point to, as learned from the confirmed records
   if field == "tags" then
     local learn = require "lulibre.learn"
