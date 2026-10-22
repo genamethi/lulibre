@@ -234,7 +234,7 @@ wait_for "1 task "
 k :; lit "split"; k Enter
 shown ":split in a panel says it is not split" "a panel is not split"
 k Escape g r
-wait_for "review is open already"
+wait_for "review is already open"
 k s
 wait_for "surest first"
 k s
