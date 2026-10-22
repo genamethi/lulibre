@@ -5,6 +5,15 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: the title page is read by the role of each line, the series
+  first. A line that is a series' name (one lulibre knows, or one the
+  library already uses) is the series, not the title, and is proposed as
+  the series. Under it, the author line and the title are read relative to
+  each other: a name at the start or end of the title's run is the author,
+  a title over two lines is one title, and on a page set in one size the
+  name may be set larger than the title ("Classics in Mathematics / Roger
+  C. Lyndon • Paul E. Schupp / Combinatorial Group Theory"). The series'
+  own page (its editors, its list of titles) gives no title or authors.
 - Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
   is proposed in title case, and keeps the book's own spelling of each word
   where the opening pages show the title: "The analysis of linear partial

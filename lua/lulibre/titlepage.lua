@@ -67,6 +67,26 @@ local function with_math(parts, lines)
 end
 
 -- words that may stand in lower case inside a name
+-- The series a line names, if it is nothing but a series' name: one of the
+-- series lulibre knows (lulibre.layouts), or one the library already uses.
+-- The library's series are read once, built in a local and put in place in
+-- one step (tasks may share the module).
+local library_series
+local function series_of(t)
+  local low = t:lower():gsub("%s+", " "):gsub("[ .,:;]+$", "")
+  if #low < 6 then return nil end
+  for _, known in ipairs(require("lulibre.layouts").series) do
+    if known[1]:lower() == low then return known[1] end
+  end
+  if not library_series then
+    local seen = {}
+    local ok, rows = pcall(lulibre.sql, "SELECT DISTINCT series FROM books WHERE series IS NOT NULL AND series != ''")
+    for _, row in ipairs(ok and rows or {}) do seen[row.series:lower()] = row.series end
+    library_series = seen
+  end
+  return library_series[low]
+end
+
 local PARTICLE = {}
 for w in ("and de del della der den di da dos du la le van von zu y e"):gmatch("%S+") do PARTICLE[w] = true end
 
@@ -150,15 +170,43 @@ function M.classify(lines)
     end
   end
   if #body == 0 then return r end
+  -- a line that is a series' name is the series, not the title: "Classics in
+  -- Mathematics" above the author and the title, all set alike
+  -- (On a page that also lists the series' editors or titles, the series line
+  -- stays where it is and the page is read as before: there it is set apart
+  -- from the title by its type, and taking it out would leave the editors.)
+  local series_here = false
+  do
+    -- (every copy of the series line goes, and a line the page repeats is
+    -- read once: some pages carry their text twice, over each other)
+    local kept, series, seen = {}, nil, {}
+    for _, l in ipairs(body) do
+      local t = trim(l.text)
+      local s = series_of(t)
+      if s and (not series or s == series) then series = s
+      elseif not seen[t] then seen[t] = true; kept[#kept + 1] = l end
+    end
+    if series then
+      r.series = series
+      local listing = #kept > 10
+      for _, l in ipairs(kept) do
+        if any(l.text:lower(), EDITORS) or l.text:lower():find("advisory board") then listing = true end
+      end
+      if not listing and #kept > 0 then body, series_here = kept, true end
+    end
+  end
 
-  local max = 0
-  for _, l in ipairs(body) do max = math.max(max, l.size) end
+  local max, smallest = 0, math.huge
+  for _, l in ipairs(body) do max, smallest = math.max(max, l.size), math.min(smallest, l.size) end
+  -- (a page set in one size, within 1.5 points, as such a series' pages are)
+  local one_size = #body >= 2 and max - smallest <= 1.5
+  local floor = max - 0.5
   local title, first, last = {}, 0, 0
   for i, l in ipairs(body) do
     -- a by-line set as large as the title ends the title; it is not part of it
     if M.byline(l.text) then
       if #title > 0 then break end
-    elseif l.size >= max - 0.5 then
+    elseif l.size >= floor then
       title[#title + 1] = trim(l.text)
       if first == 0 then first = i end
       last = i
@@ -202,9 +250,62 @@ function M.classify(lines)
       table.insert(title, 1, t)
     end
   end
+  -- In a run of one size, a line at its start or end that is a person's name
+  -- is the author line, and the title is the rest, however many lines it
+  -- takes (series, author, title in two lines, all set alike).
+  local everything = {}
+  for _, l in ipairs(lines) do everything[#everything + 1] = l.text end
+  everything = table.concat(everything, "\n")
+  -- (a name that opens the run comes off only under a series line, the layout
+  -- of a series' title page: "Julia Quick Syntax Reference" is a title)
+  -- On a page set in one size, a line with the shape of a name is taken for
+  -- one ("Tosio Kato"); where the type sets the title apart, only a line that
+  -- reads as a person's name is ("Deep Learning", in 76-point type above
+  -- "Techniques", is a title).
+  local function one_name(t)
+    return names.is_person(t, everything) or (one_size and names.looks_like_authors(t) and #names.validate { t } > 0)
+  end
+  -- several people on one line, set apart by bullets: "Hans Grauert • Reinhold Remmert"
+  local function a_name(t)
+    if not t:find("[•·]") then return one_name(t) end
+    local n = 0
+    for part in t:gmatch("[^•·]+") do
+      local name = trim(part)
+      if name ~= "" then
+        if not one_name(name) then return false end
+        n = n + 1
+      end
+    end
+    return n > 0
+  end
+  -- (one line at the start: the author line under the series line; after it
+  -- comes the title, whose words have a name's shape as often as not)
+  local named, tail = {}, {}
+  if series_here and #title > 1 and a_name(title[1]) then named[1] = table.remove(title, 1) end
+  while #title > 1 and names.is_person(title[#title], everything) do table.insert(tail, 1, table.remove(title)) end
+  for _, t in ipairs(tail) do named[#named + 1] = t end
+  -- Under a series line, a run that is nothing but names is the author line,
+  -- and the title is the lines after it, read as one, up to the next name
+  -- (series, authors in larger type, title).
+  if series_here and #named == 0 and #title == 1 and a_name(title[1]) then
+    named[#named + 1], title = title[1], {}
+    for i = last + 1, math.min(#body, last + 4) do
+      local t = trim(body[i].text)
+      if names.is_person(t, everything) or M.byline(t) or any(t:lower(), PUBLISHER) then break end
+      title[#title + 1] = t
+    end
+    if #title > 0 then last = last + #title end
+  end
+  -- under a series line, "Volume 14" is the book's number in the series
+  if series_here and #title == 1 then
+    local n = title[1]:match("^[Vv]olume%s+(%d+)$") or title[1]:match("^[Nn]o%.?%s*(%d+)$") or title[1]:match("^(%d+)$")
+    if n then r.series_index, title = n, {} end
+  end
   local cand = table.concat(title, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")
   local low = cand:lower()
-  if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then
+  -- (a typesetter's stamp at the top of a page, "FM.qxd 9/29/05 11:18 PM Page i", is no title)
+  if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low]
+    and not low:find("%.qxd") and not low:find("%f[%a]page [ivxlc%d]+$") then
     r.title, r.title_math = cand, with_math(title, body)
   end
 
@@ -289,6 +390,10 @@ function M.classify(lines)
     end
   end
   r.authors = names.validate(author_lines)
+  if #r.authors == 0 and #named > 0 then
+    for i, t in ipairs(named) do named[i] = t:gsub("%s*[•·]%s*", ", ") end
+    r.authors = names.validate(named)
+  end
   -- Names on a page of series boilerplate with no title of its own are the
   -- series editors, not the authors.
   if not r.title then
