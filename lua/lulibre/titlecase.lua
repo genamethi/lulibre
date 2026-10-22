@@ -188,16 +188,19 @@ end
 -- Word by word: a word the page capitalises, or writes with capitals inside
 -- it (LaTeX, McKean, SL), is taken as the page writes it. A word the page
 -- writes all in lower case (running text) or all in capitals (a title set in
--- capitals) is put in title case. With `title_case = "never"`, only the
--- page's own spelling is taken.
+-- capitals) is put in title case. With `title_case = "never"`, or
+-- `opts.case = false` (a book not in English: the rules of title case here
+-- are English), only the page's own spelling is taken.
 -- @tparam string title the catalogue's title
 -- @tparam[opt] string text the book's opening pages
+-- @tparam[opt] table opts `case = false` leaves the words the page does not show as they are
 -- @treturn string
 -- @treturn string|nil "page" if any word was taken from the pages, "title case", or nil if unchanged
-function M.as_on_page(title, text)
+function M.as_on_page(title, text, opts)
   if type(title) ~= "string" or title == "" then return title end
   local function squash(s) return (s:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
-  local cased = lulibre.o.title_case ~= "never" and M.numerals(M.apply(squash(title))) or squash(title)
+  local casing = lulibre.o.title_case ~= "never" and not (opts and opts.case == false)
+  local cased = casing and M.numerals(M.apply(squash(title))) or squash(title)
   local found
   if text and text ~= "" then
     local page = squash(text)
@@ -220,7 +223,7 @@ function M.as_on_page(title, text)
       for i, w in ipairs(theirs) do
         local low, up = lulibre.lower(w), lulibre.upper(w)
         if w ~= low and w == up and low ~= up then
-          if lulibre.o.title_case ~= "never" then mine[i] = capped[i] end
+          if casing then mine[i] = capped[i] end
         elseif w ~= low then
           mine[i] = w
         end
