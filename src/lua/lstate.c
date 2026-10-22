@@ -88,7 +88,7 @@ char *lstate_tree_mismatch(void) {
   snprintf(now, sizeof now, "%d.%d.%d%s", major, minor, patch, pre);
   if (!strcmp(now, LULIBRE_VERSION)) return NULL;
   return xasprintf("this lulibre is %s, but the source tree it runs from (%s) is now %s: its Lua files belong to that "
-                   "version and may fail here. Quit, run make there, and start again; or run an installed lulibre.",
+                   "version and may fail with this binary. Quit, run make in that tree, and start again; or run an installed lulibre.",
                    LULIBRE_VERSION, tree_root, now);
 }
 

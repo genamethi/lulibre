@@ -174,7 +174,7 @@ function M.run(args)
     elseif field and act == "titlecase" then
       local was = new[field] or now(field)
       if not was or was == "" then
-        lulibre.notify(was and (field .. " is empty") or "the books differ here: type a value first")
+        lulibre.notify(was and (field .. " is empty") or "the books differ in this field: type a value first")
       else
         local to = require("lulibre.titlecase").apply(was)
         if to == was then lulibre.notify(field .. " is in title case already")

@@ -152,7 +152,7 @@ lulibre.command("junk", function(args)
     end
   end
   if n == 0 then
-    lulibre.notify("no title or author here looks like junk")
+    lulibre.notify(args ~= "" and "no title or author of the matching books looks like junk" or "no title or author in the library looks like junk")
   else
     lulibre.filter("is:marked")
     lulibre.notify(("marked %d books whose title or author is not one (a file name, a number, a program's name); :propose proposes for them"):format(n))
@@ -226,7 +226,7 @@ lulibre.command("parts", function()
   local parts = require "lulibre.parts"
   local out = {}
   for _, w in ipairs(parts.wholes()) do
-    out[#out + 1] = ("%s   %d here%s%s"):format(w.whole, #w.books, w.parts and (" of " .. w.parts) or "",
+    out[#out + 1] = ("%s   %d in the library%s%s"):format(w.whole, #w.books, w.parts and (" of " .. w.parts) or "",
       #w.missing > 0 and ("; missing " .. table.concat(w.missing, " ", 1, math.min(#w.missing, 30)) .. (#w.missing > 30 and " ..." or "")) or "")
     for _, b in ipairs(w.books) do
       local book = lulibre.book(b.id)

@@ -602,7 +602,7 @@ static void command_help(struct tui *t) {
           "  -term negates;  or  starts an alternative;  sort:-added orders\n"
           "\nA command acts on the range being selected, else on the marked books in\n"
           "the list, else on the book under the cursor.\n"
-          "\nEvery key here can be changed in init.lua with lulibre.map: a command line for\n"
+          "\nEvery key on this page can be changed in init.lua with lulibre.map: a command line for\n"
           "the keys at the top, an action name for the places listed after them.\n");
   tui_pager(t, "help", h.s);
   sb_free(&h);

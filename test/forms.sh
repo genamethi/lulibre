@@ -224,7 +224,7 @@ k g r
 shown "review again"                          "review  2 pending"
 # one of each screen: opening it again goes to the one that is open
 k Escape g r
-shown "gr with review open goes to it"        "review is open already: here it is"
+shown "gr with review open goes to it"        "review is already open, and the cursor is in it"
 expect "and opens no second"                  1 "$(screen | grep -c 'review  2 pending')"
 k :; lit "new review"; k Enter
 wait_for "2 tasks"

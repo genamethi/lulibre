@@ -5,6 +5,10 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: the interface no longer says "here". It says where: "local
+  sources" in the propose-review and look-up dialogs, "on this machine" for
+  datasets (`:datasets`, `lulibre datasets`), "in this view" in review, "in
+  the library". The help's first heading is "Getting started".
 - Changed: marking and unmarking say what they did. `\ Space` says "12
   unmarked", not "0 marked"; unmarking several of the marked books says how
   many were unmarked and how many are still marked; unmarking one, or

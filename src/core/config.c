@@ -199,7 +199,7 @@ static const struct opt_def opts[] = {
 
   OPT(config_dir, OPT_PATH, "", NULL,
       "where init.lua, scripts/ and lua/ are looked for (default: ~/.config/lulibre). To start "
-      "from another one use `lulibre -C DIR` or $LULIBRE_CONFIG_DIR; set here, it moves scripts/ "
+      "from another one use `lulibre -C DIR` or $LULIBRE_CONFIG_DIR; this option moves scripts/ "
       "and lua/ from then on",
       "Where lulibre keeps things"),
   OPT(index, OPT_PATH, "", NULL, "index database file (default: under the XDG data dir)", NULL),
