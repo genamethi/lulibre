@@ -273,8 +273,13 @@ if command -v tmux >/dev/null; then
   i=0; while screen | grep -q "databases for looking" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   $T send-keys -t t g g Space Space
   shown "two books marked"                        "2 marked"
+  $T send-keys -t t g g Space
+  shown "unmarking one says how many are still marked" "^1 marked"
+  $T send-keys -t t g g Space
   $T send-keys -t t '\' Space
-  shown "Leader Space unmarks them all"           "0 marked"
+  shown "Leader Space unmarks them all, and says how many" "^2 unmarked"
+  $T send-keys -t t '\' Space
+  shown "with nothing marked, it says so"         "^no books were marked"
   $T send-keys -t t g g
 
   # selecting text in the preview with the keys
