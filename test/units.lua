@@ -1,7 +1,15 @@
--- Unit checks for the Lua runtime modules and the API. Run headless:
---   lulibre run test/units.lua
--- Uses whatever library is configured only for API smoke checks that hold
--- for any library; the module checks need none.
+-- Unit checks for the Lua runtime modules and the API. They write to the
+-- index they run on (proposals, terms, hashes, the text of every file), so
+-- they run only on the generated library test/units.sh makes: run them with
+-- make unit (or make check), never with lulibre run against a library of
+-- your own.
+do
+  local want = os.getenv("LULIBRE_UNITS_LIBRARY")
+  local have = lulibre.settings.paths().library
+  if not want or want == "" or not have or have:gsub("/+$", "") ~= want:gsub("/+$", "") then
+    error("test/units.lua writes to the index it runs on: run it with make unit, which gives it a generated library", 0)
+  end
+end
 local ids = require "lulibre.ids"
 local json = require "lulibre.json"
 local junk = require "lulibre.junk"
@@ -598,7 +606,22 @@ do
     { "A Note on Sieves", "A note on sieves" })
   lulibre.o.title_case = "never"
   eq("and not when the option says never", tc.proposed("A NOTE ON SIEVES"), "A NOTE ON SIEVES")
+  eq("a catalogue's title takes the page's spelling even then",
+    (tc.as_on_page("The analysis of LaTeX", "Front matter\nThe Analysis of LaTeX\nby A. Name")), "The Analysis of LaTeX")
   lulibre.o.title_case = "auto"
+  eq("a catalogue's title takes the page's spelling, ignoring case and spacing",
+    { tc.as_on_page("The analysis of linear partial differential operators",
+      "Lars Hörmander\nThe Analysis of Linear\nPartial Differential Operators I") },
+    { "The Analysis of Linear Partial Differential Operators", "page" })
+  eq("words the page writes in lower case or capitals are put in title case",
+    { (tc.as_on_page("Sheaves, cosheaves and applications", "We study sheaves, cosheaves and applications to networks")),
+      (tc.as_on_page("Schaum's outline of discrete mathematics", "SCHAUM'S OUTLINE OF\nDiscrete Mathematics")) },
+    { "Sheaves, Cosheaves and Applications", "Schaum's Outline of Discrete Mathematics" })
+  eq("a word with capitals inside keeps them, and so does one in capitals that title case keeps",
+    (tc.as_on_page("Introduction to sl2 and McKean", "Introduction to SL2 and McKean")),
+    "Introduction to SL2 and McKean")
+  eq("a title the pages do not show is put in title case", { tc.as_on_page("Lectures on celestial mechanics", "something else") },
+    { "Lectures on Celestial Mechanics", "title case" })
   local ex = require "lulibre.extract"
   local got
   for _, c in ipairs(ex.from_doc { title = "LECTURES ON RIEMANN SURFACES", pages = {} }) do

@@ -5,6 +5,12 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
+  is proposed in title case, and keeps the book's own spelling of each word
+  where the opening pages show the title: "The analysis of linear partial
+  differential operators" is proposed as the title page writes it, "The
+  Analysis of Linear Partial Differential Operators". Words the pages set in
+  capitals go through title case's rules for capitals (SL2 and PDE stay).
 - Changed: the interface no longer says "here". It says where: "local
   sources" in the propose-review and look-up dialogs, "on this machine" for
   datasets (`:datasets`, `lulibre datasets`), "in this view" in review, "in

@@ -458,7 +458,14 @@ for n, b in ipairs(books) do
         skip("title", "its words are not on the book's opening pages")
       else
         local partly = judged.title == "partly"
-        offer("title", r.title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
+        -- a catalogue's spelling of the title gives way to the book's own
+        -- pages, where they show it, and is otherwise put in title case
+        local title = r.title
+        if title and not r.title_tex then
+          local ev = verify.evidence(b.id)
+          title = require("lulibre.titlecase").as_on_page(title, ev and ev.text)
+        end
+        offer("title", title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
           or elsewhere and r.source .. " (another title, the same people: the whole this is part of?)"
           or partly and r.source .. " (not all its words are on the book's pages)"
           or judged.unread and r.source .. " (the file could not be read to check it)" or r.source,
