@@ -71,6 +71,12 @@ end
 -- series lulibre knows (lulibre.layouts), or one the library already uses.
 -- The library's series are read once, built in a local and put in place in
 -- one step (tasks may share the module).
+-- A line with its bullets (• and ·, which are several bytes each in UTF-8,
+-- so no character class can name them) turned into "|".
+local function bullets(t)
+  return (t:gsub("%s*\u{2022}%s*", "|"):gsub("%s*\u{00B7}%s*", "|"))
+end
+
 local library_series
 local function series_of(t)
   local low = t:lower():gsub("%s+", " "):gsub("[ .,:;]+$", "")
@@ -170,6 +176,10 @@ function M.classify(lines)
     end
   end
   if #body == 0 then return r end
+  -- Experimental (0.2): the roles of the lines under a series line, read from
+  -- their order and type by the rules below. 0.3 is to read a page's typesetting
+  -- more systematically; until then these rules may change or go.
+  --
   -- a line that is a series' name is the series, not the title: "Classics in
   -- Mathematics" above the author and the title, all set alike
   -- (On a page that also lists the series' editors or titles, the series line
@@ -267,9 +277,10 @@ function M.classify(lines)
   end
   -- several people on one line, set apart by bullets: "Hans Grauert • Reinhold Remmert"
   local function a_name(t)
-    if not t:find("[•·]") then return one_name(t) end
+    local split = bullets(t)
+    if not split:find("|", 1, true) then return one_name(t) end
     local n = 0
-    for part in t:gmatch("[^•·]+") do
+    for part in split:gmatch("[^|]+") do
       local name = trim(part)
       if name ~= "" then
         if not one_name(name) then return false end
@@ -391,7 +402,7 @@ function M.classify(lines)
   end
   r.authors = names.validate(author_lines)
   if #r.authors == 0 and #named > 0 then
-    for i, t in ipairs(named) do named[i] = t:gsub("%s*[•·]%s*", ", ") end
+    for i, t in ipairs(named) do named[i] = bullets(t):gsub("|", ", ") end
     r.authors = names.validate(named)
   end
   -- Names on a page of series boilerplate with no title of its own are the
