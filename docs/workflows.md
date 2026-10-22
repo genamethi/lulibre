@@ -975,25 +975,6 @@ capture; `case = "title"`) or `give` fixed values. `G.skip(n)`,
 and `pages = { min, max }` test the whole file, and `read(doc, got)` can
 work out more fields (or return false to reject the match after all).
 
-`G.block{ ... }` matches one or more consecutive lines set in one size (up
-to `max`, 4 by default) and reads them as one line. A title that usually
-takes one line but sometimes two is one block, and the rules after it go on
-from the line after it. Each line must pass the block's tests of type
-(`upper`, `bold`, `bigger`, `smaller`, `largest`, `size`), and `pattern` and
-`take` apply to the lines joined. For example, a series' title page with the
-series, the author, then the title:
-
-```lua
-G.add {
-  name = "classics-in-mathematics",
-  lines = {
-    G.line { pattern = "^Classics in Mathematics$", give = { series = "Classics in Mathematics" } },
-    G.line { take = "authors" },
-    G.block { take = "title" },
-  },
-}
-```
-
 With LPeg installed for lulibre's Lua (`:features` tells you), a line rule
 can give `peg = PATTERN` instead of `pattern`. A grammar can also give one
 LPeg pattern over its opening lines joined by newlines (`head` lines, 12 by
