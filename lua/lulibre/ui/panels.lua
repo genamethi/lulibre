@@ -60,7 +60,7 @@ function M.open(name, spec)
   local task = lulibre.task_id()
   if open and not (task and again[task]) then
     open:focus()
-    lulibre.notify(("%s is open already: here it is (:new %s opens another)"):format(name, name))
+    lulibre.notify(("%s is already open, and the cursor is in it (:new %s opens another)"):format(name, name))
     return nil
   end
   local p = lulibre.panel(spec)

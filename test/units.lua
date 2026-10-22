@@ -1564,7 +1564,7 @@ do
     lulibre.system { "mkdir", "-p", dir }
     eq("three datasets, each with a word on whom it is for", { #datasets.list, datasets.get("openlibrary").useful:find("^Useful if you have") ~= nil,
       datasets.get("nope") }, { 3, true })
-    eq("what is not here says so", { datasets.state(datasets.get("zbmath")), datasets.path("zbmath-oa_links.csv") }, { "not here" })
+    eq("what is not on this machine says so", { datasets.state(datasets.get("zbmath")), datasets.path("zbmath-oa_links.csv") }, { "not on this machine" })
 
     -- fetched with curl, here from a file so that nothing is asked of anybody
     local src = os.tmpname()
@@ -1574,7 +1574,7 @@ do
     local zb = datasets.get("zbmath")
     local said = {}
     eq("a dataset is fetched into the data folder", { datasets.fetch(zb, { url = "file://" .. src, say = function(t) said[#said + 1] = t end }) }, { true })
-    eq("and is then here", { datasets.path("zbmath-oa_links.csv"), datasets.state(zb):find("^here: ") ~= nil, datasets.status(zb).here },
+    eq("and is then on this machine", { datasets.path("zbmath-oa_links.csv"), datasets.state(zb):find("^on this machine: ") ~= nil, datasets.status(zb).here },
       { dir .. "/zbmath-oa_links.csv", true, true })
     eq("what is here and does not go stale is not fetched again", { datasets.fetch(zb, { url = "file:///nonexistent", say = function() end }) }, { true, "fresh" })
     local ok, why = datasets.fetch(zb, { url = "file:///nonexistent", force = true, say = function() end })
@@ -1603,7 +1603,7 @@ do
     end
     local ds, as = datasets.adopt(dir .. "/ol_dump_editions_2026-09-30.txt.gz")
     eq("a file fetched by other means is taken up under the name its dataset knows", { ds and ds.name, as }, { "openlibrary", "ol_dump_editions_latest.txt.gz" })
-    eq("one of its two files is not all of it", { datasets.status(ds).here, datasets.state(ds) }, { false, "partly here (ol_dump_authors_latest.txt.gz missing)" })
+    eq("one of its two files is not all of it", { datasets.status(ds).here, datasets.state(ds) }, { false, "partly on this machine (ol_dump_authors_latest.txt.gz missing)" })
     datasets.adopt(dir .. "/ol_dump_authors_2026-09-30.txt.gz")
     eq("both are", datasets.status(ds).here, true)
     eq("a file of no dataset is not taken up", (select(2, datasets.adopt(src .. ".nothing"))):find("there is no file") ~= nil, true)

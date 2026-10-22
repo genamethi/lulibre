@@ -106,11 +106,11 @@ end
 -- @treturn string
 function M.state(ds)
   local st = M.status(ds)
-  if st.bytes == 0 then return "not here" end
+  if st.bytes == 0 then return "not on this machine" end
   local age = st.age < 1 and "fetched today" or ("%d day%s old"):format(st.age // 1, st.age // 1 == 1 and "" or "s")
   local stale = ds.renewed and st.age > ds.renewed and ("; renewed every %d days at the source"):format(ds.renewed) or ""
-  if not st.here then return ("partly here (%s missing)"):format(table.concat(st.missing, ", ")) end
-  return ("here: %s, %s%s"):format(size(st.bytes), age, stale)
+  if not st.here then return ("partly on this machine (%s missing)"):format(table.concat(st.missing, ", ")) end
+  return ("on this machine: %s, %s%s"):format(size(st.bytes), age, stale)
 end
 
 local function on_path(program)

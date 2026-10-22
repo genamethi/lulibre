@@ -95,7 +95,7 @@ static const struct action select_actions[] = {
   {"end", "<End> $", "the end of the line"},
   {"top", "gg", "the top of the page"},
   {"bottom", "G", "the end of the page"},
-  {"mark", "v", "begin selecting from here; again, let go of it"},
+  {"mark", "v", "begin selecting at the cursor; press again to cancel"},
   {"line", "V", "select the whole line"},
   {"copy", "<CR> y", "copy what is selected (the line, when nothing is) and leave"},
   {"leave", "q <Esc>", "leave without copying"},

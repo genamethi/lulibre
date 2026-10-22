@@ -142,8 +142,8 @@ contains "a fresh one is not fetched again"  "nothing to fetch" "$(run run arxiv
 # the databases for looking books up offline: what there is, and the question
 out=$(run datasets list 2>&1)
 contains "datasets says what there is"        "Useful if you have books with an ISBN" "$out"
-contains "and what is here already"           "arxiv        arXiv's records  [here:" "$out"
-contains "and what is not"                    "openlibrary  Open Library's editions and authors  [not here]" "$out"
+contains "and what is on this machine already" "arxiv        arXiv's records  [on this machine:" "$out"
+contains "and what is not"                    "openlibrary  Open Library's editions and authors  [not on this machine]" "$out"
 contains "asked which to fetch, nothing is"   "nothing fetched" "$(printf '\n' | run datasets 2>&1)"
 contains "an answer that is none of them"     "'9' is not one of them" "$(printf '9\n' | run datasets 2>&1)"
 contains "one that is here is left alone"     "nothing to fetch" "$(printf '1\n' | run datasets --with "$t/nokaggle" 2>&1)"
@@ -159,7 +159,7 @@ tree() { "$t/tree/build/lulibre" --clean -L "$lib" "$@"; }
 expect   "a tree of the binary's own version is fine" "2" "$(tree query -c 2>&1)"
 sed -i 's/define LULIBRE_VERSION_MINOR .*/define LULIBRE_VERSION_MINOR 99/' "$t/tree/src/version.h"
 contains "a tree of another version is named at start" "is now 0.99." "$(tree query -c 2>&1)"
-contains "and when a script fails there"  "Quit, run make there" "$(tree run "$t/bad.lua" 2>&1 || true)"
+contains "and when a script fails there"  "Quit, run make in that tree" "$(tree run "$t/bad.lua" 2>&1 || true)"
 
 # The interactive interface, driven through a private tmux server.
 if command -v tmux >/dev/null; then
@@ -268,7 +268,7 @@ if command -v tmux >/dev/null; then
   shown "nothing filled in changes nothing"       "nothing was filled in"
   $T send-keys -t t '\' d
   shown "Leader d: the databases, with boxes"     "databases for looking books up"
-  shown "and what is here"                        "arxiv  *arXiv's records  *here:"
+  shown "and what is on this machine"            "arxiv  *arXiv's records  *on this machine:"
   $T send-keys -t t q
   i=0; while screen | grep -q "databases for looking" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   $T send-keys -t t g g Space Space
@@ -471,7 +471,7 @@ LUA
   $T send-keys -t t Enter
   shown "and is named by the key it is on" "^bound to ,e *$"
   $T send-keys -t t "?"
-  shown "? opens the help, under headings"  "▾ Start here"
+  shown "? opens the help, under headings"  "▾ Getting started"
   shown "the others closed, with their counts" "▸ Windows   ([0-9]*)"
   $T send-keys -t t "/"
   shown "/ searches the keys"               "^search the keys and commands:"
@@ -485,9 +485,9 @@ LUA
   $T send-keys -t t BSpace
   shown "Backspace shows everything again"  "keys, by what they are for"
   $T send-keys -t t C
-  shown "C closes every heading"            "▸ Start here"
+  shown "C closes every heading"            "▸ Getting started"
   $T send-keys -t t g g Enter
-  shown "Enter opens the one under the cursor" "▾ Start here"
+  shown "Enter opens the one under the cursor" "▾ Getting started"
   $T send-keys -t t q
   i=0; while screen | grep -q "Start here" && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   $T send-keys -t t : ; $T send-keys -t t -l "help filters" ; $T send-keys -t t Enter

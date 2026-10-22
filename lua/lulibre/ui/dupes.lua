@@ -27,7 +27,7 @@ function M.run()
     at = {}
     for _, g in ipairs(groups) do
       rows[#rows + 1] = { ("%d copies   %s each   md5 %s%s"):format(#g.books, dupes.human(g.size), g.md5,
-        g.skip and "   skipped: nothing here will be removed" or ""), id = g.keep, style = "head" }
+        g.skip and "   skipped: nothing in this group will be removed" or ""), id = g.keep, style = "head" }
       at[#rows] = { g }
       for _, b in ipairs(g.books) do
         local keep = b.id == g.keep
@@ -90,7 +90,7 @@ function M.run()
       out[#out + 1] = formats
       out[#out + 1] = folder
       if #g.books > SHOWN then
-        out[#out + 1] = { "", ("and %d more copies, not shown here"):format(#g.books - SHOWN), style = "dim" }
+        out[#out + 1] = { "", ("and %d more copies, not shown"):format(#g.books - SHOWN), style = "dim" }
       end
       return out, ("the %d copies, field by field (differing fields in colour)"):format(#g.books)
     end,

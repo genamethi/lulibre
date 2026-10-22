@@ -317,7 +317,7 @@ function M.plan()
   local p = { changes = {} }
   local found = M.find()
   if #found == 0 then
-    p.why = "no systemd unit runs calibre-server here"
+    p.why = "no systemd unit on this machine runs calibre-server"
     return p
   end
   if #found > 1 then
