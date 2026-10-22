@@ -227,7 +227,7 @@ function M.run(args)
     elseif (act == "write" or act == "propose") and results then
       local changes = changes_of(results)
       if #changes == 0 then
-        lulibre.notify("the pattern matches nothing here")
+        lulibre.notify("the pattern matches none of the selected books")
       elseif act == "propose" then
         local n = 0
         for _, c in ipairs(changes) do

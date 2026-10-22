@@ -89,6 +89,13 @@ it as they are touched:
   book"), not as "0 of 1".
 - Sentences, with the verb that is meant ("is not in init.lua", not "does
   not mention").
+- A message after an action counts what the action did: "12 unmarked",
+  not "0 marked". After an action on some but not all, it also gives what
+  remains ("3 unmarked, 9 still marked"); after an action on one, the state
+  it left is enough ("9 marked").
+- No "here". Say where: on this machine, in this view, in the library,
+  local sources. Don't alias or coin a term; use the one the rest of
+  lulibre uses for the thing.
 - A question asked unprompted is asked once at most, and only when the
   answer changes what happens next.
 

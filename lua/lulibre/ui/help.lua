@@ -68,7 +68,7 @@ local ABOUT = {
   ["weights"] = "how much each kind of source is believed, field by field",
   ["enrich-dialog"] = "a dialog: look the selected books up; what would be asked of whom, then go",
   ["change"] = "a dialog: one change to every selected book at once",
-  ["datasets-dialog"] = "a dialog: the databases kept here, with boxes for which to fetch",
+  ["datasets-dialog"] = "a dialog: the databases kept on this machine, with boxes for which to fetch",
   ["sync-dialog"] = "a dialog: add, move or drop the selected waiting files",
   ["mark none"] = "unmark every book",
   ["review"] = "go through the proposals: what was just proposed, else everything that waits", ["review selection"] = "go through the proposals of what is selected",
@@ -245,7 +245,7 @@ end
 function M.topic(word)
   word = (word or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("^:", "")
   if not M.docs_dir() then
-    lulibre.notify("the guides are not installed here (docs/ beside lulibre's Lua code)", "error")
+    lulibre.notify("the guides are not installed (docs/ beside lulibre's Lua code)", "error")
     return false
   end
   for _, g in ipairs(M.guides) do
@@ -269,7 +269,7 @@ function M.topic(word)
       lulibre.notify(("the guides say nothing about '%s'"):format(word))
       return false
     end
-    table.insert(lines, 1, ("No part of the guides is headed '%s'. It is mentioned here:"):format(word))
+    table.insert(lines, 1, ("No part of the guides is headed '%s'. These parts mention it:"):format(word))
     table.insert(lines, 2, "")
     lulibre.show(lines, "help: " .. word)
     return true
@@ -287,7 +287,7 @@ end
 -- every heading with its entries: { title=, entries = { {keys, what, word}, ... } }
 local function gather()
   local sections, of_word = {}, {}
-  sections[1] = { title = "Start here", entries = start(), open = true }
+  sections[1] = { title = "Getting started", entries = start(), open = true }
   for i, def in ipairs(SECTIONS) do
     sections[i + 1] = { title = def[1], entries = {} }
     for w in def[2]:gmatch("%S+") do of_word[w] = sections[i + 1] end

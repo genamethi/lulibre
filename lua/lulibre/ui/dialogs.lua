@@ -91,7 +91,7 @@ function M.enrich()
       } },
       { title = "", items = {
         { id = "online", kind = "action", label = total > 0 and ("Ask, then review (%s)"):format(plural(total, "request")) or "Propose from what is kept, then review" },
-        { id = "offline", kind = "action", label = "Ask nobody: propose from what is kept here, then review" },
+        { id = "offline", kind = "action", label = "Ask no service: propose from local sources, then review" },
       } },
     },
   }
@@ -186,7 +186,7 @@ function M.datasets()
     sections = {
       { title = ("Kept in %s"):format(datasets.dir()), items = items },
       { title = "", items = {
-        { id = "fetch", kind = "action", label = "Fetch the ticked ones", hint = "what is here and fresh is left alone" },
+        { id = "fetch", kind = "action", label = "Fetch the ticked ones", hint = "a dataset already on this machine and up to date is left alone" },
         { id = "force", kind = "action", label = "Fetch them even if fresh" },
       } },
     },
@@ -201,7 +201,7 @@ function M.datasets()
     end
   end
   if #failed > 0 then error(failed[1], 0) end
-  lulibre.notify(done > 0 and ("%s seen to: :enrich reads from what is here before it asks anybody"):format(plural(done, "dataset")) or "nothing was ticked")
+  lulibre.notify(done > 0 and ("%s fetched or already up to date: :enrich reads the datasets on this machine before it asks any service"):format(plural(done, "dataset")) or "nothing was ticked")
 end
 
 --- Shows what would happen to each selected waiting file in the sync

@@ -423,7 +423,7 @@ happen before it happens:
 
 | Key | Dialog |
 |---|---|
-| `\e` | **Look up** the selection. Shows how many works each service would be asked about and in how many requests (nothing is asked to find this out), a checkbox for each service, then "ask, then review" or "ask nobody: propose from what is stored here" |
+| `\e` | **Look up** the selection. Shows how many works each service would be asked about and in how many requests (nothing is asked to find this out), a checkbox for each service, then "ask, then review" or "ask no service: propose from local sources" |
 | `\c` | **Change at once**: add or remove a subject, or set the authors, series, publisher, date or language, for every selected book (the books under a heading, the marked ones). Empty lines change nothing, and one undo reverses all of it |
 | `\d` | **Databases** kept on this machine: which are here, how old they are, and a checkbox for each to fetch |
 | `\s` | **The selected waiting files** in the sync folder: which are new and which the library already has, and a choice of add, add and remove, or drop |
@@ -776,7 +776,7 @@ and books whose file could not be read.
 
 ### arXiv numbers by title, on this machine: `:run arxiv-titles`
 
-With arXiv's own snapshot stored here (`:datasets`), `:run arxiv-titles
+With arXiv's own snapshot on this machine (`:datasets`), `:run arxiv-titles
 [filter]` looks up every book with no arXiv number by its title (and by
 the part before a colon), in one pass through the file, without asking
 anyone. A paper with the same title is used only if the book's pages show
@@ -853,7 +853,7 @@ as it can:
 `:enrich --plan` reads the identifiers and prints how many requests each
 service would get and about how long the run would take.
 
-### Databases kept here
+### Datasets on this machine
 
 Some of what the services know can be downloaded whole, and then the
 services are not asked at all:
@@ -879,7 +879,7 @@ way leaves the old files as they were, and running it again resumes where
 it stopped. A dataset that is here and as new as its source is left alone,
 so you can run the command at any time.
 
-`:enrich` uses whatever datasets are here before it asks any service:
+`:enrich` uses whatever datasets are on this machine before it asks any service:
 
 - **arXiv papers** are read from the snapshot (ten seconds for its three
   million papers). arXiv is asked only about papers newer than the file.

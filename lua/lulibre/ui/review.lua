@@ -72,7 +72,7 @@ function M.banner(view, key)
   if not run then return nil end
   local books = ("%d book%s"):format(#run.ids, #run.ids == 1 and "" or "s")
   if not run.finished then
-    return ("⟳ still proposing for %s%s: what it finds appears here, and this view comes up by itself when it is done.   %s stops it")
+    return ("⟳ still proposing for %s%s: what it finds appears in this view, which comes up by itself when it is done.   %s stops it")
       :format(books, run.step and (" (%s)"):format(run.step) or "", key("drop") or "drop")
   end
   local before = (view.count or 0) - (view.own or 0)
@@ -561,7 +561,7 @@ session = function(args)
       elseif view.count == 0 then
         lulibre.notify("nothing waits in this view")
       elseif view.own == 0 then
-        lulibre.notify("nothing in this view is the run's own any more: what is here waited before it")
+        lulibre.notify("nothing in this view is the run's own any more: the proposals in it were waiting before the run")
       elseif lulibre.confirm(("drop the %d proposal%s %s? (deleted, not rejected: they can be proposed again)%s"):format(
           view.own, view.own == 1 and "" or "s", view.run and "this run added" or "in this view", staying)) then
         local n = view.own
@@ -653,7 +653,7 @@ session = function(args)
       elseif propose.FIELD[second] and #second == 1 then
         field_only = propose.FIELD[second]
         if #listed() == 0 then
-          lulibre.notify(("no proposals for %s here"):format(field_only))
+          lulibre.notify(("no proposals for %s in this view"):format(field_only))
           field_only = nil
         end
       end
