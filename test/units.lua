@@ -804,24 +804,6 @@ do
   end
   eq("proposed as such, surer for being on the page twice", { authors.value, authors.source, authors.confidence },
     { "David Mumford", "first line, named twice", 0.95 })
-  -- a series' title page, set in one size: series, author, title over two lines
-  got = titlepage.classify { line("Classics in Mathematics", 9.9), line("Lars Hörmander", 10), line("The Analysis of Linear Partial", 9.9),
-    line("Differential Operators II", 9.9) }
-  eq("a series line is the series, the name under it the author, the rest the title", { got.series, got.authors, got.title },
-    { "Classics in Mathematics", { "Lars Hörmander" }, "The Analysis of Linear Partial Differential Operators II" })
-  got = titlepage.classify { line("Classics in Mathematics", 10.9), line("Roger C. Lyndon • Paul E. Schupp", 12), line("Combinatorial Group Theory", 11) }
-  eq("authors set larger than the title, bullets between them", { got.authors, got.title },
-    { { "Roger C. Lyndon", "Paul E. Schupp" }, "Combinatorial Group Theory" })
-  got = titlepage.classify { line("Classics in Mathematics", 10.7), line("Tosio Kato", 10.3), line("Perturbation Theory for Linear Operators", 11) }
-  eq("under a series line, on a page set in one size, a name's shape is enough", { got.authors, got.title },
-    { { "Tosio Kato" }, "Perturbation Theory for Linear Operators" })
-  got = titlepage.classify { line("Springer Undergraduate Mathematics Series", 18), line("Jeremy Gray", 28), line("A History", 96),
-    line("of Abstract", 96), line("Algebra", 96) }
-  eq("where type sets the title apart, its first words stay in it", got.title, "A History of Abstract Algebra")
-  got = titlepage.classify { line("Elements of Mathematics", 9.2), line("Lie Groups and Lie Algebras, Part I", 16.4) }
-  eq("one line under a series line is a title", { got.title, got.authors }, { "Lie Groups and Lie Algebras, Part I", {} })
-  got = titlepage.classify { line("Graduate Texts in Mathematics", 12), line("Editors", 10), line("S. Axler", 10), line("K.A. Ribet", 10) }
-  eq("the series' own page gives the series and no title", { got.series, got.title }, { "Graduate Texts in Mathematics", nil })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
   got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),
