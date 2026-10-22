@@ -5,8 +5,6 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
-- Fixed: a series' name read from a title page as its title ("Classics in
-  Mathematics") is proposed as the series, not as the title.
 - Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
   is proposed in title case, and keeps the book's own spelling of each word
   where the opening pages show the title: "The analysis of linear partial

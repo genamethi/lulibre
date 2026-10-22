@@ -67,25 +67,6 @@ local function with_math(parts, lines)
 end
 
 -- words that may stand in lower case inside a name
--- The series a line names, if it is nothing but a series' name: one of the
--- series lulibre knows (lulibre.layouts), or one the library already uses.
--- (The library's series are read once, built in a local and put in place in
--- one step: tasks may share the module.)
-local library_series
-local function series_of(t)
-  local low = t:lower():gsub("%s+", " "):gsub("[ .,:;]+$", "")
-  for _, known in ipairs(require("lulibre.layouts").series) do
-    if known[1]:lower() == low then return known[1] end
-  end
-  if not library_series then
-    local seen = {}
-    local ok, rows = pcall(lulibre.sql, "SELECT DISTINCT series FROM books WHERE series IS NOT NULL AND series != ''")
-    for _, row in ipairs(ok and rows or {}) do seen[row.series:lower()] = row.series end
-    library_series = seen
-  end
-  return library_series[low]
-end
-
 local PARTICLE = {}
 for w in ("and de del della der den di da dos du la le van von zu y e"):gmatch("%S+") do PARTICLE[w] = true end
 
@@ -223,12 +204,7 @@ function M.classify(lines)
   end
   local cand = table.concat(title, " "):gsub("%s+", " "):gsub("^[ .,]+", ""):gsub("[ .,]+$", "")
   local low = cand:lower()
-  -- a series' name set as large as anything on the page ("Classics in
-  -- Mathematics") is the series, not the title
-  local series = cand ~= "" and series_of(cand)
-  if series then
-    r.series = series
-  elseif cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then
+  if cand ~= "" and low:find("%a") and not any(low, PUBLISHER) and not JUNK[low] then
     r.title, r.title_math = cand, with_math(title, body)
   end
 

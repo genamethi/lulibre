@@ -804,9 +804,6 @@ do
   end
   eq("proposed as such, surer for being on the page twice", { authors.value, authors.source, authors.confidence },
     { "David Mumford", "first line, named twice", 0.95 })
-  got = titlepage.classify { line("Classics in Mathematics", 9.9), line("Lars Hörmander", 10), line("The Analysis of Linear Partial", 9.9),
-    line("Differential Operators II", 9.9) }
-  eq("a series' name read as the title is the series, and no title", { got.series, got.title }, { "Classics in Mathematics", nil })
   got = titlepage.classify { line("Hopf Algebras", 22), line("Miriam Cohen", 14), line("An introduction", 16), line("text text text", 10) }
   eq("a title of two capitalised words is not taken for a name", { got.title, got.name_first }, { "Hopf Algebras" })
   got = titlepage.classify { line("Introduction to", 26.6), line("Commutative Algebra", 35.6), line("M. F. ATIYAH, Frs", 13),
