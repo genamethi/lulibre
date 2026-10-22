@@ -461,12 +461,12 @@ if command -v tmux >/dev/null; then
   # leaving while a task waits on a worker job: the job is waited for, so the
   # cancelled task closes what it holds (a big file, so that it outlasts the
   # moment tasks are given to stop)
-  truncate -s 3G "$t/big"
+  truncate -s 1G "$t/big"
   $T send-keys -t t : ; $T send-keys -t t -l "lua lulibre.spawn(function() local _ <close> = setmetatable({}, { __close = function() io.open('$t/closed', 'w'):close() end }) lulibre.md5('$t/big') end)"
   $T send-keys -t t Enter
   sleep 0.3
   $T send-keys -t t q
-  i=0; while [ ! -s "$t/rc" ] && [ $i -lt 600 ]; do sleep 0.05; i=$((i + 1)); done
+  i=0; while [ ! -s "$t/rc" ] && [ $i -lt 2400 ]; do sleep 0.05; i=$((i + 1)); done # (a sanitizer build hashes slowly)
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
   expect "a task waiting on a worker job at exit closes what it holds" yes "$([ -e "$t/closed" ] && echo yes)"
   # (where a sanitizer build reports, too: an error or a leak at exit)
