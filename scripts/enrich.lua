@@ -460,10 +460,13 @@ for n, b in ipairs(books) do
         local partly = judged.title == "partly"
         -- a catalogue's spelling of the title gives way to the book's own
         -- pages, where they show it, and is otherwise put in title case
+        -- (title case only for a book in English, or of no stated language:
+        -- its rules are English)
         local title = r.title
         if title and not r.title_tex then
-          local ev = verify.evidence(b.id)
-          title = require("lulibre.titlecase").as_on_page(title, ev and ev.text)
+          local lang = (b.book.lang or ""):lower()
+          local english = lang == "" or lang:find("^en") ~= nil
+          title = require("lulibre.titlecase").as_on_page(title, b.ev and b.ev.text, { case = english })
         end
         offer("title", title, r.title_tex and r.source .. " (with TeX in it)" or short and r.source .. " (the title with words left out)"
           or elsewhere and r.source .. " (another title, the same people: the whole this is part of?)"

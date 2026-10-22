@@ -622,6 +622,8 @@ do
     "Introduction to SL2 and McKean")
   eq("a title the pages do not show is put in title case", { tc.as_on_page("Lectures on celestial mechanics", "something else") },
     { "Lectures on Celestial Mechanics", "title case" })
+  eq("but not for a book in another language", (tc.as_on_page("Cours d'arithmétique", "something else", { case = false })),
+    "Cours d'arithmétique")
   local ex = require "lulibre.extract"
   local got
   for _, c in ipairs(ex.from_doc { title = "LECTURES ON RIEMANN SURFACES", pages = {} }) do
@@ -815,6 +817,19 @@ do
   got = titlepage.classify { line("Classics in Mathematics", 10.7), line("Barrett O\u{2019}Neill", 10.3), line("Semi-Riemannian Geometry", 11) }
   eq("a curly apostrophe is no bullet: the name stays whole", { got.authors, got.title },
     { { "Barrett O\u{2019}Neill" }, "Semi-Riemannian Geometry" })
+  got = titlepage.classify { line("The Collected Papers of", 16), line("John von Neumann", 16), line("Volume I", 12) }
+  eq("a title that runs on into a name keeps it", got.title, "The Collected Papers of John von Neumann")
+  local arxiv_author
+  for _, c in ipairs(require("lulibre.extract").from_doc {
+    lines = { line("arXiv:1012.6008v1 [math.CO] 29 Dec 2010", 20), line("A Title of Some Length", 18), line("Jane Q. Public", 12) },
+    text = "A Title of Some Length\nJane Q. Public\nAbstract. ...\nJane Q. Public, Department of Mathematics" } ) do
+    if c.field == "authors" then arxiv_author = arxiv_author or c end
+  end
+  eq("agreement never lowers a reading: an arXiv author named twice", arxiv_author and { arxiv_author.value, arxiv_author.confidence >= 0.9 },
+    { "Jane Q. Public", true })
+  got = titlepage.classify_pages { { line("12", 10) }, { line("Classics in Mathematics", 10.7), line("Tosio Kato", 10.3),
+    line("Perturbation Theory for Linear Operators", 11) } }
+  eq("a series found on a later page is kept", got.series, "Classics in Mathematics")
   got = titlepage.classify { line("Classics in Mathematics", 10.7), line("Tosio Kato", 10.3), line("Perturbation Theory for Linear Operators", 11) }
   eq("under a series line, on a page set in one size, a name's shape is enough", { got.authors, got.title },
     { { "Tosio Kato" }, "Perturbation Theory for Linear Operators" })
