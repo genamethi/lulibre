@@ -39,6 +39,7 @@ struct sched {
   struct task *qhead, *qtail; /* run queue */
   struct task *all;
   int next_id;
+  int jobs; /* worker jobs begun and not yet ended */
   atomic_int live, failed; /* read by the interface thread for its status line */
   uv_idle_t idle;
   int idle_on;
@@ -222,6 +223,21 @@ lua_State *sched_end_wait(struct task *t) {
     return NULL;
   }
   return t->co;
+}
+
+struct task *sched_begin_job(lua_State *L) {
+  struct task *t = sched_begin_wait(L);
+  t->ctx.app->sched->jobs++;
+  return t;
+}
+
+lua_State *sched_end_job(struct task *t) {
+  t->ctx.app->sched->jobs--; /* before sched_end_wait, which may free t */
+  return sched_end_wait(t);
+}
+
+int sched_jobs(const struct app *app) {
+  return app->sched ? app->sched->jobs : 0;
 }
 
 void sched_wake(struct task *t, int nargs) {

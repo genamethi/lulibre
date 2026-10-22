@@ -634,6 +634,7 @@ struct tui {
 
   struct indexer *ix;
   int ix_done, ix_total, ix_failed;
+  int mirroring; /* calibre's database is being read again (tui_mirror) */
 };
 
 int tui_run(struct app *app);
@@ -673,5 +674,9 @@ void tui_show_msg(struct tui *t, int error, const char *text);
 int console_key(struct tui *t, void *state, uint32_t key);
 void console_wheel(void *state, int delta);
 void tui_start_index(struct tui *t, int force);
+/* Read calibre's database again, on the Lua thread's connection so that the
+ * interface draws on meanwhile; then refresh the list. told: say so when
+ * done (the :reload command); otherwise a change starts the indexer. */
+void tui_mirror(struct tui *t, int force, int told);
 
 #endif

@@ -908,6 +908,14 @@ do
     lines:count("no part of this publication may be reproduced in any form"), 3)
   eq("and can be taken out", lines:strip("Sieve methods\nNo part of this Publication may be reproduced in any form\nby A. Name", 3),
     "Sieve methods\n.\nby A. Name\n")
+  do
+    local held <close> = lulibre.counter()
+    held:add(t)
+    c:close()
+    eq("close empties a counter now", { c:size(), c:texts(), c:count("modular forms") }, { 0, 0, 0 })
+    c:add("modular forms again")
+    eq("and it counts again from nothing", c:count("modular forms"), 1)
+  end
 
   local learn = require "lulibre.learn"
   eq("a subject and those above it", learn.lineage("math/number-theory/algebraic"), { "math/number-theory/algebraic", "math/number-theory", "math" })

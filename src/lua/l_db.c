@@ -352,21 +352,20 @@ static int l_calibre_books(lua_State *L) {
 
 static int reload_ui(lua_State *L) {
   struct app *app = lapi_app(L);
-  app_open_db(app);
-  if (app->tui) {
-    tui_reload(app->tui);
-  } else {
-    char *err = NULL;
-    if (db_mirror(&app->db, app->cfg.library, 0, &err) < 0) {
-      lua_pushstring(L, err);
-      free(err);
-      return lua_error(L);
-    }
-  }
+  if (app->tui) tui_reload(app->tui);
   return 0;
 }
 
+/* calibre's database read on this thread's connection, so the interface
+ * does not wait for it; then the list */
 static int l_reload(lua_State *L) {
+  struct app *app = lapi_app(L);
+  char *err = NULL;
+  if (db_mirror(lapi_db(L), app->cfg.library, 0, &err) < 0) {
+    lua_pushstring(L, err);
+    free(err);
+    return lua_error(L);
+  }
   return ui_call(L, reload_ui);
 }
 

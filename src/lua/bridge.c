@@ -42,6 +42,7 @@ static struct bridge {
   atomic_int redraw, exited;
   uv_timer_t winddown;
   double stop_at;
+  int said_jobs;
   struct db ldb;
 } B;
 
@@ -200,8 +201,18 @@ void bridge_start(struct app *app) {
   log_debug("Lua thread started");
 }
 
-/* Tasks were told to stop; leave once they have, or after a moment. */
+/* Tasks were told to stop; leave once they have, or after a moment. Never
+ * while a worker job is running: it may be writing (a copy of a database put
+ * back), and only its end lets the cancelled task close what it holds. */
 static void winddown_cb(uv_timer_t *h) {
+  int jobs = sched_jobs(B.app);
+  if (jobs > 0) {
+    if (now_s() > B.stop_at && !B.said_jobs) {
+      B.said_jobs = 1;
+      log_info("waiting for %d job%s to finish before leaving", jobs, jobs == 1 ? "" : "s");
+    }
+    return;
+  }
   if (sched_live(B.app) == 0 || now_s() > B.stop_at) uv_stop(&B.lloop);
 }
 

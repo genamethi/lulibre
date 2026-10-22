@@ -179,6 +179,19 @@ if command -v tmux >/dev/null; then
   shown "tui starts"                 "NORMAL"
   shown "tui lists both books"       "1/2"
   shown "tui previews indexed text"  "A Note on Sieve Methods"
+  # another connection holding the index's write lock: the indexer keeps what
+  # it extracted until it can write, and the interface goes on meanwhile
+  idx=$(ls "$t"/data/lulibre/*.db | head -1)
+  printf 'BEGIN IMMEDIATE;\n.system sleep 10\nCOMMIT;\n' | sqlite3 "$idx" &
+  locker=$!
+  sleep 0.3
+  $T send-keys -t t : ; $T send-keys -t t -l "index force" ; $T send-keys -t t Enter
+  sleep 1.5 # (extracted by then, and waiting to be stored)
+  $T send-keys -t t : ; $T send-keys -t t -l "echo still answering" ; $T send-keys -t t Enter
+  i=0; while ! screen | grep -q "^still answering" && [ $i -lt 30 ]; do sleep 0.05; i=$((i + 1)); done
+  expect "the interface answers at once while the index is locked" yes "$(screen | grep -q "^still answering" && echo yes)"
+  wait "$locker"
+  shown "and the indexer stores once it is not" "indexed 2 files"
 
   # the list as a tree
   $T send-keys -t t : ; $T send-keys -t t -l "group subject" ; $T send-keys -t t Enter
@@ -445,9 +458,17 @@ if command -v tmux >/dev/null; then
   $T send-keys -t t q
   i=0; while screen | grep -q "browse  " && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
   shown "a panel closed as the only window gives way to the list" "Author  *Title"
+  # leaving while a task waits on a worker job: the job is waited for, so the
+  # cancelled task closes what it holds (a big file, so that it outlasts the
+  # moment tasks are given to stop)
+  truncate -s 1G "$t/big"
+  $T send-keys -t t : ; $T send-keys -t t -l "lua lulibre.spawn(function() local _ <close> = setmetatable({}, { __close = function() io.open('$t/closed', 'w'):close() end }) lulibre.md5('$t/big') end)"
+  $T send-keys -t t Enter
+  sleep 0.3
   $T send-keys -t t q
-  i=0; while [ ! -s "$t/rc" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+  i=0; while [ ! -s "$t/rc" ] && [ $i -lt 2400 ]; do sleep 0.05; i=$((i + 1)); done # (a sanitizer build hashes slowly)
   expect "tui exits cleanly" 0 "$(cat "$t/rc" 2>/dev/null)"
+  expect "a task waiting on a worker job at exit closes what it holds" yes "$([ -e "$t/closed" ] && echo yes)"
   # (where a sanitizer build reports, too: an error or a leak at exit)
   expect "and writes nothing to stderr" "" "$(cat "$t/err" 2>/dev/null)"
 

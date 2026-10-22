@@ -53,7 +53,7 @@ static void remember(struct db *db, const struct hjob *j) {
 static void h_after(uv_work_t *req, int status) {
   struct hjob *j = req->data;
   if (!j->err) remember(j->db, j);
-  lua_State *L = sched_end_wait(j->task);
+  lua_State *L = sched_end_job(j->task);
   if (L) {
     if (j->err) {
       lua_pushnil(L);
@@ -102,7 +102,7 @@ static int l_md5(lua_State *L) {
   j->size = (long long)sb.st_size;
   j->mtime = mtime_ns(&sb);
   j->req.data = j;
-  j->task = sched_begin_wait(L);
+  j->task = sched_begin_job(L);
   uv_queue_work(app->lloop, &j->req, h_work, h_after);
   return lua_yield(L, 0);
 }

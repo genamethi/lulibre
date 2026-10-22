@@ -181,7 +181,7 @@ static void c_work(uv_work_t *req) {
 static void c_after(uv_work_t *req, int status) {
   (void)status;
   struct cjob *j = req->data;
-  lua_State *L = sched_end_wait(j->task);
+  lua_State *L = sched_end_job(j->task);
   if (L) {
     if (j->err) {
       lua_pushnil(L);
@@ -216,7 +216,7 @@ static void c_after(uv_work_t *req, int status) {
 
 static int start(lua_State *L, struct cjob *j) {
   j->req.data = j;
-  j->task = sched_begin_wait(L);
+  j->task = sched_begin_job(L);
   uv_queue_work(lapi_app(L)->lloop, &j->req, c_work, c_after);
   return lua_yield(L, 0);
 }

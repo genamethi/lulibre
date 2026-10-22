@@ -227,7 +227,7 @@ k Escape g r
 shown "gr with review open goes to it"        "review is already open, and the cursor is in it"
 expect "and opens no second"                  1 "$(screen | grep -c 'review  2 pending')"
 k :; lit "new review"; k Enter
-wait_for "2 tasks"
+i=0; while [ "$(screen | grep -c 'review  2 pending')" -lt 2 ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i + 1)); done
 expect ":new review opens a second all the same" 2 "$(screen | grep -c 'review  2 pending')"
 k q
 wait_for "1 task "
