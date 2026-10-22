@@ -5,6 +5,20 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
+- Fixed: leaving lulibre while a script waits on work in the background (a
+  copy of a database, a file's checksum, a document's metadata) waits for
+  that work to end, as long as it takes, instead of leaving it after 1.5
+  seconds. A copy of calibre's database being put back is finished, and the
+  script's temporary files are removed.
+- Fixed: the interface no longer waits while another connection writes to
+  the index. The indexer keeps what it extracted until it can store it (it
+  waited up to 5 seconds per statement), and calibre's database is read
+  again on the scripts' thread (`:reload`, the check every 2 seconds,
+  `lulibre.reload()`), not the interface's.
+- Added: `c:close()` on `lulibre.counter()`, also `local c <close> = ...`,
+  frees its memory at once; Lua's collector does not see that memory.
+  `learn.work` closes the census it makes.
+
 - Experimental: the title page is read by the role of each line, the series
   first. A line that is a series' name (one lulibre knows, or one the
   library already uses) is the series, not the title, and is proposed as

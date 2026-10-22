@@ -94,6 +94,7 @@ for part = 1, parts do
   end
   if lulibre.task_id() then lulibre.yield() end
 end
+census.counter:close()
 lulibre.progress(nil)
 
 local said = tally.right + tally.finer + tally.wrong

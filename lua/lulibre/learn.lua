@@ -212,6 +212,7 @@ function M.work(opts)
     return nil, ("no records are confirmed as good yet: %s lists them by how complete they look"):format(lulibre.hint("good"))
   end
   local census = opts.census or M.census()
+  local _ <close> = not opts.census and census.counter or nil -- ours: freed when this returns
   local counter, total = census.counter, census.total
   -- how the confirmed books of each subject use what is left
   local books, in_s, by, all_in, taught_n = {}, {}, {}, {}, 0

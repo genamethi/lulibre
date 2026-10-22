@@ -58,7 +58,7 @@ int cmd_config(struct app *app, int argc, char **argv);
 int tui_run(struct app *app);
 void tui_setup(void);
 void tui_teardown(void);
-void tui_reload(struct tui *t); /* re-read calibre now and refresh the list */
+void tui_reload(struct tui *t); /* refresh the list: calibre's database was read again */
 
 /* lua/lstate.c */
 struct lua_State *lstate_new(struct app *app);

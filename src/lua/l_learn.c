@@ -12,6 +12,9 @@
  *                                counter still knows, as a list
  *   c:count(phrase)              how many texts held it
  *   c:size()  c:texts()          phrases known; texts added
+ *   c:close()                    empty it, and free its memory now: Lua
+ *                                does not see that memory, so the collector
+ *                                is in no hurry (also `local c <close> = ...`)
  *
  * The same counter counts whole lines instead, which is how text that many
  * books share word for word (a publisher's imprint, a series list, a
@@ -416,7 +419,7 @@ static int c_texts(lua_State *L) {
   return 1;
 }
 
-static int c_gc(lua_State *L) {
+static int c_close(lua_State *L) {
   counter_clear(luaL_checkudata(L, 1, MT));
   return 0;
 }
@@ -436,7 +439,7 @@ void l_learn_open(lua_State *L) {
   static const luaL_Reg methods[] = {
     {"add", c_add},   {"prune", c_prune}, {"of", c_of},     {"count", c_count},
     {"size", c_size}, {"texts", c_texts}, {"add_lines", c_add_lines}, {"strip", c_strip},
-    {"__gc", c_gc},   {NULL, NULL},
+    {"close", c_close}, {"__close", c_close}, {"__gc", c_close}, {NULL, NULL},
   };
   luaL_newmetatable(L, MT);
   lua_pushvalue(L, -1);

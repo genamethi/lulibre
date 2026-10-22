@@ -259,7 +259,7 @@ int db_open(struct db *db, const char *path, char **err) {
     return -1;
   }
   db->path = xstrdup(path);
-  sqlite3_busy_timeout(db->h, 5000);
+  sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   if (db_exec(db,
               "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;"
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
@@ -282,7 +282,7 @@ int db_open_reader(struct db *db, const char *path, char **err) {
     return -1;
   }
   db->path = xstrdup(path);
-  sqlite3_busy_timeout(db->h, 5000);
+  sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   /* the custom fields, for filters on them (the file is made by db_open) */
   if (attach_custom(db, "ro", err) || db_register_functions(db, err)) {
     db_close(db);
@@ -299,7 +299,7 @@ int db_open_writer(struct db *db, const char *path, char **err) {
     return -1;
   }
   db->path = xstrdup(path);
-  sqlite3_busy_timeout(db->h, 5000);
+  sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   if (db_exec(db, "PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA temp_store=MEMORY;", err) ||
       attach_history(db, 0, err) || attach_custom(db, "rw", err) || db_register_functions(db, err)) {
     db_close(db);
