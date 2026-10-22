@@ -5,24 +5,8 @@ written in `src/version.h`.
 
 ## 0.2.0-beta.1
 
-- New: Space in the edit form also offers the title page's other blocks
-  for the title (runs of lines in one size, each read as one line, largest
-  type first), for a title the reading got wrong. They are never proposed.
-- New: `G.block{ ... }` in grammars matches one or more consecutive lines
-  set in one size as one line, so a title over one line or two is one step
-  and the rules after it go on from the line after it. Grammars read the
-  first page that has lines (a cover set as an image has none).
-- Fixed: people set apart by bullets ("Hans Grauert • Reinhold Remmert")
-  are read as several, and a name with a curly apostrophe stays whole.
-- Changed: the title page is read by the role of each line, the series
-  first. A line that is a series' name (one lulibre knows, or one the
-  library already uses) is the series, not the title, and is proposed as
-  the series. Under it, the author line and the title are read relative to
-  each other: a name at the start or end of the title's run is the author,
-  a title over two lines is one title, and on a page set in one size the
-  name may be set larger than the title ("Classics in Mathematics / Roger
-  C. Lyndon • Paul E. Schupp / Combinatorial Group Theory"). The series'
-  own page (its editors, its list of titles) gives no title or authors.
+- Fixed: a series' name read from a title page as its title ("Classics in
+  Mathematics") is proposed as the series, not as the title.
 - Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
   is proposed in title case, and keeps the book's own spelling of each word
   where the opening pages show the title: "The analysis of linear partial
