@@ -18,6 +18,12 @@ written in `src/version.h`.
 - Added: `c:close()` on `lulibre.counter()`, also `local c <close> = ...`,
   frees its memory at once; Lua's collector does not see that memory.
   `learn.work` closes the census it makes.
+- Removed: C modules are no longer loaded first in a child process (since
+  0.2.0-alpha.2). `require` loads them as Lua does: a module built for
+  another Lua fails with Lua's own message ("version mismatch", "undefined
+  symbol"), or crashes lulibre, as it would any Lua program. The data
+  folder's `cmodules.cache` and `cprobe.lua` are no longer used and can be
+  deleted.
 
 - Experimental: the title page is read by the role of each line, the series
   first. A line that is a series' name (one lulibre knows, or one the

@@ -183,76 +183,6 @@ end
 --- A script's options, read and set as lulibre.cfg.<namespace>.<name>.
 -- In init.lua, for example: lulibre.cfg.mytags.depth = 3.
 lulibre.cfg = require("lulibre.options").cfg
--- C modules. One built for another Lua (compiled against another version's
--- lua.h, which a stray header earlier on the include path makes easy) can
--- crash the program the moment it is loaded, with nothing to say why. So
--- each is loaded first in a child process (this program, `run` on a probe),
--- once for each file and its date, and one that does not survive that is
--- refused with the reason. The answers are kept in cmodules.cache in the data
--- folder.
-local probe_cache
-local function cache_file() return lulibre.settings.paths().data_dir .. "/cmodules.cache" end
-local function load_cache()
-  if probe_cache then return probe_cache end
-  local cache = {} -- built whole, then put in place (a task may be interrupted)
-  local f = io.open(cache_file(), "r")
-  if f then
-    for line in f:lines() do
-      local verdict, stamp, path = line:match("^(%a+) (%d+) (.+)$")
-      if path then cache[path] = { verdict = verdict, stamp = stamp } end
-    end
-    f:close()
-  end
-  probe_cache = cache
-  return cache
-end
-local function shq(s) return "'" .. tostring(s):gsub("'", "'\\''") .. "'" end
-local function c_module_ok(name, file)
-  if name == "luv" then return true end -- lulibre's own, checked when it is built
-  local ok, uv = pcall(require, "luv")
-  if not ok then return true end -- cannot tell; load it as Lua would
-  local st = uv.fs_stat(file)
-  local stamp = tostring(st and st.mtime and st.mtime.sec or 0)
-  local cache = load_cache()
-  local known = cache[file]
-  if known and known.stamp == stamp then return known.verdict == "ok" end
-  local dir = lulibre.settings.paths().data_dir
-  local probe = dir .. "/cprobe.lua"
-  if not uv.fs_stat(probe) then
-    os.execute("mkdir -p " .. shq(dir))
-    local f = io.open(probe, "w")
-    if f then
-      f:write('local name, path = ...\nlocal open = assert(package.loadlib(path, "luaopen_" .. name:gsub("%.", "_")))\nopen(name, path)\n')
-      f:close()
-    end
-  end
-  local exe = uv.exepath()
-  local good = exe and os.execute(("%s --clean run %s %s %s >/dev/null 2>&1"):format(shq(exe), shq(probe), shq(name), shq(file))) == true
-  cache[file] = { verdict = good and "ok" or "bad", stamp = stamp }
-  local f = io.open(cache_file(), "a")
-  if f then
-    f:write(("%s %s %s\n"):format(good and "ok" or "bad", stamp, file))
-    f:close()
-  end
-  return good
-end
-local function refused(name, file)
-  return ("\n\tthe C module %s at %s crashes when it is loaded: it was built for another Lua than this %s"
-    .. " (rebuild it against this version's headers; `luarocks install` takes LUA_INCDIR=...)"):format(name, file, _VERSION)
-end
--- the C searchers (a module's own file, and the one its root is in) go through the probe
-local std_c, std_croot = package.searchers[3], package.searchers[4]
-package.searchers[3] = function(name)
-  local file = package.searchpath(name, package.cpath)
-  if file and not c_module_ok(name, file) then return refused(name, file) end
-  return std_c(name)
-end
-package.searchers[4] = function(name)
-  local root = name:match("^([^%.]+)%.")
-  local file = root and package.searchpath(root, package.cpath)
-  if file and not c_module_ok(name, file) then return refused(name, file) end
-  return std_croot(name)
-end
 -- Modules of a luarocks tree (the option rocks_tree): looked for before the
 -- usual places, since it is the tree you named.
 local function rocks_paths(tree)
@@ -267,7 +197,6 @@ table.insert(package.searchers, 2, function(name)
   if file then return loadfile(file), file end
   file = package.searchpath(name, cpath)
   if file then
-    if not c_module_ok(name, file) then return refused(name, file) end
     local sym = "luaopen_" .. name:gsub("%.", "_")
     local f, err = package.loadlib(file, sym)
     if not f then return err end
