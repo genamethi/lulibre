@@ -1483,15 +1483,6 @@ modules `require` finds (before the usual places). With
 install a missing module there. This is off by default, for the same
 reason.
 
-A C module (a `.so`) built for a different Lua version than lulibre's
-crashes whatever loads it. A `lua.h` of another version earlier on the
-compiler's include path (`/usr/local/include` comes before `/usr/include`)
-is enough to cause this. So lulibre first loads each C module once in a
-child process, and refuses a module that crashes there, with a message,
-instead of crashing with it. (Rebuild such a module against the right
-headers: `luarocks --lua-version 5.5 install lpeg
-LUA_INCDIR=/usr/local/include/lua/5.5`.)
-
 ## Without the content server
 
 `lulibre.o.write_via` chooses how changes reach calibre: `"server"`,

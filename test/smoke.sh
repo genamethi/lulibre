@@ -80,17 +80,6 @@ contains "its scripts are found"          "hello from	$t/conf/scripts" "$("$bin"
 contains "\$LULIBRE_CONFIG_DIR does the same" "pages           11" "$(LULIBRE_CONFIG_DIR="$t/conf" "$bin" -L "$lib" -o help 2>&1)"
 expect   "config --path follows it"       "$t/conf/init.lua" "$("$bin" -C "$t/conf" -L "$lib" config --path 2>&1)"
 expect   "--clean still skips init.lua"   "pages           6" "$("$bin" --clean -C "$t/conf" -L "$lib" -o help 2>&1 | grep '^pages ' | cut -c1-17)"
-# a C module that crashes as it loads is refused, not loaded (one built for another Lua does)
-if command -v cc >/dev/null 2>&1; then
-  printf 'print(_VERSION:match("%%d+%%.%%d+"))\n' > "$t/v.lua"
-  luav=$(run run "$t/v.lua" 2>/dev/null)
-  mkdir -p "$t/rocks/lib/lua/$luav"
-  printf 'int luaopen_crashmod(void *L) { (void)L; *(volatile int *)0 = 1; return 0; }\n' > "$t/crash.c"
-  if cc -shared -fPIC -o "$t/rocks/lib/lua/$luav/crashmod.so" "$t/crash.c" 2>/dev/null; then
-    printf 'print(pcall(require, "crashmod"))\n' > "$t/c.lua"
-    contains "a C module that crashes is refused" "crashes when it is loaded" "$(run -o rocks_tree="$t/rocks" run "$t/c.lua" 2>&1)"
-  fi
-fi
 contains "config prints every option"     "o.repair_links"     "$(run config 2>&1)"
 contains "config knows the default"       '-- o.pages = 6'     "$(run config 2>&1)"
 contains "config shows what was set"      'o.pages = 9'        "$(run -o pages=9 config 2>&1)"

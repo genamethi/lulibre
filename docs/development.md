@@ -263,7 +263,7 @@ to them when it is touched.
   request at a time per service is a claim.)
 - Build a table that tasks share in a local, and put it in place with one
   assignment. Never fill it in place where another task may read it half
-  built (the caches in junk, names, quality, subjects, the C-module probes).
+  built (the caches in junk, names, quality, subjects).
 - For counters and lists that tasks share, use `lulibre.each`,
   `table.insert` and `table.remove` (one C call each), not `t[#t + 1] = v`
   (two steps).
