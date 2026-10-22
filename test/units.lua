@@ -812,6 +812,9 @@ do
   got = titlepage.classify { line("Classics in Mathematics", 10.9), line("Roger C. Lyndon • Paul E. Schupp", 12), line("Combinatorial Group Theory", 11) }
   eq("authors set larger than the title, bullets between them", { got.authors, got.title },
     { { "Roger C. Lyndon", "Paul E. Schupp" }, "Combinatorial Group Theory" })
+  got = titlepage.classify { line("Classics in Mathematics", 10.7), line("Barrett O\u{2019}Neill", 10.3), line("Semi-Riemannian Geometry", 11) }
+  eq("a curly apostrophe is no bullet: the name stays whole", { got.authors, got.title },
+    { { "Barrett O\u{2019}Neill" }, "Semi-Riemannian Geometry" })
   got = titlepage.classify { line("Classics in Mathematics", 10.7), line("Tosio Kato", 10.3), line("Perturbation Theory for Linear Operators", 11) }
   eq("under a series line, on a page set in one size, a name's shape is enough", { got.authors, got.title },
     { { "Tosio Kato" }, "Perturbation Theory for Linear Operators" })
@@ -2266,6 +2269,24 @@ do
   for _, m in ipairs(mine) do if m.grammar.name == "unit-mine" then got = m.fields end end
   eq("a grammar of one's own, with a capture and a line skipped", got and { got.series_index, got.title }, { "4", "The Title" })
   G.remove("unit-mine")
+  -- a block: the title over one line or two, the rule after it on the line after
+  G.add { name = "unit-block", lines = { G.line { pattern = "^Unit Series$", give = { series = "Unit Series" } },
+    G.line { take = "authors" }, G.block { take = "title" }, G.line { pattern = "^(%u%l+)$", smaller = true, take = "publisher" } } }
+  local function block(lines)
+    for _, m in ipairs(G.match { lines = lines }) do if m.grammar.name == "unit-block" then return m.fields end end
+  end
+  local two = block { L("Unit Series", 10), L("Lars Hörmander", 10), L("The Analysis of Linear Partial", 10),
+    L("Differential Operators II", 10), L("Springer", 8), L("body", 8), L("body", 8) }
+  local one = block { L("Unit Series", 10), L("Tosio Kato", 10), L("Perturbation Theory", 10), L("Springer", 8), L("body", 8) }
+  eq("a block takes a title over two lines as one, and the rule after it goes on after it",
+    { two and two.title, two and two.publisher, one and one.title, one and one.publisher },
+    { "The Analysis of Linear Partial Differential Operators II", "Springer", "Perturbation Theory", "Springer" })
+  G.remove("unit-block")
+  local bulleted
+  for _, c in ipairs(require("lulibre.extract").from_doc { lines = {}, pages = {}, author = "Hans Grauert • Reinhold Remmert" }) do
+    if c.field == "authors" then bulleted = c.value end
+  end
+  eq("people set apart by bullets are several", bulleted, "Hans Grauert & Reinhold Remmert")
   -- with LPeg (when it is installed for this Lua), patterns over a line, and over the opening lines
   local lpeg = G.lpeg()
   if lpeg then

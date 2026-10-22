@@ -37,7 +37,9 @@
 -- the pattern's first capture (`case = "title"` puts it in title case), or
 -- with `give = { field = value }`. `G.skip(n)` skips up to n lines,
 -- `G.opt(rule)` makes a rule optional, and `G.either{ rule, rule }` matches
--- one rule or the other.
+-- one rule or the other. `G.block{ ... }` is a line rule for one or more
+-- consecutive lines set in one size, read as one line: a title over one
+-- line or two, and the rules after it go on from the line after it.
 --
 -- A grammar can also give `text = { patterns }`, which must appear
 -- somewhere in the pages read (ignoring case); `pages = { min, max }` for the
@@ -114,6 +116,20 @@ end
 -- @treturn table the rule
 function M.line(t)
   t.kind = "line"
+  return t
+end
+
+--- Returns a rule for a block: one or more consecutive lines (up to
+-- `max`, 4 by default) set in one size, read as one line. Each line must
+-- pass the rule's tests of type (`upper`, `bold`, `bigger`, `smaller`,
+-- `largest`, `size`); `pattern` (or `peg`) and `take` apply to the lines
+-- joined. A title over two lines where it usually takes one is matched the
+-- same way, and the rules after the block go on from the line after it.
+-- The longest block that lets the rules after it match is taken.
+-- @tparam table t as for `line`, and `max`
+-- @treturn table the rule
+function M.block(t)
+  t.kind = "block"
   return t
 end
 
@@ -210,6 +226,33 @@ local function seq(rules, i, lines, j, page, got)
     end
     return nil
   end
+  if r.kind == "block" then
+    -- each line is held to the tests of type; the text tests and take go by
+    -- the lines joined, longest block first
+    local typed = { upper = r.upper, bold = r.bold, bigger = r.bigger, smaller = r.smaller, largest = r.largest, size = r.size }
+    local first = lines[j]
+    if not first then return nil end
+    local n = 0
+    while n < (r.max or 4) and lines[j + n] and math.abs((lines[j + n].size or 0) - (first.size or 0)) <= 0.5
+      and line_ok(typed, lines[j + n], page) do
+      n = n + 1
+    end
+    for k = n, 1, -1 do
+      local parts = {}
+      for m = j, j + k - 1 do parts[#parts + 1] = (lines[m].text or ""):gsub("^%s+", ""):gsub("%s+$", "") end
+      local joined = { text = table.concat(parts, " "), size = first.size, bold = first.bold }
+      local fields = line_ok({ pattern = r.pattern, nocase = r.nocase, peg = r.peg, take = r.take, case = r.case, give = r.give },
+        joined, page)
+      if fields then
+        local merged = {}
+        for key, v in pairs(got) do merged[key] = v end
+        for key, v in pairs(fields) do merged[key] = merged[key] and (merged[key] .. " " .. v) or v end
+        local res = seq(rules, i + 1, lines, j + k, page, merged)
+        if res then return res end
+      end
+    end
+    return nil
+  end
   local line = lines[j]
   if not line then return nil end
   local fields = line_ok(r, line, page)
@@ -296,7 +339,10 @@ function M.doc(id)
   local texts = {}
   for _, p in ipairs(lulibre.sql("SELECT text FROM pages WHERE file = ? ORDER BY page", f.id)) do texts[#texts + 1] = p.text end
   local book = lulibre.book(id)
-  return { id = id, lines = lulibre.lines(id, 1), texts = texts, pages = f.npages, idents = book and book.idents or {} }
+  -- the first page that has lines: a cover set as an image has none
+  local lines = lulibre.lines(id, 1)
+  if #lines == 0 then lines = lulibre.lines(id, 2) end
+  return { id = id, lines = lines, texts = texts, pages = f.npages, idents = book and book.idents or {} }
 end
 
 -- ---- built-in grammars ----
