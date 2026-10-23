@@ -6,6 +6,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
 - Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
+- Changed the `?` help heading over edit, change, propose, enrich, review and the commands beside them from "Changing what a book says" to "Editing metadata, proposing and reviewing".
 
 ## 0.2.0
 
