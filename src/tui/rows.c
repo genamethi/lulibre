@@ -1,4 +1,4 @@
-/* The list model: ids matching the current filter, the cursor, and marks.
+/* The list model: ids matching the current filter, and the cursor.
  *
  * The filter is compiled on the loop thread (so syntax errors show at once)
  * and executed on the thread pool against the reader connection. Typing
@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "core/log.h"
+#include "tui/bits.h"
 #include "tui/tui.h"
 
 enum { Q_LIST, Q_SEARCH };
@@ -65,31 +66,6 @@ static void clamp(struct tui *t) {
   if (r->cur >= r->n) r->cur = r->n - 1;
   if (r->cur < 0) r->cur = 0;
   if (r->anchor >= r->n) r->anchor = r->n - 1;
-}
-
-/* Bitmaps are indexed by book id. Staged files have negative ids, so ids
- * are folded onto the non-negative numbers first: 1, -1, 2, -2 ... */
-static sqlite3_int64 bit_of(sqlite3_int64 id) {
-  return id > 0 ? 2 * id : -2 * id + 1;
-}
-
-static void set_bit(unsigned char **bits, sqlite3_int64 *cap, sqlite3_int64 id) {
-  if (id == 0) return;
-  id = bit_of(id);
-  if (id >= *cap) {
-    sqlite3_int64 ncap = *cap ? *cap : 4096;
-    while (ncap <= id) ncap *= 2;
-    *bits = xrealloc(*bits, (size_t)(ncap >> 3));
-    memset(*bits + (*cap >> 3), 0, (size_t)((ncap - *cap) >> 3));
-    *cap = ncap;
-  }
-  (*bits)[id >> 3] |= (unsigned char)(1 << (id & 7));
-}
-
-static int get_bit(const unsigned char *bits, sqlite3_int64 cap, sqlite3_int64 id) {
-  if (id == 0) return 0;
-  id = bit_of(id);
-  return id < cap && (bits[id >> 3] >> (id & 7) & 1);
 }
 
 static int search_pending(const struct rows *r) {
@@ -355,87 +331,6 @@ int rows_goto_id(struct tui *t, sqlite3_int64 id) {
   return 0;
 }
 
-/* ---- marks ---- */
-
-int rows_marked(const struct tui *t, sqlite3_int64 id) {
-  return get_bit(t->rows.marks, t->rows.marks_cap, id);
-}
-
-static void set_mark(struct rows *r, sqlite3_int64 id, int on) {
-  if (id == 0) return;
-  int was = get_bit(r->marks, r->marks_cap, id);
-  if (on && !was) {
-    set_bit(&r->marks, &r->marks_cap, id);
-    r->nmarks++;
-  } else if (!on && was) {
-    r->marks[bit_of(id) >> 3] &= (unsigned char)~(1 << (bit_of(id) & 7));
-    r->nmarks--;
-  }
-}
-
-static void persist(struct tui *t, sqlite3_int64 id, int on) {
-  sqlite3_stmt *st;
-  const char *sql = on ? "INSERT OR IGNORE INTO marks(id) VALUES(?)" : "DELETE FROM marks WHERE id = ?";
-  if (sqlite3_prepare_v2(t->app->db.h, sql, -1, &st, NULL) != SQLITE_OK) return;
-  sqlite3_bind_int64(st, 1, id);
-  sqlite3_step(st);
-  sqlite3_finalize(st);
-}
-
-void rows_mark(struct tui *t, sqlite3_int64 id, int on) {
-  if (on < 0) on = !rows_marked(t, id);
-  set_mark(&t->rows, id, on);
-  persist(t, id, on);
-  tui_dirty(t);
-}
-
-void rows_mark_all(struct tui *t, int how) {
-  struct rows *r = &t->rows;
-  sqlite3 *h = t->app->db.h;
-  int own_txn = sqlite3_get_autocommit(h);
-  if (own_txn) sqlite3_exec(h, "BEGIN", NULL, NULL, NULL);
-  if (how == 0) {
-    sqlite3_exec(h, "DELETE FROM marks", NULL, NULL, NULL);
-    if (r->marks) memset(r->marks, 0, (size_t)(r->marks_cap >> 3));
-    r->nmarks = 0;
-  } else {
-    for (int i = 0; i < r->nall; i++) {
-      int on = how > 0 ? 1 : !rows_marked(t, r->all[i]);
-      set_mark(r, r->all[i], on);
-      persist(t, r->all[i], on);
-    }
-  }
-  if (own_txn) sqlite3_exec(h, "COMMIT", NULL, NULL, NULL);
-  tui_dirty(t);
-}
-
-sqlite3_int64 *rows_selection(const struct tui *t, int *n) {
-  const struct rows *r = &t->rows;
-  sqlite3_int64 *out = xmalloc(((size_t)r->nall + (size_t)r->n + 1) * sizeof *out);
-  *n = 0;
-  if (t->mode == MODE_VISUAL && r->anchor >= 0) {
-    int a = r->anchor < r->cur ? r->anchor : r->cur, b = r->anchor < r->cur ? r->cur : r->anchor;
-    for (int i = a; i <= b && i < r->n; i++) {
-      int dup = r->ids[i] == 0; /* a heading in the range is not a book; nor is a book taken twice */
-      for (int k = 0; k < *n && !dup; k++) dup = out[k] == r->ids[i];
-      if (!dup) out[(*n)++] = r->ids[i];
-    }
-    return out;
-  }
-  /* the marked books the filter matched, shown or under a closed heading */
-  for (int i = 0; i < r->nall; i++)
-    if (rows_marked(t, r->all[i])) out[(*n)++] = r->all[i];
-  if (*n > 0) return out;
-  /* on a heading: every book under it */
-  const struct ghead *h = rows_head(t, r->cur);
-  if (h) {
-    for (int i = 0; i < h->nbooks; i++) out[(*n)++] = r->all[h->books[i]];
-    return out;
-  }
-  if (rows_current(t)) out[(*n)++] = rows_current(t);
-  return out;
-}
-
 void rows_init(struct tui *t) {
   struct rows *r = &t->rows;
   memset(r, 0, sizeof *r);
@@ -458,10 +353,7 @@ void rows_init(struct tui *t) {
     }
     sqlite3_finalize(st);
   }
-  if (sqlite3_prepare_v2(t->app->db.h, "SELECT id FROM marks", -1, &st, NULL) == SQLITE_OK) {
-    while (sqlite3_step(st) == SQLITE_ROW) set_mark(r, sqlite3_column_int64(st, 0), 1);
-    sqlite3_finalize(st);
-  }
+  rows_marks_load(t);
 }
 
 void rows_free(struct tui *t) {
