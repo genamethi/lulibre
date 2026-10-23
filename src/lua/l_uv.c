@@ -17,6 +17,7 @@
 #include <lauxlib.h>
 
 #include "app.h"
+#include "config.h"
 #include "core/util.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -51,14 +52,20 @@ static int callback_pcall(lua_State *L, int nargs, int nresults, int flags) {
   return nresults;
 }
 
+/* luv is looked for on package.cpath, after the luarocks tree the option
+ * rocks_tree names, as require looks for any module */
 static int preload_luv(lua_State *L) {
+  const char *rocks = lapi_app(L)->cfg.rocks_tree;
   lua_getglobal(L, "package");
   lua_getfield(L, -1, "searchpath");
   lua_pushliteral(L, "luv");
-  lua_getfield(L, -3, "cpath");
+  if (rocks && rocks[0]) lua_pushfstring(L, "%s/lib/lua/%s/?.so;", rocks, LULIBRE_LUA_VER);
+  else lua_pushliteral(L, "");
+  lua_getfield(L, -4, "cpath");
+  lua_concat(L, 2);
   lua_call(L, 2, 2);
   if (lua_isnil(L, -2))
-    return luaL_error(L, "luv is not installed (try: luarocks install --local luv)%s",
+    return luaL_error(L, "luv is not on Lua's path (package.cpath) or in the luarocks tree rocks_tree names: %s",
                       lua_tostring(L, -1));
   const char *path = lua_tostring(L, -2);
   void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);

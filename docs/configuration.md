@@ -207,7 +207,9 @@ and again whenever lulibre's own file changes (`lulibre.overrides`).
 
 After your files, lulibre looks for its own in one place only: the source
 tree a build runs from, `$LULIBRE_RUNTIME`, or where `make install` put
-them. Then it looks in the rocks of `~/.luarocks` and in Lua's own places.
+them. Then it looks in the luarocks tree `rocks_tree` names, if any, and in
+Lua's own places, as Lua and the environment (`LUA_PATH_5_5`,
+`LUA_CPATH_5_5`) set them.
 Nothing is looked for in the current directory. See [the Lua API](api.md).
 
 ## Where things are kept

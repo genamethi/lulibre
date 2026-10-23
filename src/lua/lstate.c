@@ -43,7 +43,7 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
   for (const char *p = own ? own : ""; *p;) {
     const char *end = strchr(p, ';');
     size_t n = end ? (size_t)(end - p) : strlen(p);
-    if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, ";%.*s", (int)n, p);
+    if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, "%s%.*s", out.len ? ";" : "", (int)n, p);
     p += n + (end ? 1 : 0);
   }
   lua_pushstring(L, out.s);
@@ -118,13 +118,12 @@ char *lstate_tree_mismatch(void) {
 /* Search order: the user's own modules; the runtime, which is a source tree
  * when running from one (build/lulibre finds ../lua) or LULIBRE_RUNTIME, and
  * the installed one otherwise, never both (an installed module the tree has
- * since renamed or removed would still be found, stale); then the user's
- * luarocks tree so `luarocks install --local` rocks just work; then Lua's
- * own places, less the current directory. */
+ * since renamed or removed would still be found, stale); then Lua's own
+ * places, as Lua and the environment (LUA_PATH_5_5, LUA_CPATH_5_5) set them,
+ * less the current directory. A luarocks tree is the option rocks_tree. */
 static void setup_paths(lua_State *L) {
-  sbuf p = SBUF_INIT, c = SBUF_INIT;
+  sbuf p = SBUF_INIT;
   char *cfg = config_dir_path(&lapi_app(L)->cfg);
-  char *rocks = path_expand("~/.luarocks");
   const char *dev = getenv("LULIBRE_RUNTIME");
   char exe[4096], *tree = NULL;
   ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
@@ -152,17 +151,12 @@ static void setup_paths(lua_State *L) {
   if (dev && dev[0]) snprintf(runtime_lua, sizeof runtime_lua, "%s", dev);
   else if (tree) snprintf(runtime_lua, sizeof runtime_lua, "%s", tree);
   else snprintf(runtime_lua, sizeof runtime_lua, "%.4091s/lua", installed);
-  sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", rocks, LULIBRE_LUA_VER,
-            rocks, LULIBRE_LUA_VER);
-  sb_printf(&c, "%s/lib/lua/%s/?.so", rocks, LULIBRE_LUA_VER);
 
   prepend(L, "path", p.s);
-  prepend(L, "cpath", c.s);
+  prepend(L, "cpath", "");
   sb_free(&p);
-  sb_free(&c);
   free(tree);
   free(cfg);
-  free(rocks);
 }
 
 lua_State *lstate_new(struct app *app) {
