@@ -6,6 +6,8 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
 - Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
+- Added `lulibre-setup`, a setup screen built beside lulibre. Basic: user or system level, pixi or not, the library, the content server; the password file is picked from a file browser and checked for its owner and mode. Advanced: the install prefix, luv, and the rest of lulibre's options. The choices are kept in `setup.conf` between runs. Install now runs `setup/install.sh` in the terminal, each command shown first, with sudo only for a system-level install; init.lua gets the chosen values, and the file as it was stays in init.lua.bak.
+- Changed an installed lulibre to read its files from beside the binary (`<prefix>/share/lulibre`), so one build installs under any prefix.
 - Changed the `?` help heading over edit, change, propose, enrich, review and the commands beside them from "Changing what a book says" to "Editing metadata, proposing and reviewing".
 - Fixed a value set in the configuration window having no effect when init.lua sets that option on two lines. Previously the value was written to the first line and the later line kept setting the option. Now the value is written to the last line, the one that takes effect.
 

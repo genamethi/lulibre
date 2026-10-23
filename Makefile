@@ -8,7 +8,7 @@ endif
 -include config.mk
 
 BIN  := build/lulibre
-SRC  := $(wildcard src/*.c src/*/*.c)
+SRC  := $(filter-out src/setup/%,$(wildcard src/*.c src/*/*.c))
 OBJ  := $(SRC:%.c=build/%.o)
 LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
 # the guides, which :help reads
@@ -16,19 +16,24 @@ DOCS := $(wildcard docs/*.md)
 # everything but main(), for the C unit tests to link against
 LIBOBJ := $(filter-out build/src/main.o,$(OBJ))
 UNIT := build/test/unit
+# lulibre-setup: its own sources, and the parts of lulibre's it shares (the
+# drawing, the options)
+SETUP := build/lulibre-setup
+SETUP_OBJ := $(patsubst %.c,build/%.o,$(wildcard src/setup/*.c)) \
+  build/src/tui/draw.o build/src/match/fold.o build/src/core/util.o build/src/core/log.o build/src/core/config.o
 
 WARN     := -Wall -Wextra -Wno-unused-parameter
 CPPFLAGS += -D_GNU_SOURCE -I. -Isrc
 ALL_CFLAGS := -std=c11 $(WARN) $(CFLAGS) $(DEP_CFLAGS)
 
-all: $(BIN)
+all: $(BIN) $(SETUP)
 	@sh tools/build-status.sh $(BIN) $(VERSION) $(BINDIR)
 
 help:
 	@echo "lulibre $(or $(VERSION),(not configured yet: run ./configure)) $(if $(BUILD),($(BUILD) build) )-- targets:"
 	@echo
-	@echo "  make                 build build/lulibre, then say what was built and how it"
-	@echo "                       compares with the lulibre on PATH (version and md5)"
+	@echo "  make                 build build/lulibre and build/lulibre-setup, then say what was"
+	@echo "                       built and how it compares with the lulibre on PATH (version and md5)"
 	@echo "  make status          only that comparison"
 	@echo "  make builds          the log of builds: number, time, commit, branch, checkout"
 	@echo
@@ -72,6 +77,9 @@ $(BIN): $(OBJ) $(LUA) tools/build-number.sh
 	$(CC) $(ALL_CFLAGS) -c -o build/buildno.o build/buildno.c
 	$(CC) -o $@ $(OBJ) build/buildno.o $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
 
+$(SETUP): $(SETUP_OBJ)
+	$(CC) -o $@ $(SETUP_OBJ) $(LDFLAGS) $(DEP_LIBS) -lm
+
 # the log of builds: number, time, version, commit, branch, checkout
 builds:
 	@sh tools/build-number.sh $(VERSION) --log
@@ -82,7 +90,7 @@ build/%.o: %.c config.h
 
 config.h: config.mk
 
--include $(OBJ:.o=.d)
+-include $(OBJ:.o=.d) $(SETUP_OBJ:.o=.d)
 
 status: $(BIN)
 	@sh tools/build-status.sh $(BIN) $(VERSION) $(BINDIR)
@@ -97,9 +105,10 @@ unit: $(BIN) $(UNIT)
 	$(UNIT)
 	sh test/units.sh $(BIN)
 
-check: unit
+check: unit $(SETUP)
 	sh test/smoke.sh $(BIN)
 	sh test/terminal.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
 
 check-offline: $(BIN)
 	sh test/offline.sh $(BIN)
@@ -110,9 +119,10 @@ check-write: $(BIN)
 check-forms: $(BIN)
 	sh test/forms.sh $(BIN)
 
-e2e: $(BIN)
+e2e: $(BIN) $(SETUP)
 	sh test/smoke.sh $(BIN)
 	sh test/terminal.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
 	sh test/install.sh $(BIN) $(VERSION)
 	sh test/offline.sh $(BIN)
 	sh test/write.sh $(BIN)
