@@ -8,3 +8,5 @@
 # the API reference, made by LDoc for the site (.readthedocs.yaml)
 /docs/reference/
 .pixi/
+.claude
+graphify-out
