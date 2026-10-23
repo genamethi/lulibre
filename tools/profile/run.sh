@@ -8,9 +8,9 @@
 # -p: the profiler (time by default: wall, user and system time, peak RSS).
 # -i: an existing index to copy instead of indexing from scratch.
 # STEP: index query stats dupes orphans grammars refs propose verify census
-# (all of them by default, in that order). BIN selects the binary
-# (build/lulibre by default); a build with -fno-omit-frame-pointer gives
-# perf fuller call stacks.
+# (all of them by default, in that order). BIN selects the binary; the
+# default is the frame-pointer build libs.sh makes, else build/lulibre. libs.sh builds Lua, SQLite and MuPDF with debug
+# info into build/profile-cache/lib, which run.sh then loads.
 set -eu
 
 prof=time index_from=
@@ -26,8 +26,15 @@ shift $((OPTIND - 1))
 lib=$(realpath "$1") out=$2
 shift 2
 steps=${*:-index query stats dupes orphans grammars refs propose verify census}
-bin=$(realpath "${BIN:-build/lulibre}")
+# the frame-pointer build libs.sh makes, else the tree's
+fp=$(cd "$(dirname "$0")/../.." && pwd)/build/profile-cache/lulibre/build/lulibre
+[ -n "${BIN:-}" ] || { [ -x "$fp" ] && BIN=$fp || BIN=build/lulibre; }
+bin=$(realpath "$BIN")
 here=$(cd "$(dirname "$0")" && pwd)
+cache=$(cd "$here/../.." && pwd)/build/profile-cache
+export DEBUGINFOD_CACHE_PATH="${DEBUGINFOD_CACHE_PATH:-$cache/debuginfod}" PERF_BUILDID_DIR="${PERF_BUILDID_DIR:-$cache/perf}"
+# Lua, SQLite and MuPDF with debug info, when libs.sh has built them
+[ -d "$cache/lib" ] && export LD_LIBRARY_PATH="$cache/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 mkdir -p "$out/home"
 out=$(realpath "$out")
@@ -62,7 +69,7 @@ for step in $steps; do
       python3 -I "$here/rusage.py" "$out/$step.time" "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
       cat "$out/$step.time" ;;
     perf)
-      perf record -q -F 499 --call-graph dwarf,16384 -o "$out/$step.perf.data" -- \
+      perf record -q --debuginfod -F 999 --call-graph fp -o "$out/$step.perf.data" -- \
         "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
       perf report -q -i "$out/$step.perf.data" --stdio --no-children --percent-limit 0.5 -g none \
         >"$out/$step.self.txt" 2>/dev/null
