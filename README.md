@@ -23,10 +23,12 @@ At run time:
 | For | Needs |
 |---|---|
 | changing the library | calibre's `calibredb` |
-| the sync folder, orphans, onboarding | the `luv` rock: `luarocks install --local luv` |
+| the sync folder, orphans, onboarding | the `luv` rock: `make rocks` |
 | OCR | `tesseract` |
 | looking books up (`:enrich`), fetching the databases below | `curl` |
 | arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
+
+`pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).
 
 `make help` lists every target; `./configure --help` every option.
 
