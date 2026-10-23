@@ -1,990 +1,238 @@
 # Changelog
 
-Versions follow [semantic versioning](https://semver.org). The version is
-written in `src/version.h`.
+Versions follow [semantic versioning](https://semver.org). The version is set in `src/version.h`.
 
 ## 0.2.0
 
-The second release. What it brings since 0.1.0, by area; the sections of
-its pre-releases below say each change in full.
+**0.2.0**
+- Fixed background work being abandoned at exit. Previously, quitting while a script waited on a database copy, a file checksum or document metadata stopped that work after 1.5 seconds. Now lulibre exits once the work finishes: a database copy being restored completes, and the script's temporary files are deleted.
+- Fixed the interface freezing for up to 5 seconds per statement while another connection held the index's write lock. The indexer now keeps extracted text in memory until the lock is free, and re-reading calibre's database (`:reload`, the 2-second check, `lulibre.reload()`) runs on the script thread.
+- Added `close()` to `lulibre.counter()`, also usable as `local c <close> = ...`, to free its memory immediately; Lua's garbage collector does not count that memory. `learn.work` closes the census it creates.
+- Removed the C module probe added in 0.2.0-alpha.2. `require` loads C modules as standard Lua does: a module built for another Lua version fails with Lua's error ("version mismatch", "undefined symbol") or crashes lulibre. `cmodules.cache` and `cprobe.lua` in the data folder are no longer used and can be deleted.
+- Added experimental title-page parsing by line role. A line matching a known series name, built in or already used in the library, is proposed as the series instead of the title. Lines below it are assigned by position: a name at the start or end of the title block becomes the author, a title split over two lines is joined, and on a page set in one type size the name may be larger than the title ("Classics in Mathematics / Roger C. Lyndon • Paul E. Schupp / Combinatorial Group Theory"). A series' own page (editors, list of titles) yields no title or authors. These rules may be replaced in 0.3.
+- Changed catalogue titles (Open Library, zbMATH, CrossRef, ...) for books in English or with no language set to title case, keeping the title page's spelling of each word: "The analysis of linear partial differential operators" is proposed as "The Analysis of Linear Partial Differential Operators". Words printed in capitals on the page follow title case's rules for capitals, so SL2 and PDE are kept.
+- Changed interface text containing "here" to name the place: "local sources" in the propose-review and lookup dialogs, "on this machine" for datasets (`:datasets`, `lulibre datasets`), "in this view" in review, "in the library". The first help heading is "Getting started".
+- Changed mark and unmark messages to give the number of books affected. Previously `\ Space` displayed "0 marked"; now it displays "12 unmarked". Unmarking some of the marked books gives the number unmarked and the number still marked; marking, or unmarking one book, gives the total now marked.
+- Changed confidence for values parsed from a book's pages. A plain title-page reading (largest lines, names below them) is 0.75, up from 0.55, so it appears in review under the default `propose_min` and fills empty fields. It replaces an existing value only with a by-line (now 0.9), a first-line title (0.8), or a name repeated in the front pages. Agreement between sources raises a plain reading to at most 0.79. Thesis covers, a DOI on the page, series lines, received and dated lines, and publishers from copyright lines or journal headers are each 0.05 higher. Dates from received and dated lines and from copyright lines stay under 0.8, so they only fill an empty date.
+- Changed the API reference and guides to plain wording. Each function description begins with what the function does, lists and code examples render correctly, the reference groups its modules into seven sections, and every page links back to the manual.
 
-- **Reading the book's own pages.** Pages that say their facts in known
-  places are read by rule (layouts): the cataloguing block (in the Library
-  of Congress's forms and the German national library's), series pages,
-  the copyright line's publisher and year, dated and received pages,
-  journal headers, thesis covers, cover sheets, the arXiv stamp. Grammars
-  of publications read a kind of document's opening lines (Keith Conrad's
-  handouts, the Stacks project, the Handbook of Algebra; your own, with
-  LPeg if it is installed). By-lines, a name on the first line, names given
-  twice, and (experimental) the title page's lines by their roles, the
-  series first. Mathematics in titles is written in Unicode. Title case
-  after the APA manual, for titles in capitals and for catalogues' titles.
-- **The file decides.** Every proposal is marked in review with what the
-  book's pages say of it, and review sorts by that. A catalogue's record is
-  held against the pages: another work's record, another edition's, a
-  cited work's, or a chapter's whole book proposes nothing. `:verify` and
-  `:run recheck` hold the library against its files. Works no catalogue
-  has are marked (`:noncatalog`) and not looked up.
-- **Proposing and review.** `:propose` corrects fields that have a value
-  when the file is sure (`propose_over`), one field at a time (`--only`,
-  `--fresh`); proposals under `propose_min` are kept out of sight. Review
-  has one row per field with its other sources a key away, what each
-  proposal rests on where the list is, how far the sources agree, runs as
-  tabs, and a dialog for a whole round (`<Leader>pr`). `r` decides one
-  proposal, `N` bars a value for good. `:weigh` measures each source.
-- **Looking books up.** `:enrich` asks arXiv, CrossRef, zbMATH Open, Open
-  Library and OpenAlex, none of which needs an account, by each one's own
-  rules: one request at a time, paced, batched, no retries, every answer
-  kept. Databases kept on this machine (`lulibre datasets`: arXiv's
-  snapshot, Open Library's dumps, zbMATH's links to arXiv) answer first. A
-  search by title takes a record only when it is the same work.
-- **Subjects and references.** Finer subjects for computing; `:refs` reads
-  each book's bibliography; `:good` scores how complete each record looks
-  and keeps the ones you confirm; `:learn` and `:terms` find the phrases
-  that mark a subject (off by default).
-- **Changing the library safely.** Snapshots of the journal, and
-  `:rollback` to any of them; the journal in a file of its own, changes
-  made outside lulibre logged too. Copies of calibre's database, checked,
-  and put back (`:backup`). Changes calibre makes only with its server
-  stopped wait for it (`lulibre offline`, `lulibre.service`, the systemd
-  units the options set up); the opf files kept current; calibre's program
-  noticed and waited for. Custom fields of your own beside calibre's, as
-  calibre columns too, and parts of a whole (`#partof`).
-- **Text and OCR.** A garbled share per file, and `is:needsocr` by it;
-  `:run reread` with poppler's pdftotext; OCR only where a page has no
-  text, replacing it only with a better reading, and written into the PDF
-  if you ask (`ocr_write`); `a` reads more pages of a file.
-- **The interface.** The list as a tree (`gh`); the configuration window as
-  a tab (`3`), writing to init.lua; the sync folder as a tab and a column
-  (`gb`); help under headings with a search, `:help TOPIC`, a man page;
-  completion and history on the command line; every key can be bound, with
-  a leader; the mouse selects text anywhere and resizes windows; panels on
-  `Tab`, windows on `<C-w>`; one of each screen; dialogs for looking up,
-  changing many books at once, the databases and the sync folder; `/` in
-  every panel; long questions and messages wrap; messages say what an
-  action did; keys and shifted symbols right under the kitty keyboard
-  protocol.
-- **Scripts.** Options of your own (`lulibre.option`, `lulibre.cfg`);
-  `lulibre.index`, `lulibre.claim`, `lulibre.status`, `lulibre.ui.form`,
-  runs, more for panels; a file of yours that replaces one of lulibre's is
-  said at start; features name the programs they need (pixi and luarocks
-  optional, off by default). The API reference (LDoc) and the guides are
-  on Read the Docs.
-- **Underneath.** Tasks and C code made reentrant; the interface no longer
-  waits on the index's locks; background work finished before lulibre
-  quits; a publication date written at noon UTC. `lulibre -V` gives the
-  build number.
-- **License.** Apache 2.0 with LLVM Exceptions (`LICENSE`); a binary built
-  with MuPDF is distributed under the AGPL's terms (README).
+**0.2.0-beta.1**
+- Added `propose_min` (default 60%). Proposals below it are kept, but hidden from review, left out of the pending count, and not matched by `is:proposed`; each summary gives the number hidden. Lowering it displays them. When a new value is proposed for the same field, hidden proposals are dropped (`propose_held = "keep"` retains them).
+- Changed learned subjects to off by default, with lower confidence. `subject_learned` is renamed `learned_tags` (default `off`, was `suggest`), with its own threshold, `learned_tags_min` (20%). A learned subject's confidence is halved and capped at 0.3 from phrases and 0.35 from shared references, down from 0.6 and 0.7.
+- Changed `:enrich` to discard a record whose year or publisher contradicts the book's pages, as parsed from a cataloguing block, copyright line, series page, cover sheet, journal header or grammar. A record for another edition or work proposes nothing, and an ISBN not printed in the book is proposed for removal. The latest year on a copyright line, including one on a series page, is taken as the edition's year.
+- Added DOI, year and publisher for Handbook of Algebra chapters with no DOI in the example Handbook of Algebra grammar, taken from the PII in the file's title or in the first page's footer.
+- Added parsing of cover sheets with one label per line (university repositories, eScholarship): title, authors, publisher or journal, date, DOI.
+- Fixed JSTOR cover sheets headed with the journal's name having that name prepended to the title.
+- Fixed a cataloguing block's series being taken from the binding note after an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject heading's qualifier ("Rings (Algebra)").
+- Added word movement in text fields, the `:` and `/` prompts and pickers: Ctrl or Alt with Left or Right moves one word, like `b` and `w`.
+- Changed screens to one instance each. Opening review, duplicates, orphans, the edit form, help or any other screen while it is open switches to it and displays a message, instead of opening a second copy with a second context panel. `:new review` opens another.
+- Fixed `3` (or `gC`) followed quickly by `q` reopening the configuration window after it closed. The open check ran when the script reached it, after the `q`; it now runs when the key is pressed (`source config`).
+- Fixed a crash on `:split` with a panel focused. A message now states that a panel can't be split.
+- Changed options with two values to `true` and `false`, read in Lua as booleans: `server_hook`, `backup_metadata`, `weigh_sources`, `pixi_deps`, `rocks_install`. `"on"` and `"off"` are still accepted, so existing init.lua settings keep working.
+- Fixed `server_hook = "on"` writing a lulibre.service with no `[Install]` section, so enabling it had no effect and it never ran before the server.
+- Fixed every command creating or removing lulibre's systemd units according to its own options: `lulibre units` (meant only to display them), `lulibre run`, and `lulibre offline` as run by lulibre.service. A command started with different options (another init.lua, `-C`) could remove the units the interface had created. Only the interface manages them now.
+- Fixed truncation on the bottom line and in the pager. Questions were cut at half the screen width, along with their "[y/N]" choices; messages were cut to one line; the pager (help, `lulibre.show` output) cut each line at the window's width. The bottom line now grows to fit, up to a third of the screen, and the pager wraps lines.
+- Added `/` search, with `n` and `N`, in every panel (configuration, review, duplicates, ...).
+- Added `Space` on an orphans heading to set the action of every row under it, for example removing all records with no file.
+- Changed duplicates, orphans and the edit form to display context beside the list, as review does (`i` hides it): copies side by side, a record next to the book that holds its file, page evidence for each field, or for several books the values they share and where they differ.
+- Fixed the edit form, opened from duplicates or orphans, previewing the book under the list's cursor instead of the book being edited. The preview pane now stays on the panel's book, including while the cursor is in the preview pane; for several books it displays the number selected. `i` in the edit form toggles the context panel; Enter and `e` still edit a field.
+- Fixed the edit form for several books displaying "(N different values)", with N the number of books, for every field they didn't all share. It now lists the values, most common first, with a count for each ("Sam Poe (2) · Ann Lee (1)"), or the number of values when there are more than three.
+- Changed systemd unit management to three options, applied automatically: `server_hook = "on"` installs and enables `lulibre.service`; `opf_writer = "server"` adds the launcher's drop-in, now `lulibre-opf-writer.conf` (replacing `lulibre-opf.conf`); `server_restart_at = "HH:MM"` restarts the server daily. User units are updated when the interface starts and when an option changes in the configuration window; system units through sudo in the terminal, after a prompt. `lulibre server-unit` is renamed `lulibre units [apply]` (`:units`).
+- Added `lulibre.in_terminal(argv)`.
+- Fixed "Restart now" (`:offline restart`) with `lulibre.service` installed making two copies of calibre's database per restart, one by the restart and one by the service the restart started. The extra copy pushed an older one out of `backup_keep`, and calibre wrote the opf files twice. The service now leaves both to the restart.
+- Fixed the kitty keyboard protocol's flags (kitty, foot, ghostty, alacritty, WezTerm; not in tmux) staying set on the alternate screen when lulibre handed over the terminal. The next program there (the editor `E` opens, or `less`, `vi` or `nano` after lulibre exits) could receive every key as an escape code. The flags are now reset before the handover.
+- Fixed two tasks verifying the same book at once using a half-built cache entry. The second task could report a title's phrase as missing from the pages (`verify.phrase`) or an identifier as belonging to another work (`verify.ident`). Each entry is now complete before it is stored.
+- Fixed books with several files being parsed from different files. Verification used the best file (a PDF first), while the line data (`verify.headline`), `lulibre.text`, OCR and the preview pane used the file with the lowest id. All now use the same file (`DB_BOOK_FILE_ORDER`), and `lulibre.files` lists it first.
+- Changed `lulibre.doc_metadata`, when called from a task, to open the file on a worker thread instead of with MuPDF on the Lua thread.
+- Fixed the tab keys `1`, `2` and `3` doing nothing in review and other panel screens. They now switch to the library, the sync folder or the configuration, and the open screen is restored on return.
+- Changed the summaries of proposing scripts to sentences that give the next step: "No new proposals for the selected book. 300 proposals wait. Press gr to review." (`proposals.to_review`, replaceable). Previously: "0 proposals for 0 of 1 book; gr goes through them".
+- Changed the configuration window to stop prompting, when it opens, for options missing from init.lua; `a` adds them (`config_add_core` and `config_add_scripts` default to `never`).
+- Added `config_add_as`: options are added to init.lua commented out with their defaults (the default), or set to them.
+- Fixed shifted symbols under the kitty keyboard protocol (ghostty, kitty; not in tmux): `:` arrived as `;`, `?` as `/`, `&` as `7`, so the command line wouldn't open and typed text lost its symbols. Each key now produces the character typed.
+- Changed arXiv's cs.CL (Computation and Language) to map to `linguistics/computational` instead of `cs/nlp`. The phrase "computational linguistics" in a book maps there too. Existing tags and proposals are unchanged.
+- Added a console message at start, with a pointer on the message line, when a file of yours replaces a bundled one (a module in `~/.config/lulibre/lua/` or a script in `scripts/` with the same name). It appears once per file, and again when the bundled file changes, since an update may fix something your copy lacks.
 
-Since 0.2.0-beta.1:
+**0.2.0-alpha.3**
+- Added `:backup check` (and `lulibre backup check`): a read-only SQLite integrity check of calibre's database, safe while the server runs. Each new copy is checked, the list marks copies that fail, and pruning keeps the newest copy that passed.
+- Added `:backup restore N`. It first lists how the copy differs from the current database: books removed and added since, books changed (with a count per field), and folders calibre renamed since. After confirmation, the copy is restored once nothing has the library open (`:offline`), and after a copy of the current database is made. Records point to the folders as they are now, each book that differs is marked to have its metadata.opf rewritten, and no ID of a book added since is reused. `:backup compare N` lists the differences only.
+- Changed startup with a damaged calibre database: lulibre warns and continues with the library as last mirrored, so a copy can be restored. Previously it didn't start.
+- Changed `:backup` into a bundled script, so it also runs without the interface (`lulibre backup`).
+- Changed options set to nil (`lulibre.o.pages = nil`, or a script's `lulibre.cfg.NS.NAME = nil`) to reset to their defaults instead of raising an error.
+- Changed module and script loading to skip the current directory. A build run from its source tree no longer falls back on the installed lulibre's files, where a module renamed in the tree was loaded out of date.
+- Fixed undefined behaviour when the list was regrouped with a filter that matched nothing.
+- Fixed publication dates being written at midnight UTC, which calibre displays as the previous day west of Greenwich. Dates are now written at noon UTC. Dates written before are unchanged.
+- Added `contrib/calibre-server-opf.py`, a launcher that runs calibre's content server together with calibre's own metadata backup, keeping each book's metadata.opf current as calibre's desktop app does. `lulibre server-unit` locates the systemd unit that runs calibre-server and modifies it with a drop-in (`apply`, `remove`); for a system unit or a hardened one it displays the change instead. calibre's example unit, with the change, is installed under `share/lulibre/systemd/`. `:backup` reports what keeps the opf files current and how many are behind. The launcher depends on calibre's internals: after a calibre update, check its log to confirm the backup runs.
+- Added opf file writes with a plain content server: each time the server stops (`lulibre offline`, which `lulibre.service` runs before each start), and right after lulibre changes the library folder directly (`backup_metadata`).
+- Added waiting while calibre's desktop app is open. Direct changes to the library folder, moving a stray file aside, and changes queued for a stopped server are held until the app closes. The status line displays the wait.
+- Fixed concurrent tasks sending two requests to one online service at once, key hints in long messages displaying another command's key, and shared caches being read half-built.
+- Added `lulibre.claim(t, key)`, an atomic test-and-set for scripts.
+- Fixed adding a calibre column without a content server reporting a wait for the server to stop. The column is now added immediately when nothing has the library open; with calibre's desktop app open, the message names the app (`lulibre.calibre` reports which program is running).
+- Fixed an error in a luv callback leaving `lulibre run` exiting with status 0.
+- Added a start timeout to `lulibre.service`, so a script that never ends can't block the content server from starting.
 
-- Fixed: leaving lulibre while a script waits on work in the background (a
-  copy of a database, a file's checksum, a document's metadata) waits for
-  that work to end, as long as it takes, instead of leaving it after 1.5
-  seconds. A copy of calibre's database being put back is finished, and the
-  script's temporary files are removed.
-- Fixed: the interface no longer waits while another connection writes to
-  the index. The indexer keeps what it extracted until it can store it (it
-  waited up to 5 seconds per statement), and calibre's database is read
-  again on the scripts' thread (`:reload`, the check every 2 seconds,
-  `lulibre.reload()`), not the interface's.
-- Added: `c:close()` on `lulibre.counter()`, also `local c <close> = ...`,
-  frees its memory at once; Lua's collector does not see that memory.
-  `learn.work` closes the census it makes.
-- Removed: C modules are no longer loaded first in a child process (since
-  0.2.0-alpha.2). `require` loads them as Lua does: a module built for
-  another Lua fails with Lua's own message ("version mismatch", "undefined
-  symbol"), or crashes lulibre, as it would any Lua program. The data
-  folder's `cmodules.cache` and `cprobe.lua` are no longer used and can be
-  deleted.
-- Experimental: the title page is read by the role of each line, the series
-  first. A line that is a series' name (one lulibre knows, or one the
-  library already uses) is the series, not the title, and is proposed as
-  the series. Under it, the author line and the title are read relative to
-  each other: a name at the start or end of the title's run is the author,
-  a title over two lines is one title, and on a page set in one size the
-  name may be set larger than the title ("Classics in Mathematics / Roger
-  C. Lyndon • Paul E. Schupp / Combinatorial Group Theory"). The series'
-  own page (its editors, its list of titles) gives no title or authors.
-  These rules may change in 0.3, which is to read a page's typesetting more
-  systematically.
-- Changed: a title from a catalogue (Open Library, zbMATH, CrossRef ...)
-  for a book in English (or of no stated language) is proposed in title case, and keeps the book's own spelling of each word
-  where the opening pages show the title: "The analysis of linear partial
-  differential operators" is proposed as the title page writes it, "The
-  Analysis of Linear Partial Differential Operators". Words the pages set in
-  capitals go through title case's rules for capitals (SL2 and PDE stay).
-- Changed: the interface no longer says "here". It says where: "local
-  sources" in the propose-review and look-up dialogs, "on this machine" for
-  datasets (`:datasets`, `lulibre datasets`), "in this view" in review, "in
-  the library". The help's first heading is "Getting started".
-- Changed: marking and unmarking say what they did. `\ Space` says "12
-  unmarked", not "0 marked"; unmarking several of the marked books says how
-  many were unmarked and how many are still marked; unmarking one, or
-  marking, says how many are marked now.
-- Changed: what is read from a book's own pages is more confident. A plain
-  reading of the title page (its largest lines, the names under them) is
-  0.75, up from 0.55, so review shows it under the default `propose_min`
-  and it fills an empty field; it is proposed over a value only with a
-  by-line (now 0.9), a first line (0.8) or, for a by-line or first line, a
-  name given twice. Agreement raises a plain reading to at most 0.79.
-  Thesis covers, a DOI on the page, the series line, received and dated
-  pages, and the publisher on a copyright line or a journal header are each
-  0.05 higher. The dates of received and dated pages and of the copyright
-  line stay under 0.8, so they still only fill an empty date.
-- Changed: the API reference and the guides are rewritten in plain words.
-  Each function's description starts with what the function does, and
-  lists and code examples in the reference render as lists and code. The
-  reference lists its modules in seven sections instead of one long list,
-  and every page links back to the manual.
+**0.2.0-alpha.2**
+- Added calibre columns for custom fields. `:custom column add NAME` creates the column in calibre; from then on every change to the field is also written to calibre, and `:custom push NAME` copies the existing values. `:custom column remove NAME` removes any calibre column, while lulibre keeps its own values. The preview pane lists a book's custom fields that calibre lacks or holds differently, and `:custom` reports the same for each field. `:run columns` does this for #partof, #part and #parts.
+- Added copies of calibre's database in lulibre's data folder (`~/.local/share/lulibre/backups/`), made before the content server starts according to `backup_restart`: `always` (the default), `next` (once, until set to `next` again), `never`, or a number of days. `backup_keep` copies are kept (5). The first change of a session prompts for a copy when the newest is older than `backup_max_age` days (7; `backup_too_old = false` turns the prompt off). Before a column is added or removed, each changed book's metadata.opf is written (`backup_metadata`), since otherwise only calibre's desktop app writes them. `:backup` lists the copies, `:backup now` makes one, and `:backup next` (or `always`, `never`, DAYS) sets the schedule.
+- Added a queue for changes calibre only makes with the content server stopped: adding a column, and calibredb's add_custom_column, remove_custom_column, restore_database, check_library, backup_metadata and catalog. A prompt offers to restart now or later. Queued changes run before the next server start through `lulibre.service`, a systemd user unit installed under `share/lulibre/systemd/`; immediately through `server_stop` and `server_start`; or by hand with `lulibre offline`. `:offline` lists the queue.
+- Changed the keys for panels and windows. `Tab` moves to the panels (review, the edit form, the browse column, ...): from the list or a preview pane to the last panel used, and from a panel to the next; `<S-Tab>` moves back. `<C-w>w` (and the new `<C-w>W`) and `<C-w>h` `j` `k` `l` move between windows only: the list, the preview panes and the console. `Esc` in a panel returns to the window it was entered from and leaves the panel open; `q` closes it; in dialogs (the edit form, prompts) `Esc` still closes. The commands are `:focus panel [prev]` and `:focus back`; the panel action `back` can be rebound.
+- Added Unicode mathematics in proposed titles: SL₂(ℤ), GLₙ(ℚₚ), 𝔽ₚ[T], ℤ/pᵃℤ, X³ − 5. The PDF parser marks each line's mathematics from its fonts and from smaller raised or lowered type, restoring scripts lost from the plain text; arXiv's TeX is converted; a glossary converts plain titles (SL2(Z), GLn(Qp), over Q) where they have only one reading. `:notation [filter]` proposes converted titles for the selected books. Title case leaves formulas alone (p-adic is kept). Search matches plain letters: `SL2` matches SL₂(ℤ). The option `math_notation` is `unicode` or `off`.
+- Added page-evidence marks for each proposal in review, compared with the current value: `●` the pages contain it and not the current value (or it adds to the current value), `=` both, `◐` part of it, `·` undetermined, `○` neither, `✗` the current value and not this one. Dates (the year), publishers and series are now matched against the pages too, besides titles, authors and identifiers. The context panel states the result in words. Books whose proposals have the strongest page support are listed first: `review_sort` defaults to `evidence`, and `s` cycles to confidence, most disputed, and id. With one row per field, the alternative with the strongest page support is listed first.
+- Changed the configuration window into a tab: `3 Configuration` in the bar along the top, which is now always displayed (`2 Sync folder` appears once a sync folder is set). `3`, `gC`, `:config` or a click opens it full-screen in place of the list and preview; `1`, `2` or their tabs return. The description of the option under the cursor is displayed below it.
+- Changed `r` in review to reject only that proposal, so a later run can propose the value again. `N` rejects permanently: that value is not proposed again for that book and field unless `--over` is given. `review_reject = "always"` restores the old `r`. Earlier rejections no longer block anything, so a value they excluded, such as an author a grammar parses from the title page, can be proposed again.
+- Fixed Open Library records with the series after a blank line below the title ("Local Fields", blank lines, "Graduate Texts in Mathematics") being proposed whole as the title. Text after the blank line is now the series, and only comments keep line breaks.
+- Fixed OCR replacing a page's text regardless of its quality, so a readable title page could come back empty. OCR now runs only on pages with little or garbled text, and replaces the text only with a better reading. In a garbled file every indexed page is OCRed, not only the first `ocr_pages`.
+- Changed text measurement to record each file's garbled share (characters no font could map; a run of them counts once), and `is:needsocr` now uses it: little text, more than 4% unreadable, or almost no words (quality below 0.2). The share of words alone misclassified files: mathematics has few long words, so short typeset handouts were classed as scans. `:run reread` measures every file again (`lulibre.text_measure`).
+- Fixed Roman numerals that a catalogue put in title case ("Lectures in Abstract Algebra: Ii. Linear Algebra", from Open Library). They are restored to capitals in titles.
+- Added LPeg patterns in grammars, per line (`peg = ...`) or over the opening lines, when LPeg is installed (`lulibre.features` lists it).
+- Added a C module probe: each C module is loaded once in a child process before use, and refused with a message if that process crashes, because a module built for another Lua version crashed lulibre when a script required it. `rocks_tree` is searched before the default paths. (The probe is removed in 0.2.0.)
+- Added grammars of publications (`lulibre.grammars`): rules for how a type of document lays out its opening lines and what follows them. Example grammars are included for expository handouts (Keith Conrad's), Stacks project chapters (in the order of its Makefile), Elsevier's Handbook of Algebra (volume and position by DOI), and chapters numbered in very large type. `:run grammars [--apply]` runs them, and `:propose` proposes their titles and authors. Define your own in init.lua.
+- Added custom fields (`:custom`): your own metadata, stored in lulibre's database next to the index without modifying calibre's, and named like calibre's custom columns (`#partof`). They are edited, proposed, reviewed, journaled, undone and rolled back like any other field, displayed in the preview pane, and usable in filters (`#partof:handbook`, `has:#partof`).
+- Added parts of a whole as the custom fields `#partof`, `#part` and `#parts`: the filter `is:part`, and `:parts`, which lists each whole with its parts in order and the missing ones.
+- Added the configuration window (`gC`, `:config`): every option with its value, its default, the init.lua line that sets it, and its description. Changing a value there writes init.lua, after saving `init.lua.bak`. `E` opens init.lua in `$EDITOR` (vim, vi) and reloads it on exit. Options missing from init.lua can be added, commented out with their defaults (`config_add_core`, `config_add_scripts`), with full help, values only, or no comment (`config_comments`).
+- Added options for scripts: `lulibre.option(ns, {...})`, set in init.lua as `lulibre.cfg.ns.name`. init.lua's value overrides the script's default.
+- Added `:run reread`: it extracts garbled pages again with poppler's pdftotext, or shifts back shifted characters ("zkdw" for "what"), and lists the files that still need OCR (`text_fallback`). Garbled text now lowers a file's quality score, so `is:needsocr` matches it.
+- Added OCR text layers written into the PDF (`ocr_write = replace | keep`, using ocrmypdf), with the original kept in `ocr_originals` outside the library; undo restores it. `:ocr --write`.
+- Added `:features`, which lists the programs each feature needs. With `pixi_deps = "on"`, lulibre can install them into a pixi environment of its own after a prompt; `rocks_tree` and `rocks_install` do the same for Lua modules. All are off by default.
+- Added one row per field in review, showing the highest-confidence proposal, with `2/3` when there are others: `o` steps to the next source, `O` switches to the next type of source for that field across the view, and `m` toggles a row per proposal (`review_rows`).
+- Added a context panel in the list's place while review is open, for the proposal under the cursor: the source record (for an identifier, the record it resolves to), the page evidence for the value, and other sources' values. `i` hides it; the option is `review_context`; the function can be replaced as `require("lulibre.ui.review").context`.
+- Added the snapshot browser (`gz`, `:snapshots`), which displays in the list's place what restoring each snapshot would change; restore, take, retire.
+- Added `:run arxiv-titles`, which matches titles to arXiv numbers in the local arXiv snapshot, accepting a paper only when its title and authors appear in the pages.
+- Added panels in the list's window (`side = "main"`).
+- Added verification of every record `:enrich` retrieves against the book's pages (`lulibre.verify`). A record whose title and authors are both absent from the pages belongs to another work and is discarded. A record for a larger work the file belongs to (a 40-page chapter against a 404-page edition) contributes no title, authors or identifiers. A title absent from the pages is not proposed; a title or authors partly present are proposed at 0.6. A title search's result must have its title in the pages. Where the file couldn't be parsed, records are proposed 0.2 lower.
+- Added `:verify [filter]`, which checks the library against its files and changes nothing, and `:run recheck`, which goes through lulibre's earlier writes and, using the pages, restores titles and authors a record replaced and removes identifiers of cited or other works (`--propose` for review, `--apply` after a snapshot). Values typed by hand are never changed.
+- Added identifiers from a file's embedded metadata (PDF XMP and Info, an EPUB's package), proposed at 0.9. `lulibre.doc_metadata` returns them.
+- Added CrossRef subtitles ("MATLAB Deep Learning: With Machine Learning, ...") and page ranges, and Open Library page counts, used to distinguish a chapter from its book. Records cached earlier have no subtitle until they are queried again.
+- Fixed DOIs containing parentheses (Elsevier's "10.1016/S1570-7954(96)80014-3") being cut at the first one.
+- Added snapshots. `:snapshot NAME` marks a point in the change journal, and `:rollback SNAP` returns the library to it: lulibre's changes since are undone, changes made outside lulibre are kept (unless `--exact`), books added from the sync folder since go back to how they arrived (or out of the library into the sync folder's `unsynced/` with `--unsync`), and removed books are restored from calibre's recycle bin. A rollback first takes its own snapshot, so rolling back to that one rolls forward. `:snapshot plan SNAP` previews a rollback, `:snapshots` lists the snapshots, `:snapshot retire` removes one from the list, and `:snapshot import FILE` creates one from an older calibre `metadata.db`. From the shell: `lulibre snapshot ...`.
+- Changed the change journal to a separate file next to the index (`<index>.history.db`), moved there the first time this version opens the index; rebuilding or deleting the index no longer affects it. Changes made to calibre outside lulibre are logged in it (as `outside` batches), and so are books added to the library (by `:sync add`, `:orphans`, `:onboard`).
+- Added sync folder subfolders: a file added from `non-catalog/` is marked non-catalog, and one from `good/` is marked good. `unsynced/` holds books a rollback removed, and is skipped when adding files.
+- Added `:noncatalog add`, which marks the selection as works with no catalogue record (a handout, course notes, a chapter of the Stacks project). Such a book is not queried by DOI, ISBN or title, a DOI or ISBN in its pages is not proposed as its own, and having no identifiers doesn't lower its score. Marking withdraws pending catalogue proposals for it and proposes removing any DOI or ISBN it has. `is:noncatalog` filters by the mark, and `:noncatalog remove` removes it. The mark is stored in lulibre's index, not in calibre.
+- Added `:run holdout`, which tests learned subjects on books they weren't learned from: each fifth of the confirmed records is held out in turn, and the subject predicted for each book is compared with its tags. Nothing is changed. `lulibre.learn` gained `census`, `work` and `model`, for learning without storing the result.
+- Fixed `:learn` taking a publisher's front-matter phrases as subject markers ("editorial board" for geometry, "graduate texts" for algebra). They are now excluded (`learn.FURNITURE`); run `:learn` again to remove ones already learned.
+- Fixed records being accepted whenever the library held the identifier that retrieved them. A DOI or ISBN in the library can belong to a cited work (from a reference list, then accepted), a chapter, a review, or the whole book a chapter comes from; the record then proposed another work's title and authors at 0.95. Every record is now checked against the book (`net.fits`): the same title, the record's title in the file's opening, or the book's title with a subtitle; a looser match only when the authors don't differ. A record that fails is discarded and listed (`:messages`, or the terminal), proposals made from it earlier are withdrawn, and when both its title and its authors belong to another work, removing the identifier is proposed.
+- Changed weaker record values to a confidence of 0.6 or less, so they only fill empty fields (or replace values with `--over`): a title missing words from the book's, authors with none of the book's names, authors that are a subset of the book's (a catalogue's first author alone), and the title of a record matched to the book by its authors alone (the volume a chapter comes from).
+- Changed author comparison to treat slightly different spellings of a name as equal ("Bugrii" and "Bugrij"), and to parse Open Library's "Cohen, Henri." as Henri Cohen.
+- Changed DOI detection in a file's pages. A DOI is taken as the file's own only near the top, or on a line of its own with its label. A DOI after other text further down, or among the references, is proposed at 0.5 as a possible cited work.
 
-## 0.2.0-beta.1
+**0.2.0-alpha.1**
+- Added `<Leader>pr` (`:propose-review`): a dialog for a whole round: which books, which sources (files, cached records, services, bibliographies, learned subjects), which fields, how existing values are treated, and what review then displays. Lines that can't be used are greyed out, with the reason.
+- Added source agreement (`lulibre.consensus`): review displays how many sources agree on each proposal (`[2/3]`), and `s` can sort the books with the most disagreement first.
+- Added `:weigh`, which measures, field by field, how often each type of source agrees with the library's records. `:weights` (`<Leader>w`) displays the table and allows setting any weight by hand. With `weigh_sources = "on"`, confidences are computed from the weights. Off by default.
+- Added dialogs: `<Leader>e` queries online services for the selection, with a checkbox per service and the requests listed first; `<Leader>c` applies one change to every selected book; `<Leader>d` lists the datasets with checkboxes for downloading; `<Leader>s` adds, moves or drops the selected staged files. `<Leader><Space>` unmarks every book.
+- Changed arXiv stamp dates. The stamp on a paper's first page gives a date only for a first version, since a later version's stamp carries the revision date (about half of stamped papers have one). arXiv's own record now outranks the stamp, and when a record gives the date, proposals from the stamp or the arXiv number are withdrawn.
+- Added `lulibre.ui.form`, the dialog pane, for scripts.
+- Added runs (`lulibre.runs`): each pass of proposing is a run. While one is active, the status line displays a badge next to the mode (`⟳ PROPOSING  280 books: records, step 2 of 2`). Review displays the runs as tabs, one per run with pending proposals plus "all waiting"; `l` and `h` (or a click) switch tabs, and `D` drops the proposals of the run in view, stopping it first if it is still active. `gr` opens on the latest proposals.
+- Fixed "propose, then review" from the dialog prompting for `gr` after its first step while later steps were still running. Pressing it opened review on every pending proposal, and the run's own review then opened on top. The steps now keep their final lines for the log, and the run's proposals appear in the open review, if there is one.
+- Fixed a round stopped with `:cancel` leaving the options the dialog had set for it (`weigh_sources`, `subject_learned`).
+- Fixed title search (`:enrich --titles`, "CrossRef by title" in the dialog) accepting a record when two words in three of a short title matched, and proposing it at 0.95: "An introduction to the ipaddress module" became "An Introduction to Module Theory". Titles must now match: the same significant words, or one title followed by more words. A short title counts only with an author in common, conflicting authors rule the record out, and proposals get 0.7 to 0.9 depending on the fit.
+- Added `:run unmatch`, which checks title-search matches made under the earlier rule, using cached responses. It lists the matches that no longer pass, and with `--fix` withdraws their pending proposals and proposes restoring the previous values, for review.
+- Added status-line badges for scripts (`lulibre.status(name, text, style)`); `tabs` and `p:tabs(names, current)` for panels; and `p:send(key)`, which wakes a panel from another task. The run badge (`runs.badge`) and the header line of a run's view (`review.banner`) are replaceable functions.
 
-- New: `propose_min` (60% by default). A proposal under it is kept but not
-  shown in review, nor counted as waiting, nor found by `is:proposed`;
-  every summary says how many there are. Lowering it shows them. When
-  another value is proposed for a field, the ones not shown give way to it
-  (`propose_held = "keep"` keeps them).
-- Changed: subjects learned from the library are off by default, and much
-  less sure of themselves. `subject_learned` is now `learned_tags`
-  (`off` by default, was `suggest`), with `learned_tags_min` (20%) in place
-  of `propose_min` for them. A learned subject's confidence is halved, and
-  at most 0.3 (from phrases) or 0.35 (from shared references), down from
-  0.6 and 0.7.
-- Changed: `:enrich` leaves out a record whose year or publisher the book's
-  pages contradict, as read by rule (a cataloguing block, a copyright line,
-  a series page, a cover sheet, a journal header, a grammar): another
-  edition's or another work's record proposes nothing, and an ISBN the pages
-  do not print is proposed to be taken off. Of a copyright line's years the
-  latest is the edition's, the series page now included.
-- New: the Handbook of Algebra grammar knows a chapter without its DOI, by
-  the PII in the file's own title or the foot of its first page, and gives
-  its DOI, year and publisher. Cover sheets with each label on a line of its
-  own (a university's repository, eScholarship) are read: title, authors,
-  publisher or journal, date, DOI. A JSTOR sheet headed with its journal's
-  name no longer puts it in front of the title.
-- Fixed: a cataloguing block's series was taken from the binding note after
-  an ISBN ("(paperback : alkaline paper)", "(hardback)") or from a subject
-  heading's qualifier ("Rings (Algebra)").
-- New: while typing (a field, the `:` and `/` prompts, the pickers),
-  Ctrl or Alt with Left and Right moves a word at a time, as `b` and `w`.
-- Changed: one of each screen at a time. Opening review (or duplicates,
-  orphans, the edit form, help, any screen) while it is open goes to the
-  open one and says so, instead of opening a second beside it and another
-  "about" panel with it; `:new review` opens another when that is wanted.
-- Fixed: `3` (or `gC`) with the configuration window open, then `q`
-  quickly, could open the window again after it closed: whether it was open
-  was looked at only when the script got to it, after the `q`. It is now
-  decided as the key is read (`source config`).
-- Fixed: `:split` with a panel focused crashed lulibre; it now says a
-  panel is not split.
-- Changed: the options with two values are `true` or `false`, read in Lua
-  as booleans: `server_hook`, `backup_metadata`, `weigh_sources`,
-  `pixi_deps`, `rocks_install`. "on" and "off" are still taken when
-  setting them, so an init.lua that says `"off"` goes on working.
-- Fixed: `server_hook = "on"` wrote a lulibre.service with no `[Install]`
-  section, so enabling it did nothing and it never ran before the server.
-- Fixed: lulibre's systemd units were made as the options say by every
-  command, not only the interface: `lulibre units` (meant only to show),
-  `lulibre run`, and `lulibre offline` as lulibre.service runs it. A command
-  with other options than the interface's (another init.lua, `-C`) could
-  remove the units the interface had made.
-- Fixed: a question on the bottom line was cut at half the screen's
-  width, and its choices ("[y/N]") with it; a message was cut at one line,
-  and the pager (help, what `lulibre.show` shows: what was done after the
-  configuration window asks) cut every line at its width. The bottom line
-  now takes the lines a question or a message needs, up to a third of the
-  screen, and the pager wraps.
-- New: `/` in every panel (the configuration window, review, duplicates
-  …), with `n` and `N`, as in the list.
-- New: in orphans, `Space` on a heading changes the action of every row
-  under it at once: all records with no file set to be removed, say.
-- Changed: duplicates, orphans and the edit form show, where the list is,
-  what the row is about, as review does (`i` hides it): the copies side by
-  side, a record beside the book that has its file, what the pages say for
-  each field, or for several books what they share and where they differ.
-- Fixed: the edit form opened from duplicates or orphans showed, in the
-  preview, the book under the list's cursor instead of the one being
-  edited. The preview now stays on the book a panel is about, also while
-  the cursor is in the preview; for several books it shows how many are
-  selected, not one of them. `i` in the edit form is now "about this"
-  (Enter and `e` still edit a field).
-- Fixed: the edit form for several books said "(N different values)", N
-  being the number of books, for every field they did not all share. It
-  now shows the values, the commonest first, with how many books hold each
-  ("Sam Poe (2) · Ann Lee (1)"), or how many values there are when there
-  are more than three.
-
-- Changed: what lulibre adds to the systemd unit that runs calibre's
-  content server is now said by three options, and lulibre keeps the units
-  as they say: `server_hook = "on"` installs and enables `lulibre.service`
-  (no copying it by hand); `opf_writer = "server"` adds the launcher's
-  drop-in, now `lulibre-opf-writer.conf` (the old `lulibre-opf.conf` is
-  replaced); `server_restart_at = "HH:MM"` restarts the server daily. A
-  user unit's are made when the interface starts and when an option is
-  changed in the configuration window; a system unit's with sudo, in the
-  terminal, after asking. `lulibre server-unit` is now `lulibre units
-  [apply]` (`:units`). New: `lulibre.in_terminal(argv)`.
-
-- Fixed: "restart now" (`:offline restart`) with `lulibre.service`
-  installed made two copies of calibre's database for one restart (one by
-  the restart, one by the service its start set off), pushing a real copy
-  out of the `backup_keep` kept, and had calibre write the opf files twice.
-  The service now leaves both to the restart that started the server.
-
-- Fixed: in a terminal with the kitty keyboard protocol (kitty, foot,
-  ghostty, alacritty, WezTerm and others; not inside tmux), lulibre left
-  the protocol's flags set on the alternate screen when it handed the
-  terminal over: the next program there (the editor `E` opens, or `less`,
-  `vi`, `nano` after lulibre ended) could be sent every key as an escape
-  code, unless it set flags of its own. They are taken back before the
-  terminal is handed over.
-
-- Fixed: two tasks asking verify about the same book at once could see a
-  memo half made: the second found a title's phrase missing from the pages
-  (`verify.phrase`) or an identifier the file's metadata names as not its
-  own (`verify.ident`). Each is now made whole before it is kept.
-- Fixed: a book with several files was read from different ones: verify's
-  evidence from the file read best (a PDF first), its lines (the type sizes
-  `verify.headline` judges by), `lulibre.text`, OCR's pages and the preview
-  from the file with the lowest id. All now take the same one
-  (`DB_BOOK_FILE_ORDER`), and `lulibre.files` lists it first.
-- Changed: `lulibre.doc_metadata` reads the file on a worker when called
-  from a task, instead of opening it with MuPDF on the Lua thread.
-
-- Fixed: in review (and every other screen built on panels), the tab keys
-  `1` `2` `3` did nothing. They now go to the library, the sync folder or
-  the configuration, and the screen left open is there again on coming
-  back.
-- Changed: the summaries of the scripts that propose say what happened and
-  what to do, in sentences: "No new proposals for the selected book. 300
-  proposals wait. Press gr to review." (`proposals.to_review`, replaceable).
-  Before: "0 proposals for 0 of 1 book; gr goes through them".
-- Changed: options that are not in init.lua are no longer offered when the
-  configuration window opens; `a` there adds them (`config_add_core`,
-  `config_add_scripts` default to `never`). New option `config_add_as`:
-  added commented out with their defaults (the default), or set to them.
-
-- Fixed: in a terminal with the kitty keyboard protocol (ghostty, kitty;
-  not inside tmux), shifted symbols did nothing or the wrong thing: `:`
-  arrived as `;`, `?` as `/`, `&` as `7`, so the command line would not
-  open and typed text lost its symbols. A key is now what it types.
-
-- Changed: arXiv's cs.CL (Computation and Language) is proposed as
-  `linguistics/computational`, not `cs/nlp`: computational linguistics is
-  not natural language processing. The words "computational linguistics"
-  on a book's pages point to `linguistics/computational` too. Tags already
-  in the library, and proposals already made, are as they were.
-
-- Added: a file of yours used in place of one of lulibre's own (a module in
-  `~/.config/lulibre/lua/`, a script in `scripts/`, named like lulibre's)
-  is said in the console at start, with a pointer on the message line: once
-  for each file, and again whenever lulibre's own file changes (an update
-  may have fixed what yours lacks).
-
-## 0.2.0-alpha.3
-
-- Added: `:backup check` (and `lulibre backup check`) runs SQLite's
-  integrity check of calibre's database, read only, with the server
-  running. Each copy is checked as it is made, and the list marks one that
-  fails. Pruning keeps the newest copy that passed its check.
-- Added: `:backup restore N` puts a copy back. It first says what the copy
-  differs in: books removed and added since, books changed (with how many
-  in each field), and folders calibre renamed since. Then it asks. The copy
-  goes back once nothing has the library open (`:offline`), after a copy of
-  calibre's database as it is. Records are pointed at the folders as they
-  are now, each book that differs is marked for its metadata.opf to be
-  written again, and no ID of a book added since is given out again.
-  `:backup compare N` shows the differences alone.
-- Changed: when calibre's database can't be read (it is damaged), lulibre
-  warns and goes on with the library as it last read it, so that a copy can
-  be put back. Before, it would not start.
-- Changed: `:backup` is a bundled script now, so it runs with no interface
-  too (`lulibre backup`).
-
-- Changed: an option set to nil (`lulibre.o.pages = nil`, or a script's
-  `lulibre.cfg.NS.NAME = nil`) goes back to its default instead of being an
-  error.
-- Changed: modules and scripts are not looked for in the current directory,
-  and a build run from its source tree no longer falls back on the
-  installed lulibre's files (a module renamed in the tree was found there,
-  out of date).
-- Fixed: undefined behaviour when the list was regrouped with a filter that
-  matched nothing.
-- Fixed: a publication date was written at midnight UTC, which calibre shows
-  as the day before west of Greenwich; it is written at noon UTC, the same
-  day everywhere. Dates written before are as they were.
-
-- Added: calibre's content server can keep each book's metadata.opf
-  current while it runs, as calibre's program does: the launcher
-  `contrib/calibre-server-opf.py` starts calibre's server with calibre's
-  own metadata backup in it. `lulibre server-unit` finds the systemd unit
-  that runs calibre-server and changes it by a drop-in (`apply`, `remove`);
-  a system unit, or a hardened one, is shown the change instead. calibre's
-  manual's unit, so changed, is installed under `share/lulibre/systemd/`.
-  `:backup` says who keeps the opf files current and how many are behind.
-  The launcher relies on calibre's internals: after a calibre update, its
-  log says whether the backup runs.
-
-- Added: with a plain content server, lulibre has calibre write the opf
-  files each time the server is stopped (`lulibre offline`, which
-  `lulibre.service` runs before each start), and right after lulibre
-  changes the library straight in its folder (option `backup_metadata`).
-- Added: while calibre's program is open, what lulibre would do that the
-  program could be doing too waits, and goes on once it is closed: a change
-  straight to the library's folder, a stray file set aside, the changes
-  queued for a stopped server. The status line says so.
-
-- Fixed: requests to an online service could go out two at a time when
-  several tasks looked a book up together (two found the service free in
-  the same moment); a key hint in a long message could show another
-  command's key; shared caches could be read half-built.
-  `lulibre.claim(t, key)` gives scripts the same one-step test and set.
-
-- Fixed: with no content server, a new calibre column said it waited for
-  the server to be stopped; it is offered at once when nothing has the
-  library open, and with calibre's program open it says it waits for the
-  program to be closed (`lulibre.calibre` tells which is running).
-- Fixed: an error in a luv callback left `lulibre run` exiting 0; and
-  `lulibre.service` has a start timeout, so a script that never ends cannot
-  keep the content server from starting.
-
-## 0.2.0-alpha.2
-
-- Added: custom fields can be calibre columns too. `:custom column add
-  NAME` asks calibre for the column; from then on every change to the field
-  is written to calibre as well, and `:custom push NAME` copies the values
-  it had. `:custom column remove NAME` takes any calibre column out again
-  (lulibre keeps its own values). The preview says which of a book's custom
-  fields calibre lacks or holds otherwise, and `:custom` says it of each
-  field. `:run columns` does it for #partof, #part and #parts.
-
-- Added: copies of calibre's database, kept with lulibre's data
-  (`~/.local/share/lulibre/backups/`), made before the content server
-  starts as the option `backup_restart` says: `always` (the default),
-  `next` (once, then not until set to `next` again), `never`, or a number
-  of days. `backup_keep` copies are kept (5). The first change of a
-  session offers one when the newest is older than `backup_max_age` days
-  (7; `backup_too_old = false` says nothing). Before a column is added or
-  removed, each changed book's metadata.opf is written (`backup_metadata`,
-  on): calibre's own program is the only one that writes them otherwise.
-  `:backup` lists the copies, `:backup now` makes one, `:backup next` (or
-  always, never, DAYS) says when.
-
-- Added: changes calibre makes only while the content server is stopped
-  (a new column; calibredb's add_custom_column, remove_custom_column,
-  restore_database, check_library, backup_metadata, catalog) wait in a
-  queue, and lulibre asks: restart now, or not now. They are done before
-  the server's next start by `lulibre.service`, a systemd user unit
-  (installed under `share/lulibre/systemd/`), or now with the options
-  `server_stop` and `server_start`, or by hand with `lulibre offline`.
-  `:offline` shows what waits.
-
-- Changed: panels and windows are reached by different keys. `Tab` goes to
-  the panels (review, the edit form, the browse column ...): from the list
-  or a preview, to the one last in, and in a panel to the next; `<S-Tab>`
-  the other way. `<C-w>w` (and the new `<C-w>W` back) and `<C-w>h` `j` `k`
-  `l` go through the windows only: the list, the previews, the console.
-  `Esc` in a panel goes back to the window it was reached from and leaves
-  the panel open; `q` closes it, and in a dialog (the edit form, a form
-  that asks something) `Esc` still closes. `:focus panel [prev]` and
-  `:focus back` are the commands; the panel action `back` can be rebound.
-
-- Mathematics in proposed titles is written in Unicode: SL₂(ℤ), GLₙ(ℚₚ),
-  𝔽ₚ[T], ℤ/pᵃℤ, X³ − 5. The PDF reader marks each line's mathematics from
-  its fonts and from type set smaller and higher or lower, so a title page
-  gives back the scripts its text lost; arXiv's TeX is written out; and a
-  glossary reads plain titles (SL2(Z), GLn(Qp), over Q) where they read one
-  way only. `:notation [filter]` proposes the selected books' titles that
-  way. Title case leaves formulas alone (p-adic stays so). Search reads
-  them as plain letters: `SL2` finds SL₂(ℤ). Option `math_notation`
-  (`unicode`, or `off`).
-
-- Review marks each proposal with what the book's own pages say of it,
-  against what the book has now: `●` they show it and not what is there now
-  (or it adds to it), `=` they show both, `◐` part of it, `·` they cannot
-  tell, `○` neither, `✗` they show what is there now and not this. Dates
-  (their year, where a book says when it is from), publishers and series
-  are now looked for on the pages too, besides titles, authors and
-  identifiers. The context panel says the verdict in words. Books whose
-  proposals are best borne out come first: `review_sort` is now `evidence`
-  by default, and `s` steps on to the sources' confidence, the most
-  disputed, and id. With one row per field, the alternative shown first is
-  the best borne out.
-- The configuration window is a tab: `3 Configuration` in the bar along the
-  top (always shown now; `2 Sync folder` is there once a sync folder is
-  set). `3`, `gC`, `:config` or a click opens it across the screen in place
-  of the list and the preview; `1`, `2` or their tabs go back. What the
-  option under the cursor does is shown under it.
-- Changed: rejecting a proposal (`r`) no longer keeps the value from being
-  proposed again by a later run; it decides that proposal only. `N` in
-  review rejects for good (that value, for that book and field, is not
-  proposed again unless `--over` asks). The option `review_reject = "always"`
-  brings back the old behaviour for `r`. Earlier rejections no longer block
-  anything: what they kept out, such as an author a grammar reads off the
-  title page, can be proposed again.
-- Fixed: some Open Library records put the series under the title after a
-  blank line ("Local Fields", line breaks, "Graduate Texts in Mathematics"),
-  and the whole was proposed as the title. The part after the blank line is
-  now the series, and no proposed value but a comment keeps a line break.
-- Fixed: OCR replaced a page's text whatever it was, so a title page that
-  read well could come back empty. A page is now read by OCR only when its
-  own text is no text (little of it, or garbled), and replaced only when
-  OCR reads it better; a garbled file has every page the index holds read,
-  not only the first `ocr_pages`.
-
-- Changed: each file's text keeps a garbled share (characters no font
-  could map; a run of them once), and `is:needsocr` goes by it: little
-  text, more than 4% unreadable, or almost no words (quality below 0.2).
-  A word's share alone is no sign: mathematics has few long words, and
-  Keith Conrad's handouts were being taken for scans. `:run reread`
-  measures every file again (`lulibre.text_measure`).
-
-- Fixed: roman numerals a catalogue had put in title case ("Lectures in
-  Abstract Algebra: Ii. Linear Algebra", from Open Library) are put back in
-  capitals in the records' titles.
-
-- New: grammars may use LPeg patterns, per line (`peg = ...`) or over the
-  opening lines, when LPeg is installed (`lulibre.features` names it).
-- Fixed: a C module built for another Lua crashed lulibre when a script
-  required it. Each C module is now loaded once in a child process first and
-  refused, with the reason, if that crashes. `rocks_tree` is searched before
-  the usual places.
-
-- New: grammars of publications (`lulibre.grammars`): how a kind of
-  document sets its opening lines, and what follows. Built in: Keith
-  Conrad's handouts, the Stacks project's chapters (in the order of its
-  Makefile), Elsevier's Handbook of Algebra (volume and place by DOI),
-  numbered chapters in very large type. `:run grammars [--apply]`; their
-  titles and authors are proposed by `:propose`. Your own in init.lua.
-- New: custom fields (`:custom`): metadata of your own beside calibre's,
-  in a database of lulibre's own beside the index (calibre's is never
-  changed for them), named as calibre's custom columns (`#partof`). They are
-  edited, proposed, reviewed, journaled, undone and rolled back like any
-  field, shown in the preview, and filtered by (`#partof:handbook`,
-  `has:#partof`).
-- New: parts of a whole, as the custom fields `#partof`, `#part`, `#parts`:
-  `is:part`, `:parts` (each whole, its parts in order, what is missing).
-
-- New: the configuration window, `gC` / `:config`: every option with its
-  value, default and the line of init.lua that sets it, and what it does;
-  a value changed there is written to init.lua (kept as `init.lua.bak`
-  first); `E` opens init.lua in `$EDITOR` (vim, vi), and it is read again
-  when you leave. Options init.lua does not mention can be put in,
-  commented out with their defaults (`config_add_core`,
-  `config_add_scripts`), with full help, the values only, or no comment
-  (`config_comments`).
-- New: scripts declare options of their own, `lulibre.option(ns, {...})`,
-  set in init.lua as `lulibre.cfg.ns.name`; init.lua wins over the script.
-- New: `:run reread` reads garbled pages again with poppler's pdftotext,
-  or moves shifted characters back ("zkdw" for "what"), and names what still
-  needs OCR (`text_fallback`). Garbled text now counts against a file's
-  quality, so `is:needsocr` finds it.
-- New: OCR can give the PDF itself a text layer (`ocr_write = replace |
-  keep`, with ocrmypdf), the original kept in `ocr_originals` outside the
-  library; undo puts it back. `:ocr --write`.
-- New: features say which programs they need (`:features`); with
-  `pixi_deps = "on"` lulibre can keep them in a pixi environment of its own,
-  asking first. `rocks_tree` and `rocks_install` do the same for Lua
-  modules. All off by default.
-
-- New: review shows one row per field, the surest proposal for it, with
-  `2/3` when there are others: `o` steps to the next source, `O` takes the
-  next kind of source for that field throughout the view, `m` switches to a
-  row for every proposal (option `review_rows`).
-- New: while review is open, the list's place shows what the proposal
-  under the cursor rests on: the record behind it (for an identifier, the
-  one it leads to), what the book's pages say of the value, and the other
-  sources' values (`i` hides it; option `review_context`; replaceable as
-  `require("lulibre.ui.review").context`).
-- New: the snapshot browser, `gz` / `:snapshots`: what going back to each
-  would do, shown where the list is; go back, take, retire.
-- New: `:run arxiv-titles` finds arXiv numbers by title in arXiv's snapshot
-  kept on this machine, taking a paper only when the pages show its title
-  and people.
-- New: panels can be shown in the list's window (`side = "main"`).
-
-- New: the file decides. Every record `:enrich` finds is held against the
-  book's own pages (`lulibre.verify`): one whose title and people are both
-  missing there is another work's and left out; one of a work the file is
-  only part of (a 40-page chapter, a 404-page edition) gives no title,
-  authors or identifiers; a title the pages do not show is not offered;
-  one shown in part, or people named in part, are offered at 0.6. A title
-  search's record must have its title on the pages. Where the file could
-  not be read, records are offered 0.2 lower.
-- New: `:verify [filter]` holds the library against its files and changes
-  nothing; `:run recheck` goes back over what lulibre wrote and, with the
-  file deciding, puts back titles and authors a record replaced, takes off
-  identifiers of cited or other works (`--propose` for review, `--apply`
-  after a snapshot). Typed values are never touched.
-- New: identifiers from a file's own metadata (a PDF's XMP and Info, an
-  EPUB's package) are offered as its own (0.9); `lulibre.doc_metadata`.
-- New: CrossRef's subtitle is kept ("MATLAB Deep Learning: With Machine
-  Learning, ..."), and its page range and Open Library's page count are
-  read, to tell a chapter from its book. (Records already kept have no
-  subtitle; they get one when asked again.)
-- Fixed: a DOI with parentheses in it (Elsevier's
-  "10.1016/S1570-7954(96)80014-3") was cut at the first one.
-
-- New: snapshots. `:snapshot NAME` marks a point in the journal of
-  changes, and `:rollback SNAP` puts the library back to it: what lulibre
-  changed since goes back, changes made outside lulibre stay (unless
-  `--exact`), books added from the sync folder since go back to how they
-  came (or out of the library to the sync folder's `unsynced/` with
-  `--unsync`), removed books come back from calibre's recycle bin. A
-  rollback first takes a snapshot of its own, so going back to that rolls
-  forward. `:snapshot plan SNAP` shows what it would do, `:snapshots` lists
-  them, `:snapshot retire` takes one out of the list, `:snapshot import
-  FILE` makes one from an older copy of calibre's `metadata.db`. From the
-  shell: `lulibre snapshot ...`.
-- Changed: the journal now lives in a file of its own beside the index
-  (`<index>.history.db`), moved there the first time this version opens
-  the index; rebuilding or deleting the index no longer touches it.
-  Changes made to calibre outside lulibre are now logged in it too (as
-  `outside` batches), and so are books added to the library (by `:sync
-  add`, `:orphans`, `:onboard`).
-- New: folders under the sync folder: a file added from `non-catalog/` is
-  marked non-catalog, one from `good/` known good; `unsynced/` holds books
-  a rollback took back out and is not looked in for files to add.
-
-- New: `:noncatalog add` marks the selection as works no catalogue has a
-  record of (a handout, course notes, a chapter of the Stacks project).
-  Such a book is not looked up by DOI or ISBN nor searched for by title,
-  a DOI or ISBN in its pages is not offered as its own, and having no
-  identifiers does not count against it. Marking withdraws what waits for
-  it from catalogue records and proposes taking off a DOI or ISBN it
-  holds. `is:noncatalog` filters by it; `:noncatalog remove` takes it back.
-  The mark is kept in lulibre's index, not written to calibre.
-- New: `:run holdout` tries the learned subjects on books they were not
-  taught by: each fifth of the confirmed records is left out in turn, and
-  the subject said for each book is held against its tags. It keeps and
-  changes nothing. (`lulibre.learn` gained `census`, `work` and `model`
-  for learning without storing the result.)
-- Fixed: `:learn` took phrases of a publisher's front matter for a
-  subject's ("editorial board" for geometry, "graduate texts" for
-  algebra). They are now left out (`learn.FURNITURE`). Run `:learn` again
-  to be rid of the ones already learned.
-- Fixed: a record was believed whenever the library held the identifier
-  that led to it. But a DOI or ISBN in the library can be a cited work's
-  (read off a reference list and accepted), a chapter's, a review's, or
-  the ISBN of the whole book a chapter is from; the record then offered
-  somebody else's title and authors at 0.95. Every record is now checked
-  against the book (`net.fits`): the same title, or the record's title in
-  the opening of the file, or the book's title with a subtitle; a looser
-  likeness only when the authors do not differ. A record that fails is
-  left out and named (`:messages`, or the terminal), what was proposed
-  from it before is withdrawn, and when both its title and its authors
-  are another work's, taking the identifier off the book is proposed.
-- A record no longer presses a worse value on a good one. Offered at 0.6
-  or less, so only where the field is empty or `--over` asks: a title
-  that is the book's with words left out, authors with none of the
-  book's names, authors that are some of the book's and nobody else (a
-  catalogue's first author alone), and the title of a record known for
-  the book's by its authors alone (the volume a chapter is from).
-- A name spelled a little differently is the same name when authors are
-  compared ("Bugrii" and "Bugrij"), and Open Library's "Cohen, Henri." is
-  read as Henri Cohen.
-- A DOI on a file's pages is taken for the file's own only near the top,
-  or on a line of its own with its label; one that follows other words
-  further down, or stands among the references, is offered at 0.5 as
-  "perhaps a work it cites".
-
-## 0.2.0-alpha.1
-
-The second alpha: dialogs over what lulibre already does, how far sources
-agree and how much each is believed, and runs of proposing that review
-shows by themselves.
-
-- `<Leader>pr` (`:propose-review`): a dialog for a whole round: which
-  books, what is asked (files, kept records, services, bibliographies,
-  learned subjects), which fields, how what is there is treated, and what
-  review then shows; lines that cannot be used are greyed and say why.
-- How far a book's sources agree is measured (`lulibre.consensus`): review
-  shows how many agree on each proposal (`[2/3]`), and `s` can put the
-  books whose sources disagree most first.
-- `:weigh` measures how often each kind of source agrees with the library's
-  own records, field by field; `:weights` (`<Leader>w`) shows the table and
-  lets any weight be set by hand. With `weigh_sources = "on"` confidences
-  are worked out from them. Off by default.
-- More dialogs over what lulibre already does: `<Leader>e` looks the
-  selection up (what would be asked of whom, a box for each service),
-  `<Leader>c` makes one change to every selected book, `<Leader>d` shows
-  the databases with boxes for which to fetch, `<Leader>s` adds, moves or
-  drops the selected waiting files. `<Leader><Space>` unmarks every book.
-- The arXiv stamp on a paper's first page gives a date only when it is a
-  first version's: a later version's stamp is the day of that revision,
-  and half the stamped papers carry one. arXiv's own record of a paper now
-  outranks its stamp, and when a record gives the day the proposals read
-  off the stamp or the number are withdrawn instead of left beside it.
-- `lulibre.ui.form`: the dialog pane, for scripts.
-- Each go of proposing is a run (`lulibre.runs`). While one is going on the
-  status line carries a badge beside the mode (`⟳ PROPOSING  280 books:
-  records, step 2 of 2`). Review shows the runs as tabs: one for each that
-  still has something waiting, and "all waiting"; `l` and `h` (or a click)
-  switch, and `D` drops what the run in view added, stopping it first if it
-  is still going on. `gr` opens on what was just proposed.
-- Fixed: "propose, then review" from the dialog told you to press `gr`
-  after its first step, while the later steps were still working; that
-  opened review on everything that waited, and the run's own review then
-  came up over it. The steps now keep their closing lines for the log, and
-  the run's proposals come up in the review that is open, if one is.
-- Fixed: a round stopped with `:cancel` left the options the dialog had set
-  for it (`weigh_sources`, `subject_learned`) in place.
-- Fixed: looking a book up by its title (`:enrich --titles`, the dialog's
-  "CrossRef by title") took a record when two words in three of a short
-  title agreed, and offered it at 0.95: "An introduction to the ipaddress
-  module" became "An Introduction to Module Theory". The titles must now
-  say the same thing (the same telling words, or one the other with
-  something run on after it), a short title counts only with an author in
-  common, authors that disagree rule the record out, and the proposals
-  carry 0.7 to 0.9 according to how well it fits. Of the 79 such matches
-  in the library this was found in, 17 hold.
-- `:run unmatch` goes back over what the earlier rule brought in, from the
-  answers that were kept: it lists the matches that no longer hold, and
-  with `--fix` withdraws what still waits from them and proposes, for
-  review, putting back what the books said before.
-- For scripts: `lulibre.status(name, text, style)` keeps a badge in the
-  status line; panels take `tabs` and `p:tabs(names, current)`, and
-  `p:send(key)` wakes a panel from another task. The badge
-  (`runs.badge`) and the line at the top of a run's view
-  (`review.banner`) are functions to replace.
-
-## 0.2.0-alpha.0
-
-The first alpha of 0.2.0: everything below is in it. (Put together on the
-branch `0.2.0-dev` and merged into `main` as it went; builds of it are
-numbered from 001 again.)
-
-Added
-- Thesis and dissertation cover pages are read by rule (title above "by",
-  author after it, degree, program, institution, year, advisor), following
-  Choudhury et al., JCDL 2020. It needs no font information, so it also works
-  on pages read by OCR.
-- `D` (`:sync drop`) takes staged files out of the sync folder without adding
-  them; they are kept aside and `u` puts them back.
-- With a sync folder set, a tab line shows `1 Library` and `2 Sync folder`
-  with their counts and which one the list is showing; `1`, `2` or a click
-  switch, and the keys that act on staged files are shown beside it.
-- The command line completes: command names, option names and their values
-  for `:set`, scripts for `:run`, the arguments of other commands, and the
-  filter language at `&` and `/`. `Tab` takes the highlighted completion,
-  `<C-n>` `<C-p>` move through them.
-- History for the command, filter and search lines, kept between sessions.
-  `Up` and `Down` recall entries that start with what has been typed.
-- `lulibre.index{filter=, force=}` runs the indexer from a script and waits
-  for it.
-- Every panel's keys can be changed: `lulibre.map("review", "y", "accept")`.
-  The title bar shows a panel's main keys and `?` lists them all, both
-  written from the keys in force.
-- The remaining fixed keys can be changed too: moving inside a panel and
-  closing it, editing the line being typed, the picker, overlays and the
-  console each have named actions, bound with `lulibre.map("panel", "n",
-  "down")`. `?` lists them all with their keys.
-- `c` clears a field in the edit form and in review. In the edit form `x`,
-  which dropped the pending change, is now called revert.
-- `<Leader>` in key bindings, set by the option `leader` (default `\`).
-- `:reload-cfg` (`<Leader>R`) reads `init.lua` again.
-- Hints and messages name keys as they are bound now, not as they were
-  shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the
-  same.
-
-- Title case, after the APA manual. `gT` (`:titlecase`) rewrites the
-  selected titles that are in CAPITALS; `t` does it for a field in the edit
-  form and in review; titles proposed from files and `.bib` records arrive
-  in title case when they were found in capitals (option `title_case`).
-  `is:capstitle` filters for titles in capitals. For scripts:
-  `lulibre.titlecase`, and `lulibre.lower` / `lulibre.upper`, which know
-  accented, Greek and Cyrillic letters.
-- The mouse selects text everywhere, not only in the preview: a drag in the
-  list, a panel, the line being typed, the status line or an overlay copies
-  what it covers; a double click the word; a triple click the row, or in a
-  panel the whole cell including what its column cut off. `<C-y>` copies
-  the line being typed.
-- Windows are resized with the mouse, by dragging the line between two of
-  them or a window's bar up or down, and from the keyboard with Alt and an
-  arrow, or `<Leader>` and an arrow (`:resize left|right|up|down`). These
-  keys, like any Alt combination and the leader, work from inside panels.
-- `:propose` no longer stops at fields that have a value. When the file is
-  confident and says something different from what the book holds, that is
-  proposed too, so a value mistyped by hand gets corrected by the next run.
-  The option `propose_over` (`gaps`, `sure`, `any`) sets how far the file is
-  believed; `:propose --over` and `--gaps` do so for one run. A proposal
-  that was rejected is not made again unless `--over` asks, and accepting
-  everything above a confidence asks before replacing existing values.
-- In review, `a` on a book's own line accepts all of that book's proposals
-  (again: takes them back), and `r` there rejects those still pending.
-- A by-line under the title ("By A. Name", "BY A. NAME*", "by NAME, A. B.",
-  or "by" alone above the names) is read as the authors and proposed with
-  confidence 0.85, as the page's own word rather than a guess from layout.
-- Selecting text in the preview to copy it (a drag, a double click) no
-  longer moves the cursor out of the window it was in, so in review the next
-  key is still review's.
-- Authors from title pages: ranks and roles ("Professor Emeritus") are
-  never proposed, and the option `never_authors` adds terms of your own; a
-  page that opens with its author's name alone on the first line is read
-  that way (author 0.7, title from the next largest line); a name the
-  leading pages give twice is proposed with 0.15 more confidence.
-- Known good records. Every record has a score for how complete and clean
-  it looks; `gk` (`:good`) lists them by it, and the ones you confirm are
-  marked (`is:good`). `lulibre.quality` for scripts.
-- `:learn` finds, from the confirmed records, the two- and three-word
-  phrases that mark each subject, and `:terms` shows them for review: drop
-  what does not belong, add your own. The edit form offers the subject a
-  book's phrases point to, naming them, at no more than 0.6 confidence;
-  the option `subject_learned` turns that into proposals, or off.
-  `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
-- In the edit form, subjects that say what a book is about come before
-  catch-alls such as `math/general` (option `subject_catchall`).
-- `:enrich` asks five services, none of which needs an account: arXiv,
-  CrossRef, zbMATH Open (which gives a mathematics paper its subject from
-  the MSC codes), Open Library (books by ISBN, with the subject from the
-  shelf class) and OpenAlex. Every answer is kept, so a work is asked about
-  once and `--offline` proposes from what is kept. The options
-  `enrich_services` and `contact_email`.
-- `:enrich` keeps to each service's rules, arXiv's first (its terms: one
-  request every three seconds, one connection). One request at a time,
-  five seconds apart for arXiv and one for the others, across every running
-  lulibre; forty arXiv papers, twenty DOIs or twenty ISBNs to a request; a service that answers "too
-  many requests" is not asked again for half an hour and nothing is retried
-  or asked one by one instead; `:enrich --plan` says what a run would ask
-  before anything is asked. Old-style arXiv numbers with a subject class
-  (`math.AG/0601001`) are looked up as arXiv files them.
-- arXiv from a file: with a file of arXiv's records in the data folder
-  (`~/.local/share/lulibre/arxiv.json`, or the option `arxiv_snapshot`),
-  `:enrich` reads papers from it and asks arXiv only about those newer
-  than the file. Both arXiv's own snapshot and a hypergraph of arXiv are
-  read; from the second, authors are put in the order of the paper's first
-  page. The snapshot is preferred where both are there, and betters the
-  records that were read from a hypergraph.
-- `:enrich` leaves out the record of a work the file only cites (an
-  identifier found in the pages whose record has another title), puts TeX
-  in arXiv's titles and names into plain text (`lulibre.detex`), and does
-  not propose the same authors named less fully.
-- Fixed: a hyphen or dash written another way (`Vanden‐Eijnden`,
-  `Erdős–Kac`) made two values count as different.
-- A layout for a series named in so many words: a line that is a series'
-  name with a volume number, editors, an ISSN or a house's name beside it;
-  the line above "Series Editors"; a "Series:" label. Names set over two
-  lines are joined, names in capitals put in title case. "Fourier Series"
-  and its like are known for what they are (`layouts.not_series`).
-- The cataloguing block is read in the form the Library of Congress has
-  used since 2015 (`Names: ... | Title: ... | Description: ...`), which was
-  being taken for the old form and gave titles such as "Names: Miyagawa,
-  Shigeru, author"; in the German national library's form; and not at all
-  where it only says that a record exists. A title from a block printed in
-  a scanned book is taken at 0.8, not 0.9. Found by stripping a copy of the
-  library of all its metadata and proposing it back: titles proposed at 0.9
-  or more went from 34% to 92% agreeing with the library's own.
-- Embedded metadata in Latin-1 is read as such, not passed on as broken
-  UTF-8.
-- Computing has finer subjects. The vocabulary tells machine learning, AI,
-  language processing, vision, complexity, algorithms, programming
-  languages, information theory, systems and security apart (it knew one
-  `cs`), thirty more arXiv classes have a subject of their own, and a finer
-  subject under one a book already has (`cs/ml` for a book filed under
-  `cs`) is proposed. `stat.*` is statistics, not computing.
-- Help that can be found in: `?` shows the keys under headings that open
-  and close (all but "Start here" closed to begin with), each key with what
-  it does; `/` searches every key and command as you type; `K` on a key, or
-  `:help TOPIC` anywhere, shows what the guides say about it. The guides are
-  installed with lulibre. `:help-plain` is the old single page.
-- `gp` proposes metadata for what is selected.
-- `a` reads a file as far as the page being previewed, when that page is
-  past what was indexed (`:addpages`); `lulibre.index { pages = N }`.
-- A man page, `lulibre(1)`. `propose`, `enrich` and `refs` are commands of
-  the command line too, and every script-backed command answers `-h`.
-- The list as a tree. `gh` groups it by author, subject (subjects nest),
-  series, publisher, year, format, or the folders of the calibre library;
-  headings open and close (Enter, `l`/`h`, `za` `zo` `zc` `zR` `zM`, a
-  click), show their counts, and stand for their books: `Space` marks them,
-  `e` edits them, `r` reviews their proposals. `s` chooses the order of the
-  books. Enter on a book opens the edit form. `:group`, `:fold`.
-- `r` reviews the proposals of what is selected (`:review selection`).
-- Text in the preview can be selected with the keys: `v` puts a cursor
-  there, vim's movements move it, `v`/`V` select, `y` copies. A place of
-  its own for keys: `lulibre.map("select", key, action)`.
-- `gb`: the sync folder in a column beside the library, the list following
-  the file under the cursor to the book that is the same file or to those
-  that look like it; add, move, drop, edit and review from there.
-- `lulibre datasets`: databases for looking books up without asking
-  anybody. It says what there is (arXiv's records, Open Library's editions
-  and authors, zbMATH's links to arXiv), each with a line on whom it is for,
-  asks which to fetch, and can be run again whenever; `datasets add FILE`
-  takes up files fetched by other means. `:datasets` in the interface.
-- `:enrich` reads books by ISBN out of Open Library's dumps where they are
-  here, and proposes an arXiv paper's zbMATH number from zbMATH's table of
-  links, before asking either.
-- An article's publisher is its journal, after the house behind it where
-  that is known: `Elsevier: Journal of Algebra`. Read from a journal's
-  heading and from CrossRef's and OpenAlex's records; houses are written one
-  way (`layouts.house`), archives such as JSTOR are not named.
-- `:arxiv-fetch` fetches arXiv's snapshot from Kaggle into the data folder,
-  running Kaggle's program through pixi; not again within a week unless
-  forced.
-- `:enrich` paces each service by its published policy, read and linked in
-  `net.lua` (Open Library and zbMATH two seconds), waits longer after a
-  slow answer, and no longer sends `contact_email` to OpenAlex, which has no
-  use for it.
-- The publisher from the copyright line ("© Springer-Verlag Berlin
-  Heidelberg 1999", "Copyright © 1984 by McGraw-Hill, Inc."), written one
-  way per house (`layouts.houses`); an author's own copyright names none.
-- Four layouts that read a date, for the books that have none: the day a
-  journal received an article, a date on a line of its own on the first
-  page, the year in a journal's heading, the year of a copyright line.
-  `layouts.date(text)` and `layouts.journal(text)` for scripts.
-- The series-page layout knows some thirty series of several publishers
-  (and takes more: `layouts.series`), with the volume, the house and the
-  year. An author read off a title page who also heads entries of the
-  book's own references is proposed with more confidence; a book with no
-  author is offered the authors of the books that share its references.
-- `:refs` reads what each book cites from the bibliography on its last
-  pages: the heading is found, the entries cut apart by numbering or hanging
-  indent, and each given a key (DOI, arXiv number, or author, year and first
-  page) by which the same work is known in another book's list. Books that
-  share references suggest each other's subject in the edit form.
-  `lulibre.extract` takes `tail = true` for a file's last pages.
-- Fuller records teach more when `:learn` runs: a confirmed record counts by
-  its score. The option `never_titles` adds to what marks a title as junk.
-- Layouts: pages that say their facts in known places are read by rule. A
-  book's cataloguing block gives author, title, series and number, year and,
-  from its class number, the subject; a Springer series page the series and
-  volume; the arXiv stamp the day of submission. Your own are a few lines
-  (`require("lulibre.layouts").add{...}`): marks that identify the page and,
-  for each field, a constant, a pattern or a function. Series and series
-  number can now be proposed.
-- One field at a time. `:propose --only title,ids` keeps to the fields
-  named; `--fresh` proposes the file's reading whatever the record says, for
-  when a field went wrong across many books; in review `f` and a letter
-  shows only that field's proposals, and accept-all then speaks for it
-  alone. `:clear FIELDS` blanks fields outright.
-- A title of one word is no longer junk for being one word: "Algebra" and
-  "Topology" are titles; "infinite" and "E807en" are still what a file name
-  leaves behind. The option `one_word_titles` (`check`, `ok`, `junk`) sets
-  the rule, `good_titles` lists titles to leave alone, and nothing in a
-  record confirmed as good is treated as junk. (Every one-word title used
-  to count as empty, so a bulk accept could replace it unasked, the edit
-  form's "fill gaps" could overwrite it, and it scored as junk.)
-- A value that is plainly not one is treated as empty when proposing: a
-  title that is a number, a file name or a heading, an author that is a
-  program, a site or a rank. `:junk` marks and lists such records.
-- Title pages: a title that begins with "Introduction" is no longer taken
-  for the heading that ends the front matter (no title was read from such
-  pages at all); a smaller line that leads into the largest is part of the
-  title ("Introduction to" above "Commutative Algebra"); a page set in one
-  size has its title read from its first lines; "Professor A. Name" is A.
-  Name.
-- `lulibre.map` takes a description for the help overlay, or `false` to stay
-  out of it.
-- A warning when the password file can be read by other users.
-- Review lists the books surest first: the one whose best proposal has the
-  highest confidence at the top, with how many proposals wait for each. `s`
-  switches to id order; the option `review_sort` sets the default.
-- Review, duplicates and orphans refresh when the library changes under
-  them (`reloads = true` gives a script's panel the same, as `"<Reload>"`).
-  Proposals for a book that has been removed are no longer listed or counted.
-- From duplicates and orphans, `e` opens the edit form for the row's book
-  and `r` the review of its proposals; the panel steps aside meanwhile and
-  comes back up to date. `:review FILTER` reviews only the matching books.
-- `t` in duplicates and orphans takes from the row under the cursor: what
-  its record says and the kept copy's (or the book that has the file) does
-  not is proposed for that one, and review opens on those proposals.
-- With the cursor in review, duplicates, orphans or capture, the preview's
-  keys work (`P`, `]`, `[`, `J`, `K`), as do the copying keys and the
-  console's. `p` shrinks the panel to give the preview room.
-- A following panel shows its row's book in the preview even when the
-  list's filter leaves that book out.
-- Panels for scripts: `keys` and `pass`, `p:hide()`, `p:show()`,
-  `p:height()`; `lulibre.ui.edit` and `lulibre.ui.review` take `{ ids = }`.
-
-Changed
-- After duplicates or orphan records are removed, the message says plainly
-  what was kept from them and where it went.
+**0.2.0-alpha.0**
+- Added parsing of thesis and dissertation cover pages (title above "by", the author after it, degree, program, institution, year, advisor), following Choudhury et al., JCDL 2020. It needs no font information, so it also works on OCRed pages.
+- Added `D` (`:sync drop`), which removes staged files from the sync folder without adding them. They are kept aside, and `u` restores them.
+- Added a tab line when a sync folder is set: `1 Library` and `2 Sync folder`, with counts and the active one highlighted. `1`, `2` or a click switches, and the keys for staged files are listed beside it.
+- Added command-line completion: command names, option names and values for `:set`, scripts for `:run`, other commands' arguments, and the filter language at `&` and `/`. `Tab` accepts the highlighted completion; `<C-n>` and `<C-p>` move through them.
+- Added history for the command, filter and search lines, kept between sessions. `Up` and `Down` recall entries that begin with the typed text.
+- Added `lulibre.index{filter=, force=}`, which runs the indexer from a script and waits for it to finish.
+- Added rebinding of every panel key: `lulibre.map("review", "y", "accept")`. The title bar lists a panel's main keys and `?` lists them all, both generated from the current bindings.
+- Added rebinding of the remaining fixed keys. Moving inside a panel and closing it, editing the input line, the picker, overlays and the console have named actions, bound with `lulibre.map("panel", "n", "down")`. `?` lists them with their keys.
+- Added `c` to clear a field in the edit form and in review.
+- Changed the name of `x` in the edit form, which drops the pending change, to revert.
+- Added `<Leader>` in key bindings, set by the option `leader` (default `\`).
+- Added `:reload-cfg` (`<Leader>R`), which reloads `init.lua`.
+- Changed hints and messages to name keys as currently bound, not as shipped. `lulibre.key`, `lulibre.hint` and `lulibre.maps` give scripts the same.
+- Added title case after the APA manual. `gT` (`:titlecase`) converts the selected titles that are in capitals; `t` converts a field in the edit form and in review; titles proposed from files and `.bib` records that were in capitals arrive in title case (option `title_case`). `is:capstitle` filters for titles in capitals. For scripts: `lulibre.titlecase`, and `lulibre.lower` and `lulibre.upper`, which handle accented, Greek and Cyrillic letters.
+- Added mouse text selection everywhere, not only in the preview pane: dragging in the list, a panel, the input line, the status line or an overlay copies the text covered; a double click copies a word; a triple click copies the row, or in a panel the whole cell including text its column truncated. `<C-y>` copies the input line.
+- Added window resizing with the mouse, by dragging the border between two windows or a window's bar up or down, and from the keyboard with Alt and an arrow, or `<Leader>` and an arrow (`:resize left|right|up|down`). These keys, like any Alt combination and the leader, work inside panels.
+- Changed `:propose` to continue past fields that have a value. When the file gives a confident value that differs from the book's, that value is proposed too, so a mistyped value is corrected by the next run. The option `propose_over` (`gaps`, `sure`, `any`) sets the threshold; `:propose --over` and `--gaps` set it for one run. A rejected proposal is not repeated unless `--over` is given, and accepting everything above a confidence prompts before replacing existing values.
+- Added `a` on a book's line in review, which accepts all of that book's proposals (pressed again, it undoes them), and `r` there, which rejects the pending ones.
+- Added by-line parsing under the title ("By A. Name", "BY A. NAME*", "by NAME, A. B.", or "by" alone above the names). The names are proposed as the authors with confidence 0.85.
+- Fixed text selection in the preview pane (a drag, a double click) moving the cursor out of its window, so in review the next key still goes to review.
+- Changed author parsing on title pages: ranks and roles ("Professor Emeritus") are never proposed, and the option `never_authors` adds terms of your own; a page that starts with the author's name alone on the first line is parsed that way (author 0.7, title from the next largest line); a name repeated in the front pages gets 0.15 more confidence.
+- Added record quality: every record gets a score for completeness and cleanliness. `gk` (`:good`) lists records by it, and the ones you confirm are marked (`is:good`). `lulibre.quality` for scripts.
+- Added `:learn`, which extracts from the confirmed records the two- and three-word phrases that mark each subject, and `:terms`, which lists them for review: drop what doesn't belong, add your own. The edit form suggests the subject a book's phrases point to, listing the phrases, at no more than 0.6 confidence; the option `subject_learned` turns this into proposals, or off. `lulibre.phrases`, `lulibre.counter` and `lulibre.learn` for scripts.
+- Changed the order of subjects in the edit form: specific subjects come before catch-alls such as `math/general` (option `subject_catchall`).
+- Added `:enrich`, which queries five services, none needing an account: arXiv, CrossRef, zbMATH Open (subjects from MSC codes for mathematics papers), Open Library (books by ISBN, subjects from the shelf class) and OpenAlex. Every response is cached, so each work is queried once, and `--offline` proposes from the cache. Options `enrich_services` and `contact_email`.
+- Added rate limits to `:enrich`, following each service's terms, arXiv's first (one request every three seconds, one connection): one request at a time, five seconds apart for arXiv and one second for the others, across every running lulibre; forty arXiv papers, twenty DOIs or twenty ISBNs per request. A service that returns "too many requests" is paused for half an hour, with no retries and no fallback to single requests. `:enrich --plan` lists the requests a run would make before making any. Old-style arXiv numbers with a subject class (`math.AG/0601001`) are queried in arXiv's own format.
+- Added arXiv records from a local file. With a file of arXiv's records in the data folder (`~/.local/share/lulibre/arxiv.json`, or the option `arxiv_snapshot`), `:enrich` takes papers from it and queries arXiv only for papers newer than the file. Both arXiv's own snapshot and an arXiv hypergraph are supported; from the hypergraph, authors are ordered as on the paper's first page. The snapshot takes precedence where both exist, and improves records taken from a hypergraph.
+- Changed `:enrich` to discard the record of a work the file only cites (an identifier in the pages whose record has another title), to convert TeX in arXiv's titles and names to plain text (`lulibre.detex`), and to skip proposing the same authors with less complete names.
+- Fixed hyphen and dash variants (`Vanden‐Eijnden`, `Erdős–Kac`) making two equal values compare as different.
+- Added a layout for series named explicitly: a line with a series name and a volume number, editors, an ISSN or a publisher beside it; the line above "Series Editors"; a "Series:" label. Names split over two lines are joined, and names in capitals are put in title case. "Fourier Series" and similar phrases are excluded (`layouts.not_series`).
+- Fixed parsing of the cataloguing block in the form the Library of Congress has used since 2015 (`Names: ... | Title: ... | Description: ...`). It was parsed as the old form and produced titles such as "Names: Miyagawa, Shigeru, author". Blocks that only state that a record exists are no longer parsed, and a title from a block printed in a scanned book is proposed at 0.8, not 0.9.
+- Added the German national library's form of the cataloguing block.
+- Fixed embedded metadata in Latin-1 being passed on as broken UTF-8.
+- Added finer computing subjects: machine learning, AI, language processing, vision, complexity, algorithms, programming languages, information theory, systems and security, where there was one `cs`. Thirty more arXiv classes have a subject of their own, and a finer subject under one a book already has (`cs/ml` under `cs`) is proposed. `stat.*` maps to statistics, not computing.
+- Added searchable help. `?` lists the keys under headings that expand and collapse (all but "Start here" collapsed at first), each key with its action; `/` searches every key and command while typing; `K` on a key, or `:help TOPIC` anywhere, displays the guides' section on it. The guides are installed with lulibre. `:help-plain` is the old single page.
+- Added `gp`, which proposes metadata for the selection.
+- Added `a`, which indexes a file up to the page being previewed when that page is past the indexed pages (`:addpages`); `lulibre.index { pages = N }`.
+- Added a man page, `lulibre(1)`. `propose`, `enrich` and `refs` are also shell commands, and every script-backed command accepts `-h`.
+- Added the list as a tree. `gh` groups it by author, subject (subjects nest), series, publisher, year, format, or the calibre library's folders. Headings expand and collapse (Enter, `l`/`h`, `za` `zo` `zc` `zR` `zM`, a click), display counts, and act for their books: `Space` marks them, `e` edits them, `r` reviews their proposals. `s` sets the order of the books. Enter on a book opens the edit form. `:group`, `:fold`.
+- Added `r`, which reviews the selection's proposals (`:review selection`).
+- Added keyboard selection in the preview pane: `v` places a cursor there, vim's movements move it, `v` and `V` select, `y` copies. Keys for it are bound with `lulibre.map("select", key, action)`.
+- Added `gb`: the sync folder in a column beside the library. The list moves to the book that is the same file as the one under the cursor, or to books that resemble it; files can be added, moved, dropped, edited and reviewed from there.
+- Added `lulibre datasets`: local databases for offline lookups (arXiv's records, Open Library's editions and authors, zbMATH's links to arXiv), each listed with who it is for, and a prompt for which to download. It can be run again at any time; `datasets add FILE` imports files downloaded by other means. `:datasets` in the interface.
+- Added offline lookups to `:enrich`: books by ISBN from Open Library's dumps when they are present, and an arXiv paper's zbMATH number from zbMATH's table of links, before either service is queried.
+- Changed an article's publisher to its journal, after the publishing house where known: `Elsevier: Journal of Algebra`. It is taken from a journal's header and from CrossRef and OpenAlex records; houses are written one way (`layouts.house`), and archives such as JSTOR are omitted.
+- Added `:arxiv-fetch`, which downloads arXiv's snapshot from Kaggle into the data folder, running Kaggle's tool through pixi; it doesn't download again within a week unless forced.
+- Changed `:enrich` pacing to each service's published policy, linked in `net.lua` (two seconds for Open Library and zbMATH), with longer waits after slow responses. `contact_email` is no longer sent to OpenAlex, which doesn't use it.
+- Added the publisher from the copyright line ("© Springer-Verlag Berlin Heidelberg 1999", "Copyright © 1984 by McGraw-Hill, Inc."), written one way per house (`layouts.houses`). An author's own copyright gives no publisher.
+- Added four layouts for dates, for books with none: the date a journal received an article, a date alone on a line of the first page, the year in a journal's header, and the year on a copyright line. `layouts.date(text)` and `layouts.journal(text)` for scripts.
+- Added a series-page layout covering about thirty series from several publishers (extend it with `layouts.series`), with the volume, the publisher and the year. An author from a title page who also leads entries in the book's own references gets more confidence, and a book with no author gets the authors of books that share its references as proposals.
+- Added `:refs`, which extracts the bibliography from each book's last pages: it locates the heading, splits the entries by numbering or hanging indent, and gives each entry a key (DOI, arXiv number, or author, year and first page) so the same work matches across books. Books that share references suggest each other's subject in the edit form. `lulibre.extract` accepts `tail = true` for a file's last pages.
+- Changed `:learn` to weight each confirmed record by its score.
+- Added the option `never_titles`, which adds terms that mark a title as junk.
+- Added layouts: rules for pages that state facts in fixed places. A cataloguing block gives author, title, series and number, year, and the subject from its class number; a Springer series page gives the series and volume; the arXiv stamp gives the submission date. Your own take a few lines (`require("lulibre.layouts").add{...}`): markers that identify the page and, for each field, a constant, a pattern or a function. Series and series number can now be proposed.
+- Added single-field proposing. `:propose --only title,ids` limits a run to the named fields; `--fresh` proposes the file's value regardless of the record, for a field that went wrong across many books; in review, `f` and a letter display only that field's proposals, and accepting all then applies to that field alone. `:clear FIELDS` empties fields.
+- Changed one-word titles to no longer count as junk: "Algebra" and "Topology" are titles, while "infinite" and "E807en", left over from file names, still count as junk. The option `one_word_titles` (`check`, `ok`, `junk`) sets the rule, `good_titles` lists titles to keep, and nothing in a confirmed record counts as junk. Previously every one-word title counted as empty, so a bulk accept could replace it, the edit form's "fill gaps" could overwrite it, and it scored as junk.
+- Added placeholder detection when proposing: a title that is a number, a file name or a heading, or an author that is a program, a website or a rank, counts as empty. `:junk` marks and lists such records.
+- Fixed title-page parsing. A title beginning with "Introduction" was taken for the heading that ends the front matter, so no title was parsed from such pages. A smaller line leading into the largest is now part of the title ("Introduction to" above "Commutative Algebra"), a page set in one type size has its title taken from its first lines, and "Professor A. Name" becomes A. Name.
+- Added a description argument to `lulibre.map` for the help overlay, or `false` to leave the binding out of it.
+- Added a warning when the password file is readable by other users.
+- Changed review's order to highest confidence first: the book whose best proposal has the highest confidence is at the top, with the number of pending proposals for each. `s` switches to id order; `review_sort` sets the default.
+- Changed review, duplicates and orphans to refresh when the library changes (`reloads = true` gives a script's panel the same, as `"<Reload>"`). Proposals for a removed book are no longer listed or counted.
+- Added `e` (the edit form) and `r` (review) for the row's book in duplicates and orphans. The panel steps aside meanwhile and returns refreshed. `:review FILTER` reviews only the matching books.
+- Added `t` in duplicates and orphans, which takes values from the row under the cursor: values in its record that the kept copy (or the book with the file) lacks are proposed for that book, and review opens on those proposals.
+- Changed the preview keys (`P`, `]`, `[`, `J`, `K`), the copying keys and the console's keys to work with the cursor in review, duplicates, orphans or capture. `p` shrinks the panel to enlarge the preview pane.
+- Fixed the preview pane of a panel's row going blank when the list's filter excluded that row's book.
+- Added panel features for scripts: `keys` and `pass`, `p:hide()`, `p:show()`, `p:height()`. `lulibre.ui.edit` and `lulibre.ui.review` accept `{ ids = }`.
+- Changed the message after duplicates or orphan records are removed to list what was kept from them and where it went.
 
 ## 0.1.0
 
-The first release: what 0.1.0-beta.2 was, with nothing changed but the
-version. A neovim-style interface to a calibre library for labelling and
-fixing metadata: an index of the first pages of every file, a filter
-language, an edit form with suggestions read from the files, proposals and
-their review, capture by pattern, duplicates by content, orphans, a sync
-folder, BibTeX in and out, OCR, undo, a Lua API. Changes reach calibre
-through `calibredb`, by the content server or directly.
+**0.1.0**
+- Initial release: a Neovim-style terminal interface for labelling and fixing metadata in a calibre library. It provides an index of the first pages of every file, a filter language, an edit form with suggestions parsed from the files, proposals and their review, capture by pattern, duplicates by content, orphans, a sync folder, BibTeX import and export, OCR, undo, and a Lua API. Changes are written through `calibredb`, by the content server or directly.
+- Fixed the smoke test leaving its private tmux server, and the lulibre inside it, running after a failed run.
 
-Tests
-- The smoke test stops its private tmux server however it ends: a failed
-  run used to leave its sessions, and the lulibre inside them, running.
+**0.1.0-beta.2**
+- Fixed a build run from its tree (`./build/lulibre`) failing with misleading errors ("unknown option 'propose_over'") when the tree was switched to another version while it ran. Lua files are loaded from the tree as needed, and those no longer matched the binary. At start and with any script error, lulibre now prints the binary's version, the tree's version, and what to do.
+- Fixed `test/forms.sh` exiting with failure after every check had passed.
 
-## 0.1.0-beta.2
+**0.1.0-beta**
+- Fixed blanking a field: empty it and press `Enter`. Backspace in an emptied field no longer cancels the edit, review accepts an empty value, and both forms display `(blank)` where a value is about to be removed.
+- Fixed commands typed with the cursor in review, duplicates or orphans acting on the list's book instead of the row's. `:remove` repeated on a row whose book had just been removed took the list's next book; it is now refused.
+- Fixed the orphans verdict running off the right edge. The column holds a short version; `x` expands a row (`X` all rows) to the full verdict, the whole path, and a link's target.
+- Added a label for the active filter in the status line, with the number of matches and the key to clear it: `filter id:526   1 of 1999   <BS> shows all`.
+- Changed panels to follow files staged from the sync folder too.
+- Fixed a use-after-free: closing the console (`` ` ``) with only one other window open left the focus on a freed window.
+- Fixed a panel made the only window (`:only`) being impossible to close. The list now takes its place.
+- Fixed a script waiting on `lulibre.input` hanging when another prompt or a picker took over the bottom line. It now receives a cancel.
+- Fixed a mouse drag continuing after its preview pane closed. The target is now checked to be a preview pane before use.
+- Fixed messages on their way to the Lua thread at exit being dropped along with what they carried; they are now run.
+- Fixed the indexer's progress report keeping pointers into a finished job, and `lulibre.extract` leaking memory when called outside a task.
+- Added `test/forms.sh` (`make check-forms`, part of `make e2e`): the edit form, review, removal and orphans tested by keystroke against a throwaway library.
 
-Fixed
-- A lulibre run from its build tree (`./build/lulibre`) reads its Lua files
-  from that tree, when each is first needed. If the tree was switched to
-  another version while it ran, those files no longer fitted the binary and
-  failed with errors that said nothing of the cause ("unknown option
-  'propose_over'"). It now says so, at start and with any script error: which
-  version the binary is, which the tree has become, and what to do.
-- `test/forms.sh` could exit with failure after every check had passed.
+**0.1.0-alpha.2**
+- Fixed a crash from a lifecycle issue with luv running callbacks on finished tasks.
+- Added restoring removed books with `u`, from calibre's recycle bin.
+- Changed the confidence for cover sheets that label their fields ("Author(s): ...", as JSTOR's do) to 0.95, from 0.55.
+- Changed the page preview pane to open at the first page that contains text. Descriptive text gives the reason for a page with no text: a blank page, a page past the indexed ones, or a scan that needs OCR.
+- Fixed a missing password file being reported only once a write was under way. It is now reported before anything is written.
+- Fixed pasted text: a line break no longer submits a field, and a paste outside a field no longer runs as keystrokes.
+- Changed the tests to skip what needs the luv rock when it isn't installed (Lua 5.4).
+- Added a crash log with a backtrace, `~/.local/state/lulibre/crash.log`. Release builds keep their symbols.
+- Added `lulibre.settings` (get, set, reset, names, info, paths), the option `config_dir`, `lulibre -C DIR`, and `$LULIBRE_CONFIG_DIR`.
+- Added mouse selection in the text preview pane: drag to select and copy, double click for a word, triple click for a line. `<C-v>`, middle click or right click pastes into a field.
 
-## 0.1.0-beta
-
-Fixed, from testing the alpha
-- A field can be blanked: empty it and press `Enter`. Backspace in an
-  emptied field no longer cancels it, review accepts an empty answer, and
-  both forms show `(blank)` where a value is about to be removed.
-- A command typed with the cursor in review, duplicates or orphans acts on
-  the book that row shows. `:remove`, repeated on a row whose book had just
-  been removed, took the list's next book instead; it is now refused.
-- Orphans: the verdict no longer runs off the right edge. The column holds
-  a short wording; `x` opens a row (`X` all rows) to show the full verdict,
-  the whole path and where a link points.
-- A filter in force is labelled in the status line, with how much of the
-  library it leaves and how to clear it:
-  `filter id:526   1 of 1999   <BS> shows all`.
-- Panels follow files staged from the sync folder too.
-
-Fixed, from a review of pointer lifetimes and leaks
-- A use-after-free: closing the console (`` ` ``) while only one other
-  window was open left the focus pointing at a freed window.
-- A panel made the only window (`:only`) could not be closed; the list now
-  takes its place.
-- A script waiting on a question (`lulibre.input`) waited for ever when
-  another prompt or a picker took over the bottom line; it is answered as
-  cancelled.
-- A mouse drag is dropped when its preview window closes, and its target is
-  checked to be a preview before use.
-- Messages still on their way to the Lua thread at exit are run, not
-  dropped, so what they carry is freed.
-- The indexer's progress report no longer keeps pointers into a finished
-  job; `lulibre.extract` no longer leaks when called outside a task.
-
-Tests
-- `test/forms.sh` (`make check-forms`, part of `make e2e`): the edit form,
-  review, removal and orphans, by keystroke, against a throwaway library.
-
-## 0.1.0-alpha.2
-
-Fixed
-- A crash on the Lua thread, seen while writing: luv ran its callbacks on
-  the coroutine of whichever task first loaded it, which could be gone.
-- Removed books can be brought back with `u` (from calibre's recycle bin).
-- A cover sheet that labels its fields ("Author(s): ...", as JSTOR's do) is
-  trusted: 0.95 instead of 0.55.
-- The preview opens at the first page that has text, and where a page shows
-  none it says why (blank page, past the indexed pages, a scan needing OCR).
-- A missing password file is reported as such before anything is written.
-- Text pasted by the terminal is text: a line break in it no longer submits
-  a field, and a paste outside a field no longer runs as keystrokes.
-- Tests skip what needs the luv rock when it is not installed (Lua 5.4).
-
-Added
-- A crash log with a backtrace, `~/.local/state/lulibre/crash.log`; release
-  builds keep their symbols.
-- `lulibre.settings` (get, set, reset, names, info, paths); the option
-  `config_dir`, `lulibre -C DIR`, `$LULIBRE_CONFIG_DIR`.
-- Mouse: drag in the text preview to select and copy, double click a word,
-  triple click a line; `<C-v>`, middle or right click paste into a field.
-
-## 0.1.0-alpha
-
-First version.
+**0.1.0-alpha**
+- Initial version.
