@@ -1,6 +1,6 @@
 -- What the grammars of publications (lulibre.grammars) make of the books:
--- which are Keith Conrad's handouts, chapters of the Stacks project or of a
--- handbook, and what their opening lines say.
+-- which books each grammar matches, and the fields it sets from their
+-- opening lines.
 --   :run grammars [filter]           say what each grammar finds; nothing is changed
 --   :run grammars --apply [filter]   and keep it: the whole each is a part of
 --                                    (:parts), the non-catalog mark where the

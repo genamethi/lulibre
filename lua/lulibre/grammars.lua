@@ -1,25 +1,27 @@
 --- Recognises kinds of documents by how they set their opening lines.
 --
--- Keith Conrad's handouts put the title in capitals, with KEITH CONRAD
--- smaller below. A chapter of the Stacks project puts its title in
--- capitals, then its tag ("01H8") or "Contents". A Springer chapter puts
--- its number and title in very large type. The first few lines and how
--- they are set say more than the title page as a whole. A grammar describes
--- those lines one by one, and what follows if they match: the title, the
--- authors, that such works have no catalogue record, or which whole the
--- file is part of.
+-- A series of handouts may put each title in capitals with the author's
+-- name smaller below it; a numbered chapter puts its number and title in
+-- very large type. A grammar describes those lines one by one, and the
+-- fields to set when they match: the title, the authors, that such works
+-- have no catalogue record, or which whole the file is part of.
+--
+-- One grammar is built in: numbered chapters. Example grammars for
+-- particular sources are in examples/grammars/ (installed under
+-- share/lulibre/examples/grammars/); copy one to ~/.config/lulibre/lua/
+-- and require it from init.lua.
 --
 -- A grammar is matched against the first page's lines in order. Each line
 -- has its text, its font size, and whether it is bold:
 --
 --    local G = require "lulibre.grammars"
 --    G.add {
---      name = "keith-conrad",           -- shown as where a value came from
+--      name = "my-handouts",            -- shown as where a value came from
 --      kind = "handout",                -- what such a file is
 --      noncatalog = true,               -- such works have no catalogue record
 --      lines = {                        -- the opening lines, in order
 --        G.line { upper = true, take = "title", case = "title" },   -- in capitals: the title (put in title case)
---        G.line { pattern = "^KEITH CONRAD$", smaller = true, give = { authors = "Keith Conrad" } },
+--        G.line { pattern = "^A%. AUTHOR$", smaller = true, give = { authors = "A. Author" } },
 --      },
 --      confidence = 0.95,
 --    }
@@ -299,125 +301,7 @@ function M.doc(id)
   return { id = id, lines = lulibre.lines(id, 1), texts = texts, pages = f.npages, idents = book and book.idents or {} }
 end
 
--- ---- built-in grammars ----
-
-M.add {
-  name = "keith-conrad",
-  kind = "handout",
-  noncatalog = true,
-  lines = {
-    M.line { upper = true, take = "title", case = "title" },
-    M.opt(M.line { upper = true, take = "title", case = "title" }),
-    M.line { pattern = "^KEITH CONRAD$", give = { authors = "Keith Conrad" } },
-  },
-  confidence = 0.95,
-}
-
--- The Stacks project: each chapter opens with its name in capitals and then
--- its tag (four characters, 01H8) or its contents. The reading order is in
--- the project's Makefile; a book whose text holds that table ("Chapters in
--- reading order", | # | Chapter | Pages | PDF |) gives each chapter its number.
-local stacks_order -- stem -> { n=, pages= }, and the count; read once
-local function read_stacks_order()
-  if stacks_order ~= nil then return stacks_order end
-  stacks_order = false
-  local row = lulibre.sql([[SELECT p.text FROM pages p JOIN files f ON f.id = p.file
-    WHERE p.text LIKE '%Chapters in reading order%' LIMIT 1]])[1]
-  if not row then return false end
-  local fid = lulibre.sql([[SELECT p.file FROM pages p WHERE p.text LIKE '%Chapters in reading order%' LIMIT 1]])[1].file
-  local text = {}
-  for _, r in ipairs(lulibre.sql("SELECT text FROM pages WHERE file = ? ORDER BY page", fid)) do text[#text + 1] = r.text end
-  local order, n = {}, 0
-  for num, stem, pages in table.concat(text, "\n"):gmatch("|%s*(%d+)%s*|%s*([%w%-_]+)%s*|%s*(%d+)%s*|") do
-    order[stem:lower()] = { n = tonumber(num), pages = tonumber(pages) }
-    n = math.max(n, tonumber(num))
-  end
-  if n == 0 then return false end
-  stacks_order = { order = order, count = n }
-  return stacks_order
-end
-
-M.add {
-  name = "stacks-project",
-  kind = "chapter of the Stacks project",
-  noncatalog = true,
-  lines = {
-    M.line { upper = true, take = "title", case = "title" },
-    M.either {
-      M.line { pattern = "^%w%w%w%w$" },  -- its tag
-      M.line { pattern = "^Contents$" },
-      M.line { pattern = "^Copyright %(C%) %d+ %-%- %d+ Johan de Jong" },
-    },
-  },
-  read = function(doc, got)
-    -- a tag is four characters of figures and capitals, with a figure among them
-    local first = doc.lines and doc.lines[2] and doc.lines[2].text or ""
-    if first:match("^%w%w%w%w$") and not first:find("%d") then return false end
-    local fields = { authors = "The Stacks Project", part_of = "The Stacks Project" }
-    local ord = read_stacks_order()
-    if ord then
-      fields.parts = ord.count
-      -- the chapter by its file's name (calibre's title, when it came from it), else by its title's first word, and its length
-      local book = lulibre.book(doc.id)
-      local keys = { lulibre.fold(book and book.title or ""):gsub("[^%w]+", ""), (lulibre.fold(got.title or ""):match("^(%w+)")) }
-      for _, k in ipairs(keys) do
-        local hit = k and ord.order[k]
-        if hit and (not hit.pages or not doc.pages or math.abs(hit.pages - doc.pages) <= 1) then
-          fields.part = hit.n
-          break
-        end
-      end
-    end
-    return fields
-  end,
-  confidence = 0.9,
-}
-
--- Elsevier's Handbook of Algebra (ISSN 1570-7954): its chapters' DOIs say the
--- volume by year ((96) is volume 1) and the chapter's place in it (80014: 14).
--- A chapter without its DOI still has Elsevier's item number (the PII) in
--- the file's own title ("PII: S1570-7954(00)80034-0"), of which the DOI is
--- made, or its first page's foot: "HANDBOOK OF ALGEBRA, VOL. 3 / Edited by
--- M. Hazewinkel / © 2003 Elsevier Science B.V.".
-local HANDBOOK_VOLUMES = { ["96"] = 1, ["00"] = 2, ["03"] = 3, ["06"] = 4, ["08"] = 5, ["09"] = 6 }
-local HANDBOOK_YEARS = { 1996, 2000, 2003, 2006, 2008, 2009 }
-M.add {
-  name = "handbook-of-algebra",
-  kind = "chapter of the Handbook of Algebra",
-  read = function(doc)
-    local doi = ((doc.idents or {}).doi or ""):upper()
-    if doi == "" and doc.id then
-      for _, f in ipairs(lulibre.sql("SELECT emb_title FROM files WHERE book = ?", doc.id)) do
-        local pii = (f.emb_title or ""):upper():match("PII:%s*(S1570%-7954%(%d%d%)%d%d%d%d%d%-?[%dX])")
-        if pii then doi = "10.1016/" .. pii break end
-      end
-    end
-    local yy, item = doi:match("^10%.1016/S1570%-7954%((%d%d)%)(%d%d%d%d%d)")
-    local vol = yy and HANDBOOK_VOLUMES[yy]
-    local page = (doc.texts or {})[1] or ""
-    local foot = page:upper():match("HANDBOOK OF ALGEBRA,?%s*VOL%.?%s*(%d)%f[%D]")
-    if not yy and not foot then return false end
-    vol = vol or tonumber(foot)
-    local fields = { part_of = vol and ("Handbook of Algebra, Volume %d"):format(vol) or "Handbook of Algebra",
-      part = item and tonumber(item:sub(-3)) or nil,
-      identifiers = yy and ("doi:" .. doi) or nil,
-      -- the year the foot of the page prints, else the volume's
-      pubdate = page:match("%f[%d](%d%d%d%d)%s+Elsevier") or (vol and HANDBOOK_YEARS[vol] and tostring(HANDBOOK_YEARS[vol])) or nil,
-      publisher = "Elsevier" }
-    -- the title is the largest type on the page, the authors under it
-    local lines, top = doc.lines or {}, 0
-    for _, l in ipairs(lines) do
-      if (l.size or 0) > top then top = l.size end
-    end
-    local title = {}
-    for i, l in ipairs(lines) do
-      if (l.size or 0) >= top - 0.1 and i <= 4 then title[#title + 1] = l.text end
-    end
-    if #title > 0 then fields.title = table.concat(title, " ") end
-    return fields
-  end,
-  confidence = 0.85,
-}
+-- ---- the built-in grammar ----
 
 -- A chapter of a book set as Springer and others set them: its number and
 -- its title in very large type, on a file much shorter than a book.
