@@ -43,6 +43,7 @@ help:
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
 	@echo "  make uninstall       remove what install put there"
 	@echo "  make datasets        optional: fetch databases for looking books up offline"
+	@echo "  make rocks           install the Lua rocks lulibre needs (LUA_VERSION, ROCKS to override)"
 	@echo
 	@echo "  make clean           remove what make built; keeps the configuration"
 	@echo "  make distclean       also remove what ./configure wrote: back to a bare source tree"
@@ -149,6 +150,14 @@ install: $(BIN)
 datasets: $(BIN)
 	$(BIN) datasets
 
+# Installs lulibre-dev-1.rockspec's dependencies, built against the Lua
+# headers ./configure pinned (build/lua-inc).
+LUA_VERSION = $(LUA_VER)
+ROCKS = --local
+ROCKS_INCDIR = $(if $(and $(filter $(LUA_VER),$(LUA_VERSION)),$(wildcard build/lua-inc/lua.h)),LUA_INCDIR=$(CURDIR)/build/lua-inc)
+rocks:
+	luarocks $(ROCKS) --lua-version $(LUA_VERSION) install --deps-only lulibre-dev-1.rockspec $(ROCKS_INCDIR)
+
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/lulibre
 	rm -rf $(DESTDIR)$(DATADIR)/lulibre
@@ -164,4 +173,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status builds api unit check check-offline check-write check-forms e2e install datasets uninstall clean distclean
+.PHONY: all help status builds api unit check check-offline check-write check-forms e2e install datasets rocks uninstall clean distclean

@@ -1,0 +1,35 @@
+# lulibre's run-time dependencies. pixi never builds lulibre.
+
+[workspace]
+name = "lulibre"
+description = "lulibre's run-time dependencies"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64"]
+
+[feature.rocks.dependencies]
+lua = "5.5.*"
+luarocks = ">=3.13"
+cmake = "*"
+
+[feature.rocks.tasks]
+rocks = { cmd = 'make rocks ROCKS="--tree $CONDA_PREFIX"', description = "install the Lua rocks lulibre needs into the pixi environment" }
+
+[feature.rocks.activation.env]
+LUA_PATH_5_5 = "$CONDA_PREFIX/share/lua/5.5/?.lua;$CONDA_PREFIX/share/lua/5.5/?/init.lua;;"
+LUA_CPATH_5_5 = "$CONDA_PREFIX/lib/lua/5.5/?.so;;"
+
+[feature.pdf.dependencies]
+poppler = "*"
+
+[feature.ocr.dependencies]
+tesseract = "*"
+ocrmypdf = "*"
+
+[feature.datasets.dependencies]
+kaggle = "*"
+
+[environments]
+default = { features = ["rocks", "pdf", "ocr", "datasets"], solve-group = "runtime" }
+pdf = { features = ["pdf"], no-default-feature = true, solve-group = "runtime" }
+ocr = { features = ["ocr"], no-default-feature = true, solve-group = "runtime" }
+datasets = { features = ["datasets"], no-default-feature = true, solve-group = "runtime" }

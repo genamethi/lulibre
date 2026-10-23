@@ -2,6 +2,11 @@
 
 Versions follow [semantic versioning](https://semver.org). The version is set in `src/version.h`.
 
+## Unreleased
+
+- Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
+- Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
+
 ## 0.2.0
 
 **0.2.0**
