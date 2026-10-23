@@ -3,7 +3,81 @@
 Versions follow [semantic versioning](https://semver.org). The version is
 written in `src/version.h`.
 
-## 0.2.0-beta.1
+## 0.2.0
+
+The second release. What it brings since 0.1.0, by area; the sections of
+its pre-releases below say each change in full.
+
+- **Reading the book's own pages.** Pages that say their facts in known
+  places are read by rule (layouts): the cataloguing block (in the Library
+  of Congress's forms and the German national library's), series pages,
+  the copyright line's publisher and year, dated and received pages,
+  journal headers, thesis covers, cover sheets, the arXiv stamp. Grammars
+  of publications read a kind of document's opening lines (Keith Conrad's
+  handouts, the Stacks project, the Handbook of Algebra; your own, with
+  LPeg if it is installed). By-lines, a name on the first line, names given
+  twice, and (experimental) the title page's lines by their roles, the
+  series first. Mathematics in titles is written in Unicode. Title case
+  after the APA manual, for titles in capitals and for catalogues' titles.
+- **The file decides.** Every proposal is marked in review with what the
+  book's pages say of it, and review sorts by that. A catalogue's record is
+  held against the pages: another work's record, another edition's, a
+  cited work's, or a chapter's whole book proposes nothing. `:verify` and
+  `:run recheck` hold the library against its files. Works no catalogue
+  has are marked (`:noncatalog`) and not looked up.
+- **Proposing and review.** `:propose` corrects fields that have a value
+  when the file is sure (`propose_over`), one field at a time (`--only`,
+  `--fresh`); proposals under `propose_min` are kept out of sight. Review
+  has one row per field with its other sources a key away, what each
+  proposal rests on where the list is, how far the sources agree, runs as
+  tabs, and a dialog for a whole round (`<Leader>pr`). `r` decides one
+  proposal, `N` bars a value for good. `:weigh` measures each source.
+- **Looking books up.** `:enrich` asks arXiv, CrossRef, zbMATH Open, Open
+  Library and OpenAlex, none of which needs an account, by each one's own
+  rules: one request at a time, paced, batched, no retries, every answer
+  kept. Databases kept on this machine (`lulibre datasets`: arXiv's
+  snapshot, Open Library's dumps, zbMATH's links to arXiv) answer first. A
+  search by title takes a record only when it is the same work.
+- **Subjects and references.** Finer subjects for computing; `:refs` reads
+  each book's bibliography; `:good` scores how complete each record looks
+  and keeps the ones you confirm; `:learn` and `:terms` find the phrases
+  that mark a subject (off by default).
+- **Changing the library safely.** Snapshots of the journal, and
+  `:rollback` to any of them; the journal in a file of its own, changes
+  made outside lulibre logged too. Copies of calibre's database, checked,
+  and put back (`:backup`). Changes calibre makes only with its server
+  stopped wait for it (`lulibre offline`, `lulibre.service`, the systemd
+  units the options set up); the opf files kept current; calibre's program
+  noticed and waited for. Custom fields of your own beside calibre's, as
+  calibre columns too, and parts of a whole (`#partof`).
+- **Text and OCR.** A garbled share per file, and `is:needsocr` by it;
+  `:run reread` with poppler's pdftotext; OCR only where a page has no
+  text, replacing it only with a better reading, and written into the PDF
+  if you ask (`ocr_write`); `a` reads more pages of a file.
+- **The interface.** The list as a tree (`gh`); the configuration window as
+  a tab (`3`), writing to init.lua; the sync folder as a tab and a column
+  (`gb`); help under headings with a search, `:help TOPIC`, a man page;
+  completion and history on the command line; every key can be bound, with
+  a leader; the mouse selects text anywhere and resizes windows; panels on
+  `Tab`, windows on `<C-w>`; one of each screen; dialogs for looking up,
+  changing many books at once, the databases and the sync folder; `/` in
+  every panel; long questions and messages wrap; messages say what an
+  action did; keys and shifted symbols right under the kitty keyboard
+  protocol.
+- **Scripts.** Options of your own (`lulibre.option`, `lulibre.cfg`);
+  `lulibre.index`, `lulibre.claim`, `lulibre.status`, `lulibre.ui.form`,
+  runs, more for panels; a file of yours that replaces one of lulibre's is
+  said at start; features name the programs they need (pixi and luarocks
+  optional, off by default). The API reference (LDoc) and the guides are
+  on Read the Docs.
+- **Underneath.** Tasks and C code made reentrant; the interface no longer
+  waits on the index's locks; background work finished before lulibre
+  quits; a publication date written at noon UTC. `lulibre -V` gives the
+  build number.
+- **License.** Apache 2.0 with LLVM Exceptions (`LICENSE`); a binary built
+  with MuPDF is distributed under the AGPL's terms (README).
+
+Since 0.2.0-beta.1:
 
 - Fixed: leaving lulibre while a script waits on work in the background (a
   copy of a database, a file's checksum, a document's metadata) waits for
@@ -24,7 +98,6 @@ written in `src/version.h`.
   symbol"), or crashes lulibre, as it would any Lua program. The data
   folder's `cmodules.cache` and `cprobe.lua` are no longer used and can be
   deleted.
-
 - Experimental: the title page is read by the role of each line, the series
   first. A line that is a series' name (one lulibre knows, or one the
   library already uses) is the series, not the title, and is proposed as
@@ -65,6 +138,9 @@ written in `src/version.h`.
   lists and code examples in the reference render as lists and code. The
   reference lists its modules in seven sections instead of one long list,
   and every page links back to the manual.
+
+## 0.2.0-beta.1
+
 - New: `propose_min` (60% by default). A proposal under it is kept but not
   shown in review, nor counted as waiting, nor found by `is:proposed`;
   every summary says how many there are. Lowering it shows them. When
