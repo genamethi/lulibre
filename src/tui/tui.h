@@ -622,7 +622,7 @@ struct tui {
    * Tab and Esc go back to them (wm_focus_panel, wm_focus_back); found again
    * by wm_leaf_of, so one that has closed is simply not found */
   void *last_window, *last_panel;
-  /* a terminal paste in progress (tui.c): keys held while they might be one
+  /* a terminal paste in progress (input.c): keys held while they might be one
    * of its markers, and the text between the markers */
   struct ncinput held[6];
   int nheld, pasting;
@@ -636,6 +636,22 @@ struct tui {
   int ix_done, ix_total, ix_failed;
   int mirroring; /* calibre's database is being read again (tui_mirror) */
 };
+
+/* Between tui.c and the files split from it: prompt.c, input.c, render.c. */
+void suggest_clear(struct tui *t);
+void suggest_rematch(struct tui *t);
+void suggest_accept(struct tui *t);
+void draw_suggestions(struct tui *t, int bottom_y, int x);
+void history_load(struct tui *t);
+void prompt_changed(struct tui *t);
+void prompt_paste(struct tui *t);
+void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni);
+void input_read_cb(uv_poll_t *h, int status, int events);
+void bracketed_paste(int on);
+void terminal_release(struct tui *t);
+void log_arrived(void *ud);
+const char *tab_command(const struct tui *t, int i);
+void render_prepare_cb(uv_prepare_t *h);
 
 int tui_run(struct app *app);
 /* Hand the terminal to an editor ($VISUAL, $EDITOR, else vim, else vi) on
