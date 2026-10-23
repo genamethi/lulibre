@@ -155,8 +155,9 @@ static void build_items(void) {
     .kind = K_CHOICE, .key = "LUV_ROCKS", .label = "Install luv with luarocks", .choices = "user|system|no",
     .depth = 1, .head = adv,
     .help = "luv is found on Lua's package path, as any module is, and nothing needs setting when it is there. "
-            "user: make rocks installs it into the user-level luarocks tree. system: into the system's tree, "
-            "with sudo. pixi's environment has it already."});
+            "user: make rocks installs it into the user-level luarocks tree (~/.luarocks), which lulibre "
+            "searches when the option rocks_tree names it. system: into the system's tree, with sudo. pixi's "
+            "environment has it already."});
   add((struct item){.kind = K_CHECK, .key = "LUV_CHECK", .label = "Check luv", .depth = 1, .head = adv,
                     .help = "Enter runs require \"luv\" under lulibre's own Lua (build/lulibre, in pixi's "
                             "environment when pixi is chosen) and says whether it loads."});
