@@ -156,7 +156,7 @@ static void build_items(void) {
     .depth = 1, .head = adv,
     .help = "luv is found on Lua's package path, as any module is, and nothing needs setting when it is there. "
             "user: make rocks installs it into the user-level luarocks tree (~/.luarocks), which lulibre "
-            "searches when the option rocks_tree names it. system: into the system's tree, with sudo. pixi's "
+            "searches when the option mod_tree names it. system: into the system's tree, with sudo. pixi's "
             "environment has it already."});
   add((struct item){.kind = K_CHECK, .key = "LUV_CHECK", .label = "Check luv", .depth = 1, .head = adv,
                     .help = "Enter runs require \"luv\" under lulibre's own Lua (build/lulibre, in pixi's "

@@ -257,7 +257,7 @@ sums them up.
 | `lulibre.features` | finds the programs features need: `find(program)`, `status(f)`, `need(name)` (may offer pixi), `declare{ name=, programs=, used_for=, packages=, pixi= }` |
 | `lulibre.in_terminal(argv)` | runs a program in the terminal, handing the terminal over as for the editor (headless: on the terminal lulibre runs in). Returns its exit status, or nil and a message |
 | `lulibre.edit_file(path)` | opens a file in `$VISUAL`/`$EDITOR` (vim, vi), handing the terminal over. Returns the exit status |
-| `lulibre.require_rock(module [, rock])` | requires a module, offering to install it into `rocks_tree` if `rocks_install = true` |
+| `lulibre.require_rock(module [, rock])` | requires a module, offering to install it into `mod_tree` if `rocks_install = true` |
 | `lulibre.grammars` | recognises documents by their opening lines: `add{ name=, kind=, lines = { G.line{...}, G.skip(n), G.opt(r), G.either{...} }, text=, pages=, read=, noncatalog=, confidence= }`, `remove(name)`, `match(doc)` → `{ {grammar=, fields=} }`, `doc(id)` |
 | `lulibre.ids` | finds identifiers in page text: DOIs, ISBNs, arXiv numbers, MSC areas |
 | `lulibre.junk` | recognises titles and authors that are artefacts (build file names, error pages, the PDF's producer), matched against lower-case values |

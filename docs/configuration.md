@@ -71,8 +71,8 @@ o.library = "~/calibre-library"
 | `leader` | `\` | the key `<Leader>` stands for in key bindings |
 | `log_file` | | a file the log is also appended to (`$LULIBRE_LOG` does the same) |
 | `pixi_deps` | `false` | `true`: programs that features need (pdftotext, tesseract, ocrmypdf) may come from a pixi environment lulibre keeps, and lulibre offers to add a missing one |
-| `rocks_tree` | | a luarocks tree whose modules scripts may require |
-| `rocks_install` | `false` | `true`: lulibre offers to install a rock a script needs into `rocks_tree` |
+| `mod_tree` | | a prefix of Lua modules, searched before any other place; ignored in a pixi environment |
+| `rocks_install` | `false` | `true`: lulibre offers to install a rock a script needs into `mod_tree` (`luarocks --tree`) |
 | `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for. Reading it gives the directory in use |
 
 In Lua, the same options are read and set with `lulibre.settings.get(name)`
@@ -207,7 +207,7 @@ and again whenever lulibre's own file changes (`lulibre.overrides`).
 
 After your files, lulibre looks for its own in one place only: the source
 tree a build runs from, `$LULIBRE_RUNTIME`, or where `make install` put
-them. Then it looks in the luarocks tree `rocks_tree` names, if any, and in
+them. Then it looks under the prefix `mod_tree` names, if any, and in
 Lua's own places, as Lua and the environment (`LUA_PATH_5_5`,
 `LUA_CPATH_5_5`) set them.
 Nothing is looked for in the current directory. See [the Lua API](api.md).

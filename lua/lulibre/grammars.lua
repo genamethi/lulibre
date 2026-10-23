@@ -80,7 +80,7 @@ M.list = {}
 function M.lpeg()
   local ok, lpeg = pcall(require, "lpeg")
   if ok then return lpeg end
-  return nil, "LPeg is not installed for " .. _VERSION .. " (luarocks install lpeg, or the option rocks_tree): " .. tostring(lpeg):match("[^\n]*$")
+  return nil, "LPeg is not installed for " .. _VERSION .. " (luarocks install lpeg, or the option mod_tree): " .. tostring(lpeg):match("[^\n]*$")
 end
 
 --- Adds a grammar, or replaces the grammar with the same name.

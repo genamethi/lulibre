@@ -68,7 +68,7 @@ struct config {
   int backup_metadata; /* backup_metadata whenever the server is stopped, after direct writes */
   char *log_file;       /* every log entry is also appended here; empty = no file */
   int pixi_deps; /* programs features need may come from lulibre's own pixi environment */
-  char *rocks_tree;     /* a luarocks tree whose modules scripts may require */
+  char *mod_tree;       /* a module prefix, searched first; ignored in a pixi environment */
   int rocks_install; /* lulibre may install a rock a script needs into that tree (asking) */
   char *config_add_core;    /* auto | ask | never: put options missing from init.lua in it */
   char *config_add_scripts; /* auto | ask | never: the same for options scripts declare */

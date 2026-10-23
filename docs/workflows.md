@@ -1483,11 +1483,13 @@ If a program is missing, lulibre says how to install it. With
 `~/.local/share/lulibre/pixi`) and offers to add the program there, asking
 first. This is off by default, since it means running what pixi fetches.
 
-Scripts may need Lua modules. `rocks_tree` names a luarocks tree whose
-modules `require` finds (before the usual places). With
-`rocks_install = true`, `lulibre.require_rock(module [, rock])` offers to
-install a missing module there. This is off by default, for the same
-reason.
+Scripts may need Lua modules. `mod_tree` names a prefix whose modules
+(`share/lua/<version>`, `lib/lua/<version>`) `require` finds before any
+other place. With `rocks_install = true`,
+`lulibre.require_rock(module [, rock])` offers to install a missing module
+there (`luarocks --tree`). This is off by default, for the same reason. In
+a pixi environment, `mod_tree` is ignored: the environment holds the
+modules.
 
 ## Without the content server
 

@@ -120,7 +120,8 @@ char *lstate_tree_mismatch(void) {
  * the installed one otherwise, never both (an installed module the tree has
  * since renamed or removed would still be found, stale); then Lua's own
  * places, as Lua and the environment (LUA_PATH_5_5, LUA_CPATH_5_5) set them,
- * less the current directory. A luarocks tree is the option rocks_tree. */
+ * less the current directory. A prefix of modules searched first is the
+ * option mod_tree (prelude.lua). */
 static void setup_paths(lua_State *L) {
   sbuf p = SBUF_INIT;
   char *cfg = config_dir_path(&lapi_app(L)->cfg);

@@ -83,6 +83,18 @@ expect "init.lua.bak: the file before setup" "$(printf 'local o = lulibre.o\no.p
   "$(cat "$t/home/.config/lulibre/init.lua.bak")"
 expect "the password file is mode 600" "600" "$(stat -c %a "$t/home/.config/calibre/pw")"
 
+# ---- where modules are found: mod_tree first, and not in a pixi environment
+mkdir -p "$t/mods/share/lua/5.5" "$t/modcfg/lulibre"
+lv=$("$bin" -V | sed -n 's/.*Lua \([0-9.]*\)).*/\1/p')
+[ "$lv" = 5.5 ] || mv "$t/mods/share/lua/5.5" "$t/mods/share/lua/$lv"
+echo 'return "from mod_tree"' >"$t/mods/share/lua/$lv/modprobe.lua"
+printf 'lulibre.o.mod_tree = "%s"\n' "$t/mods" >"$t/modcfg/lulibre/init.lua"
+printf 'local ok, m = pcall(require, "modprobe") print(ok and m or "not found")\n' >"$t/mod.lua"
+expect "mod_tree: a module under it is found" "from mod_tree" \
+  "$("$bin" -C "$t/modcfg/lulibre" run "$t/mod.lua" 2>/dev/null)"
+expect "in a pixi environment, mod_tree is ignored" "not found" \
+  "$(PIXI_ENVIRONMENT_NAME=default "$bin" -C "$t/modcfg/lulibre" run "$t/mod.lua" 2>/dev/null)"
+
 # ---- the screen
 if ! command -v tmux >/dev/null; then
   echo "setup: tmux not found, the screen is not tried"
