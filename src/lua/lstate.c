@@ -68,6 +68,29 @@ const char *lstate_runtime_modules(void) {
   return runtime_lua;
 }
 
+/* Where lulibre's files are installed: beside the binary when it runs from
+ * an installed tree (<prefix>/bin/lulibre finds <prefix>/share/lulibre), so
+ * that one build can be installed under any prefix; else the prefix
+ * ./configure was given. */
+const char *lstate_datadir(void) {
+  static char dir[4096];
+  if (dir[0]) return dir;
+  snprintf(dir, sizeof dir, "%s", LULIBRE_DATADIR);
+  char exe[4096];
+  ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
+  if (len <= 0) return dir;
+  exe[len] = '\0';
+  char *slash = strrchr(exe, '/');
+  if (!slash) return dir;
+  *slash = '\0';
+  char *share = xasprintf("%s/../share/lulibre", exe), *lua = xasprintf("%s/lua", share);
+  char real[4096];
+  if (access(lua, R_OK) == 0 && realpath(share, real)) snprintf(dir, sizeof dir, "%s", real);
+  free(share);
+  free(lua);
+  return dir;
+}
+
 char *lstate_tree_mismatch(void) {
   if (!tree_root[0]) return NULL;
   char *path = xasprintf("%s/src/version.h", tree_root);
@@ -124,8 +147,11 @@ static void setup_paths(lua_State *L) {
   sb_printf(&p, "%s/lua/?.lua;%s/lua/?/init.lua", cfg, cfg);
   if (dev && dev[0]) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", dev, dev);
   if (tree) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", tree, tree);
-  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", LULIBRE_DATADIR, LULIBRE_DATADIR);
-  snprintf(runtime_lua, sizeof runtime_lua, "%s", dev && dev[0] ? dev : tree ? tree : LULIBRE_DATADIR "/lua");
+  const char *installed = lstate_datadir();
+  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", installed, installed);
+  if (dev && dev[0]) snprintf(runtime_lua, sizeof runtime_lua, "%s", dev);
+  else if (tree) snprintf(runtime_lua, sizeof runtime_lua, "%s", tree);
+  else snprintf(runtime_lua, sizeof runtime_lua, "%.4091s/lua", installed);
   sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", rocks, LULIBRE_LUA_VER,
             rocks, LULIBRE_LUA_VER);
   sb_printf(&c, "%s/lib/lua/%s/?.so", rocks, LULIBRE_LUA_VER);
