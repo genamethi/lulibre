@@ -2255,6 +2255,11 @@ end
 -- grammars of publications, over the opening lines of a page
 do
   local G = require "lulibre.grammars"
+  -- the example grammars, as an init.lua would load them
+  local root = debug.getinfo(1, "S").source:match("^@(.*)/test/[^/]*$") or "."
+  for _, name in ipairs { "keith-conrad", "stacks-project", "handbook-of-algebra" } do
+    dofile(root .. "/examples/grammars/" .. name .. ".lua")
+  end
   local function L(text, size, bold) return { text = text, size = size or 10.9, bold = bold or false } end
   local function names(found)
     local out = {}

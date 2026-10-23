@@ -183,7 +183,7 @@ function M.from_doc(doc)
     if isbn then add("identifiers", "isbn:" .. isbn, "page text", 0.85) end
   end
 
-  -- what the grammars of publications say: a Conrad handout, a Stacks chapter ...
+  -- what the grammars of publications set (lulibre.grammars)
   if doc.id then
     local grammars = require "lulibre.grammars"
     local book = lulibre.book(doc.id)

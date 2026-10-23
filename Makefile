@@ -138,6 +138,9 @@ install: $(BIN)
 	sed -e 's|@DATADIR@|$(DATADIR)|g' contrib/calibre-server.service.in \
 	  > $(DESTDIR)$(DATADIR)/lulibre/systemd/calibre-server.service
 	install -D -m 644 contrib/calibre-server-opf.py $(DESTDIR)$(DATADIR)/lulibre/contrib/calibre-server-opf.py
+	@for f in examples/grammars/*.lua; do \
+	  install -D -m 644 $$f $(DESTDIR)$(DATADIR)/lulibre/$$f || exit 1; \
+	done
 	@echo "installed lulibre $(VERSION) ($(BUILD)) in $(DESTDIR)$(BINDIR)"
 	@echo "optional: 'lulibre datasets' (or 'make datasets') fetches databases for looking books up offline; it can be run again whenever"
 

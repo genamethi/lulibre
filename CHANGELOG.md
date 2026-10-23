@@ -5,6 +5,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 ## 0.2.0
 
 **0.2.0**
+- Changed the Keith Conrad, Stacks project and Handbook of Algebra grammars from built-in grammars to examples in `examples/grammars/`, installed under `share/lulibre/examples/grammars/`. They're no longer loaded by default. To use one, copy it to `~/.config/lulibre/lua/grammars/` and add `require "grammars.keith-conrad"` (or the example's name) to init.lua. The numbered-chapter grammar stays built in.
 - Fixed background work being abandoned at exit. Previously, quitting while a script waited on a database copy, a file checksum or document metadata stopped that work after 1.5 seconds. Now lulibre exits once the work finishes: a database copy being restored completes, and the script's temporary files are deleted.
 - Fixed the interface freezing for up to 5 seconds per statement while another connection held the index's write lock. The indexer now keeps extracted text in memory until the lock is free, and re-reading calibre's database (`:reload`, the 2-second check, `lulibre.reload()`) runs on the script thread.
 - Added `close()` to `lulibre.counter()`, also usable as `local c <close> = ...`, to free its memory immediately; Lua's garbage collector does not count that memory. `learn.work` closes the census it creates.
