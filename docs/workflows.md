@@ -924,29 +924,35 @@ that differs.
 
 ## Grammars of publications: `:run grammars`
 
-Some kinds of document always start the same way. Keith Conrad's handouts
-put the title in capitals, with KEITH CONRAD smaller below it. A chapter of
-the Stacks project puts its name in capitals, then its tag ("01H8") or its
-contents. A Springer chapter puts its number and title in very large type.
-A chapter of Elsevier's Handbook of Algebra has a DOI that gives its volume
-and its place in the volume. A *grammar* describes a kind of document's
-opening lines, line by line (their text, font size, capitals, bold), and
-what follows if they match.
+A *grammar* describes how a kind of document sets its opening lines, line
+by line (text, font size, capitals, bold), and the fields to set when a
+file's first page matches. One grammar is built in: a chapter whose number
+and title are set in very large type, as Springer sets them.
 
-    :run grammars [filter]           show what each grammar finds; nothing is changed
+Example grammars for particular sources are in `examples/grammars/`,
+installed under `share/lulibre/examples/grammars/`: Keith Conrad's
+expository papers, chapters of the Stacks project, and chapters of
+Elsevier's Handbook of Algebra. To use one, copy it to
+`~/.config/lulibre/lua/grammars/` and require it in init.lua:
+
+```lua
+require "grammars.keith-conrad"
+```
+
+    :run grammars [filter]           list what each grammar matches; nothing is changed
     :run grammars --apply [filter]   store the parts and the non-catalog marks
 
-`:propose` proposes what a grammar says about a title or authors, like
-what the title page says (source `grammar: keith-conrad`). `--apply` marks
-Conrad's handouts and the Stacks project's chapters as non-catalog.
+`:propose` proposes the titles and authors a grammar sets, with the
+grammar's name as the source (`grammar: keith-conrad`). `--apply` marks the
+files a `noncatalog = true` grammar matches as non-catalog.
 
 **Parts of a whole.** A grammar can say which whole a file is part of, the
 file's number in the whole, and how many parts there are. So can a record
 much longer than the file. These values are custom fields (see below):
 `#partof`, `#part`, `#parts`. `is:part` finds such books, and `:parts`
 lists each whole with its parts in order and the missing numbers. For the
-Stacks project, the order comes from its Makefile: lulibre reads it from a
-book that contains the table "Chapters in reading order"
+Stacks project example, the order comes from the project's Makefile,
+taken from a book that contains the table "Chapters in reading order"
 (`| # | Chapter | Pages | PDF |`).
 
 Add your own grammars in init.lua or a module:
