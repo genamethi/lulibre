@@ -52,10 +52,11 @@ static int callback_pcall(lua_State *L, int nargs, int nresults, int flags) {
   return nresults;
 }
 
-/* luv is looked for on package.cpath, after the luarocks tree the option
- * rocks_tree names, as require looks for any module */
+/* luv is looked for on package.cpath, after the module prefix the option
+ * mod_tree names (outside a pixi environment), as require looks for any
+ * module */
 static int preload_luv(lua_State *L) {
-  const char *rocks = lapi_app(L)->cfg.rocks_tree;
+  const char *rocks = getenv("PIXI_ENVIRONMENT_NAME") ? NULL : lapi_app(L)->cfg.mod_tree;
   lua_getglobal(L, "package");
   lua_getfield(L, -1, "searchpath");
   lua_pushliteral(L, "luv");
@@ -65,7 +66,7 @@ static int preload_luv(lua_State *L) {
   lua_concat(L, 2);
   lua_call(L, 2, 2);
   if (lua_isnil(L, -2))
-    return luaL_error(L, "luv is not on Lua's path (package.cpath) or in the luarocks tree rocks_tree names: %s",
+    return luaL_error(L, "luv is not on Lua's path (package.cpath) or under mod_tree: %s",
                       lua_tostring(L, -1));
   const char *path = lua_tostring(L, -2);
   void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
