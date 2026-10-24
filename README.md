@@ -22,7 +22,7 @@ At run time:
 | For | Needs |
 |---|---|
 | changing the library | calibre's `calibredb` |
-| the sync folder, orphans, onboarding | the `luv` rock: `make rocks` |
+| the sync folder, orphans, onboarding | the `luv` rock, on Lua's path or under `mod_tree`; `make rocks` installs it into the user-level tree, which `mod_tree = "~/.luarocks"` names |
 | OCR | `tesseract` |
 | looking books up (`:enrich`), fetching the databases below | `curl` |
 | arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
