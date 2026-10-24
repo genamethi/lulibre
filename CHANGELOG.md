@@ -4,8 +4,8 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 
 ## 0.2.1
 
-- Fixed a scanned cataloguing block whose hyphens read as middle dots (`Steen, Lynn A 1941·`). Previously the author's heading was taken as the start of the title ("Steen, Lynn A 1941· Counterexamples in topology"). Now the heading is the author and the title is the book's.
-- Fixed an edition statement under a title ("Second Edition") being proposed as the author.
+- Fixed scanned cataloguing blocks whose hyphens read as middle dots or other dashes. Previously the author's heading, with its dates, was taken as the start of the title. Now the heading is read as the author.
+- Fixed an edition statement under a title being proposed as an author.
 
 **0.2.1-beta.1**
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
