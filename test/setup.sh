@@ -130,7 +130,29 @@ else
   $T kill-session -t s 2>/dev/null || true
   start
   contains "started again, the choices are there" "Level                          user" "$(screen)"
+  # the library from the browser: a path typed after /, then its first row
+  $T send-keys -t s j j Enter
+  wait_for "choose this folder" || true
+  $T send-keys -t s /
+  $T send-keys -t s C-u
+  $T send-keys -t s -l "$t/home/it's lib"
+  $T send-keys -t s Enter
+  sleep 0.3
+  $T send-keys -t s g Enter
+  wait_for "a calibre library" || true
+  contains "the browser: a folder chosen, shown under ~" "~/it's lib   a calibre library" "$(screen)"
+  # a value with a quote in it, typed
+  $T send-keys -t s j Space j j Enter
+  $T send-keys -t s -l "o'brien"
+  $T send-keys -t s Enter
+  wait_for "o'brien" || true
   $T send-keys -t s q
+  sleep 0.5
+  plan=$(cat "$t/tui.conf" 2>/dev/null || true)
+  contains "the plan: the folder chosen" "LIBRARY='$t/home/it'\\''s lib'" "$plan"
+  contains "the plan: a quote kept as the shell reads it" "SERVER_USER='o'\\''brien'" "$plan"
+  printf '. "%s"\nprintf "%%s|%%s" "$LIBRARY" "$SERVER_USER"\n' "$t/tui.conf" >"$t/read.sh"
+  expect "and the shell reads the values back" "$t/home/it's lib|o'brien" "$(opt() { :; }; . "$t/read.sh")"
 fi
 
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
