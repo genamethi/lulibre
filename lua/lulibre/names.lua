@@ -32,7 +32,7 @@ local ROLE = set([[emeritus emerita lecturer editor editors edited translator tr
   foreword preface thesis dissertation notes lecture lectures report preprint draft version
   reprint reprints archive blog talks seminar colloquium workshop conference proceedings
   memorial anniversary honors honours visiting assistant associate adjunct distinguished
-  invited keynote supervisor advisor adviser examiner committee unknown]])
+  invited keynote supervisor advisor adviser examiner committee unknown edition editions]])
 -- given names common among the authors of books and papers: enough to tell
 -- "David Mumford" from "Hopf Algebras" where nothing else on the page does
 local GIVEN = set([[aaron adam adrian alan albert alex alexander alexandre alfred alice allen amy anatoly andre

@@ -4,6 +4,9 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 
 ## 0.2.1
 
+- Fixed scanned cataloguing blocks whose hyphens read as middle dots or other dashes. Previously the author's heading, with its dates, was taken as the start of the title. Now the heading is read as the author.
+- Fixed an edition statement under a title being proposed as an author.
+
 **0.2.1-beta.1**
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
 - Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
