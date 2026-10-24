@@ -2,8 +2,9 @@
 
 Versions follow [semantic versioning](https://semver.org). The version is set in `src/version.h`.
 
-## Unreleased
+## 0.2.1
 
+**0.2.1-beta.1**
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
 - Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
 - Added `lulibre-setup`, a setup screen built beside lulibre. Basic: user or system level, pixi or not, the library, the content server; the password file is picked from a file browser and checked for its owner and mode. Advanced: the install prefix, luv, and the rest of lulibre's options. The choices are kept in `setup.conf` between runs. Install now runs `setup/install.sh` in the terminal, each command shown first, with sudo only for a system-level install; init.lua gets the chosen values, and the file as it was stays in init.lua.bak.
