@@ -214,10 +214,13 @@ static const struct opt_def opts[] = {
       "lulibre keeps with pixi under its data folder, and it offers to add one that is missing there. "
       "Off by default: it means running what pixi fetches",
       "Programs and modules"),
-  OPT(rocks_tree, OPT_PATH, "", NULL,
-      "a luarocks tree (luarocks --tree DIR) whose Lua modules scripts may require", NULL),
+  OPT(mod_tree, OPT_PATH, "", NULL,
+      "a prefix of Lua modules: its share/lua/<version> and lib/lua/<version> are searched before any "
+      "other place. Ignored in a pixi environment, where pixi's environment holds the modules",
+      NULL),
   OPT(rocks_install, OPT_BOOL, "false", "true|false",
-      "on: when a script needs a rock that is not there, lulibre offers to install it into rocks_tree. "
+      "on: when a script needs a rock that is not there, lulibre offers to install it into mod_tree "
+      "(luarocks --tree). "
       "Off by default: it means running what luarocks fetches",
       NULL),
   OPT(config_add_core, OPT_STR, "never", POLICY,

@@ -43,7 +43,7 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
   for (const char *p = own ? own : ""; *p;) {
     const char *end = strchr(p, ';');
     size_t n = end ? (size_t)(end - p) : strlen(p);
-    if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, ";%.*s", (int)n, p);
+    if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, "%s%.*s", out.len ? ";" : "", (int)n, p);
     p += n + (end ? 1 : 0);
   }
   lua_pushstring(L, out.s);
@@ -66,6 +66,29 @@ static char runtime_lua[4096]; /* the bundled modules' directory in use (setup_p
 
 const char *lstate_runtime_modules(void) {
   return runtime_lua;
+}
+
+/* Where lulibre's files are installed: beside the binary when it runs from
+ * an installed tree (<prefix>/bin/lulibre finds <prefix>/share/lulibre), so
+ * that one build can be installed under any prefix; else the prefix
+ * ./configure was given. */
+const char *lstate_datadir(void) {
+  static char dir[4096];
+  if (dir[0]) return dir;
+  snprintf(dir, sizeof dir, "%s", LULIBRE_DATADIR);
+  char exe[4096];
+  ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
+  if (len <= 0) return dir;
+  exe[len] = '\0';
+  char *slash = strrchr(exe, '/');
+  if (!slash) return dir;
+  *slash = '\0';
+  char *share = xasprintf("%s/../share/lulibre", exe), *lua = xasprintf("%s/lua", share);
+  char real[4096];
+  if (access(lua, R_OK) == 0 && realpath(share, real)) snprintf(dir, sizeof dir, "%s", real);
+  free(share);
+  free(lua);
+  return dir;
 }
 
 char *lstate_tree_mismatch(void) {
@@ -95,13 +118,13 @@ char *lstate_tree_mismatch(void) {
 /* Search order: the user's own modules; the runtime, which is a source tree
  * when running from one (build/lulibre finds ../lua) or LULIBRE_RUNTIME, and
  * the installed one otherwise, never both (an installed module the tree has
- * since renamed or removed would still be found, stale); then the user's
- * luarocks tree so `luarocks install --local` rocks just work; then Lua's
- * own places, less the current directory. */
+ * since renamed or removed would still be found, stale); then Lua's own
+ * places, as Lua and the environment (LUA_PATH_5_5, LUA_CPATH_5_5) set them,
+ * less the current directory. A prefix of modules searched first is the
+ * option mod_tree (prelude.lua). */
 static void setup_paths(lua_State *L) {
-  sbuf p = SBUF_INIT, c = SBUF_INIT;
+  sbuf p = SBUF_INIT;
   char *cfg = config_dir_path(&lapi_app(L)->cfg);
-  char *rocks = path_expand("~/.luarocks");
   const char *dev = getenv("LULIBRE_RUNTIME");
   char exe[4096], *tree = NULL;
   ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
@@ -124,19 +147,17 @@ static void setup_paths(lua_State *L) {
   sb_printf(&p, "%s/lua/?.lua;%s/lua/?/init.lua", cfg, cfg);
   if (dev && dev[0]) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", dev, dev);
   if (tree) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", tree, tree);
-  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", LULIBRE_DATADIR, LULIBRE_DATADIR);
-  snprintf(runtime_lua, sizeof runtime_lua, "%s", dev && dev[0] ? dev : tree ? tree : LULIBRE_DATADIR "/lua");
-  sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", rocks, LULIBRE_LUA_VER,
-            rocks, LULIBRE_LUA_VER);
-  sb_printf(&c, "%s/lib/lua/%s/?.so", rocks, LULIBRE_LUA_VER);
+  const char *installed = lstate_datadir();
+  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", installed, installed);
+  if (dev && dev[0]) snprintf(runtime_lua, sizeof runtime_lua, "%s", dev);
+  else if (tree) snprintf(runtime_lua, sizeof runtime_lua, "%s", tree);
+  else snprintf(runtime_lua, sizeof runtime_lua, "%.4091s/lua", installed);
 
   prepend(L, "path", p.s);
-  prepend(L, "cpath", c.s);
+  prepend(L, "cpath", "");
   sb_free(&p);
-  sb_free(&c);
   free(tree);
   free(cfg);
-  free(rocks);
 }
 
 lua_State *lstate_new(struct app *app) {

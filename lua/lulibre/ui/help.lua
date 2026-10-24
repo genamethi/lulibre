@@ -21,7 +21,7 @@ local keys = require("lulibre.ui.keys").of("help")
 local SECTIONS = {
   { "Moving and finding", "move search prompt filter pick sort" },
   { "The list as a tree, and selecting", "group fold enter mark visual" },
-  { "Changing what a book says", "edit change review propose propose-review enrich-dialog weights weigh capture titlecase clear undo enrich" },
+  { "Editing metadata, proposing and reviewing", "edit change review propose propose-review enrich-dialog weights weigh capture titlecase clear undo enrich" },
   { "The preview", "preview addpages" },
   { "Copying", "yank" },
   { "Windows", "focus split close only resize console" },

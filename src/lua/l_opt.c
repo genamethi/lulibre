@@ -36,8 +36,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-#include <config.h> /* the generated one: LULIBRE_DATADIR (core/config.h is the options) */
-
 #include "app.h"
 #include "core/util.h"
 #include "lua/bridge.h"
@@ -209,7 +207,7 @@ static int s_paths_ui(lua_State *L) {
   lua_setfield(L, -2, "data_dir");
   lua_pushstring(L, c->library);
   lua_setfield(L, -2, "library");
-  lua_pushstring(L, LULIBRE_DATADIR);
+  lua_pushstring(L, lstate_datadir());
   lua_setfield(L, -2, "installed");
   /* lulibre's own modules and scripts, in the one runtime searched */
   lua_createtable(L, 0, 2);

@@ -8,22 +8,21 @@ language, batch editing with undo, and Lua scripting. C, notcurses, libuv.
 books before a few hundred. Every change is journaled and `u` undoes it,
 removals included. [Changelog](CHANGELOG.md).
 
-## Install
+## Build
 
 Needs a C compiler, pkgconf and the development files of **libuv**,
 **sqlite3**, **notcurses**, **mupdf**, **djvulibre** and **Lua 5.4 or 5.5**.
 
-    ./configure --prefix=/usr/local
-    make
+    ./configure
+    make                # build/lulibre, and build/lulibre-setup
     make check          # optional: unit tests and a quick end-to-end test
-    sudo make install   # or: make DESTDIR=$PWD/stage install
 
 At run time:
 
 | For | Needs |
 |---|---|
 | changing the library | calibre's `calibredb` |
-| the sync folder, orphans, onboarding | the `luv` rock: `make rocks` |
+| the sync folder, orphans, onboarding | the `luv` rock, on Lua's path or under `mod_tree`; `make rocks` installs it into the user-level tree, which `mod_tree = "~/.luarocks"` names |
 | OCR | `tesseract` |
 | looking books up (`:enrich`), fetching the databases below | `curl` |
 | arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
@@ -34,6 +33,20 @@ At run time:
 
 ## Set up
 
+    build/lulibre-setup
+
+One screen holds the choices of a setup. Basic: the level (user, under
+`~/.local`, or system, under `/usr/local`), pixi or not, the library, the
+content server and its password file. Advanced: the install prefix, luv,
+and every other option of lulibre's. The choices stay in `setup.conf`, in
+lulibre's folder, between runs. Install now hands the terminal to
+`setup/install.sh`, which shows each command before running it; sudo is
+used only by a system-level install. `sh setup/install.sh -n` lists the
+commands a plan would run.
+
+By hand, the same steps:
+
+    make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
     lulibre config --write        # writes ~/.config/lulibre/init.lua, every option commented
     $EDITOR ~/.config/lulibre/init.lua
 

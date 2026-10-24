@@ -68,5 +68,6 @@ void lstate_close(struct app *app);
  * version: a sentence saying so (the caller frees it), else NULL. */
 char *lstate_tree_mismatch(void);
 const char *lstate_runtime_modules(void);
+const char *lstate_datadir(void);
 
 #endif

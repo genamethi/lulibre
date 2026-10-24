@@ -2134,6 +2134,13 @@ do
     text:find("\nlulibre.cfg.unitns.style = \"long\"\n", 1, true) ~= nil, (cf.line_of({ name = "pages" })) }, { true, true, 2 })
   cf.write_value({ name = "pages" }, nil)
   eq("and back to its default, commented out", cf.read():find("\n-- o.pages = 6\n", 1, true) ~= nil, true)
+  f = assert(io.open(init, "a"))
+  f:write("o.pages = 3\n")
+  f:close()
+  cf.write_value({ name = "pages" }, 8)
+  text = cf.read()
+  eq("set twice: the line that takes effect, the last, is written",
+    { text:find("\no.pages = 8\n$") ~= nil, text:find("\n-- o.pages = 6\n", 1, true) ~= nil }, { true, true })
   lulibre.settings.set("config_comments", "values")
   cf.add { { name = "mouse" } }
   eq("values only", cf.read():find("-- (number)\n-- o.mouse = 1", 1, true) ~= nil, true)

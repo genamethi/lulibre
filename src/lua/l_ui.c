@@ -794,7 +794,7 @@ char **lapi_script_dirs(struct app *app) {
       free(lua);
     }
   }
-  if (n == 1) dirs[n++] = xstrdup(LULIBRE_DATADIR "/scripts");
+  if (n == 1) dirs[n++] = xasprintf("%s/scripts", lstate_datadir());
   return dirs;
 }
 

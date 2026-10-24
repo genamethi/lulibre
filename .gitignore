@@ -4,7 +4,11 @@
 /config.h
 /config.status
 /stage/
+# lulibre-setup's plan, kept between runs
+/setup.conf
 /site/
 # the API reference, made by LDoc for the site (.readthedocs.yaml)
 /docs/reference/
 .pixi/
+.claude
+graphify-out
