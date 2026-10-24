@@ -776,6 +776,8 @@ do
   eq("ranks and roles are never authors", { names.never("Professor Emeritus"), names.never("Lecture Notes"),
     names.never("David Mumford"), names.never("John Dean") }, { true, true, false, false })
   eq("so they are not names", { names.clean("Professor Emeritus"), names.clean("David Mumford") }, { nil, "David Mumford" })
+  eq("an edition statement is not an author", { names.never("Second Edition"), names.validate({ "Second Edition" }),
+    names.validate({ "Third Revised Edition" }) }, { true, {}, {} })
   -- words that are a rank in one place and a name in another stay names
   eq("Dean, Senior, Reader, Fellow and Chair are people's names", { names.never("Dean Koontz"), names.never("Mary Senior"),
     names.never("John Reader"), names.never("Anne Fellow"), names.clean("W. Reader"), names.clean("Dean Rickles") },
@@ -1010,6 +1012,11 @@ RM315.M44 1987]]
     layouts.cip("Library of Congress Cataloging-in-Publication Data\nA catalog record for this book is available from the Library of Congress.\nISBN 0-387-90040-3").title, nil)
   cip = layouts.cip("Die Deutsche Bibliothek - CIP-Einheitsaufnahme\nCourant, Richard: Introduction to calculus and analysis / Richard Courant; Fritz John.\nBerlin: Springer")
   eq("the German national library's block: who, a colon, the title", { cip.title, cip.authors }, { "Introduction to calculus and analysis", "Richard Courant" })
+  cip = layouts.cip("Library of Congress Cataloging in Publication Data\n\nSteen, Lynn A 1941\194\183\n\nCounterexamples in topology.\nBibliography: p.\n\nIncludes index.")
+  eq("a scan's hyphen read as a middle dot, the comma before the dates lost: still the main entry",
+    { cip.title, cip.authors }, { "Counterexamples in topology", "Lynn A Steen" })
+  cip = layouts.cip("Library of Congress Cataloging-in-Publication Data\nHalmos, Paul R., 1916\226\128\1472006.\nNaive set theory / Paul R. Halmos.")
+  eq("dates with an en dash", { cip.title, cip.authors }, { "Naive set theory", "Paul R. Halmos" })
   cip = layouts.cip("Library of Congress Cataloging in Publication Data\nWallace, D.A.R. (David Alexander Ross)\nGroups, rings, and fields / D.A.R. Wallace.\np. cm.")
   eq("a main entry that does not read as a name is still not the title", cip.title, "Groups, rings, and fields")
   eq("a title from a printed block is taken for less than one that came as text", cip.confidence.title, 0.8)
