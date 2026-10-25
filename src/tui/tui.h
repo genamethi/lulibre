@@ -283,6 +283,10 @@ void rows_search_end(struct tui *t, const char *text, int accept);
 void rows_search_next(struct tui *t, int dir);
 int rows_hit(const struct tui *t, sqlite3_int64 id);
 
+/* ---------------------------------------------------------------- marks.c */
+
+/* Read the marks kept in the index (rows_init). */
+void rows_marks_load(struct tui *t);
 int rows_marked(const struct tui *t, sqlite3_int64 id);
 void rows_mark(struct tui *t, sqlite3_int64 id, int on);
 void rows_mark_all(struct tui *t, int how); /* 1 all in list, 0 none anywhere, -1 invert */

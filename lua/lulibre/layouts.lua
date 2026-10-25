@@ -138,7 +138,7 @@ end
 -- "Lang, Serge" or "Lyndon, Roger C., 1917-" the right way round
 local function person(entry)
   -- (the full stop that ends the entry goes; the one after an initial stays)
-  entry = entry:gsub("%s*%d%d%d%d%s*%-%s*%d*%s*%.?$", ""):gsub(",%s*$", ""):gsub("(%l)%.%s*$", "%1"):gsub(",%s*$", "")
+  entry = entry:gsub(",?%s*%d%d%d%d%s*%-%s*%d*%s*%.?$", "") -- the comma before the dates may be lost in a scan:gsub(",%s*$", ""):gsub("(%l)%.%s*$", "%1"):gsub(",%s*$", "")
   local family, given = entry:match("^([^,]+),%s*(.+)$")
   if not family then return nil end
   given = given:gsub(",.*$", "")
@@ -271,7 +271,13 @@ end
 -- form used since 2015 is read too.
 -- @tparam string text a page's text
 -- @treturn table
+-- dashes a scan or a font gives the block for its hyphens: the middle dot
+-- (·), the hyphen and non-breaking hyphen (U+2010, U+2011), the en and em
+-- dashes; read as "-", so "Steen, Lynn A 1941·" is a main entry with its dates
+local DASHES = { "\194\183", "\226\128\144", "\226\128\145", "\226\128\147", "\226\128\148" }
+
 function M.cip(text)
+  for _, d in ipairs(DASHES) do text = text:gsub(d, "-") end
   local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme")
   if not at then return {} end
   at = text:sub(1, at):match(".*()\n") or at -- from the start of the line the words stand on

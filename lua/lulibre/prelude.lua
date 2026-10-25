@@ -183,14 +183,19 @@ end
 --- A script's options, read and set as lulibre.cfg.<namespace>.<name>.
 -- In init.lua, for example: lulibre.cfg.mytags.depth = 3.
 lulibre.cfg = require("lulibre.options").cfg
--- Modules of a luarocks tree (the option rocks_tree): looked for before the
--- usual places, since it is the tree you named.
+-- Modules under a prefix of your own (the option mod_tree): looked for
+-- before any other place, since it is the prefix you named. In a pixi
+-- environment pixi's environment holds the modules, and mod_tree is ignored.
+local function mod_tree()
+  if os.getenv("PIXI_ENVIRONMENT_NAME") then return "" end
+  return lulibre.o.mod_tree or ""
+end
 local function rocks_paths(tree)
   local v = _VERSION:match("%d+%.%d+")
   return ("%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua"):format(tree, v, tree, v), ("%s/lib/lua/%s/?.so"):format(tree, v)
 end
 table.insert(package.searchers, 2, function(name)
-  local tree = lulibre.o.rocks_tree or ""
+  local tree = mod_tree()
   if tree == "" then return nil end
   local lpath, cpath = rocks_paths(tree)
   local file = package.searchpath(name, lpath)
@@ -202,10 +207,10 @@ table.insert(package.searchers, 2, function(name)
     if not f then return err end
     return f, file
   end
-  return ("\n\tno module '%s' in the luarocks tree %s"):format(name, tree)
+  return ("\n\tno module '%s' under mod_tree %s"):format(name, tree)
 end)
 --- Requires a module. If the module is missing, offers to install its rock
--- into `rocks_tree`. The offer is made only if `rocks_install` is true and
+-- into `mod_tree` (luarocks --tree). The offer is made only if `rocks_install` is true and
 -- someone can be asked.
 -- @tparam string module
 -- @tparam[opt] string rock the rock's name, if it differs from the module's
@@ -214,7 +219,7 @@ end)
 function lulibre.require_rock(module, rock)
   local ok, m = pcall(require, module)
   if ok then return m end
-  local tree = lulibre.o.rocks_tree or ""
+  local tree = mod_tree()
   if not lulibre.o.rocks_install or tree == "" then
     error(("the Lua module %s is not installed (luarocks install %s%s)"):format(module, rock or module,
       tree ~= "" and (" --tree " .. tree) or ""), 2)
@@ -235,6 +240,10 @@ function lulibre._before_init()
   require("lulibre.options").forget_file()
 end
 function lulibre._after_init()
+  if os.getenv("PIXI_ENVIRONMENT_NAME") and (lulibre.o.mod_tree or "") ~= "" then
+    lulibre.log(("mod_tree (%s) is ignored: lulibre runs in a pixi environment, which holds the modules")
+      :format(lulibre.o.mod_tree), "info")
+  end
   -- options nobody has put in init.lua yet go in on their own when the options say "auto"
   local add_core, add_scripts = lulibre.o.config_add_core == "auto", lulibre.o.config_add_scripts == "auto"
   if (add_core or add_scripts) and lulibre.settings.paths().init then

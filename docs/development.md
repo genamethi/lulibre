@@ -19,7 +19,13 @@ if it can't tell where they are, `--lua-inc` says.
 
 `make clean` removes what make built and keeps the configuration.
 `make distclean` also removes what configure wrote. `make install` honours
-`DESTDIR`, and building never needs root.
+`DESTDIR`, `BINDIR` and `DATADIR`, and building never needs root. An
+installed lulibre reads its files from `share/lulibre` beside its `bin`, so
+one build installs under any prefix.
+
+Setup is separate from the build. `build/lulibre-setup` (src/setup/) keeps
+the choices in `setup.conf`, and `setup/install.sh` carries them out;
+`sh setup/install.sh -n` prints the commands without running them.
 
 After building, `make` prints the version and md5 of the new binary next to
 those of the `lulibre` on PATH. `make status` prints the same on its own.
@@ -74,8 +80,8 @@ and `lulibre.build.commit`, and a crash log names both.
 | | |
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/units.lua` (the Lua runtime and API) |
-| `make check` | the unit tests, `test/smoke.sh` (the command line and the interface, driven through tmux, on a generated library) and `test/terminal.sh` (keys as a terminal sends them, outside tmux) |
-| `make e2e` | every end-to-end test: smoke; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server); `forms.sh` (the edit form, review, removal and orphans, typed into the interface) |
+| `make check` | the unit tests, `test/smoke.sh` (the command line and the interface, driven through tmux, on a generated library), `test/terminal.sh` (keys as a terminal sends them, outside tmux) and `test/setup.sh` (setup/install.sh on plans, under a temporary prefix; lulibre-setup driven through tmux; `mod_tree`) |
+| `make e2e` | every end-to-end test: smoke; terminal; setup; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server); `forms.sh` (the edit form, review, removal and orphans, typed into the interface) |
 | `make check-offline` · `make check-write` · `make check-forms` | one of the last three |
 
 The last three need calibre and `unshare`. They run inside a private
@@ -198,6 +204,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/index/      the parallel indexer
     src/match/      text folding, fuzzy matching
     src/tui/        the interface: windows, views, keymap, commands, pickers, console
+    src/setup/      lulibre-setup: the setup screen and its plan (setup/ holds install.sh)
     src/lua/        Lua state, task scheduler, the bridge between threads, the API (one l_*.c per module)
     src/cmd/        command-line front ends
     lua/lulibre/    the runtime written in Lua; ui/ holds the screens built on panels

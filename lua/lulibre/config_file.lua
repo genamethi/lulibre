@@ -71,7 +71,8 @@ local function pattern(item)
   return "%f[%w_]o%." .. name .. "%s*="
 end
 
---- Finds the line that names an option, commented out or not.
+--- Finds the line that sets an option: the last line that sets it, which is
+-- the one that takes effect, or else the first that names it commented out.
 -- @tparam table item
 -- @tparam[opt] string text the text of init.lua, read from the file if not given
 -- @treturn[1] integer the line's number
@@ -79,12 +80,19 @@ end
 -- @treturn[2] nil if no line names the option
 function M.line_of(item, text)
   text = text or M.read() or ""
-  local n = 0
+  local n, set_n, set_line, commented_n, commented_line = 0, nil, nil, nil, nil
   for line in (text .. "\n"):gmatch("([^\n]*)\n") do
     n = n + 1
-    if line:find(pattern(item)) then return n, line end
+    if line:find(pattern(item)) then
+      if not line:find("^%s*%-%-") then
+        set_n, set_line = n, line
+      elseif not commented_n then
+        commented_n, commented_line = n, line
+      end
+    end
   end
-  return nil
+  if set_n then return set_n, set_line end
+  return commented_n, commented_line
 end
 
 --- Returns the options that init.lua does not mention.
