@@ -3,9 +3,10 @@
 # only read. Every step writes to a copy of the index in OUT, never to the
 # library or to the index lulibre normally uses.
 #
-#   tools/profile/run.sh [-p time|perf|callgrind|massif] [-i INDEX] LIBRARY OUT [STEP...]
+#   tools/profile/run.sh [-p time|perf|callgrind|massif|count] [-i INDEX] LIBRARY OUT [STEP...]
 #
-# -p: the profiler (time by default: wall, user and system time, peak RSS).
+# -p: the profiler (time by default: wall, user and system time, peak RSS;
+# count: the calls Lua makes, by luacount.c).
 # -i: an existing index to copy instead of indexing from scratch.
 # STEP: index query stats dupes orphans grammars refs propose verify census
 # (all of them by default, in that order). BIN selects the binary; the
@@ -86,6 +87,12 @@ for step in $steps; do
         "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
       ms_print "$out/$step.massif" >"$out/$step.massif.txt"
       head -n 45 "$out/$step.massif.txt" ;;
+    count)
+      [ -e "$cache/luacount.so" ] || cc -O2 -g -fPIC -shared -I "$here/../../build/lua-inc" \
+        -o "$cache/luacount.so" "$here/luacount.c" -ldl
+      python3 -I "$here/rusage.py" "$out/$step.time" \
+        env LUACOUNT_OUT="$out/$step.count" LD_PRELOAD="$cache/luacount.so" "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+      cat "$out/$step.time" ;;
     *) echo "unknown profiler: $prof" >&2; exit 2 ;;
   esac
 done
