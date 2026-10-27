@@ -213,6 +213,18 @@ static void test_settings_state(void) {
 
 /* ---- the queue ---- */
 
+/* An inbox alone does not keep its loop running; in the program other
+ * handles do, here this one. */
+static uv_async_t keep;
+
+static void keep_open(uv_loop_t *loop) {
+  uv_async_init(loop, &keep, NULL);
+}
+
+static void keep_close(void) {
+  uv_close((uv_handle_t *)&keep, NULL);
+}
+
 static int order[8], norder;
 
 static void note(struct app *app, void *arg) {
@@ -241,11 +253,15 @@ static void stop_when_counted(uv_idle_t *h) {
 static void test_queue(void) {
   uv_loop_t loop;
   uv_loop_init(&loop);
+  keep_open(&loop);
   queue_post(LOOP_UI, note, (void *)7L);
   queue_open(NULL, LOOP_UI, &loop);
   queue_open(NULL, LOOP_LUA, &loop); /* headless: both inboxes on one loop */
   uv_run(&loop, UV_RUN_NOWAIT);
   ok(norder == 1 && order[0] == 7, "a message posted before the inbox opened runs once it does");
+  uv_unref((uv_handle_t *)&keep);
+  ok(uv_run(&loop, UV_RUN_DEFAULT) == 0, "the inboxes alone do not keep the loop running");
+  uv_ref((uv_handle_t *)&keep);
 
   norder = 0;
   queue_post(LOOP_LUA, post_inside, NULL);
@@ -279,6 +295,7 @@ static void test_queue(void) {
   norder = 0;
   queue_close(LOOP_UI);
   queue_close(LOOP_LUA);
+  keep_close();
   uv_run(&loop, UV_RUN_NOWAIT);
   queue_post(LOOP_UI, note, (void *)5L);
   queue_drain(LOOP_UI);
@@ -320,6 +337,7 @@ static struct event *records_changed(long long id) {
 static void test_events(void) {
   uv_loop_t loop;
   uv_loop_init(&loop);
+  keep_open(&loop);
   queue_open(NULL, LOOP_UI, &loop);
   queue_open(NULL, LOOP_LUA, &loop);
 
@@ -360,6 +378,7 @@ static void test_events(void) {
 
   queue_close(LOOP_UI);
   queue_close(LOOP_LUA);
+  keep_close();
   uv_run(&loop, UV_RUN_NOWAIT);
   ok(uv_loop_close(&loop) == 0, "the loop closes");
 }

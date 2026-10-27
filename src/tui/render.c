@@ -264,7 +264,7 @@ static int count_books(struct tui *t, const char *where) {
 
 /* The command a click on tab i runs. */
 const char *tab_command(const struct tui *t, int i) {
-  int sync = t->app->cfg.sync_dir[0] != '\0';
+  int sync = app_str(t->app, S_SYNC_DIR)[0] != '\0';
   if (i == 0) return "source library";
   if (i == 1 && sync) return "sync";
   return "source config";
@@ -274,7 +274,7 @@ static void draw_tabs(struct tui *t) {
   struct ncplane *n = t->std;
   dr_style(n, theme.dim, theme.bar_bg, 0);
   dr_fill(n, 0, 0, t->cols_n);
-  int sync = t->app->cfg.sync_dir[0] != '\0';
+  int sync = app_str(t->app, S_SYNC_DIR)[0] != '\0';
   char label[3][96];
   int on[3], bg[3], k = 0;
   snprintf(label[k], sizeof label[k], " 1  Library  %d ", count_books(t, "id > 0"));
@@ -319,7 +319,7 @@ static void render(struct tui *t) {
   t->cols_n = (int)cols;
   ncplane_erase(t->std);
   notcurses_cursor_disable(t->nc);
-  keymap_set_leader(t->km, t->app->cfg.leader);
+  keymap_set_leader(t->km, app_str(t->app, S_LEADER));
   wm_note_focus(t);
   /* the panel that was looking has lost the cursor to the list, which says
    * again what the preview shows (in the preview itself, to page or copy

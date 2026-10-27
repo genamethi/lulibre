@@ -293,7 +293,7 @@ enum imode { IMG_PIXEL, IMG_SEXTANT, IMG_QUADRANT, IMG_HALF };
 /* Sets the image pixels one cell holds, and one such pixel's height over its
  * width (taking a cell to be twice as tall as wide). */
 static enum imode cell_geometry(struct tui *t, int *cw, int *ch, float *aspect) {
-  const char *want = t->app->cfg.blitter;
+  const char *want = app_str(t->app, S_BLITTER);
   int any = !strcmp(want, "auto");
   if ((any || !strcmp(want, "pixel")) && notcurses_canpixel(t->nc)) {
     unsigned pxy, pxx, cdy, cdx, my, mx;
@@ -464,7 +464,7 @@ static void *create(struct tui *t) {
   ps->t = t;
   ps->page = 1;
   ps->zoom = 1;
-  ps->graphic = !strcmp(t->app->cfg.preview, "image");
+  ps->graphic = !strcmp(app_str(t->app, S_PREVIEW), "image");
   return ps;
 }
 

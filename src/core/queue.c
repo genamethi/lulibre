@@ -54,6 +54,8 @@ void queue_open(struct app *app, enum loop_id id, uv_loop_t *loop) {
   b->app = app;
   uv_async_init(loop, &b->async, wake);
   b->async.data = b;
+  /* an inbox alone does not keep its loop running */
+  uv_unref((uv_handle_t *)&b->async);
   uv_mutex_lock(&b->mu);
   b->open = 1;
   int waiting = b->head != NULL;

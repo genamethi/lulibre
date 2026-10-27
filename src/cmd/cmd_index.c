@@ -84,9 +84,9 @@ int cmd_index(struct app *app, int argc, char **argv) {
     else if (!strcmp(a, "--retry")) o.retry = 1;
     else if (!strcmp(a, "-v")) r.verbose = 1;
     else if (!strcmp(a, "--pages") && i + 1 < argc) {
-      if (config_set(&app->cfg, "pages", argv[++i], &err)) die("%s", err);
+      if (settings_set(app->settings, "pages", argv[++i], FROM_CLI, &err)) die("%s", err);
     } else if (!strcmp(a, "--layout-pages") && i + 1 < argc) {
-      if (config_set(&app->cfg, "layout_pages", argv[++i], &err)) die("%s", err);
+      if (settings_set(app->settings, "layout_pages", argv[++i], FROM_CLI, &err)) die("%s", err);
     } else {
       if (filter.len) sb_putc(&filter, ' ');
       sb_puts(&filter, a);
@@ -94,8 +94,9 @@ int cmd_index(struct app *app, int argc, char **argv) {
   }
 
   app_open_db(app);
-  o.pages = app->cfg.pages;
-  o.layout_pages = app->cfg.layout_pages < o.pages ? app->cfg.layout_pages : o.pages;
+  o.pages = (int)app_int(app, S_PAGES);
+  o.layout_pages = (int)app_int(app, S_LAYOUT_PAGES);
+  if (o.layout_pages > o.pages) o.layout_pages = o.pages;
   o.inflight = app_jobs(app) + app_jobs(app) / 2;
 
   struct query q = {0};

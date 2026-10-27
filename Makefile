@@ -8,7 +8,8 @@ endif
 -include config.mk
 
 BIN  := build/lulibre
-SRC  := $(filter-out src/setup/%,$(wildcard src/*.c src/*/*.c))
+# core/config.c: the 0.2 options, which only lulibre-setup still lists
+SRC  := $(filter-out src/setup/% src/core/config.c,$(wildcard src/*.c src/*/*.c))
 OBJ  := $(SRC:%.c=build/%.o)
 LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
 # the guides, which :help reads

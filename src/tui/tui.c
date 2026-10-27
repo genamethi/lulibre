@@ -77,8 +77,8 @@ static void ix_done(struct indexer *ix, const struct index_stats *st, void *ud) 
   else
     tui_msg(t, 0, "index is up to date");
   rows_reload(t); /* text-based filters may now match more */
-  if (s.ok > 0 && !strcmp(t->app->cfg.ocr, "auto")) tui_exec(t, "run ocr");
-  else if (s.ok > 0 && !strcmp(t->app->cfg.ocr, "always")) tui_exec(t, "run ocr is:indexed -is:ocr");
+  if (s.ok > 0 && !strcmp(app_str(t->app, S_OCR), "auto")) tui_exec(t, "run ocr");
+  else if (s.ok > 0 && !strcmp(app_str(t->app, S_OCR), "always")) tui_exec(t, "run ocr is:indexed -is:ocr");
 }
 
 void tui_start_index(struct tui *t, int force) {
@@ -88,8 +88,9 @@ void tui_start_index(struct tui *t, int force) {
   }
   struct index_opts o = {0};
   char *err = NULL;
-  o.pages = t->app->cfg.pages;
-  o.layout_pages = t->app->cfg.layout_pages < o.pages ? t->app->cfg.layout_pages : o.pages;
+  o.pages = (int)app_int(t->app, S_PAGES);
+  o.layout_pages = (int)app_int(t->app, S_LAYOUT_PAGES);
+  if (o.layout_pages > o.pages) o.layout_pages = o.pages;
   o.force = force;
   o.inflight = app_jobs(t->app) + app_jobs(t->app) / 2;
   t->ix_done = t->ix_total = t->ix_failed = 0;
@@ -129,6 +130,7 @@ static void tick_cb(uv_timer_t *h) {
 struct remirror {
   struct tui *t;
   int force, told, rc;
+  char *library; /* resolved when the message was made */
   char *err;
 };
 
@@ -146,12 +148,13 @@ static void remirror_done(void *arg) { /* interface thread */
     }
   }
   free(m->err);
+  free(m->library);
   free(m);
 }
 
 static void remirror_lua(struct app *app, void *arg) { /* Lua thread, between tasks */
   struct remirror *m = arg;
-  m->rc = db_mirror(app->ldb ? app->ldb : &app->db, app->cfg.library, m->force, &m->err);
+  m->rc = db_mirror(app->ldb ? app->ldb : &app->db, m->library, m->force, &m->err);
   bridge_ui(app, remirror_done, m);
 }
 
@@ -162,6 +165,8 @@ void tui_mirror(struct tui *t, int force, int told) {
   m->t = t;
   m->force = force;
   m->told = told;
+  m->library = realpath(app_str(t->app, S_LIBRARY), NULL); /* taken now (design 4) */
+  if (!m->library) m->library = xstrdup(app_str(t->app, S_LIBRARY));
   bridge_lua(t->app, remirror_lua, m);
 }
 
@@ -198,7 +203,7 @@ static void terminal_start(struct tui *t) {
   notcurses_linesigs_disable(t->nc); /* Ctrl-C is a key, not a signal */
   crash_install(); /* again, to run before notcurses' handlers, which give the terminal back */
   bracketed_paste(1);
-  if (t->app->cfg.mouse) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
+  if (app_bool(t->app, S_MOUSE)) notcurses_mice_enable(t->nc, NCMICE_BUTTON_EVENT | NCMICE_DRAG_EVENT);
   t->std = notcurses_stdplane(t->nc);
   t->nc_gen++;
 }
@@ -328,7 +333,7 @@ int tui_run(struct app *app) {
       SQLITE_OK) {
     int pending = sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int(st, 0) : 0;
     sqlite3_finalize(st);
-    const char *policy = app->cfg.auto_index;
+    const char *policy = app_str(app, S_AUTO_INDEX);
     if (pending && !strcmp(policy, "auto")) tui_start_index(t, 0);
     else if (pending && !strcmp(policy, "ask"))
       tui_msg(t, 0, "%d file%s not indexed yet; :index reads them", pending, pending == 1 ? " is" : "s are");
@@ -339,7 +344,7 @@ int tui_run(struct app *app) {
   tui_dirty(t);
   log_to_stderr(0); /* the terminal is ours; the console shows the log */
   log_on_entry(log_arrived, app);
-  log_debug("interface up: %d books listed from %s", t->rows.n, app->cfg.library);
+  log_debug("interface up: %d books listed from %s", t->rows.n, app_str(app, S_LIBRARY));
   bridge_start(app); /* from here on Lua runs on its own thread */
   uv_run(loop, UV_RUN_DEFAULT);
 

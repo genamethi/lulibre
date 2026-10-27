@@ -255,13 +255,7 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
         return -1;
       }
       if (!strcmp(val, "proposed"))
-        /* only what review shows: none under propose_min (learned subjects:
-         * learned_tags_min); lulibre.proposals.shown says the same */
-        sb_printf(sql, "(b.id IN (SELECT book FROM proposals WHERE status = 'accepted' OR (status = 'pending'"
-                       " AND (confidence IS NULL OR source = 'typed' OR asked = 1 OR confidence >= CASE WHEN source LIKE"
-                       " 'learned:%%' OR source LIKE 'shares references with %%' THEN %.6f ELSE %.6f END"
-                       " - 1e-9))))",
-                  config_learned_tags_min / 100.0, config_propose_min / 100.0);
+        sb_printf(sql, "(b.id IN (SELECT book FROM proposals WHERE status IN ('accepted', 'pending')))");
       else
         sb_printf(sql, "(%s)", t);
       return 0;

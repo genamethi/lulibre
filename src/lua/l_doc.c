@@ -294,7 +294,7 @@ static int l_extract(lua_State *L) {
   struct app *app = lapi_app(L);
   sched_require_task(L); /* raises outside a task, before anything is allocated */
   struct xjob *j = xcalloc(1, sizeof *j);
-  j->opts = (struct doc_opts){app->cfg.pages, app->cfg.layout_pages, 0};
+  j->opts = (struct doc_opts){(int)lapi_setting_int(L, S_PAGES), (int)lapi_setting_int(L, S_LAYOUT_PAGES), 0};
   if (lua_istable(L, 2)) {
     lua_getfield(L, 2, "pages");
     if (!lua_isnil(L, -1)) j->opts.pages = (int)lua_tointeger(L, -1);

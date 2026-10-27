@@ -48,7 +48,7 @@ static int parse_bool(const char *t) {
   return -1;
 }
 
-static int parse(const struct setting_def *d, const char *text, union setting_value *out, char **err) {
+int settings_parse(const struct setting_def *d, const char *text, union setting_value *out, char **err) {
   if (d->choices && !in_choices(d->choices, text)) {
     *err = xasprintf("%s: %s is not one of %s", d->name, text, d->choices);
     return -1;
@@ -119,7 +119,7 @@ static int settle(struct settings *st, int i) {
   enum setting_origin o = top(st, i);
   union setting_value v;
   char *err = NULL;
-  if (parse(d, e->layer[o], &v, &err)) die("%s", err); /* each layer was checked when set */
+  if (settings_parse(d, e->layer[o], &v, &err)) die("%s", err); /* each layer was checked when set */
   int changed = !same(d->type, &v, &e->v);
   if (is_text(d->type)) free(e->v.s);
   e->v = v;
@@ -143,7 +143,7 @@ struct settings *settings_new(const struct setting_def *defs, int ndefs) {
   st->persist = -1;
   for (int i = 0; i < ndefs; i++) {
     char *err = NULL;
-    if (parse(&defs[i], defs[i].dflt, &st->e[i].v, &err)) die("the default of %s", err);
+    if (settings_parse(&defs[i], defs[i].dflt, &st->e[i].v, &err)) die("the default of %s", err);
     st->e[i].layer[FROM_DEFAULT] = xstrdup(defs[i].dflt);
     if (defs[i].flags & SETTING_PERSIST) st->persist = i;
   }
@@ -214,7 +214,7 @@ int settings_set(struct settings *st, const char *name, const char *text, enum s
   int i = layer_for(st, name, from, err);
   if (i < 0) return -1;
   union setting_value v;
-  if (parse(&st->defs[i], text, &v, err)) return -1;
+  if (settings_parse(&st->defs[i], text, &v, err)) return -1;
   if (is_text(st->defs[i].type)) free(v.s);
   free(st->e[i].layer[from]);
   st->e[i].layer[from] = xstrdup(text);
@@ -229,6 +229,19 @@ int settings_unset(struct settings *st, const char *name, enum setting_origin fr
   st->e[i].layer[from] = NULL;
   settle_all(st);
   return 0;
+}
+
+char *settings_format(const struct setting_def *d, const union setting_value *v) {
+  switch (d->type) {
+  case SETTING_INT:
+    return xasprintf("%lld", v->i);
+  case SETTING_NUM:
+    return xasprintf("%g", v->n);
+  case SETTING_BOOL:
+    return xstrdup(v->b ? "true" : "false");
+  default:
+    return xstrdup(v->s);
+  }
 }
 
 int settings_get(const struct settings *st, const char *name, union setting_value *out, char **err) {

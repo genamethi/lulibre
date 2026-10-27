@@ -6,7 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "core/config.h"
 #include "core/log.h"
 #include "core/md5.h"
 #include "core/util.h"
@@ -145,54 +144,6 @@ static void test_match(void) {
 }
 
 /* ---- options ---- */
-
-static void test_config(void) {
-  struct config c;
-  char *err = NULL;
-  config_init(&c);
-  ok(c.pages == 6 && c.layout_pages == 2 && c.mouse == 1, "defaults: numbers");
-  eq(c.repair_links, "ask", "defaults: a policy");
-  eq(c.write_via, "auto", "defaults: write_via");
-  ok(config_set(&c, "pages", "9", &err) == 0 && c.pages == 9, "set a number");
-  ok(config_set(&c, "pages", "nine", &err) != 0, "a number option rejects text");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "repair_links", "auto", &err) == 0, "set a policy");
-  ok(config_set(&c, "repair_links", "sometimes", &err) != 0, "a policy rejects other words");
-  ok(err && strstr(err, "auto|ask|never"), "and says which are allowed");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "repair_links", "", &err) != 0, "nor the empty string");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "no_such_option", "1", &err) != 0, "unknown options are refused");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "sync_dir", "~/in", &err) == 0 && c.sync_dir[0] == '/', "paths are expanded");
-  char *dir = config_dir_path(&c);
-  ok(dir[0] == '/' && strstr(dir, "lulibre"), "the configuration directory has a default");
-  free(dir);
-  ok(config_set(&c, "config_dir", "/somewhere/else", &err) == 0, "and can be set");
-  dir = config_dir_path(&c);
-  eq(dir, "/somewhere/else", "which is then the one in effect");
-  free(dir);
-  size_t n;
-  const struct opt_def *o = config_opts(&n);
-  int bad = 0;
-  for (size_t i = 0; i < n; i++) {
-    struct config d;
-    config_init(&d);
-    char *e = NULL;
-    /* every default must be a value its own option accepts */
-    if (o[i].type != OPT_PATH && config_set(&d, o[i].name, o[i].def, &e)) bad++;
-    free(e);
-    if (!o[i].help || !o[i].help[0]) bad++;
-    config_free(&d);
-  }
-  ok(bad == 0, "every option has help and a default it accepts itself");
-  ok(o[0].group != NULL, "the first option opens a group");
-  config_free(&c);
-}
 
 /* ---- the filter language ---- */
 
@@ -405,7 +356,6 @@ int main(void) {
   test_util();
   test_md5();
   test_match();
-  test_config();
   test_query();
   test_log();
   test_quality();

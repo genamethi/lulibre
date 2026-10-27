@@ -359,9 +359,12 @@ static int reload_ui(lua_State *L) {
 /* calibre's database read on this thread's connection, so the interface
  * does not wait for it; then the list */
 static int l_reload(lua_State *L) {
-  struct app *app = lapi_app(L);
-  char *err = NULL;
-  if (db_mirror(lapi_db(L), app->cfg.library, 0, &err) < 0) {
+  char *err = NULL, *library = lapi_setting_str(L, S_LIBRARY);
+  char *real = realpath(library, NULL);
+  int rc = db_mirror(lapi_db(L), real ? real : library, 0, &err);
+  free(real);
+  free(library);
+  if (rc < 0) {
     lua_pushstring(L, err);
     free(err);
     return lua_error(L);

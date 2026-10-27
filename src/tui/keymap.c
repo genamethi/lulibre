@@ -346,7 +346,6 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL | MODE_VISUAL, "yy", "yank title"},
     /* misc */
     {MODE_NORMAL, "R", "reload"},
-    {MODE_NORMAL, "<Leader>R", "reload-cfg"},
     {MODE_NORMAL, "?", "help"},
     {MODE_NORMAL, "`", "console"},
     {MODE_NORMAL, "q", "quit"},

@@ -20,13 +20,14 @@ enum loop_id { LOOP_UI, LOOP_LUA, LOOPS };
 
 typedef void queue_fn(struct app *app, void *arg);
 
-/* Before the loop runs: the inbox takes a handle on loop. Messages waiting
- * from before run on the loop's next turn. */
+/* Before the loop runs: the inbox takes a handle on loop, which does not
+ * by itself keep the loop running. Messages waiting from before run on the
+ * loop's next turn. */
 void queue_open(struct app *app, enum loop_id id, uv_loop_t *loop);
 /* On the inbox's loop: closes the handle; later messages wait. */
 void queue_close(enum loop_id id);
-/* Runs the messages waiting, on the calling thread: the loop is gone and
- * will not come back. */
+/* Runs the messages waiting, on the calling thread: the inbox's own thread
+ * between turns of its loop, or any thread once the loop is gone. */
 void queue_drain(enum loop_id id);
 
 void queue_post(enum loop_id to, queue_fn *fn, void *arg);

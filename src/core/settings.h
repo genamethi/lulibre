@@ -65,6 +65,13 @@ int settings_set(struct settings *st, const char *name, const char *text, enum s
 /* Empties layer `from`: the layer below shows through. */
 int settings_unset(struct settings *st, const char *name, enum setting_origin from, char **err);
 
+/* Checks text against a definition, from any thread; fills *out (the
+ * caller frees out->s for a text). */
+int settings_parse(const struct setting_def *d, const char *text, union setting_value *out, char **err);
+
+/* A value as text, the way it would be typed; malloc'd. */
+char *settings_format(const struct setting_def *d, const union setting_value *v);
+
 /* A copy of the value in effect. The caller frees out->s. */
 int settings_get(const struct settings *st, const char *name, union setting_value *out, char **err);
 

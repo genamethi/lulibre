@@ -70,10 +70,10 @@ static void add_scripts(struct list *l, struct app *app) {
 }
 
 static void add_options(struct list *l, const char *word) {
-  size_t n;
-  const struct opt_def *o = config_opts(&n);
+  const struct setting_def *o = setting_defs;
   const char *eq = strchr(word, '=');
-  for (size_t i = 0; i < n; i++) {
+  for (size_t i = 0; i < S_COUNT; i++) {
+    if (o[i].flags & SETTING_CLI_ONLY) continue;
     if (eq && o[i].choices && strlen(o[i].name) == (size_t)(eq - word) &&
         !strncmp(o[i].name, word, (size_t)(eq - word))) {
       for (const char *p = o[i].choices; *p;) { /* name=choice for each allowed value */

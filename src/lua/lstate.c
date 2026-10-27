@@ -124,7 +124,7 @@ char *lstate_tree_mismatch(void) {
  * option mod_tree (prelude.lua). */
 static void setup_paths(lua_State *L) {
   sbuf p = SBUF_INIT;
-  char *cfg = config_dir_path(&lapi_app(L)->cfg);
+  const char *cfg = lapi_app(L)->config_dir;
   const char *dev = getenv("LULIBRE_RUNTIME");
   char exe[4096], *tree = NULL;
   ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
@@ -157,7 +157,6 @@ static void setup_paths(lua_State *L) {
   prepend(L, "cpath", "");
   sb_free(&p);
   free(tree);
-  free(cfg);
 }
 
 lua_State *lstate_new(struct app *app) {
@@ -168,6 +167,9 @@ lua_State *lstate_new(struct app *app) {
   app->lmain->app = app;
   *(struct lctx **)lua_getextraspace(L) = app->lmain;
   luaL_openlibs(L);
+  luaL_requiref(L, "setman", luaopen_setman, 1);
+  lua_pop(L, 1);
+  l_setman_fill(L, app->settings);
   setup_paths(L);
   sched_init(app);
 
@@ -196,7 +198,6 @@ lua_State *lstate_new(struct app *app) {
   lua_pushstring(L, lulibre_build_commit);
   lua_setfield(L, -2, "commit");
   lua_setfield(L, -2, "build");
-  l_opt_open(L);
   l_job_open(L);
   l_db_open(L);
   l_doc_open(L);
@@ -224,8 +225,7 @@ lua_State *lstate_new(struct app *app) {
 }
 
 int lstate_run_init(struct app *app) {
-  char *dir = config_dir_path(&app->cfg);
-  char *init = xasprintf("%s/init.lua", dir);
+  char *init = xasprintf("%s/init.lua", app->config_dir);
   int rc = 0;
   if (access(init, R_OK) == 0 && luaL_dofile(app->L, init) != LUA_OK) {
     warnf("%s", lua_tostring(app->L, -1));
@@ -247,7 +247,6 @@ int lstate_run_init(struct app *app) {
   }
   lua_pop(app->L, 1);
   free(init);
-  free(dir);
   return rc;
 }
 

@@ -317,14 +317,18 @@ static void c_set(struct tui *t, const char *args) {
   const char *eq = strchr(args, '=');
   char *err = NULL;
   if (!eq) {
-    const struct opt_def *o = config_find(args);
-    if (!o) tui_msg(t, 1, "unknown option '%s'", args);
-    else if (o->type == OPT_INT) tui_msg(t, 0, "%s=%d", o->name, config_int(&t->app->cfg, o));
-    else tui_msg(t, 0, "%s=%s", o->name, config_str(&t->app->cfg, o));
+    int i = settings_find(t->app->settings, args);
+    if (i < 0) {
+      tui_msg(t, 1, "no setting is called %s", args);
+      return;
+    }
+    char *v = settings_format(&setting_defs[i], settings_value(t->app->settings, i));
+    tui_msg(t, 0, "%s=%s", args, v);
+    free(v);
     return;
   }
   char *name = xstrndup(args, (size_t)(eq - args));
-  if (config_set(&t->app->cfg, name, eq + 1, &err)) {
+  if (app_set(t->app, name, eq + 1, &err)) {
     tui_msg(t, 1, "%s", err);
     free(err);
   } else {
@@ -350,7 +354,7 @@ static void c_source(struct tui *t, const char *args) {
     return;
   }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
-  if (to && !t->app->cfg.sync_dir[0]) {
+  if (to && !app_str(t->app, S_SYNC_DIR)[0]) {
     tui_msg(t, 1, "no sync folder is set: lulibre.o.sync_dir = \"~/some/folder\" in init.lua, or :set sync_dir=DIR");
     return;
   }

@@ -772,9 +772,7 @@ ON_UI(l_show)
 char **lapi_script_dirs(struct app *app) {
   char **dirs = xcalloc(4, sizeof *dirs);
   int n = 0;
-  char *cfg = config_dir_path(&app->cfg);
-  dirs[n++] = xasprintf("%s/scripts", cfg);
-  free(cfg);
+  dirs[n++] = xasprintf("%s/scripts", app->config_dir);
   /* the bundled scripts of one runtime only, as for modules (lstate.c): a
    * build tree's (build/lulibre -> ../scripts), LULIBRE_RUNTIME's (its lua/
    * folder's sibling), or the installed ones */
@@ -940,81 +938,6 @@ static void c_lua(struct tui *t, const char *args) {
   bridge_lua(t->app, eval_line, xstrdup(args));
 }
 
-/* ---- :reload-cfg : read init.lua again ----
- * Keys go back to the built-in ones first, so a binding taken out of
- * init.lua is gone; options keep their values unless init.lua sets them, and
- * what the command line set is applied on top again, as at start. */
-
-static void keys_reset_ui(void *arg) {
-  keymap_free(&tui_keymap);
-  keymap_defaults(&tui_keymap);
-  ctx_defaults();
-}
-
-static void cli_again_ui(void *arg) {
-  struct app *app = arg;
-  char *err = NULL;
-  if (app_apply_cli(app, &err)) {
-    lapi_report(app, 1, err);
-    free(err);
-  }
-}
-
-/* lulibre[name](), if the prelude defines it; its errors are reported */
-static void call_hook(lua_State *L, const char *name) {
-  lua_getglobal(L, "lulibre");
-  if (lua_istable(L, -1)) {
-    lua_getfield(L, -1, name);
-    if (lua_isfunction(L, -1)) {
-      if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-        lapi_report(lapi_app(L), 1, lua_tostring(L, -1));
-        lua_pop(L, 1);
-      }
-    } else {
-      lua_pop(L, 1);
-    }
-  }
-  lua_pop(L, 1);
-}
-
-static void reload_cfg(struct app *app, void *arg) { /* Lua thread */
-  char *path = arg;
-  lua_State *L = app->L;
-  bridge_ui(app, keys_reset_ui, NULL);
-  lua_getglobal(L, "require");
-  lua_pushliteral(L, "lulibre.ui.keys");
-  if (lua_pcall(L, 1, 1, 0) == LUA_OK) {
-    lua_getfield(L, -1, "reset");
-    if (lua_pcall(L, 0, 0, 0) != LUA_OK) lua_pop(L, 1);
-  }
-  lua_pop(L, 1);
-  call_hook(L, "_before_init"); /* what init.lua said before is forgotten */
-  if (luaL_dofile(L, path) != LUA_OK) {
-    lapi_report(app, 1, lua_tostring(L, -1));
-    lua_pop(L, 1);
-  } else {
-    call_hook(L, "_after_init");
-    char *msg = xasprintf("read %s again", path);
-    lapi_report(app, 0, msg);
-    free(msg);
-  }
-  bridge_ui(app, cli_again_ui, app);
-  bridge_redraw(app);
-  free(path);
-}
-
-static void c_reload_cfg(struct tui *t, const char *args) {
-  char *dir = config_dir_path(&t->app->cfg);
-  char *init = xasprintf("%s/init.lua", dir);
-  free(dir);
-  if (access(init, R_OK) != 0) {
-    tui_msg(t, 1, "there is no %s to read (lulibre config --write makes one)", init);
-    free(init);
-    return;
-  }
-  bridge_lua(t->app, reload_cfg, init);
-}
-
 static void message_line(const struct log_entry *e, void *ud) {
   time_t secs = (time_t)e->when;
   struct tm tm;
@@ -1126,7 +1049,6 @@ void l_ui_open(lua_State *L) {
 
   command_register("run", c_run, "[script [args]]  run a Lua script; no argument lists them");
   command_register("lua", c_lua, "code  run a line of Lua and show what it returns");
-  command_register("reload-cfg", c_reload_cfg, "read init.lua again: keys are reset first, options it sets take effect");
   command_register("messages", c_messages, "the log so far, in a pager");
   command_register("console", c_console, "[focus]  show or hide the log console");
   command_register("tasks", c_tasks, "scripts that are running");

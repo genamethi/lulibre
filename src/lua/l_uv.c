@@ -56,12 +56,13 @@ static int callback_pcall(lua_State *L, int nargs, int nresults, int flags) {
  * mod_tree names (outside a pixi environment), as require looks for any
  * module */
 static int preload_luv(lua_State *L) {
-  const char *rocks = getenv("PIXI_ENVIRONMENT_NAME") ? NULL : lapi_app(L)->cfg.mod_tree;
+  char *rocks = getenv("PIXI_ENVIRONMENT_NAME") ? NULL : lapi_setting_str(L, S_MOD_TREE);
   lua_getglobal(L, "package");
   lua_getfield(L, -1, "searchpath");
   lua_pushliteral(L, "luv");
   if (rocks && rocks[0]) lua_pushfstring(L, "%s/lib/lua/%s/?.so;", rocks, LULIBRE_LUA_VER);
   else lua_pushliteral(L, "");
+  free(rocks);
   lua_getfield(L, -4, "cpath");
   lua_concat(L, 2);
   lua_call(L, 2, 2);

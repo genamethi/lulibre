@@ -7,7 +7,7 @@
  * on top of the stack; it adds its functions and leaves the stack as it
  * found it. The whole API is the one flat `lulibre` table:
  *
- *   l_opt.c    lulibre.o                          options
+ *   l_setman.c setman (its own library)           settings
  *   l_job.c    spawn sleep yield tasks cancel     tasks
  *   l_db.c     ids books book count sql authors tags store reload
  *              source stage_refresh
@@ -25,6 +25,8 @@
  *   l_uv.c     lulibre.uv, require "luv"          libuv on the host loop
  *   l_panel.c  lulibre.panel                      tables a script fills and steers
  */
+
+#include "core/setdefs.h"
 
 struct lua_State;
 struct app;
@@ -61,7 +63,17 @@ char **lapi_script_dirs(struct app *app);
  * argument. From the interface thread; the task starts on the Lua thread. */
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg);
 
-void l_opt_open(struct lua_State *L);
+/* setman (l_setman.c). The copy of the settings in the registry: filled
+ * when the lua_State is made, and kept current by l_setman_changed, a
+ * message the store's watcher posts with setman_change_new. */
+int luaopen_setman(struct lua_State *L);
+void l_setman_fill(struct lua_State *L, const struct settings *st);
+struct setman_change *setman_change_new(const struct settings *st, int def);
+void l_setman_changed(struct app *app, void *arg);
+/* A value from the copy, for C on the Lua thread; the string is malloc'd. */
+long long lapi_setting_int(struct lua_State *L, enum setting_id id);
+char *lapi_setting_str(struct lua_State *L, enum setting_id id);
+
 void l_job_open(struct lua_State *L);
 void l_db_open(struct lua_State *L);
 void l_doc_open(struct lua_State *L);
