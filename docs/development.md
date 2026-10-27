@@ -79,12 +79,14 @@ and `lulibre.build.commit`, and a crash log names both.
 
 | | |
 |---|---|
-| `make unit` | `test/unit.c` (the C core) and `test/units.lua` (the Lua runtime and API) |
-| `make check` | the unit tests, `test/smoke.sh` (the command line and the interface, driven through tmux, on a generated library), `test/terminal.sh` (keys as a terminal sends them, outside tmux) and `test/setup.sh` (setup/install.sh on plans, under a temporary prefix; lulibre-setup driven through tmux; `mod_tree`) |
-| `make e2e` | every end-to-end test: smoke; terminal; setup; `install.sh` (the version in every place, a staged install); `offline.sh` (changes straight to a library folder); `write.sh` (changes through a content server); `forms.sh` (the edit form, review, removal and orphans, typed into the interface) |
-| `make check-offline` · `make check-write` · `make check-forms` | one of the last three |
+| `make unit` | `test/unit.c` (the C core) |
+| `make check` | the unit tests and `test/setup.sh` (setup/install.sh on plans, under a temporary prefix; lulibre-setup driven through tmux; `mod_tree`) |
+| `make e2e` | every end-to-end test: for now `test/setup.sh` |
 
-The last three need calibre and `unshare`. They run inside a private
+Previously the end-to-end tests drove the 0.2 Lua runtime. Now they are
+written again as each part of 0.3 is.
+
+Tests that write need calibre and `unshare`. They run inside a private
 network namespace against throwaway libraries, because calibre refuses
 direct access to any library while one of its servers runs on the machine.
 If a test can't run (a missing tool, no namespace, no luv), it prints

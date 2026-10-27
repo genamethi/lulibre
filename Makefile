@@ -37,13 +37,9 @@ help:
 	@echo "  make status          only that comparison"
 	@echo "  make builds          the log of builds: number, time, commit, branch, checkout"
 	@echo
-	@echo "  make check           unit tests and the quick end-to-end test (no calibre needed)"
-	@echo "  make unit            unit tests: C (build/test/unit) and Lua (test/units.lua)"
-	@echo "  make e2e             every end-to-end test: the interface, an install into a"
-	@echo "                       stage, writes without and with a content server, the forms"
-	@echo "  make check-offline   only: writes straight to a library (needs calibre, unshare)"
-	@echo "  make check-forms     only: the edit form, review, removal and orphans, by keystroke"
-	@echo "  make check-write     only: writes through a content server (the same needs)"
+	@echo "  make check           unit tests and the setup test (no calibre needed)"
+	@echo "  make unit            unit tests: C (build/test/unit)"
+	@echo "  make e2e             every end-to-end test"
 	@echo
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
 	@echo "  make uninstall       remove what install put there"
@@ -103,30 +99,12 @@ $(UNIT): test/unit.c $(LIBOBJ)
 
 unit: $(BIN) $(UNIT)
 	$(UNIT)
-	sh test/units.sh $(BIN)
 
 check: unit $(SETUP)
-	sh test/smoke.sh $(BIN)
-	sh test/terminal.sh $(BIN)
 	sh test/setup.sh $(BIN) $(SETUP)
-
-check-offline: $(BIN)
-	sh test/offline.sh $(BIN)
-
-check-write: $(BIN)
-	sh test/write.sh $(BIN)
-
-check-forms: $(BIN)
-	sh test/forms.sh $(BIN)
 
 e2e: $(BIN) $(SETUP)
-	sh test/smoke.sh $(BIN)
-	sh test/terminal.sh $(BIN)
 	sh test/setup.sh $(BIN) $(SETUP)
-	sh test/install.sh $(BIN) $(VERSION)
-	sh test/offline.sh $(BIN)
-	sh test/write.sh $(BIN)
-	sh test/forms.sh $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----
 
@@ -183,4 +161,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status builds api unit check check-offline check-write check-forms e2e install datasets rocks uninstall clean distclean
+.PHONY: all help status builds api unit check e2e install datasets rocks uninstall clean distclean
