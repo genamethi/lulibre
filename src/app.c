@@ -6,6 +6,7 @@
 #include "app.h"
 #include "core/queue.h"
 #include "index/indexer.h"
+#include "library/library.h"
 #include "core/util.h"
 #include "lua/lapi.h"
 
@@ -129,4 +130,5 @@ void app_open_db(struct app *app) {
   }
   free(real);
   app->db_ready = 1;
+  app->library = library_open(app);
 }

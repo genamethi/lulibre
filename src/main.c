@@ -10,6 +10,7 @@
 #include "version.h"
 #include "core/log.h"
 #include "core/queue.h"
+#include "library/library.h"
 #include "core/util.h"
 #include "lua/bridge.h"
 
@@ -58,6 +59,7 @@ static int finish(struct app *app, int rc) {
   }
   queue_drain(LOOP_LUA); /* what was on its way to the copy, before the lua_State goes */
   lstate_close(app);
+  library_close(app->library);
   if (app->db_ready) db_close(&app->db);
   tui_teardown();
   settings_free(app->settings);

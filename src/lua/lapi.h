@@ -83,6 +83,7 @@ void lstate_paths(struct lua_State *L);
 /* lulibre.reading (l_reading.c), a module written in C, preloaded. */
 int luaopen_lulibre_reading(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
+int luaopen_lulibre_library(struct lua_State *L);
 
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);

@@ -44,6 +44,11 @@ const struct setting_def setting_defs[S_COUNT] = {
                       "two values are near when each is at least this much found in the other (0 to 1)"},
   [S_SIMILAR_SAME] = {"similar_same", SETTING_NUM, 0, "0.95", NULL,
                       "a value is all found in another at this much or more (0 to 1): both ways, they are equal"},
+  [S_EMBED] = {"embed", SETTING_BOOL, 0, "false", NULL,
+               "every change to a record is also written into the book's files (calibredb embed_metadata), "
+               "once per batch, undoing too"},
+  [S_WRITE_JOBS] = {"write_jobs", SETTING_INT, 0, "4", NULL,
+                    "calibredb processes at once through the content server (one at a time straight to the folder)"},
   [S_SERVER] = {"server", SETTING_STR, 0, "", NULL,
                 "calibre content server URL; changes go through it (http://127.0.0.1:8080)"},
   [S_USER] = {"user", SETTING_STR, 0, "", NULL, "content server user"},

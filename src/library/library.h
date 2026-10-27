@@ -1,16 +1,19 @@
 #ifndef LULIBRE_LIBRARY_H
 #define LULIBRE_LIBRARY_H
 
-/* The library (design 24-32): one resource, owned by C on the interface
- * thread, so editing works with no Lua.
+/* The library (design 24-31): one resource, owned by C on the main thread,
+ * so editing works with no Lua.
  *
- * The holder (the content server, calibre's program, or none) is kept
- * current by observation and posted as EV_HOLDER. Every calibre operation
- * is a message to the library with a need: any holder, or the library
- * closed. An operation runs once the need is met, by the route the holder
- * allows; the journal records every operation through one lifecycle. A
- * write that applies posts EV_RECORDS_CHANGED, after embedding and opf
- * files where the operation asks for them. */
+ * The holder (calibre's content server, calibre's program, or none) is kept
+ * current by observation, calibre's lock among the machine's sockets, and
+ * posted as EV_HOLDER. Every calibre operation is a message to the library
+ * with a need: any holder, or the library closed. It runs once the need is
+ * met, by the route the holder allows: through the server, or straight to
+ * the library folder; while calibre's program has the library, it waits.
+ * No caller asks for the route. The journal records every operation
+ * through one lifecycle: queued, running, applied or failed, undone. An
+ * operation that applies posts EV_RECORDS_CHANGED, after embedding the
+ * records in the books' files when the operation asks. */
 
 struct app;
 
@@ -24,42 +27,50 @@ enum change_op { CHANGE_SET, CHANGE_ADD, CHANGE_REMOVE };
 
 struct change {
   long long book;
-  const char *field; /* a calibre field, or "#name" for a field of lulibre's own */
+  const char *field; /* a calibre field (library/fields.h), or "#name" for one of lulibre's own */
   const char *value;
   enum change_op op;
-  /* where the change came from (design 27); NULL and 0 for a hand edit */
+  /* where the change came from (design 27); 0 and NULL for a hand edit */
   long long proposal;
   const char *proposed; /* the value as proposed */
-  const char *source;   /* the grammar or service that supplied the field */
+  const char *source;   /* the grammar or service that supplied it */
 };
 
 struct operation {
   const char *label;
   enum op_need need;
-  const char *store; /* a REG_STORE entry: "calibre", "staging", "own" */
   const struct change *changes;
   int nchanges;
-  const char *const *argv; /* a structural calibredb command, in place of changes */
-  /* taken from the settings when the operation is made (design 4) */
-  int embed;
-  int jobs;
+  const char *const *argv; /* a structural calibredb command, NULL-terminated, in place of changes */
 };
 
 struct library;
 
+/* batch: the journal's batch, 0 when nothing was to change; state:
+ * OP_APPLIED, OP_FAILED (err says why, for the first book that failed). */
 typedef void library_done(long long batch, enum op_state state, const char *err, void *ud);
 
-/* All return 0 on success; on failure *err is a malloc'd message. */
-struct library *library_open(struct app *app, char **err);
+struct library *library_open(struct app *app);
 void library_close(struct library *lib);
+/* Queues again what the journal holds queued; by those that run the loop
+ * (the interface, lulibre run), not by a command that only reads. */
+void library_resume(struct library *lib);
 
+/* Any thread. */
 enum library_holder library_holder(const struct library *lib);
 
-/* Queues op (copied) as one batch of the journal; done fires on the
- * interface loop when the batch has applied or failed. */
+/* Queues op as one batch of the journal; op is copied, and the settings it
+ * runs by (the route's, embedding, processes at once) are taken now. done
+ * fires on the main loop when the batch has applied or failed, at once
+ * when nothing was to change. Returns -1 with *err for a change that
+ * cannot be made (an unknown field, a malformed value). */
 int library_submit(struct library *lib, const struct operation *op, library_done *done, void *ud, char **err);
 
 /* Puts a batch's old values back, as an operation of its own. */
 int library_undo(struct library *lib, long long batch, library_done *done, void *ud, char **err);
+
+/* What went wrong with a calibredb run, in words: the one place its error
+ * text is read. status: its exit status; out: what it printed. malloc'd. */
+char *library_failure(int status, const char *out, const char *server);
 
 #endif

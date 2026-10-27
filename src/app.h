@@ -12,6 +12,7 @@ struct lua_State;
 struct sched;
 struct lctx;
 struct tui;
+struct library;
 
 struct app {
   struct settings *settings; /* the store; read and changed on the main thread only */
@@ -19,6 +20,7 @@ struct app {
   char *state_path;          /* the saved settings: fixed at start */
   struct db db;
   int db_ready;
+  struct library *library; /* calibre's library as a resource (library/library.h); with the index */
   uv_loop_t *loop;      /* the interface's loop; the only loop when headless */
   uv_loop_t *lloop;     /* the loop Lua's timers, processes and luv use (lua/bridge.h) */
   struct db *ldb;       /* the Lua thread's own connection, while it has one */

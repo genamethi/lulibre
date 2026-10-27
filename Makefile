@@ -112,6 +112,7 @@ check: unit $(SETUP)
 
 e2e: $(BIN) $(SETUP)
 	sh test/setup.sh $(BIN) $(SETUP)
+	sh test/write.sh $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----
 

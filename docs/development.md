@@ -81,7 +81,7 @@ and `lulibre.build.commit`, and a crash log names both.
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/core.c` (the 0.3 runtime: settings, events, the registry) |
 | `make check` | the unit tests and `test/setup.sh` (setup/install.sh on plans, under a temporary prefix; lulibre-setup driven through tmux; `mod_tree`) |
-| `make e2e` | every end-to-end test: for now `test/setup.sh` |
+| `make e2e` | every end-to-end test: `test/setup.sh`; `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) |
 
 Previously the end-to-end tests drove the 0.2 Lua runtime. Now they are
 written again as each part of 0.3 is.

@@ -16,6 +16,7 @@
 #include "db/db.h"
 #include "doc/doc.h"
 #include "doc/reading.h"
+#include "library/fields.h"
 #include "match/similar.h"
 #include "lua/sched.h"
 
@@ -559,6 +560,55 @@ static void test_similar(void) {
   free(path);
 }
 
+/* ---- the write core's values ---- */
+
+static const char *resolved(const char *field, enum change_op op, const char *now, const char *value) {
+  static char *last;
+  free(last);
+  char *err = NULL;
+  last = field_resolve(field, op, now, value, &err);
+  if (!last) {
+    last = err; /* the message, for the checks that expect one */
+    return NULL;
+  }
+  return last;
+}
+
+static void test_fields(void) {
+  eq(resolved("tags", CHANGE_SET, "", "b, a,  c"), "a, b, c", "a set of tags is sorted, one spelling");
+  eq(resolved("tags", CHANGE_ADD, "a, c", "b"), "a, b, c", "add keeps the others");
+  eq(resolved("tags", CHANGE_ADD, "a, Topology", "topology"), "a, topology", "the same tag folded is the same tag");
+  eq(resolved("tags", CHANGE_REMOVE, "a, b, c", "b"), "a, c", "remove takes one out");
+  eq(resolved("authors", CHANGE_SET, "", "Terence Tao & Van Vu"), "Terence Tao & Van Vu", "authors keep their order");
+  eq(resolved("authors", CHANGE_ADD, "Terence Tao", "Ben Green"), "Terence Tao & Ben Green", "an author is added last");
+  eq(resolved("identifiers", CHANGE_ADD, "doi:10.1/x, isbn:1", "doi:10.2/y"), "doi:10.2/y, isbn:1",
+     "an identifier of a type held is replaced");
+  eq(resolved("identifiers", CHANGE_REMOVE, "doi:10.1/x, isbn:1", "doi"), "isbn:1", "and removed by its type");
+  ok(resolved("identifiers", CHANGE_SET, "", "10.1/x") == NULL, "an identifier without its type is refused");
+  eq(resolved("pubdate", CHANGE_SET, "", "2006"), "2006-01-01", "a year is its first of January");
+  ok(resolved("pubdate", CHANGE_SET, "", "soon") == NULL, "a date that is no date is refused");
+  ok(resolved("title", CHANGE_ADD, "", "x") == NULL, "a field of one value is only set");
+  eq(resolved("series_index", CHANGE_SET, "", " 2.50 "), "2.5", "a series index as a number");
+  ok(resolved("colour", CHANGE_SET, "", "x") == NULL, "an unknown field is refused");
+  eq(resolved("#partof", CHANGE_ADD, "a", "b"), "a, b", "a field of lulibre's own is a list");
+  resolved("title", CHANGE_SET, "", "");
+  char *w = field_wire("tags", "a, b");
+  eq(w, "a,b", "calibredb's tags: commas alone");
+  free(w);
+  w = field_wire("pubdate", "2006-01-01");
+  eq(w, "2006-01-01T12:00:00+00:00", "a date at noon UTC, the same day everywhere");
+  free(w);
+  w = field_wire("pubdate", "");
+  eq(w, "0101-01-01T00:00:00+00:00", "no date is calibre's no date");
+  free(w);
+  char *f = library_failure(1, "Traceback...\nAnother calibre program such as calibre-server is running", NULL);
+  ok(strstr(f, "calibre program has the library open") != NULL, "calibredb's error, in words");
+  free(f);
+  f = library_failure(1, "line one\nHTTP Error 401: Unauthorized\n", "http://x");
+  ok(strstr(f, "user name or password") != NULL, "a refused account");
+  free(f);
+}
+
 int main(void) {
   const char *base = getenv("TMPDIR");
   char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
@@ -579,6 +629,7 @@ int main(void) {
   test_evman();
   test_reading();
   test_similar();
+  test_fields();
   printf("core tests: %d checks, %d failed\n", checks, fails);
   char *rm = xasprintf("rm -rf '%s'", tmpdir);
   if (system(rm)) printf("could not remove %s\n", tmpdir);

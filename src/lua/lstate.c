@@ -192,6 +192,8 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "lulibre.reading");
   lua_pushcfunction(L, luaopen_lulibre_similar);
   lua_setfield(L, -2, "lulibre.similar");
+  lua_pushcfunction(L, luaopen_lulibre_library);
+  lua_setfield(L, -2, "lulibre.library");
   lua_pop(L, 1);
   l_setman_fill(L, app->settings);
   keep_own(L, "path", LUA_OWN_PATH);

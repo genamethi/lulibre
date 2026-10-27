@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "core/log.h"
+#include "library/library.h"
 #include "lua/bridge.h"
 #include "tui/tui.h"
 
@@ -292,6 +293,7 @@ int tui_run(struct app *app) {
     return 2;
   }
   app_open_db(app);
+  library_resume(app->library);
 
   struct tui tui, *t = &tui;
   memset(t, 0, sizeof *t);

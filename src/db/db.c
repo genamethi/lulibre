@@ -85,40 +85,26 @@ static int reset_if_stale(struct db *db, char **err) {
   return rc;
 }
 
-/* ---- the history: every change made to the library, and the snapshots
- * taken of it. It is lulibre's record of what it did, not derived from
- * anything, so it lives in a file of its own beside the index
- * ("<index>.history.db") where rebuilding or deleting the index cannot
- * touch it. It is attached to each read-write connection as `history`; its
- * tables are named without the prefix ("FROM journal"). ---- */
+/* ---- the journal: every operation on the library, one lifecycle
+ * (design 25, 26, 27). It is lulibre's record of what it did, not derived
+ * from anything, so it lives in a file of its own beside the index
+ * ("<index>.journal.db") where rebuilding or deleting the index cannot
+ * touch it. It is attached to each read-write connection as `history`. ----
+ *
+ * A row is one field of one book changed (old and new), or one structural
+ * command (argv, as calibredb's arguments joined by tabs); a batch is one
+ * operation. need: enum op_need; state: enum op_state. proposal, proposed
+ * and source: where the value came from, for a decision taken in review.
+ * undoes: the batch an undo puts back. */
 static const char history_schema[] =
   "PRAGMA history.journal_mode=WAL;"
-  /* one row per field changed (or book removed, added, restored, dropped);
-   * label 'outside' marks changes found in calibre that lulibre did not make */
   "CREATE TABLE IF NOT EXISTS history.journal("
-  " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, book INTEGER NOT NULL, field TEXT NOT NULL,"
-  " old TEXT, new TEXT, status TEXT NOT NULL DEFAULT 'pending', error TEXT, ts INTEGER,"
-  " label TEXT, undone INTEGER NOT NULL DEFAULT 0);"
+  " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, label TEXT, need INTEGER NOT NULL DEFAULT 0,"
+  " store TEXT NOT NULL, state INTEGER NOT NULL, error TEXT, ts INTEGER,"
+  " book INTEGER, field TEXT, old TEXT, new TEXT, argv TEXT,"
+  " proposal INTEGER, proposed TEXT, source TEXT, undoes INTEGER);"
   "CREATE INDEX IF NOT EXISTS history.journal_batch ON journal(batch);"
-  "CREATE INDEX IF NOT EXISTS history.journal_book ON journal(book, field);"
-  /* a snapshot is a point in the journal: the library as it was after row
-   * `upto` (lua/lulibre/snapshots.lua) */
-  "CREATE TABLE IF NOT EXISTS history.snapshots("
-  " id INTEGER PRIMARY KEY, name TEXT NOT NULL, ts INTEGER NOT NULL, upto INTEGER NOT NULL,"
-  " auto INTEGER NOT NULL DEFAULT 0, retired INTEGER, note TEXT);"
-  /* changes calibre makes only while no calibre program has the library
-   * open (add_custom_column ...), waiting for the content server to be
-   * stopped (lua/lulibre/offline.lua). argv: calibredb's arguments after
-   * --with-library, or a job lulibre does itself (restore_copy PATH), as
-   * JSON; status waiting, done, failed or cancelled */
-  "CREATE TABLE IF NOT EXISTS history.offline("
-  " id INTEGER PRIMARY KEY, argv TEXT NOT NULL, label TEXT, ts INTEGER NOT NULL,"
-  " status TEXT NOT NULL DEFAULT 'waiting', error TEXT, done INTEGER);"
-  /* for a snapshot made from a copy of calibre's database: the values in
-   * which that copy differs from what the journal says the library was */
-  "CREATE TABLE IF NOT EXISTS history.snapshot_values("
-  " snap INTEGER NOT NULL, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
-  " PRIMARY KEY(snap, book, field)) WITHOUT ROWID;";
+  "CREATE INDEX IF NOT EXISTS history.journal_book ON journal(book, field);";
 
 /* ---- custom metadata: fields of your own beside calibre's (#partof,
  * #part ...), additive: calibre's database is never changed for them. In a
@@ -142,10 +128,9 @@ static char *beside(const char *index, const char *what) {
   return xasprintf("%s.%s.db", index, what);
 }
 
-/* Where the history (the journal and the snapshots) of the index at `index`
- * is kept. malloc'd. */
+/* Where the journal of the index at `index` is kept. malloc'd. */
 static char *db_history_path(const char *index) {
-  return beside(index, "history");
+  return beside(index, "journal");
 }
 
 /* Where the custom fields (#partof ...) of the index at `index` are kept. */
@@ -203,26 +188,6 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
   return rc;
 }
 
-/* An index from before the history had a journal of its own: its rows move
- * to the history (once, and only into an empty one), and it goes. */
-static int move_journal(struct db *db, char **err) {
-  sqlite3_stmt *st;
-  int old = 0;
-  if (sqlite3_prepare_v2(db->h, "SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = 'journal'",
-                         -1, &st, NULL) == SQLITE_OK) {
-    old = sqlite3_step(st) == SQLITE_ROW;
-    sqlite3_finalize(st);
-  }
-  if (!old) return 0;
-  return db_exec(db,
-                 "BEGIN IMMEDIATE;"
-                 "INSERT INTO history.journal SELECT * FROM main.journal"
-                 " WHERE NOT EXISTS(SELECT 1 FROM history.journal);"
-                 "DROP TABLE main.journal;"
-                 "COMMIT;",
-                 err);
-}
-
 int db_open(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
   char *tmp = xstrdup(path);
@@ -242,7 +207,7 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
       reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
-      db_exec(db, history_schema, err) || move_journal(db, err) || attach_custom(db, "rwc", err) ||
+      db_exec(db, history_schema, err) || attach_custom(db, "rwc", err) ||
       db_exec(db, custom_schema, err) || db_register_functions(db, err)) {
     db_close(db);
     return -1;

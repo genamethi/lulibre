@@ -6,6 +6,7 @@
 
 #include "app.h"
 #include "core/util.h"
+#include "library/library.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
 
@@ -39,6 +40,7 @@ int cmd_run(struct app *app, int argc, char **argv) {
   }
   free(path);
   /* returns once no task is running and nothing they started is pending */
+  if (app->db_ready) library_resume(app->library);
   uv_run(app->loop, UV_RUN_DEFAULT);
   return sched_failed(app) ? 1 : 0;
 }

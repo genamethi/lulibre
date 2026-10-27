@@ -41,8 +41,13 @@ struct sched {
   int next_id;
   int jobs; /* worker jobs begun and not yet ended */
   atomic_int live, failed; /* read by the interface thread for its status line */
-  uv_idle_t idle;
+  uv_idle_t *idle;
   int idle_on;
+  /* A task waiting for a message (lulibre.library's answer, say) has no
+   * handle of its own on the loop; while any task waits, this one keeps
+   * the loop running. */
+  uv_async_t *keep;
+  int waits;
 };
 
 static struct task *task_of(lua_State *L) {
@@ -60,7 +65,7 @@ static void enqueue(struct sched *s, struct task *t) {
   s->qtail = t;
   if (!s->idle_on) {
     s->idle_on = 1;
-    uv_idle_start(&s->idle, idle_cb);
+    uv_idle_start(s->idle, idle_cb);
   }
 }
 
@@ -140,8 +145,19 @@ static void idle_cb(uv_idle_t *h) {
   }
   if (!s->qhead) {
     s->idle_on = 0;
-    uv_idle_stop(&s->idle);
+    uv_idle_stop(s->idle);
   }
+}
+
+static void handle_free(uv_handle_t *h) {
+  free(h);
+}
+
+static void waits_add(struct sched *s, int d) {
+  int before = s->waits;
+  s->waits += d;
+  if (!before && s->waits) uv_ref((uv_handle_t *)s->keep);
+  else if (before && !s->waits) uv_unref((uv_handle_t *)s->keep);
 }
 
 void sched_init(struct app *app) {
@@ -149,15 +165,22 @@ void sched_init(struct app *app) {
   s->app = app;
   s->L = app->L;
   s->next_id = 1;
-  uv_idle_init(app->lloop, &s->idle);
-  s->idle.data = s;
+  s->idle = xcalloc(1, sizeof *s->idle);
+  uv_idle_init(app->lloop, s->idle);
+  s->idle->data = s;
+  s->keep = xcalloc(1, sizeof *s->keep);
+  uv_async_init(app->lloop, s->keep, NULL);
+  uv_unref((uv_handle_t *)s->keep);
   app->sched = s;
 }
 
 void sched_free(struct app *app) {
   struct sched *s = app->sched;
   if (!s) return;
-  uv_idle_stop(&s->idle);
+  uv_idle_stop(s->idle);
+  /* the handles go when the loop next turns, if it does */
+  uv_close((uv_handle_t *)s->idle, handle_free);
+  uv_close((uv_handle_t *)s->keep, handle_free);
   /* tasks still alive here are released with the Lua state */
   for (struct task *t = s->all, *n; t; t = n) {
     n = t->next;
@@ -201,18 +224,21 @@ struct task *sched_begin_wait(lua_State *L) {
   struct task *t = task_of(L);
   t->state = T_WAITING;
   t->pending++;
+  waits_add(t->ctx.app->sched, 1);
   return t;
 }
 
 void sched_abort_wait(struct task *t) {
   t->state = T_READY;
   t->pending--;
+  waits_add(t->ctx.app->sched, -1);
   t->cancel_fn = NULL;
 }
 
 lua_State *sched_end_wait(struct task *t) {
   struct sched *s = t->ctx.app->sched;
   t->pending--;
+  waits_add(s, -1);
   t->cancel_fn = NULL;
   if (t->state == T_DONE) {
     if (t->pending == 0) task_free(t);

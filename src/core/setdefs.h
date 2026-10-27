@@ -31,6 +31,8 @@ enum setting_id {
   S_TRACK_AFTER,
   S_SIMILAR_NEAR,
   S_SIMILAR_SAME,
+  S_EMBED,
+  S_WRITE_JOBS,
   S_SERVER,
   S_USER,
   S_PASSWORD_FILE,
