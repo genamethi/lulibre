@@ -9,15 +9,18 @@
 #include "core/util.h"
 
 struct entry {
-  union setting_value v;
+  char *layer[ORIGINS]; /* the text per layer, as typed; NULL = none */
   enum setting_origin from;
-  char *keep; /* the text saved: from the Lua API or the state; NULL = none */
+  union setting_value v;
 };
 
 struct settings {
   const struct setting_def *defs;
   int n;
   struct entry *e;
+  int persist; /* the persistence setting's index, or -1 */
+  settings_watch_fn *watch;
+  void *ud;
 };
 
 static int is_text(enum setting_type t) {
@@ -79,8 +82,57 @@ static int parse(const struct setting_def *d, const char *text, union setting_va
   return -1;
 }
 
-static void drop(const struct setting_def *d, union setting_value *v) {
-  if (is_text(d->type)) free(v->s);
+static int persistent(const struct settings *st) {
+  return st->persist >= 0 && st->e[st->persist].v.b;
+}
+
+/* The layer that is in effect for setting i. */
+static enum setting_origin top(const struct settings *st, int i) {
+  const struct entry *e = &st->e[i];
+  for (int o = FROM_API; o > FROM_DEFAULT; o--) {
+    if (o == FROM_STATE && !persistent(st)) continue;
+    if (e->layer[o]) return o;
+  }
+  return FROM_DEFAULT;
+}
+
+static int same(enum setting_type t, const union setting_value *a, const union setting_value *b) {
+  switch (t) {
+  case SETTING_STR:
+  case SETTING_PATH:
+    return !strcmp(a->s, b->s);
+  case SETTING_INT:
+    return a->i == b->i;
+  case SETTING_BOOL:
+    return a->b == b->b;
+  case SETTING_NUM:
+    return a->n == b->n;
+  }
+  return 0;
+}
+
+/* Brings setting i's value in effect up to date with its layers; 1 when it
+ * changed. */
+static int settle(struct settings *st, int i) {
+  const struct setting_def *d = &st->defs[i];
+  struct entry *e = &st->e[i];
+  enum setting_origin o = top(st, i);
+  union setting_value v;
+  char *err = NULL;
+  if (parse(d, e->layer[o], &v, &err)) die("%s", err); /* each layer was checked when set */
+  int changed = !same(d->type, &v, &e->v);
+  if (is_text(d->type)) free(e->v.s);
+  e->v = v;
+  e->from = o;
+  return changed;
+}
+
+static void settle_all(struct settings *st) {
+  int was = persistent(st);
+  for (int i = 0; i < st->n; i++)
+    if (settle(st, i) && st->watch) st->watch(st, i, st->ud);
+  /* the persistence setting decides which layers count for the others */
+  if (persistent(st) != was) settle_all(st);
 }
 
 struct settings *settings_new(const struct setting_def *defs, int ndefs) {
@@ -88,9 +140,12 @@ struct settings *settings_new(const struct setting_def *defs, int ndefs) {
   st->defs = defs;
   st->n = ndefs;
   st->e = xcalloc(ndefs, sizeof *st->e);
+  st->persist = -1;
   for (int i = 0; i < ndefs; i++) {
     char *err = NULL;
     if (parse(&defs[i], defs[i].dflt, &st->e[i].v, &err)) die("the default of %s", err);
+    st->e[i].layer[FROM_DEFAULT] = xstrdup(defs[i].dflt);
+    if (defs[i].flags & SETTING_PERSIST) st->persist = i;
   }
   return st;
 }
@@ -98,17 +153,26 @@ struct settings *settings_new(const struct setting_def *defs, int ndefs) {
 void settings_free(struct settings *st) {
   if (!st) return;
   for (int i = 0; i < st->n; i++) {
-    drop(&st->defs[i], &st->e[i].v);
-    free(st->e[i].keep);
+    if (is_text(st->defs[i].type)) free(st->e[i].v.s);
+    for (int o = 0; o < ORIGINS; o++) free(st->e[i].layer[o]);
   }
   free(st->e);
   free(st);
+}
+
+void settings_watch(struct settings *st, settings_watch_fn *fn, void *ud) {
+  st->watch = fn;
+  st->ud = ud;
 }
 
 int settings_find(const struct settings *st, const char *name) {
   for (int i = 0; i < st->n; i++)
     if (!strcmp(st->defs[i].name, name)) return i;
   return -1;
+}
+
+int settings_count(const struct settings *st) {
+  return st->n;
 }
 
 const struct setting_def *settings_def(const struct settings *st, int def) {
@@ -119,49 +183,52 @@ enum setting_origin settings_origin(const struct settings *st, int def) {
   return st->e[def].from;
 }
 
-/* The change, already valid, to this copy. */
-static void change(struct settings *st, int i, enum setting_origin from, const char *text) {
-  const struct setting_def *d = &st->defs[i];
-  struct entry *e = &st->e[i];
-  if (from == FROM_API || from == FROM_STATE) {
-    free(e->keep);
-    e->keep = xstrdup(text);
-  }
-  if (from == FROM_API && d->when == SETTING_AT_START) return;
-  union setting_value v;
-  char *err = NULL;
-  if (parse(d, text, &v, &err)) { /* valid where it was made; this build agrees */
-    free(err);
-    return;
-  }
-  drop(d, &e->v);
-  e->v = v;
-  e->from = from;
+const union setting_value *settings_value(const struct settings *st, int def) {
+  return &st->e[def].v;
 }
 
-int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from,
-                 struct setting_change *out, char **err) {
-  out->def = -1;
-  out->text = NULL;
+/* The setting called name, if layer `from` may hold a value of it. */
+static int layer_for(const struct settings *st, const char *name, enum setting_origin from, char **err) {
   int i = settings_find(st, name);
   if (i < 0) {
     *err = xasprintf("no setting is called %s", name);
     return -1;
   }
+  unsigned flags = st->defs[i].flags;
+  if (from != FROM_CLI && flags & SETTING_CLI_ONLY) {
+    *err = xasprintf("%s is set only on the command line", name);
+    return -1;
+  }
+  if (from == FROM_STATE && flags & SETTING_PERSIST) {
+    *err = xasprintf("%s is not kept in the saved state", name);
+    return -1;
+  }
+  if (from == FROM_DEFAULT) {
+    *err = xasprintf("%s: a default is fixed", name);
+    return -1;
+  }
+  return i;
+}
+
+int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from, char **err) {
+  int i = layer_for(st, name, from, err);
+  if (i < 0) return -1;
   union setting_value v;
   if (parse(&st->defs[i], text, &v, err)) return -1;
-  drop(&st->defs[i], &v);
-  if (from < st->e[i].from) return 0;
-  change(st, i, from, text);
-  out->def = i;
-  out->from = from;
-  out->text = xstrdup(text);
+  if (is_text(st->defs[i].type)) free(v.s);
+  free(st->e[i].layer[from]);
+  st->e[i].layer[from] = xstrdup(text);
+  settle_all(st);
   return 0;
 }
 
-void settings_apply(struct settings *st, const struct setting_change *ch) {
-  if (ch->def < 0 || ch->def >= st->n || ch->from < st->e[ch->def].from) return;
-  change(st, ch->def, ch->from, ch->text);
+int settings_unset(struct settings *st, const char *name, enum setting_origin from, char **err) {
+  int i = layer_for(st, name, from, err);
+  if (i < 0) return -1;
+  free(st->e[i].layer[from]);
+  st->e[i].layer[from] = NULL;
+  settle_all(st);
+  return 0;
 }
 
 int settings_get(const struct settings *st, const char *name, union setting_value *out, char **err) {
@@ -214,13 +281,11 @@ int settings_load_state(struct settings *st, const char *path, char **err) {
     if (!line[0] || line[0] == '#' || !eq) continue;
     *eq = '\0';
     unescape(eq + 1);
-    struct setting_change ch;
     char *e = NULL;
-    if (settings_set(st, line, eq + 1, FROM_STATE, &ch, &e)) {
+    if (settings_set(st, line, eq + 1, FROM_STATE, &e)) {
       log_warn("%s: passed over: %s", path, e);
       free(e);
     }
-    free(ch.text);
   }
   free(line);
   fclose(f);
@@ -228,6 +293,7 @@ int settings_load_state(struct settings *st, const char *path, char **err) {
 }
 
 int settings_save_state(const struct settings *st, const char *path, char **err) {
+  if (!persistent(st)) return 0;
   char *dir = xstrdup(path), *slash = strrchr(dir, '/');
   if (slash && slash != dir) {
     *slash = '\0';
@@ -242,9 +308,11 @@ int settings_save_state(const struct settings *st, const char *path, char **err)
     return -1;
   }
   for (int i = 0; i < st->n; i++) {
-    if (!st->e[i].keep) continue;
+    if (st->defs[i].flags & (SETTING_CLI_ONLY | SETTING_PERSIST)) continue;
+    const char *t = st->e[i].layer[FROM_API] ? st->e[i].layer[FROM_API] : st->e[i].layer[FROM_STATE];
+    if (!t) continue;
     fprintf(f, "%s=", st->defs[i].name);
-    put_escaped(f, st->e[i].keep);
+    put_escaped(f, t);
     fputc('\n', f);
   }
   int bad = ferror(f) | fclose(f);

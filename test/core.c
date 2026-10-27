@@ -33,12 +33,13 @@ static char *tmpdir;
 /* ---- settings ---- */
 
 static const struct setting_def defs[] = {
-  {"name", SETTING_STR, SETTING_LIVE, "x", NULL, "a text"},
-  {"mode", SETTING_STR, SETTING_LIVE, "a", "a|b|c", "one of three"},
-  {"count", SETTING_INT, SETTING_LIVE, "3", NULL, "a whole number"},
-  {"weight", SETTING_NUM, SETTING_LIVE, "0.45", NULL, "a number"},
-  {"flag", SETTING_BOOL, SETTING_LIVE, "false", NULL, "true or false"},
-  {"dir", SETTING_PATH, SETTING_AT_START, "~/d", NULL, "read before Lua runs"},
+  {"name", SETTING_STR, 0, "x", NULL, "a text"},
+  {"mode", SETTING_STR, 0, "a", "a|b|c", "one of three"},
+  {"count", SETTING_INT, 0, "3", NULL, "a whole number"},
+  {"weight", SETTING_NUM, 0, "0.45", NULL, "a number"},
+  {"flag", SETTING_BOOL, 0, "false", NULL, "true or false"},
+  {"dir", SETTING_PATH, SETTING_CLI_ONLY, "~/d", NULL, "where things are"},
+  {"persistent", SETTING_BOOL, SETTING_PERSIST, "false", NULL, "keep the settings"},
 };
 #define NDEFS ((int)(sizeof defs / sizeof defs[0]))
 
@@ -73,13 +74,17 @@ static const char *get_s(struct settings *st, const char *name) {
   return last = v.s;
 }
 
-static int set(struct settings *st, const char *name, const char *text, enum setting_origin from,
-               struct setting_change *ch) {
+static int set(struct settings *st, const char *name, const char *text, enum setting_origin from) {
   char *err = NULL;
-  struct setting_change mine;
-  int r = settings_set(st, name, text, from, ch ? ch : &mine, &err);
+  int r = settings_set(st, name, text, from, &err);
   free(err);
-  if (!ch) free(mine.text);
+  return r;
+}
+
+static int unset(struct settings *st, const char *name, enum setting_origin from) {
+  char *err = NULL;
+  int r = settings_unset(st, name, from, &err);
+  free(err);
   return r;
 }
 
@@ -93,109 +98,106 @@ static void test_settings_values(void) {
   ok(settings_get(st, "flag", &v, &err) == 0 && v.b == 0, "a flag's default");
   ok(get_s(st, "dir")[0] == '/', "a path's default is expanded");
 
-  ok(set(st, "count", "9", FROM_API, NULL) == 0 && get_i(st, "count") == 9, "set a number");
-  ok(set(st, "count", "nine", FROM_API, NULL) != 0 && get_i(st, "count") == 9,
+  ok(set(st, "count", "9", FROM_API) == 0 && get_i(st, "count") == 9, "set a number");
+  ok(set(st, "count", "nine", FROM_API) != 0 && get_i(st, "count") == 9,
      "text is refused for a number, and the value stays");
-  ok(set(st, "count", "", FROM_API, NULL) != 0, "so is nothing");
-  ok(set(st, "weight", "0.5x", FROM_API, NULL) != 0, "and a number with more after it");
-  ok(set(st, "mode", "d", FROM_API, NULL) != 0, "a value outside the choices is refused");
-  ok(settings_set(st, "mode", "d", FROM_API, &(struct setting_change){0}, &err) != 0 && err &&
-         strstr(err, "a|b|c"),
+  ok(set(st, "count", "", FROM_API) != 0, "so is nothing");
+  ok(set(st, "weight", "0.5x", FROM_API) != 0, "and a number with more after it");
+  ok(set(st, "mode", "d", FROM_API) != 0, "a value outside the choices is refused");
+  ok(settings_set(st, "mode", "d", FROM_API, &err) != 0 && err && strstr(err, "a|b|c"),
      "and the message names the choices");
   free(err);
   err = NULL;
-  ok(set(st, "flag", "on", FROM_API, NULL) == 0 && settings_get(st, "flag", &v, &err) == 0 && v.b == 1,
+  ok(set(st, "flag", "on", FROM_API) == 0 && settings_get(st, "flag", &v, &err) == 0 && v.b == 1,
      "a flag takes on");
-  ok(set(st, "flag", "maybe", FROM_API, NULL) != 0, "but not maybe");
-  ok(set(st, "nothing", "1", FROM_API, NULL) != 0, "an unknown setting is refused");
+  ok(set(st, "flag", "maybe", FROM_API) != 0, "but not maybe");
+  ok(set(st, "nothing", "1", FROM_API) != 0, "an unknown setting is refused");
   ok(settings_get(st, "nothing", &v, &err) != 0, "and has no value");
   free(err);
+  ok(set(st, "dir", "/x", FROM_API) != 0, "a command line setting is refused from the API");
+  ok(set(st, "dir", "/x", FROM_CLI) == 0, "and taken from the command line");
 
   /* a copy, not a view: a change after the get leaves the copy as it was */
   union setting_value held;
   err = NULL;
   settings_get(st, "name", &held, &err);
-  set(st, "name", "y", FROM_API, NULL);
+  set(st, "name", "y", FROM_API);
   eq(held.s, "x", "a value taken once does not change under its holder");
-  eq(get_s(st, "name"), "y", "a later get returns the current value");
+  eq(get_s(st, "name"), "y", "a later get returns the value in effect");
   free(held.s);
   get_s_done();
   settings_free(st);
 }
 
-static void test_settings_precedence(void) {
-  struct settings *st = settings_new(defs, NDEFS);
-  struct setting_change ch;
-  set(st, "count", "4", FROM_STATE, NULL);
-  set(st, "count", "5", FROM_CLI, NULL);
-  ok(get_i(st, "count") == 5, "the command line over the state");
-  ok(set(st, "count", "6", FROM_STATE, &ch) == 0 && ch.def < 0 && get_i(st, "count") == 5,
-     "the state under the command line changes nothing, and makes no message");
-  set(st, "count", "7", FROM_API, NULL);
-  ok(get_i(st, "count") == 7, "the Lua API over the command line");
-  set(st, "count", "8", FROM_CLI, NULL);
-  ok(get_i(st, "count") == 7, "and the command line under the Lua API");
-  ok(settings_origin(st, settings_find(st, "count")) == FROM_API, "the origin is the API's");
-  set(st, "count", "9", FROM_API, NULL);
-  ok(get_i(st, "count") == 9, "the API over its own earlier value");
-  settings_free(st);
+static int watched[NDEFS];
+
+static void watch(struct settings *st, int def, void *ud) {
+  watched[def]++;
 }
 
-static void test_settings_threads(void) {
-  /* two copies, as two threads have: the interface's (ui) and Lua's */
-  struct settings *ui = settings_new(defs, NDEFS), *lua = settings_new(defs, NDEFS);
-  struct setting_change from_lua, from_ui;
-  set(lua, "count", "1", FROM_API, &from_lua);
-  ok(get_i(lua, "count") == 1, "a set is seen at once on the thread that made it");
-  set(ui, "count", "2", FROM_API, &from_ui);
-  /* the interface thread applies in the order it receives, then sends each
-   * change to every copy: its own (2), then Lua's (1) */
-  settings_apply(ui, &from_lua);
-  settings_apply(lua, &from_ui);
-  settings_apply(lua, &from_lua);
-  ok(get_i(ui, "count") == 1 && get_i(lua, "count") == 1, "both copies end on the same value");
-  free(from_lua.text);
-  free(from_ui.text);
-
-  struct setting_change bad = {.def = 99, .from = FROM_API, .text = "1"};
-  settings_apply(ui, &bad);
-  ok(get_i(ui, "count") == 1, "a change for a setting this build lacks is ignored");
-  settings_free(ui);
-  settings_free(lua);
+static void test_settings_layers(void) {
+  struct settings *st = settings_new(defs, NDEFS);
+  int count = settings_find(st, "count");
+  settings_watch(st, watch, NULL);
+  set(st, "count", "4", FROM_STATE);
+  ok(get_i(st, "count") == 3 && watched[count] == 0, "the state does not count while persistence is off");
+  set(st, "persistent", "true", FROM_API);
+  ok(get_i(st, "count") == 4 && watched[count] == 1, "it does once persistence is on, and the change is reported");
+  set(st, "count", "5", FROM_CLI);
+  ok(get_i(st, "count") == 5, "the command line over the state");
+  set(st, "count", "7", FROM_API);
+  ok(get_i(st, "count") == 7 && settings_origin(st, count) == FROM_API, "the Lua API over the command line");
+  set(st, "count", "8", FROM_CLI);
+  ok(get_i(st, "count") == 7, "the command line under the Lua API changes nothing in effect");
+  unset(st, "count", FROM_API);
+  ok(get_i(st, "count") == 8, "unset, the layer below shows through");
+  int before = watched[count];
+  set(st, "count", "8", FROM_API);
+  ok(watched[count] == before, "a value equal to the one in effect is no change");
+  unset(st, "count", FROM_API);
+  unset(st, "count", FROM_CLI);
+  set(st, "persistent", "false", FROM_API);
+  ok(get_i(st, "count") == 3, "persistence off again: down to the default");
+  ok(set(st, "persistent", "true", FROM_STATE) != 0, "persistence is not taken from the state");
+  settings_free(st);
 }
 
 static void test_settings_state(void) {
   char *path = xasprintf("%s/state/settings", tmpdir);
   char *err = NULL;
   struct settings *st = settings_new(defs, NDEFS);
-  set(st, "name", "two\nlines \\ here", FROM_API, NULL);
-  set(st, "count", "5", FROM_CLI, NULL);
-  set(st, "dir", "/new", FROM_API, NULL);
-  char *was = path_expand("~/d");
-  eq(get_s(st, "dir"), was, "a setting read before Lua runs keeps its value when Lua sets it");
-  free(was);
-  ok(settings_save_state(st, path, &err) == 0, "the state is saved, its folder made");
+  set(st, "name", "two\nlines \\ here", FROM_API);
+  set(st, "dir", "/new", FROM_CLI);
+  set(st, "count", "5", FROM_CLI);
+  ok(settings_save_state(st, path, &err) == 0 && access(path, F_OK) != 0, "persistence off: nothing is written");
+  set(st, "persistent", "true", FROM_API);
+  ok(settings_save_state(st, path, &err) == 0, "persistence on: the state is saved, its folder made");
   settings_free(st);
 
   st = settings_new(defs, NDEFS);
   ok(settings_load_state(st, path, &err) == 0, "and read back");
+  eq(get_s(st, "name"), "x", "the state waits for persistence");
+  set(st, "persistent", "true", FROM_CLI);
   eq(get_s(st, "name"), "two\nlines \\ here", "a value with a line break and a backslash");
   ok(get_i(st, "count") == 3, "a command line value is not saved");
-  eq(get_s(st, "dir"), "/new", "Lua's value for a setting read before Lua runs, at the next start");
+  ok(get_s(st, "dir")[0] == '/' && strcmp(get_s(st, "dir"), "/new"), "nor a command line setting");
   ok(settings_origin(st, settings_find(st, "name")) == FROM_STATE, "the origin is the state");
-  set(st, "count", "6", FROM_CLI, NULL);
+  set(st, "count", "6", FROM_API);
   ok(settings_save_state(st, path, &err) == 0, "saved again");
   settings_free(st);
   st = settings_new(defs, NDEFS);
   settings_load_state(st, path, &err);
+  set(st, "persistent", "true", FROM_CLI);
   eq(get_s(st, "name"), "two\nlines \\ here", "a value read from the state is saved again");
+  ok(get_i(st, "count") == 6, "with the API's laid over it");
   settings_free(st);
 
   FILE *f = fopen(path, "w");
-  fputs("# a comment\ngone=1\ncount=many\nmode=b\n", f);
+  fputs("# a comment\ngone=1\ncount=many\nmode=b\npersistent=true\n", f);
   fclose(f);
   st = settings_new(defs, NDEFS);
   ok(settings_load_state(st, path, &err) == 0, "a state with an unknown setting and a bad value loads");
+  set(st, "persistent", "true", FROM_API);
   ok(get_i(st, "count") == 3, "the bad value is passed over");
   eq(get_s(st, "mode"), "b", "the good one is read");
   settings_free(st);
@@ -385,8 +387,7 @@ int main(void) {
     return 1;
   }
   test_settings_values();
-  test_settings_precedence();
-  test_settings_threads();
+  test_settings_layers();
   test_settings_state();
   test_queue();
   test_events();
