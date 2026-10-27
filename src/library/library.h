@@ -28,9 +28,11 @@ enum change_op { CHANGE_SET, CHANGE_ADD, CHANGE_REMOVE };
 struct change {
   long long book;
   const char *field; /* a calibre field (library/fields.h), or "#name" for one of lulibre's own */
-  const char *value;
+  const char *value; /* NULL: the field keeps its value */
   enum change_op op;
-  /* where the change came from (design 27); 0 and NULL for a hand edit */
+  /* where the change came from (design 27); 0 and NULL for a hand edit. A
+   * change with a proposal is journaled even when it changes nothing: it
+   * is a review decision. */
   long long proposal;
   const char *proposed; /* the value as proposed */
   const char *source;   /* the grammar or service that supplied it */

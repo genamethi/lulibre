@@ -14,19 +14,25 @@ local grammar = require "lulibre.grammar"
 local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
 local similar = require "lulibre.similar"
+local track = require "lulibre.track"
+local library = require "lulibre.library"
 
 local M = {}
 
---- The settings proposing reads, taken once by the command that proposes
--- (design 3) and passed down.
+--- What proposing goes by, taken once by the command that proposes
+-- (design 3) and passed down: the settings, and the parses' track records
+-- as the journal has them.
 function M.settings()
-  local coverage <const>, agreement <const>, track <const>, after <const>, near <const>, same <const> =
+  local coverage <const>, agreement <const>, weight <const>, after <const>, near <const>, same <const> =
     setman.get("rank_coverage", "rank_agreement", "rank_track", "track_after", "similar_near", "similar_same")
-  return { coverage = coverage, agreement = agreement, track = track, track_after = after, near = near, same = same }
+  return { coverage = coverage, agreement = agreement, track = weight, near = near, same = same,
+           records = track.records(after, near, same) }
 end
 
---- A value as the field holds it: authors as calibre writes them, "A & B".
+--- A value as the field holds it: authors as calibre writes them, "A & B";
+-- an identifier as "type:value".
 function M.normalize(field, value)
+  if not track.library_field[field] and not value:find("^[%w_%-]+:") then return field .. ":" .. value end
   if field ~= "authors" then return value end
   local names = {}
   for name in (value:gsub("%s+and%s+", "&"):gsub("[,;]", "&") .. "&"):gmatch("%s*(.-)%s*&") do
@@ -129,18 +135,46 @@ function M.of(book)
   return out
 end
 
+--- The change a decision on a proposal makes: the library's field, with
+-- the proposal's provenance (design 27). An identifier is added to the
+-- book's; tags are added to its own.
+local function change(p, value)
+  local field = track.field(p.field)
+  return { book = p.book, field = field, value = value, proposal = p.id, proposed = p.value, source = p.parse,
+           op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
+end
+
+local function row(id)
+  return lulibre.sql("SELECT id, book, field, value, parse FROM proposals WHERE id = ?", id)[1]
+end
+
+local function decided(p)
+  lulibre.store("DELETE FROM proposals WHERE book = ? AND field = ?", p.book, p.field)
+end
+
 --- Accepts a proposal, as proposed or edited, as an operation of the
--- library, with its provenance (design 27).
+-- library; waits for it. Returns the batch, or nil and why.
 -- @tparam integer id the proposal
 -- @tparam[opt] string value the edited value
 function M.accept(id, value)
-  error("not written yet", 2)
+  local p = row(id)
+  if not p then return nil, "no proposal " .. id end
+  local batch, err = library.apply({ change(p, value or p.value) }, "review: " .. p.field)
+  if err then return nil, err end
+  decided(p)
+  return batch
 end
 
---- Rejects a proposal.
+--- Rejects a proposal: the field keeps its value, and the journal keeps
+-- the decision, for the parse's track record.
 -- @tparam integer id
 function M.reject(id)
-  error("not written yet", 2)
+  local p = row(id)
+  if not p then return nil, "no proposal " .. id end
+  local batch, err = library.apply({ change(p, nil) }, "review: " .. p.field .. " rejected")
+  if err then return nil, err end
+  decided(p)
+  return batch
 end
 
 return M

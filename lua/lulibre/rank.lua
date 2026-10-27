@@ -57,7 +57,8 @@ end
 
 --- The parses, best first, each with `score=`, `agree=` and `disagree=`
 -- (per field, the names of the sources).
--- @tparam table w `{ coverage=, agreement=, track=, track_after=, near=, same= }`
+-- @tparam table w `{ coverage=, agreement=, track=, records=, near=, same= }`; records:
+-- lulibre.track.records()
 function M.order(parses, srcs, w)
   local total = w.coverage + w.agreement + w.track
   for _, p in ipairs(parses) do
@@ -65,7 +66,7 @@ function M.order(parses, srcs, w)
     agreement, p.agree, p.disagree = M.agreement(p, srcs, w)
     local record, n = 0, 0
     for field in pairs(p.fields) do
-      record = record + track.record(p.grammar, field, w.track_after)
+      record = record + track.record(w.records, p.grammar, field)
       n = n + 1
     end
     record = n > 0 and record / n or track.prior

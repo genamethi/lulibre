@@ -4,7 +4,8 @@
  *   library.apply(changes [, label])   the changes as one operation; waits
  *     until it has applied or failed: the batch (nil when nothing was to
  *     change), or nil and why. changes: { {book=, field=, value=,
- *     op = "set"|"add"|"remove", proposal=, proposed=, source=}, ... }
+ *     op = "set"|"add"|"remove", proposal=, proposed=, source=}, ... };
+ *     no value: the field keeps its value, a decision on a proposal
  *   library.command(args [, label])    a structural calibredb command
  *     ({ "add_custom_column", ... }), run once nothing holds the library
  *   library.undo(batch)                puts a batch's old values back

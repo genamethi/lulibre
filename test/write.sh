@@ -48,6 +48,23 @@ local f = lulibre.sql("SELECT emb_title FROM files WHERE book = 1")[1]
 print("emb|" .. tostring(f and f.emb_title))
 LUA
 
+cat > "$t/review.lua" <<'LUA'
+local proposals = require "lulibre.proposals"
+local track = require "lulibre.track"
+-- a parse of the scan, as the front grammar would give it, stored as proposals
+lulibre.store("INSERT INTO proposals(id, book, field, value, parse, alt) VALUES"
+  .. " (1, 1, 'title', 'Topics in Additive Combinatorics', 'front', 1),"
+  .. " (2, 1, 'authors', 'Terence Tao & Van Vu', 'front', 1)")
+print("accept|" .. tostring(proposals.accept(1)))
+print("reject|" .. tostring(proposals.reject(2)))
+local b = lulibre.book(1)
+print("decided|" .. b.title .. "|" .. b.author .. "|" .. #proposals.of(1))
+local r = lulibre.sql("SELECT store, field, proposal, source FROM history.journal WHERE batch = 2")[1]
+print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
+local rec = track.records(1, 0.7, 0.95)
+print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
+LUA
+
 cat > "$t/inside.sh" <<'IN'
 #!/bin/sh
 # inside the namespace: $1 the folder, $2 the binary, $3 a PDF
@@ -61,6 +78,8 @@ rm -rf "$t/lib" "$t/data" "$t/state"
 mkdir -p "$t/lib"
 calibredb --with-library "$t/lib" add "$pdf" >/dev/null 2>&1
 "$bin" -L "$t/lib" index >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/review.lua" 2>&1
+rm -f "$t"/data/lulibre/*.journal.db
 ip link set lo up 2>/dev/null || true
 calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
 pid=$!
@@ -87,6 +106,11 @@ expect "the journal keeps where a value came from" "provenance|7|front"
 expect "undo is a batch of its own" "undo|2"
 expect "and puts the old values back" "after undo|paper|Unknown"
 expect "the batch put back is undone, all five rows" "undone|5"
+expect "a proposal accepted is a change with its provenance" "accept|1"
+expect "a proposal rejected is a decision in the journal" "reject|2"
+expect "the record has the one, not the other" "decided|Topics in Additive Combinatorics|Unknown|0"
+expect "a rejection changes nothing but is kept" "rejection|review|authors|2|front"
+expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
 expect "the content server is seen to hold the library" "holder|server"
 expect "a change goes through the server" "apply|1"
 expect "embedding updates what the index knows of the file" "emb|Embedded Title"

@@ -637,7 +637,8 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
       rc = -1;
       break;
     }
-    news[i] = field_resolve(c->field, c->op, olds[i], c->value ? c->value : "", err);
+    /* no value: the field keeps its value (a proposal rejected) */
+    news[i] = c->value ? field_resolve(c->field, c->op, olds[i], c->value, err) : xstrdup(olds[i]);
     if (!news[i]) rc = -1;
   }
   if (!rc) {
@@ -645,7 +646,16 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
     int rows = 0;
     for (int i = 0; i < n; i++) {
       const struct change *c = &changes[i];
-      if (!strcmp(olds[i], news[i])) continue; /* no change */
+      if (!strcmp(olds[i], news[i])) {
+        /* no change; a decision on a proposal is kept all the same, for
+         * the parse's track record (design 21) */
+        if (c->proposal) {
+          journal_add(db, b->id, label, b->need, "review", OP_APPLIED, c->book, c->field, olds[i], news[i], NULL, c,
+                      undoes);
+          rows++;
+        }
+        continue;
+      }
       rows++;
       const char *store = c->book < 0 ? "staging" : field_is_own(c->field) ? "own" : "calibre";
       if (!strcmp(store, "calibre")) {
