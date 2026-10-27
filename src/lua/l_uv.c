@@ -52,19 +52,13 @@ static int callback_pcall(lua_State *L, int nargs, int nresults, int flags) {
   return nresults;
 }
 
-/* luv is looked for on package.cpath, after the module prefix the option
- * mod_tree names (outside a pixi environment), as require looks for any
- * module */
+/* luv is looked for on package.cpath, as require looks for any module
+ * (mod_tree's prefix is on it: lstate.c) */
 static int preload_luv(lua_State *L) {
-  char *rocks = getenv("PIXI_ENVIRONMENT_NAME") ? NULL : lapi_setting_str(L, S_MOD_TREE);
   lua_getglobal(L, "package");
   lua_getfield(L, -1, "searchpath");
   lua_pushliteral(L, "luv");
-  if (rocks && rocks[0]) lua_pushfstring(L, "%s/lib/lua/%s/?.so;", rocks, LULIBRE_LUA_VER);
-  else lua_pushliteral(L, "");
-  free(rocks);
-  lua_getfield(L, -4, "cpath");
-  lua_concat(L, 2);
+  lua_getfield(L, -3, "cpath");
   lua_call(L, 2, 2);
   if (lua_isnil(L, -2))
     return luaL_error(L, "luv is not on Lua's path (package.cpath) or under mod_tree: %s",

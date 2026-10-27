@@ -31,14 +31,15 @@ uv_loop_t *lapi_loop(lua_State *L) {
   return lapi_app(L)->lloop;
 }
 
-/* Prepend to package.path / package.cpath. */
-/* entries, then Lua's own, without those relative to the current directory
+static const char LUA_OWN_PATH[] = "lulibre.path", LUA_OWN_CPATH[] = "lulibre.cpath";
+
+/* Lua's own package.path or cpath, as Lua and the environment set it, kept
+ * in the registry without the entries relative to the current directory
  * (./?.lua): lulibre started in a folder must not load a module found there */
-static void prepend(lua_State *L, const char *field, const char *entries) {
+static void keep_own(lua_State *L, const char *field, const char *key) {
   lua_getglobal(L, "package");
   lua_getfield(L, -1, field);
   sbuf out = SBUF_INIT;
-  sb_puts(&out, entries);
   const char *own = lua_tostring(L, -1);
   for (const char *p = own ? own : ""; *p;) {
     const char *end = strchr(p, ';');
@@ -46,8 +47,18 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
     if (n && strncmp(p, "./", 2) != 0) sb_printf(&out, "%s%.*s", out.len ? ";" : "", (int)n, p);
     p += n + (end ? 1 : 0);
   }
-  lua_pushstring(L, out.s);
+  lua_pushstring(L, out.s ? out.s : "");
   sb_free(&out);
+  lua_setfield(L, LUA_REGISTRYINDEX, key);
+  lua_pop(L, 2);
+}
+
+/* package[field] = entries, then Lua's own */
+static void set_path(lua_State *L, const char *field, const char *key, const char *entries) {
+  lua_getglobal(L, "package");
+  lua_getfield(L, LUA_REGISTRYINDEX, key);
+  const char *own = lua_tostring(L, -1);
+  lua_pushfstring(L, "%s%s%s", entries, entries[0] && own[0] ? ";" : "", own);
   lua_setfield(L, -3, field);
   lua_pop(L, 2);
 }
@@ -62,7 +73,7 @@ static void prepend(lua_State *L, const char *field, const char *entries) {
  * tree is now, so the mismatch can at least be named. */
 
 static char tree_root[4096]; /* the tree this binary runs from, or "" */
-static char runtime_lua[4096]; /* the bundled modules' directory in use (setup_paths) */
+static char runtime_lua[4096]; /* the packaged modules' directory: the tree's, LULIBRE_RUNTIME's or the installed one */
 
 const char *lstate_runtime_modules(void) {
   return runtime_lua;
@@ -115,16 +126,11 @@ char *lstate_tree_mismatch(void) {
                    LULIBRE_VERSION, tree_root, now);
 }
 
-/* Search order: the user's own modules; the runtime, which is a source tree
- * when running from one (build/lulibre finds ../lua) or LULIBRE_RUNTIME, and
- * the installed one otherwise, never both (an installed module the tree has
- * since renamed or removed would still be found, stale); then Lua's own
- * places, as Lua and the environment (LUA_PATH_5_5, LUA_CPATH_5_5) set them,
- * less the current directory. A prefix of modules searched first is the
- * option mod_tree (prelude.lua). */
-static void setup_paths(lua_State *L) {
-  sbuf p = SBUF_INIT;
-  const char *cfg = lapi_app(L)->config_dir;
+/* The packaged modules: a source tree's when running from one (build/lulibre
+ * finds ../lua), or LULIBRE_RUNTIME, and the installed ones otherwise, never
+ * both (an installed module the tree has since renamed or removed would
+ * still be found, stale). */
+static void find_runtime(void) {
   const char *dev = getenv("LULIBRE_RUNTIME");
   char exe[4096], *tree = NULL;
   ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
@@ -143,20 +149,30 @@ static void setup_paths(lua_State *L) {
       }
     }
   }
-
-  sb_printf(&p, "%s/lua/?.lua;%s/lua/?/init.lua", cfg, cfg);
-  if (dev && dev[0]) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", dev, dev);
-  if (tree) sb_printf(&p, ";%s/?.lua;%s/?/init.lua", tree, tree);
-  const char *installed = lstate_datadir();
-  if (!tree && !(dev && dev[0])) sb_printf(&p, ";%s/lua/?.lua;%s/lua/?/init.lua", installed, installed);
   if (dev && dev[0]) snprintf(runtime_lua, sizeof runtime_lua, "%s", dev);
   else if (tree) snprintf(runtime_lua, sizeof runtime_lua, "%s", tree);
-  else snprintf(runtime_lua, sizeof runtime_lua, "%.4091s/lua", installed);
-
-  prepend(L, "path", p.s);
-  prepend(L, "cpath", "");
-  sb_free(&p);
+  else snprintf(runtime_lua, sizeof runtime_lua, "%.4091s/lua", lstate_datadir());
   free(tree);
+}
+
+/* Search order (design 47): the packaged modules; the user's own (lua/ in
+ * the configuration directory); the module prefix the setting mod_tree
+ * names, outside a pixi environment; then Lua's own places. No user file
+ * is found before a packaged module. Again whenever mod_tree changes. */
+void lstate_paths(lua_State *L) {
+  sbuf p = SBUF_INIT, c = SBUF_INIT;
+  const char *cfg = lapi_app(L)->config_dir;
+  sb_printf(&p, "%s/?.lua;%s/?/init.lua;%s/lua/?.lua;%s/lua/?/init.lua", runtime_lua, runtime_lua, cfg, cfg);
+  char *tree = getenv("PIXI_ENVIRONMENT_NAME") ? NULL : lapi_setting_str(L, S_MOD_TREE);
+  if (tree && tree[0]) {
+    sb_printf(&p, ";%s/share/lua/%s/?.lua;%s/share/lua/%s/?/init.lua", tree, LULIBRE_LUA_VER, tree, LULIBRE_LUA_VER);
+    sb_printf(&c, "%s/lib/lua/%s/?.so", tree, LULIBRE_LUA_VER);
+  }
+  free(tree);
+  set_path(L, "path", LUA_OWN_PATH, p.s);
+  set_path(L, "cpath", LUA_OWN_CPATH, c.s ? c.s : "");
+  sb_free(&p);
+  sb_free(&c);
 }
 
 lua_State *lstate_new(struct app *app) {
@@ -171,7 +187,10 @@ lua_State *lstate_new(struct app *app) {
   luaL_requiref(L, "evman", luaopen_evman, 1);
   lua_pop(L, 2);
   l_setman_fill(L, app->settings);
-  setup_paths(L);
+  keep_own(L, "path", LUA_OWN_PATH);
+  keep_own(L, "cpath", LUA_OWN_CPATH);
+  if (!runtime_lua[0]) find_runtime();
+  lstate_paths(L);
   sched_init(app);
 
   lua_newtable(L);

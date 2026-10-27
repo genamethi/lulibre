@@ -85,7 +85,10 @@ struct setman_change *setman_change_new(const struct settings *st, int def) {
 
 void l_setman_changed(struct app *app, void *arg) {
   struct setman_change *c = arg;
-  if (app->L) put(app->L, c->def, &c->v);
+  if (app->L) {
+    put(app->L, c->def, &c->v);
+    if (c->def == S_MOD_TREE) lstate_paths(app->L);
+  }
   if (is_text(&setting_defs[c->def])) free(c->v.s);
   free(c);
 }

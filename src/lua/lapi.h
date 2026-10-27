@@ -76,6 +76,10 @@ void l_setman_changed(struct app *app, void *arg);
 int luaopen_evman(struct lua_State *L);
 void l_evman_close(struct app *app);
 
+/* package.path and cpath, from the runtime, the configuration directory
+ * and mod_tree (lstate.c). */
+void lstate_paths(struct lua_State *L);
+
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);
