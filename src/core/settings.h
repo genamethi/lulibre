@@ -38,7 +38,9 @@ union setting_value {
   double n;
 };
 
-/* A change, as a message between threads. */
+/* A change, as a message between threads. The interface thread applies
+ * every change in the order it receives them and sends each on to every
+ * thread, the one that made it too, so all copies end on the same value. */
 struct setting_change {
   int def;                  /* index into the definitions */
   enum setting_origin from;
@@ -47,17 +49,25 @@ struct setting_change {
 
 struct settings;
 
+/* Dies when a default is not a value of its own definition. */
 struct settings *settings_new(const struct setting_def *defs, int ndefs);
 void settings_free(struct settings *st);
+
+/* The definition's index, or -1. */
+int settings_find(const struct settings *st, const char *name);
+const struct setting_def *settings_def(const struct settings *st, int def);
+enum setting_origin settings_origin(const struct settings *st, int def);
 
 /* All return 0 on success; on failure *err is a malloc'd message. */
 
 /* Validates text, changes this thread's copy, and fills *out with the
- * message for the other threads. A value of lower precedence than the one
- * held changes nothing and returns 0 with out->def = -1. */
+ * message for the interface thread. A value of lower precedence than the
+ * one held changes nothing and returns 0 with out->def = -1. A value set
+ * through the Lua API for a SETTING_AT_START setting is kept for saving
+ * and leaves the value in effect as it is. */
 int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from,
                  struct setting_change *out, char **err);
-/* Applies a change another thread made. */
+/* Applies a change another thread made; ch->text stays the caller's. */
 void settings_apply(struct settings *st, const struct setting_change *ch);
 
 /* A copy of the current value: an operation takes its values when created
@@ -65,8 +75,11 @@ void settings_apply(struct settings *st, const struct setting_change *ch);
 int settings_get(const struct settings *st, const char *name, union setting_value *out, char **err);
 
 /* The saved state (~/.local/state/lulibre): read once at start; written on
- * command, on call and at shutdown. Only values set through the Lua API or
- * the command line are saved. */
+ * command, on call and at shutdown. Saved are the values set through the
+ * Lua API and those read from the state; a command line value holds for
+ * its run. One `name=value` per line; a setting the state names that no
+ * longer exists, or a value no longer valid, is passed over with a
+ * warning. */
 int settings_load_state(struct settings *st, const char *path, char **err);
 int settings_save_state(const struct settings *st, const char *path, char **err);
 

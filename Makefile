@@ -16,6 +16,7 @@ DOCS := $(wildcard docs/*.md)
 # everything but main(), for the C unit tests to link against
 LIBOBJ := $(filter-out build/src/main.o,$(OBJ))
 UNIT := build/test/unit
+CORE := build/test/core
 # lulibre-setup: its own sources, and the parts of lulibre's it shares (the
 # drawing, the options)
 SETUP := build/lulibre-setup
@@ -38,7 +39,7 @@ help:
 	@echo "  make builds          the log of builds: number, time, commit, branch, checkout"
 	@echo
 	@echo "  make check           unit tests and the setup test (no calibre needed)"
-	@echo "  make unit            unit tests: C (build/test/unit)"
+	@echo "  make unit            unit tests: C (build/test/unit, build/test/core)"
 	@echo "  make e2e             every end-to-end test"
 	@echo
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
@@ -97,8 +98,13 @@ $(UNIT): test/unit.c $(LIBOBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -o $@ test/unit.c $(LIBOBJ) $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
 
-unit: $(BIN) $(UNIT)
+$(CORE): test/core.c $(LIBOBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -o $@ test/core.c $(LIBOBJ) $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
+
+unit: $(BIN) $(UNIT) $(CORE)
 	$(UNIT)
+	$(CORE)
 
 check: unit $(SETUP)
 	sh test/setup.sh $(BIN) $(SETUP)
