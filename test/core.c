@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "core/queue.h"
 #include "core/settings.h"
 #include "core/util.h"
 
@@ -207,6 +208,81 @@ static void test_settings_state(void) {
   get_s_done();
 }
 
+/* ---- the queue ---- */
+
+static int order[8], norder;
+
+static void note(struct app *app, void *arg) {
+  order[norder++] = (int)(long)arg;
+}
+
+static void post_inside(struct app *app, void *arg) {
+  queue_post(LOOP_UI, note, (void *)2L);
+  order[norder++] = 1; /* the message posted above has not run yet */
+}
+
+static int counted;
+
+static void count(struct app *app, void *arg) {
+  counted++;
+}
+
+static void post_counted(void *arg) {
+  for (int i = 0; i < 1000; i++) queue_post(LOOP_UI, count, NULL);
+}
+
+static void stop_when_counted(uv_idle_t *h) {
+  if (counted == 2000) uv_stop(h->loop);
+}
+
+static void test_queue(void) {
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+  queue_post(LOOP_UI, note, (void *)7L);
+  queue_open(NULL, LOOP_UI, &loop);
+  queue_open(NULL, LOOP_LUA, &loop); /* headless: both inboxes on one loop */
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 1 && order[0] == 7, "a message posted before the inbox opened runs once it does");
+
+  norder = 0;
+  queue_post(LOOP_LUA, post_inside, NULL);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 2 && order[0] == 1 && order[1] == 2,
+     "a message posted from a message runs after it, never in its stack");
+
+  norder = 0;
+  queue_close(LOOP_LUA);
+  queue_post(LOOP_LUA, note, (void *)3L);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 0, "a closed inbox's messages wait");
+  queue_open(NULL, LOOP_LUA, &loop);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 1 && order[0] == 3, "and run when it opens again");
+
+  /* two threads post at once; every message runs, once */
+  uv_thread_t a, b;
+  uv_idle_t idle;
+  uv_idle_init(&loop, &idle);
+  uv_idle_start(&idle, stop_when_counted);
+  uv_thread_create(&a, post_counted, NULL);
+  uv_thread_create(&b, post_counted, NULL);
+  uv_run(&loop, UV_RUN_DEFAULT);
+  uv_thread_join(&a);
+  uv_thread_join(&b);
+  ok(counted == 2000, "messages from two threads all run");
+  uv_close((uv_handle_t *)&idle, NULL);
+
+  norder = 0;
+  queue_close(LOOP_UI);
+  queue_close(LOOP_LUA);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  queue_post(LOOP_UI, note, (void *)5L);
+  queue_drain(LOOP_UI);
+  ok(norder == 1 && order[0] == 5, "drain runs what waits, when the loop is gone");
+  ok(uv_loop_close(&loop) == 0, "the inboxes leave no handle open");
+}
+
 int main(void) {
   const char *base = getenv("TMPDIR");
   char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
@@ -219,6 +295,7 @@ int main(void) {
   test_settings_precedence();
   test_settings_threads();
   test_settings_state();
+  test_queue();
   printf("core tests: %d checks, %d failed\n", checks, fails);
   char *rm = xasprintf("rm -rf '%s'", tmpdir);
   if (system(rm)) printf("could not remove %s\n", tmpdir);
