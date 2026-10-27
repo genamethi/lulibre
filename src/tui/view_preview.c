@@ -7,6 +7,7 @@
 
 #include "db/db.h"
 #include "doc/doc.h"
+#include "index/outcome.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -167,8 +168,8 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
     sqlite3_finalize(st);
   }
   if (sqlite3_prepare_v2(h,
-                         "SELECT f.id, f.path, f.format, f.status, f.error, f.npages,"
-                         " (SELECT count(*) FROM pages p WHERE p.file = f.id), f.emb_title,"
+                         "SELECT f.id, f.path, f.format, f.outcome, f.error, f.npages,"
+                         " (SELECT count(DISTINCT page) FROM lines l WHERE l.file = f.id), f.emb_title,"
                          " f.emb_author FROM files f WHERE f.book = ? ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1",
                          -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, id);
@@ -562,7 +563,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
 
   /* Settle the image question before drawing the rule, which reports it. */
   int overlay = t->picker != NULL || t->help != NULL;
-  int want_image = ps->graphic && ps->file && ps->fstatus != FILE_MISSING;
+  int want_image = ps->graphic && ps->file && ps->fstatus != OUT_MISSING;
   enum imode imode = IMG_HALF;
   int have_image = want_image && image_ready(ps, w, &imode);
 
@@ -570,9 +571,8 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   sb_reset(&line);
   const char *state_note = NULL;
   if (!ps->file) state_note = "no file on record";
-  else if (ps->fstatus == FILE_MISSING) state_note = "file missing on disk";
-  else if (ps->fstatus == FILE_ERROR) state_note = ps->ferror ? ps->ferror : "could not be read";
-  else if (ps->fstatus == FILE_PENDING) state_note = "not indexed yet";
+  else if (ps->fstatus == OUT_UNREADABLE) state_note = ps->ferror ? ps->ferror : outcome_names[OUT_UNREADABLE];
+  else if (ps->fstatus != OUT_READ && ps->fstatus >= 0 && ps->fstatus < OUTCOMES) state_note = outcome_names[ps->fstatus];
   sb_printf(&line, "── page %d", ps->page);
   if (ps->npages > 0) sb_printf(&line, "/%d", ps->npages);
   if (ps->skipped && ps->page == ps->first_text) sb_puts(&line, ", the first with text");
@@ -603,7 +603,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   if (blank) {
     /* say why there is nothing to read, and what would show it */
     dr_style(n, theme.dim, C_DEFAULT, 0);
-    if (ps->file && ps->fstatus == FILE_OK) {
+    if (ps->file && (ps->fstatus == OUT_READ || ps->fstatus == OUT_READ_OCR)) {
       const char *why, *then;
       char buf[160], image[96], past[320], scan[200];
       snprintf(image, sizeof image, "%s shows the page as an image.", key_hint("preview graphic"));

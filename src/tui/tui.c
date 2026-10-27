@@ -89,8 +89,6 @@ void tui_start_index(struct tui *t, int force) {
   struct index_opts o = {0};
   char *err = NULL;
   o.pages = (int)app_int(t->app, S_PAGES);
-  o.layout_pages = (int)app_int(t->app, S_LAYOUT_PAGES);
-  if (o.layout_pages > o.pages) o.layout_pages = o.pages;
   o.force = force;
   o.inflight = app_jobs(t->app) + app_jobs(t->app) / 2;
   t->ix_done = t->ix_total = t->ix_failed = 0;
@@ -329,7 +327,7 @@ int tui_run(struct app *app) {
   history_load(t);
   /* first run, or books added since the last one: index in the background */
   sqlite3_stmt *st;
-  if (sqlite3_prepare_v2(app->db.h, "SELECT count(*) FROM files WHERE status = 0", -1, &st, NULL) ==
+  if (sqlite3_prepare_v2(app->db.h, "SELECT count(*) FROM files WHERE outcome = 0", -1, &st, NULL) ==
       SQLITE_OK) {
     int pending = sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int(st, 0) : 0;
     sqlite3_finalize(st);

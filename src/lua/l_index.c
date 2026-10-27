@@ -81,14 +81,11 @@ static int start_ui(lua_State *L) {
   struct index_opts o = {0};
   app_open_db(app);
   o.pages = (int)app_int(app, S_PAGES); /* the interface thread (ui_call) */
-  o.layout_pages = (int)app_int(app, S_LAYOUT_PAGES);
-  if (o.layout_pages > o.pages) o.layout_pages = o.pages;
   o.inflight = app_jobs(app) + app_jobs(app) / 2;
   if (lua_istable(L, 1)) {
     lua_getfield(L, 1, "pages"); /* read this many pages of each file, not the option's number */
     if (lua_isinteger(L, -1) && lua_tointeger(L, -1) > 0) {
       o.pages = (int)lua_tointeger(L, -1);
-      if (o.layout_pages > o.pages) o.layout_pages = o.pages;
     }
     lua_pop(L, 1);
     lua_getfield(L, 1, "force");

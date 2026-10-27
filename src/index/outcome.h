@@ -13,6 +13,15 @@ enum file_outcome {
   OUT_UNREADABLE,      /* the file did not open; the error is kept */
   OUT_MISSING,         /* no file at the recorded path */
   OUT_NO_TEXT,         /* marked by the user as having no text: never retried */
+  OUTCOMES
 };
+
+/* What each outcome is called where a person reads it, and the word that
+ * filters for it (is:<word>). */
+extern const char *const outcome_names[OUTCOMES], *const outcome_words[OUTCOMES];
+
+/* The SQL test for a file whose text is usable, f the files table's alias
+ * with its dot ("f.") or "". */
+#define OUTCOME_HAS_TEXT(f) "(" f "outcome IN (1, 2))"
 
 #endif

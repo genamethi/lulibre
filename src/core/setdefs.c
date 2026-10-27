@@ -15,8 +15,6 @@ const struct setting_def setting_defs[S_COUNT] = {
                   "also append the log to this file (the console, `, shows it either way)"},
   [S_JOBS] = {"jobs", SETTING_INT, 0, "0", NULL, "worker threads (0 = one per core)"},
   [S_PAGES] = {"pages", SETTING_INT, 0, "6", NULL, "first N pages of each file to index as text"},
-  [S_LAYOUT_PAGES] = {"layout_pages", SETTING_INT, 0, "2", NULL,
-                      "of those, pages kept as lines tagged with font size"},
   [S_OCR] = {"ocr", SETTING_STR, 0, "never", "never|auto|always",
              "read page images with tesseract after indexing: never, auto (files with no text), always"},
   [S_OCR_PAGES] = {"ocr_pages", SETTING_INT, 0, "3", NULL, "pages per file the OCR pass reads"},

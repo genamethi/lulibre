@@ -47,9 +47,8 @@ struct doc_info {
 };
 
 struct doc_opts {
-  int pages;        /* extract the first N pages */
-  int layout_pages; /* keep tagged lines for the first M of them */
-  int tail;         /* the last N pages instead of the first: where a bibliography is */
+  int pages; /* extract the first N pages */
+  int tail;  /* the last N pages instead of the first: where a bibliography is */
 };
 
 /* Fills *out (zeroed first). Check out->error. */
@@ -73,8 +72,15 @@ void doc_image_free(struct doc_image *img);
 /* takes ownership of text; returns the line, or NULL when it was only whitespace */
 struct doc_line *doc_page_add_line(struct doc_page *pg, char *text, float size, unsigned flags,
                                    float x0, float y0, float x1, float y1);
-void doc_page_finish(struct doc_page *pg, int keep_lines);
+/* The page's text, from its lines: what the text is measured by. */
+void doc_page_finish(struct doc_page *pg);
 double doc_text_quality(const char *s, long *nchars, double *garbled);
+/* Whether text so measured is usable, or wants OCR: enough letters, few
+ * characters no font could map, enough words that look like words. The
+ * thresholds were measured on a mathematics library, where sound text
+ * scores 0.5-0.8 because formulas are full of one-letter tokens, and its
+ * symbols in private-use characters come to two or three per cent. */
+int doc_text_usable(long nchars, double garbled, double quality);
 
 /* A PDF's XMP packet and Info dictionary ("Key: value" lines), or an EPUB's
  * package document, as text (malloc'd; "" when there is none). NULL and

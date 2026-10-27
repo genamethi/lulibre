@@ -15,7 +15,6 @@ enum setting_id {
   S_LOG_FILE,
   S_JOBS,
   S_PAGES,
-  S_LAYOUT_PAGES,
   S_OCR,
   S_OCR_PAGES,
   S_OCR_LANG,

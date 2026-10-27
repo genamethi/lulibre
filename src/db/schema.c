@@ -89,31 +89,31 @@ const char db_schema[] =
   " id INTEGER PRIMARY KEY, title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL,"
   " publisher TEXT, pubdate TEXT, languages TEXT, idents TEXT, formats TEXT, path TEXT);"
 
-  /* ---- files and their extracted text; survives mirror refreshes ---- */
+  /* ---- files and what reading them came to (design 37, 38) ---- */
   "CREATE TABLE IF NOT EXISTS files("
   " id INTEGER PRIMARY KEY, book INTEGER, format TEXT NOT NULL, path TEXT NOT NULL,"
-  " size INTEGER, mtime INTEGER, status INTEGER NOT NULL DEFAULT 0, error TEXT,"
-  " npages INTEGER, req_pages INTEGER, req_layout INTEGER,"
-  " nchars INTEGER, quality REAL, text_src TEXT,"
+  " size INTEGER, mtime INTEGER,"
+  " outcome INTEGER NOT NULL DEFAULT 0," /* enum file_outcome (index/outcome.h) */
+  " error TEXT, npages INTEGER, req_pages INTEGER, nchars INTEGER, quality REAL, garbled REAL,"
+  " ocr_pages INTEGER, ocr_lang TEXT," /* what OCR read, when it did */
   " emb_title TEXT, emb_author TEXT, emb_subject TEXT, emb_keywords TEXT,"
-  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER, garbled REAL,"
+  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER,"
   " UNIQUE(book, format));"
   "CREATE INDEX IF NOT EXISTS files_path ON files(path);"
-  "CREATE TABLE IF NOT EXISTS pages("
-  " id INTEGER PRIMARY KEY, file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
-  " page INTEGER NOT NULL, text TEXT NOT NULL, src TEXT, w REAL, h REAL,"
-  " UNIQUE(file, page));"
+  /* the only stored text: one row per printed line; flags LINE_* (doc/doc.h),
+   * LINE_BLOCK on the first line of each paragraph */
   "CREATE TABLE IF NOT EXISTS lines("
+  " id INTEGER PRIMARY KEY,"
   " file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
   " page INTEGER NOT NULL, n INTEGER NOT NULL, text TEXT NOT NULL,"
   " size REAL, flags INTEGER, x0 REAL, y0 REAL, x1 REAL, y1 REAL, math TEXT,"
-  " PRIMARY KEY(file, page, n)) WITHOUT ROWID;"
-  "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
-  " text, content='pages', content_rowid='id', tokenize='unicode61 remove_diacritics 2');"
-  "CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN"
-  " INSERT INTO pages_fts(rowid, text) VALUES (new.id, new.text); END;"
-  "CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN"
-  " INSERT INTO pages_fts(pages_fts, rowid, text) VALUES ('delete', old.id, old.text); END;"
-  "CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN"
-  " INSERT INTO pages_fts(pages_fts, rowid, text) VALUES ('delete', old.id, old.text);"
-  " INSERT INTO pages_fts(rowid, text) VALUES (new.id, new.text); END;";
+  " UNIQUE(file, page, n));"
+  /* a page's text, from its lines: a blank line before each paragraph */
+  "CREATE VIEW IF NOT EXISTS pages(file, page, text) AS"
+  " SELECT file, page, group_concat(CASE WHEN flags & 32 AND n > 0 THEN char(10) || text ELSE text END,"
+  " char(10) ORDER BY n) FROM lines GROUP BY file, page;"
+  /* one row per paragraph, built from its lines when they are stored; the
+   * rowid is the paragraph's first line's. A match is found again in the
+   * paragraph's lines. */
+  "CREATE VIRTUAL TABLE IF NOT EXISTS paragraphs_fts USING fts5("
+  " text, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2');";

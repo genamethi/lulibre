@@ -8,19 +8,16 @@
  *                                   math=}, ... }
  *                                math: the line with its mathematics marked
  *                                up as TeX, when it has any (lulibre.notation)
- *   lulibre.files(id)            { {path=, format=, status=, pages=, chars=,
+ *   lulibre.files(id)            { {path=, format=, outcome=, pages=, chars=,
  *                                   quality=, error=, title=, author=, subject=,
  *                                   keywords=, creator=, producer=}, ... }
- *   lulibre.extract(path [, {pages=, layout_pages=}])
+ *   lulibre.extract(path [, {pages=, tail=}])
  *                                read a file now, off the main thread (waits):
  *                                { pages=N, chars=, quality=, meta={title=...},
  *                                  page={ {text=, lines={...}}, ... } } or nil, err
  *   lulibre.render(path, page [, width])
  *                                the page as a greyscale PGM image string, for
  *                                handing to tesseract (waits); or nil, err
- *   lulibre.page_put(id, page, {text=, lines=, src=})
- *                                replace the indexed text of a page, as the
- *                                OCR pass does. lines: {text=, size=, x0=...}
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +30,7 @@
 
 #include "app.h"
 #include "core/util.h"
+#include "index/outcome.h"
 #include "db/db.h"
 #include "doc/doc.h"
 #include "lua/lapi.h"
@@ -185,13 +183,12 @@ static int l_lines(lua_State *L) {
 }
 
 static int l_files(lua_State *L) {
-  static const char *const status[] = {"pending", "indexed", "error", "missing"};
   static const char *const text_cols[] = {"path", "format", "error", "title", "author",
                                           "subject", "keywords", "creator", "producer"};
   lua_Integer id = luaL_checkinteger(L, 1);
   sqlite3_stmt *st = prep(L,
     "SELECT path, format, error, emb_title, emb_author, emb_subject, emb_keywords,"
-    " emb_creator, emb_producer, status, npages, nchars, quality"
+    " emb_creator, emb_producer, outcome, npages, nchars, quality"
     " FROM files WHERE book = ? ORDER BY " DB_BOOK_FILE_ORDER(""));
   sqlite3_bind_int64(st, 1, id);
   lua_newtable(L);
@@ -204,9 +201,9 @@ static int l_files(lua_State *L) {
       lua_pushstring(L, s);
       lua_setfield(L, -2, text_cols[c]);
     }
-    int s = sqlite3_column_int(st, 9);
-    lua_pushstring(L, status[s >= 0 && s <= 3 ? s : 0]);
-    lua_setfield(L, -2, "status");
+    int o = sqlite3_column_int(st, 9);
+    lua_pushstring(L, outcome_words[o >= 0 && o < OUTCOMES ? o : 0]);
+    lua_setfield(L, -2, "outcome");
     if (sqlite3_column_type(st, 10) != SQLITE_NULL) {
       lua_pushinteger(L, sqlite3_column_int(st, 10));
       lua_setfield(L, -2, "pages");
@@ -294,15 +291,13 @@ static int l_extract(lua_State *L) {
   struct app *app = lapi_app(L);
   sched_require_task(L); /* raises outside a task, before anything is allocated */
   struct xjob *j = xcalloc(1, sizeof *j);
-  j->opts = (struct doc_opts){(int)lapi_setting_int(L, S_PAGES), (int)lapi_setting_int(L, S_LAYOUT_PAGES), 0};
+  j->opts = (struct doc_opts){(int)lapi_setting_int(L, S_PAGES), 0};
   if (lua_istable(L, 2)) {
     lua_getfield(L, 2, "pages");
     if (!lua_isnil(L, -1)) j->opts.pages = (int)lua_tointeger(L, -1);
-    lua_getfield(L, 2, "layout_pages");
-    if (!lua_isnil(L, -1)) j->opts.layout_pages = (int)lua_tointeger(L, -1);
     lua_getfield(L, 2, "tail");
     j->opts.tail = lua_toboolean(L, -1);
-    lua_pop(L, 3);
+    lua_pop(L, 2);
   }
   j->path = xstrdup(path);
   j->format = xstrdup(path_ext(path));
@@ -372,152 +367,10 @@ static int l_render(lua_State *L) {
 
 /* ---- lulibre.page_put ---- */
 
-static double num_field(lua_State *L, int idx, const char *key) {
-  lua_getfield(L, idx, key);
-  double v = lua_tonumber(L, -1);
-  lua_pop(L, 1);
-  return v;
-}
-
-static int l_page_put(lua_State *L) {
-  lua_Integer id = luaL_checkinteger(L, 1);
-  int page = (int)luaL_checkinteger(L, 2);
-  luaL_checktype(L, 3, LUA_TTABLE);
-  sqlite3 *h = lapi_db(L)->h;
-  sqlite3_stmt *st;
-
-  sqlite3_int64 file = 0;
-  if (sqlite3_prepare_v2(h, "SELECT id FROM files WHERE book = ? ORDER BY " DB_BOOK_FILE_ORDER("") " LIMIT 1", -1, &st, NULL) == SQLITE_OK) {
-    sqlite3_bind_int64(st, 1, id);
-    if (sqlite3_step(st) == SQLITE_ROW) file = sqlite3_column_int64(st, 0);
-    sqlite3_finalize(st);
-  }
-  if (!file) return luaL_error(L, "book %d has no file on record", (int)id);
-
-  lua_getfield(L, 3, "text");
-  size_t tlen;
-  const char *text = luaL_optlstring(L, -1, "", &tlen);
-  lua_getfield(L, 3, "src");
-  const char *src = luaL_optstring(L, -1, "ocr");
-
-  int own = sqlite3_get_autocommit(h);
-  if (own) sqlite3_exec(h, "BEGIN IMMEDIATE", NULL, NULL, NULL);
-  if (sqlite3_prepare_v2(h,
-        "INSERT INTO pages(file, page, text, src) VALUES(?1, ?2, ?3, ?4)"
-        " ON CONFLICT(file, page) DO UPDATE SET text = ?3, src = ?4", -1, &st, NULL) == SQLITE_OK) {
-    sqlite3_bind_int64(st, 1, file);
-    sqlite3_bind_int(st, 2, page);
-    sqlite3_bind_text(st, 3, text, (int)tlen, SQLITE_TRANSIENT);
-    sqlite3_bind_text(st, 4, src, -1, SQLITE_TRANSIENT);
-    sqlite3_step(st);
-    sqlite3_finalize(st);
-  }
-  lua_getfield(L, 3, "lines");
-  if (lua_istable(L, -1)) {
-    int lines = lua_gettop(L);
-    if (sqlite3_prepare_v2(h, "DELETE FROM lines WHERE file = ? AND page = ?", -1, &st, NULL) == SQLITE_OK) {
-      sqlite3_bind_int64(st, 1, file);
-      sqlite3_bind_int(st, 2, page);
-      sqlite3_step(st);
-      sqlite3_finalize(st);
-    }
-    if (sqlite3_prepare_v2(h,
-          "INSERT INTO lines(file, page, n, text, size, flags, x0, y0, x1, y1)"
-          " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", -1, &st, NULL) == SQLITE_OK) {
-      lua_Integer n = (lua_Integer)lua_rawlen(L, lines);
-      for (lua_Integer i = 1; i <= n; i++) {
-        lua_rawgeti(L, lines, i);
-        int l = lua_gettop(L);
-        lua_getfield(L, l, "text");
-        lua_getfield(L, l, "block");
-        sqlite3_bind_int64(st, 1, file);
-        sqlite3_bind_int(st, 2, page);
-        sqlite3_bind_int64(st, 3, i - 1);
-        sqlite3_bind_text(st, 4, lua_tostring(L, -2) ? lua_tostring(L, -2) : "", -1, SQLITE_TRANSIENT);
-        sqlite3_bind_double(st, 5, num_field(L, l, "size"));
-        sqlite3_bind_int(st, 6, lua_toboolean(L, -1) ? LINE_BLOCK : 0);
-        sqlite3_bind_double(st, 7, num_field(L, l, "x0"));
-        sqlite3_bind_double(st, 8, num_field(L, l, "y0"));
-        sqlite3_bind_double(st, 9, num_field(L, l, "x1"));
-        sqlite3_bind_double(st, 10, num_field(L, l, "y1"));
-        sqlite3_step(st);
-        sqlite3_reset(st);
-        lua_settop(L, l - 1);
-      }
-      sqlite3_finalize(st);
-    }
-  }
-  /* the file's totals follow its pages */
-  sbuf all = SBUF_INIT;
-  if (sqlite3_prepare_v2(h, "SELECT text FROM pages WHERE file = ? ORDER BY page", -1, &st, NULL) == SQLITE_OK) {
-    sqlite3_bind_int64(st, 1, file);
-    while (sqlite3_step(st) == SQLITE_ROW) {
-      sb_puts(&all, (const char *)sqlite3_column_text(st, 0));
-      sb_putc(&all, '\n');
-    }
-    sqlite3_finalize(st);
-  }
-  long nchars = 0;
-  double garbled = 0;
-  double quality = doc_text_quality(all.s ? all.s : "", &nchars, &garbled);
-  sb_free(&all);
-  if (sqlite3_prepare_v2(h, "UPDATE files SET nchars = ?, quality = ?, text_src = ?, garbled = ? WHERE id = ?", -1, &st, NULL) == SQLITE_OK) {
-    sqlite3_bind_int64(st, 1, nchars);
-    sqlite3_bind_double(st, 2, quality);
-    sqlite3_bind_text(st, 3, src, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_double(st, 4, garbled);
-    sqlite3_bind_int64(st, 5, file);
-    sqlite3_step(st);
-    sqlite3_finalize(st);
-  }
-  if (own) sqlite3_exec(h, "COMMIT", NULL, NULL, NULL);
-  return 0;
-}
-
-/* lulibre.text_measure(id): measure again the text the index holds for each
- * of a book's files (nchars, quality), as indexing would now: after the
- * measure has changed, or text was put by other means (garbled too). Returns how many
- * files were measured. */
-static int l_text_measure(lua_State *L) {
-  lua_Integer id = luaL_checkinteger(L, 1);
-  sqlite3 *h = lapi_db(L)->h;
-  sqlite3_stmt *files, *pages, *up;
-  int n = 0;
-  if (sqlite3_prepare_v2(h, "SELECT id FROM files WHERE book = ? AND status = 1", -1, &files, NULL) != SQLITE_OK) return 0;
-  sqlite3_bind_int64(files, 1, id);
-  while (sqlite3_step(files) == SQLITE_ROW) {
-    sqlite3_int64 file = sqlite3_column_int64(files, 0);
-    sbuf all = SBUF_INIT;
-    if (sqlite3_prepare_v2(h, "SELECT text FROM pages WHERE file = ? ORDER BY page", -1, &pages, NULL) == SQLITE_OK) {
-      sqlite3_bind_int64(pages, 1, file);
-      while (sqlite3_step(pages) == SQLITE_ROW) {
-        sb_puts(&all, (const char *)sqlite3_column_text(pages, 0));
-        sb_putc(&all, '\n');
-      }
-      sqlite3_finalize(pages);
-    }
-    long nchars = 0;
-    double garbled = 0;
-    double quality = doc_text_quality(all.s ? all.s : "", &nchars, &garbled);
-    sb_free(&all);
-    if (sqlite3_prepare_v2(h, "UPDATE files SET nchars = ?, quality = ?, garbled = ? WHERE id = ?", -1, &up, NULL) == SQLITE_OK) {
-      sqlite3_bind_int64(up, 1, nchars);
-      sqlite3_bind_double(up, 2, quality);
-      sqlite3_bind_double(up, 3, garbled);
-      sqlite3_bind_int64(up, 4, file);
-      if (sqlite3_step(up) == SQLITE_DONE) n++;
-      sqlite3_finalize(up);
-    }
-  }
-  sqlite3_finalize(files);
-  lua_pushinteger(L, n);
-  return 1;
-}
-
 void l_doc_open(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"doc_metadata", l_doc_metadata}, {"text", l_text},     {"lines", l_lines},       {"files", l_files}, {"extract", l_extract},
-    {"render", l_render}, {"page_put", l_page_put}, {"text_measure", l_text_measure}, {NULL, NULL},
+    {"render", l_render}, {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
 }

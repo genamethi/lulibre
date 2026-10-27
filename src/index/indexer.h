@@ -15,7 +15,6 @@
 
 struct index_opts {
   int pages;
-  int layout_pages;
   int force;                 /* re-extract even when size and mtime are unchanged */
   int retry;                 /* retry files that failed last time */
   int inflight;              /* jobs handed to the pool at once */

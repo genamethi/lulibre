@@ -7,7 +7,7 @@
 
 #include "core/util.h"
 
-#define SCHEMA_VERSION "1"
+#define SCHEMA_VERSION "3"
 
 static int fail(struct db *db, char **err, const char *what) {
   *err = xasprintf("%s: %s", what, db->h ? sqlite3_errmsg(db->h) : "no database");
@@ -66,17 +66,22 @@ static int reset_if_stale(struct db *db, char **err) {
   int stale = v && strcmp(v, SCHEMA_VERSION) != 0;
   free(v);
   if (!stale) return 0;
-  static const char *const drop[] = {
-    "pages_fts", "books_fts", "lines", "pages", "files", "idents", "book_tags", "tags",
-    "book_authors", "authors", "books", "marks", "meta",
-  };
-  for (size_t i = 0; i < ARRAY_LEN(drop); i++) {
-    char *sql = xasprintf("DROP TABLE IF EXISTS %s", drop[i]);
-    int rc = db_exec(db, sql, err);
-    free(sql);
-    if (rc) return rc;
+  /* every view and table of the index: views first, then full-text tables
+   * (which take their own tables with them: IF EXISTS passes over those) */
+  sbuf sql = SBUF_INIT;
+  if (sqlite3_prepare_v2(db->h,
+                         "SELECT type, name FROM main.sqlite_master WHERE type IN ('table', 'view')"
+                         " AND name NOT LIKE 'sqlite_%'"
+                         " ORDER BY type = 'view' DESC, sql LIKE 'CREATE VIRTUAL%' DESC",
+                         -1, &st, NULL) == SQLITE_OK) {
+    while (sqlite3_step(st) == SQLITE_ROW)
+      sb_printf(&sql, "DROP %s IF EXISTS \"%s\";", (const char *)sqlite3_column_text(st, 0),
+                (const char *)sqlite3_column_text(st, 1));
+    sqlite3_finalize(st);
   }
-  return 0;
+  int rc = sql.s ? db_exec(db, sql.s, err) : 0;
+  sb_free(&sql);
+  return rc;
 }
 
 /* ---- the history: every change made to the library, and the snapshots
@@ -202,8 +207,6 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
  * of every file). */
 static int add_columns(struct db *db, char **err) {
   static const struct { const char *table, *column, *decl; } cols[] = {
-    {"files", "garbled", "REAL"},
-    {"lines", "math", "TEXT"},
     /* 1: a proposal someone asked for (taking a copy's values), shown whatever propose_min says */
     {"proposals", "asked", "INTEGER"},
   };

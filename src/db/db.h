@@ -13,8 +13,6 @@ struct db {
   char *path;
 };
 
-enum file_status { FILE_PENDING = 0, FILE_OK = 1, FILE_ERROR = 2, FILE_MISSING = 3 };
-
 /* All return 0 on success; on failure *err is a malloc'd message. */
 /* A book's file, the one its text is read from: the file read best (one
  * indexed, a PDF first), else the first on record. lulibre.text, lines,
@@ -24,7 +22,7 @@ enum file_status { FILE_PENDING = 0, FILE_OK = 1, FILE_ERROR = 2, FILE_MISSING =
 /* How long a statement waits for another connection's write lock. */
 #define DB_BUSY_MS 5000
 
-#define DB_BOOK_FILE_ORDER(p) "(" p "status = 1) DESC, (" p "format = 'PDF') DESC, " p "id"
+#define DB_BOOK_FILE_ORDER(p) "(" p "outcome IN (1, 2)) DESC, (" p "format = 'PDF') DESC, " p "id"
 
 int db_open(struct db *db, const char *path, char **err);
 /* A second, read-only connection for queries run off the loop thread. */

@@ -6,6 +6,7 @@
 
 #include "core/util.h"
 #include "doc/doc.h"
+#include "index/outcome.h"
 
 struct job {
   uv_work_t req;
@@ -28,7 +29,7 @@ struct indexer {
   int njobs, next, inflight;
   int cancelled, finished;
 
-  sqlite3_stmt *del_pages, *del_lines, *ins_page, *ins_line, *upd_file;
+  sqlite3_stmt *del_paras, *del_lines, *ins_line, *ins_para, *upd_file;
   int in_txn, since_commit;
   double last_commit;
 
@@ -79,55 +80,77 @@ static void run(sqlite3_stmt *st) {
   sqlite3_clear_bindings(st);
 }
 
-/* Inside a transaction (txn_begin). */
+/* The paragraph built so far, as one full-text row keyed by its first
+ * line. */
+static void flush_para(struct indexer *ix, sqlite3_int64 first, sbuf *para) {
+  if (!first || !para->len) return;
+  sqlite3_bind_int64(ix->ins_para, 1, first);
+  sqlite3_bind_text(ix->ins_para, 2, para->s, (int)para->len, SQLITE_TRANSIENT);
+  run(ix->ins_para);
+  sb_reset(para);
+}
+
+/* What reading the file came to. */
+static enum file_outcome outcome_of(const struct doc_info *d) {
+  if (d->error) return OUT_UNREADABLE;
+  return doc_text_usable(d->nchars, d->garbled, d->quality) ? OUT_READ : OUT_OCR_UNAVAILABLE;
+}
+
+/* Inside a transaction (txn_begin). The lines replace the file's lines, and
+ * each paragraph is a row of paragraphs_fts: a paragraph starts at a line
+ * flagged LINE_BLOCK, and at the first line of each page. */
 static void store(struct indexer *ix, struct job *j) {
   struct doc_info *d = &j->info;
 
-  sqlite3_bind_int64(ix->del_pages, 1, j->file);
-  run(ix->del_pages);
+  sqlite3_bind_int64(ix->del_paras, 1, j->file);
+  run(ix->del_paras);
   sqlite3_bind_int64(ix->del_lines, 1, j->file);
   run(ix->del_lines);
 
+  sbuf para = SBUF_INIT;
+  sqlite3_int64 first = 0;
   for (int i = 0; i < d->n; i++) {
     struct doc_page *pg = &d->pages[i];
-    sqlite3_bind_int64(ix->ins_page, 1, j->file);
-    sqlite3_bind_int(ix->ins_page, 2, pg->no);
-    sqlite3_bind_text(ix->ins_page, 3, pg->text ? pg->text : "", -1, SQLITE_TRANSIENT);
-    sqlite3_bind_double(ix->ins_page, 4, pg->w);
-    sqlite3_bind_double(ix->ins_page, 5, pg->h);
-    run(ix->ins_page);
     for (int k = 0; k < pg->nlines; k++) {
       struct doc_line *l = &pg->lines[k];
+      unsigned flags = l->flags | (k == 0 ? LINE_BLOCK : 0);
       sqlite3_bind_int64(ix->ins_line, 1, j->file);
       sqlite3_bind_int(ix->ins_line, 2, pg->no);
       sqlite3_bind_int(ix->ins_line, 3, k);
       sqlite3_bind_text(ix->ins_line, 4, l->text, -1, SQLITE_TRANSIENT);
       sqlite3_bind_double(ix->ins_line, 5, l->size);
-      sqlite3_bind_int(ix->ins_line, 6, (int)l->flags);
+      sqlite3_bind_int(ix->ins_line, 6, (int)flags);
       sqlite3_bind_double(ix->ins_line, 7, l->x0);
       sqlite3_bind_double(ix->ins_line, 8, l->y0);
       sqlite3_bind_double(ix->ins_line, 9, l->x1);
       sqlite3_bind_double(ix->ins_line, 10, l->y1);
       bind_text(ix->ins_line, 11, l->math);
       run(ix->ins_line);
+      sqlite3_int64 id = sqlite3_last_insert_rowid(ix->db->h); /* before flush_para inserts a row of its own */
+      if (flags & LINE_BLOCK) {
+        flush_para(ix, first, &para);
+        first = id;
+      }
+      if (para.len) sb_putc(&para, '\n');
+      sb_puts(&para, l->text);
     }
     ix->st.pages++;
   }
+  flush_para(ix, first, &para);
+  sb_free(&para);
 
   sqlite3_stmt *u = ix->upd_file;
   sqlite3_bind_int64(u, 1, j->size);
   sqlite3_bind_int64(u, 2, j->mtime);
-  sqlite3_bind_int(u, 3, d->error ? FILE_ERROR : FILE_OK);
+  sqlite3_bind_int(u, 3, outcome_of(d));
   bind_text(u, 4, d->error);
   sqlite3_bind_int(u, 5, d->npages);
   sqlite3_bind_int(u, 6, ix->dopts.pages);
-  sqlite3_bind_int(u, 7, ix->dopts.layout_pages);
-  sqlite3_bind_int64(u, 8, d->nchars);
-  sqlite3_bind_double(u, 9, d->quality);
-  bind_text(u, 10, d->error ? NULL : "emb");
-  for (int k = 0; k < DOC_META_N; k++) bind_text(u, 11 + k, d->meta[k]);
-  sqlite3_bind_double(u, 11 + DOC_META_N, d->garbled);
-  sqlite3_bind_int64(u, 12 + DOC_META_N, j->file);
+  sqlite3_bind_int64(u, 7, d->nchars);
+  sqlite3_bind_double(u, 8, d->quality);
+  sqlite3_bind_double(u, 9, d->garbled);
+  for (int k = 0; k < DOC_META_N; k++) bind_text(u, 10 + k, d->meta[k]);
+  sqlite3_bind_int64(u, 10 + DOC_META_N, j->file);
   run(u);
 
   ix->st.chars += d->nchars;
@@ -247,8 +270,7 @@ static void idle_finish(uv_idle_t *h) {
 
 static int plan(struct indexer *ix, char **err) {
   sbuf sql = SBUF_INIT;
-  sb_puts(&sql, "SELECT f.id, f.path, f.format, f.size, f.mtime, f.status, f.req_pages,"
-                " f.req_layout FROM files f");
+  sb_puts(&sql, "SELECT f.id, f.path, f.format, f.size, f.mtime, f.outcome, f.req_pages FROM files f");
   if (ix->o.only)
     sb_printf(&sql, " WHERE f.book IN (SELECT b.id FROM books b WHERE %s)", ix->o.only->where);
   sb_puts(&sql, " ORDER BY f.id");
@@ -275,15 +297,18 @@ static int plan(struct indexer *ix, char **err) {
       missing[nmissing++] = id;
       continue;
     }
-    int status = sqlite3_column_int(st, 5);
+    int outcome = sqlite3_column_int(st, 5);
     int same = sqlite3_column_type(st, 3) != SQLITE_NULL &&
                sqlite3_column_int64(st, 3) == (sqlite3_int64)sb.st_size &&
                sqlite3_column_int64(st, 4) == (sqlite3_int64)sb.st_mtime;
-    int enough = sqlite3_column_int(st, 6) >= ix->o.pages &&
-                 sqlite3_column_int(st, 7) >= ix->o.layout_pages;
+    int enough = sqlite3_column_int(st, 6) >= ix->o.pages;
+    if (outcome == OUT_NO_TEXT) { ix->st.current++; continue; } /* marked so: nothing retries it */
     if (!ix->o.force && same) {
-      if (status == FILE_OK && enough) { ix->st.current++; continue; }
-      if (status == FILE_ERROR && !ix->o.retry) { ix->st.current++; continue; }
+      if (outcome == OUT_UNREADABLE && !ix->o.retry) { ix->st.current++; continue; }
+      if (outcome != OUT_PENDING && outcome != OUT_MISSING && outcome != OUT_UNREADABLE && enough) {
+        ix->st.current++;
+        continue;
+      }
     }
     struct job *j = xcalloc(1, sizeof *j);
     j->ix = ix;
@@ -304,7 +329,7 @@ static int plan(struct indexer *ix, char **err) {
   if (nmissing) {
     sqlite3_stmt *m;
     /* marked on a later run if the write lock is taken now */
-    if (txn_begin(ix) == 0 && db_prepare(ix->db, "UPDATE files SET status = 3 WHERE id = ?", &m, err) == 0) {
+    if (txn_begin(ix) == 0 && db_prepare(ix->db, "UPDATE files SET outcome = 6 WHERE id = ?", &m, err) == 0) {
       for (int i = 0; i < nmissing; i++) {
         sqlite3_bind_int64(m, 1, missing[i]);
         run(m);
@@ -326,25 +351,26 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
   ix->db = db;
   ix->o = *o;
   if (ix->o.inflight < 1) ix->o.inflight = 4;
-  ix->dopts = (struct doc_opts){o->pages, o->layout_pages, 0};
+  ix->dopts = (struct doc_opts){o->pages, 0};
   ix->progress = progress;
   ix->done = done;
   ix->ud = ud;
   ix->st.started = now_s();
 
-  if (db_prepare(db, "DELETE FROM pages WHERE file = ?", &ix->del_pages, err) ||
+  if (db_prepare(db,
+                 "DELETE FROM paragraphs_fts WHERE rowid IN (SELECT id FROM lines WHERE file = ? AND flags & 32)",
+                 &ix->del_paras, err) ||
       db_prepare(db, "DELETE FROM lines WHERE file = ?", &ix->del_lines, err) ||
-      db_prepare(db, "INSERT INTO pages(file, page, text, src, w, h) VALUES(?, ?, ?, 'emb', ?, ?)",
-                 &ix->ins_page, err) ||
+      db_prepare(db, "INSERT INTO paragraphs_fts(rowid, text) VALUES(?, ?)", &ix->ins_para, err) ||
       db_prepare(db,
                  "INSERT INTO lines(file, page, n, text, size, flags, x0, y0, x1, y1, math)"
                  " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  &ix->ins_line, err) ||
       db_prepare(db,
-                 "UPDATE files SET size = ?, mtime = ?, status = ?, error = ?, npages = ?,"
-                 " req_pages = ?, req_layout = ?, nchars = ?, quality = ?, text_src = ?,"
+                 "UPDATE files SET size = ?, mtime = ?, outcome = ?, error = ?, npages = ?,"
+                 " req_pages = ?, nchars = ?, quality = ?, garbled = ?,"
                  " emb_title = ?, emb_author = ?, emb_subject = ?, emb_keywords = ?,"
-                 " emb_creator = ?, emb_producer = ?, garbled = ?, indexed_at = strftime('%s', 'now')"
+                 " emb_creator = ?, emb_producer = ?, indexed_at = strftime('%s', 'now')"
                  " WHERE id = ?",
                  &ix->upd_file, err) ||
       plan(ix, err)) {
@@ -375,9 +401,9 @@ void indexer_free(struct indexer *ix) {
   free(ix->jobs);
   for (int i = 0; i < ix->nheld; i++) job_free(ix->held[i]);
   free(ix->held);
-  sqlite3_finalize(ix->del_pages);
+  sqlite3_finalize(ix->del_paras);
   sqlite3_finalize(ix->del_lines);
-  sqlite3_finalize(ix->ins_page);
+  sqlite3_finalize(ix->ins_para);
   sqlite3_finalize(ix->ins_line);
   sqlite3_finalize(ix->upd_file);
   free(ix);
