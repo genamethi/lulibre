@@ -13,6 +13,9 @@
 #include "core/queue.h"
 #include "core/settings.h"
 #include "core/util.h"
+#include "db/db.h"
+#include "doc/doc.h"
+#include "doc/reading.h"
 #include "lua/sched.h"
 
 static int checks, fails;
@@ -471,6 +474,43 @@ static void test_evman(void) {
   free(cfg);
 }
 
+/* ---- a reading ---- */
+
+static void test_reading(void) {
+  char *path = xasprintf("%s/index.db", tmpdir), *err = NULL;
+  struct db db = {0};
+  ok(db_open(&db, path, &err) == 0, "an index opens");
+  const char *rows =
+    "INSERT INTO files(id, book, format, path, emb_title) VALUES (7, 1, 'PDF', '/x.pdf', 'Embedded');"
+    "INSERT INTO lines(file, page, n, text, size, flags) VALUES"
+    " (7, 1, 0, 'Title', 18, 32 | 1), (7, 1, 1, 'Author Name', 12, 0),"
+    " (7, 1, 2, 'First paragraph', 10, 32), (7, 2, 0, 'Next page', 10, 32);";
+  ok(db_exec(&db, rows, &err) == 0, "lines go in");
+  struct reading *r = reading_load(&db, 7, &err);
+  ok(r != NULL, "a reading loads");
+  if (r) {
+    eq(r->text, "Title\nAuthor Name\n\nFirst paragraph\fNext page",
+       "lines joined: a line break, a blank line before a paragraph, a form feed between pages");
+    ok(r->nlines == 4 && r->pages == 2, "four lines on two pages");
+    eq(r->meta.title, "Embedded", "the file's own metadata comes with it");
+    size_t at = (size_t)(strstr(r->text, "Name") - r->text);
+    ok(reading_line_at(r, at) == 1, "a position maps to its line");
+    ok(r->lines[1].size == 12 && r->lines[0].flags & 1, "and the line has its size and flags");
+    ok(reading_line_at(r, r->lines[1].start + r->lines[1].len) == 1, "a line break counts as the line before's");
+    ok(reading_line_at(r, (size_t)(strchr(r->text, '\f') - r->text)) == -1, "a page break is no line's");
+    ok(reading_line_at(r, r->len) == -1, "nor is the end");
+    ok(reading_line_at(r, 0) == 0, "the first position is the first line's");
+    reading_hold(r);
+    reading_release(r);
+    eq(r->text, "Title\nAuthor Name\n\nFirst paragraph\fNext page", "a second holder keeps it");
+    reading_release(r);
+  }
+  ok(reading_load(&db, 99, &err) == NULL && err, "a file the index lacks is an error");
+  free(err);
+  db_close(&db);
+  free(path);
+}
+
 int main(void) {
   const char *base = getenv("TMPDIR");
   char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
@@ -489,6 +529,7 @@ int main(void) {
   test_queue();
   test_events();
   test_evman();
+  test_reading();
   printf("core tests: %d checks, %d failed\n", checks, fails);
   char *rm = xasprintf("rm -rf '%s'", tmpdir);
   if (system(rm)) printf("could not remove %s\n", tmpdir);

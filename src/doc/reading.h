@@ -53,8 +53,9 @@ struct reading *reading_load(struct db *db, long long file, char **err);
 void reading_hold(struct reading *r);
 void reading_release(struct reading *r);
 
-/* The index of the line holding text position pos (0-based), or -1 when pos
- * falls between pages. */
+/* The index of the line holding text position pos (0-based); the line
+ * breaks after a line count as the line's. -1 on a page break, or past the
+ * end. */
 int reading_line_at(const struct reading *r, size_t pos);
 
 #endif
