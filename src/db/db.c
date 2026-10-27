@@ -7,7 +7,7 @@
 
 #include "core/util.h"
 
-#define SCHEMA_VERSION "3"
+#define SCHEMA_VERSION "4"
 
 static int fail(struct db *db, char **err, const char *what) {
   *err = xasprintf("%s: %s", what, db->h ? sqlite3_errmsg(db->h) : "no database");
@@ -53,8 +53,9 @@ int db_meta_set(struct db *db, const char *key, const char *val) {
   return rc;
 }
 
-/* The index holds nothing that cannot be regenerated, so a schema change
- * drops everything instead of migrating. */
+/* A schema change drops what the index derived (from the library, the
+ * files, the readings) instead of migrating it; what nothing can derive
+ * again stays: the online answers, the sync folder's files, kv. */
 static int reset_if_stale(struct db *db, char **err) {
   char *v = NULL;
   sqlite3_stmt *st;
@@ -71,7 +72,7 @@ static int reset_if_stale(struct db *db, char **err) {
   sbuf sql = SBUF_INIT;
   if (sqlite3_prepare_v2(db->h,
                          "SELECT type, name FROM main.sqlite_master WHERE type IN ('table', 'view')"
-                         " AND name NOT LIKE 'sqlite_%'"
+                         " AND name NOT LIKE 'sqlite_%' AND name NOT IN ('lookups', 'staged', 'kv')"
                          " ORDER BY type = 'view' DESC, sql LIKE 'CREATE VIRTUAL%' DESC",
                          -1, &st, NULL) == SQLITE_OK) {
     while (sqlite3_step(st) == SQLITE_ROW)
@@ -202,33 +203,6 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
   return rc;
 }
 
-/* Columns added to the index since it was made: added, empty, to one made
- * before (the index is derived data, but rebuilding it would cost the text
- * of every file). */
-static int add_columns(struct db *db, char **err) {
-  static const struct { const char *table, *column, *decl; } cols[] = {
-    /* 1: a proposal someone asked for (taking a copy's values), shown whatever propose_min says */
-    {"proposals", "asked", "INTEGER"},
-  };
-  for (size_t i = 0; i < ARRAY_LEN(cols); i++) {
-    char *q = xasprintf("SELECT 1 FROM pragma_table_info('%s') WHERE name = '%s'", cols[i].table, cols[i].column);
-    sqlite3_stmt *st;
-    int have = 0;
-    if (sqlite3_prepare_v2(db->h, q, -1, &st, NULL) == SQLITE_OK) {
-      have = sqlite3_step(st) == SQLITE_ROW;
-      sqlite3_finalize(st);
-    }
-    free(q);
-    if (!have) {
-      char *alter = xasprintf("ALTER TABLE %s ADD COLUMN %s %s", cols[i].table, cols[i].column, cols[i].decl);
-      int rc = db_exec(db, alter, err);
-      free(alter);
-      if (rc) return rc;
-    }
-  }
-  return 0;
-}
-
 /* An index from before the history had a journal of its own: its rows move
  * to the history (once, and only into an empty one), and it goes. */
 static int move_journal(struct db *db, char **err) {
@@ -267,7 +241,7 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;"
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
-      reset_if_stale(db, err) || db_exec(db, db_schema, err) || add_columns(db, err) || attach_history(db, 1, err) ||
+      reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
       db_exec(db, history_schema, err) || move_journal(db, err) || attach_custom(db, "rwc", err) ||
       db_exec(db, custom_schema, err) || db_register_functions(db, err)) {
     db_close(db);

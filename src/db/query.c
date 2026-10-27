@@ -60,17 +60,13 @@ static const struct { const char *name, *sql; } is_tests[] = {
                 " OR b.title LIKE '%.dvi' OR b.title LIKE '%.tex' OR b.title LIKE '%.ps')"},
   /* a title in capitals (as far as A to Z go): what :titlecase is for */
   {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
-  /* confirmed as right by the user (:good) */
-  {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
-  /* marked as a work no catalogue has a record of (:noncatalog) */
-  {"noncatalog", "EXISTS(SELECT 1 FROM noncatalog n WHERE n.book = b.id)"},
   {"part", "EXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = '#partof')"},
   /* a book with a file whose text is usable; each outcome is a filter of
    * its own too (outcome_words, index/outcome.h) */
   {"indexed", ANY_FILE(OUTCOME_HAS_TEXT("f."))},
   {"multiformat", "(SELECT count(*) FROM files f WHERE f.book = b.id) > 1"},
   {"marked", "b.id IN (SELECT id FROM marks)"},
-  {"proposed", "b.id IN (SELECT book FROM proposals WHERE status IN ('pending', 'accepted'))"},
+  {"proposed", "b.id IN (SELECT book FROM proposals)"},
   /* byte-identical to another book's file; known once :dupes has hashed them */
   {"dupe", "b.id IN (SELECT f.book FROM files f JOIN hashes h ON h.path = f.path"
            " WHERE f.book > 0 AND h.md5 IN (SELECT h2.md5 FROM hashes h2 JOIN files f2"
@@ -258,10 +254,7 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
         free(names);
         return -1;
       }
-      if (!strcmp(val, "proposed"))
-        sb_printf(sql, "(b.id IN (SELECT book FROM proposals WHERE status IN ('accepted', 'pending')))");
-      else
-        sb_printf(sql, "(%s)", t);
+      sb_printf(sql, "(%s)", t);
       return 0;
     }
     case F_TEXT:

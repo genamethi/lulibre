@@ -38,38 +38,22 @@ const char db_schema[] =
   /* ---- lulibre's own records. Unlike everything else here these are not
    * derived from the library, so they are never dropped on a schema change.
    * Lua reads and writes them through lulibre.store(). ---- */
+  /* one proposal per book and field from one parse, or collective, with
+   * its alternatives (design 16, 18, 19): alt 1 is the first-ranked; agree
+   * and disagree name the sources, as JSON; the span is where in the
+   * file's reading the value was found */
   "CREATE TABLE IF NOT EXISTS proposals("
-  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL,"
-  " op TEXT NOT NULL DEFAULT 'set', value TEXT NOT NULL, source TEXT, confidence REAL,"
-  " status TEXT NOT NULL DEFAULT 'pending', created INTEGER, note TEXT, asked INTEGER);"
-  "CREATE INDEX IF NOT EXISTS proposals_status ON proposals(status, book);"
+  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
+  " parse TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " file INTEGER, span_start INTEGER, span_end INTEGER, ts INTEGER,"
+  " UNIQUE(book, field, alt));"
   /* the journal of changes lives in the history file beside the index
    * (db.c, history_schema), so that nothing done to the index loses it */
   "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);"
-  /* records the user has confirmed as right: what is learned about subjects
-   * is learned from these (lua/lulibre/quality.lua, learn.lua) */
-  "CREATE TABLE IF NOT EXISTS good(book INTEGER PRIMARY KEY, ts INTEGER);"
-  /* works no catalogue has a record of (a handout, course notes): they have
-   * no DOI or ISBN of their own and are not looked up by one
-   * (lua/lulibre/noncatalog.lua) */
-  "CREATE TABLE IF NOT EXISTS noncatalog(book INTEGER PRIMARY KEY, ts INTEGER);"
-  /* the phrases that tell one subject from the others, learned from the good
-   * records; state is 'learned', 'kept' (the user's own, or pinned) or
-   * 'dropped' (never to come back) */
-  /* what each book cites, one key for each entry of its bibliography
-   * (lua/lulibre/refs.lua): books that cite the same things are about the
-   * same thing */
-  "CREATE TABLE IF NOT EXISTS refs("
-  " book INTEGER NOT NULL, key TEXT NOT NULL, raw TEXT, PRIMARY KEY(book, key)) WITHOUT ROWID;"
-  "CREATE INDEX IF NOT EXISTS refs_key ON refs(key);"
-  /* what metadata services answered (lua/lulibre/net/core.lua), so that each work
-   * is asked about once; status 404 is "asked, and there is none" */
+  /* every online answer, kept (design 43) */
   "CREATE TABLE IF NOT EXISTS lookups("
-  " service TEXT NOT NULL, key TEXT NOT NULL, at INTEGER, status INTEGER, body TEXT,"
+  " service TEXT NOT NULL, key TEXT NOT NULL, answer TEXT, ts INTEGER,"
   " PRIMARY KEY(service, key)) WITHOUT ROWID;"
-  "CREATE TABLE IF NOT EXISTS terms("
-  " subject TEXT NOT NULL, term TEXT NOT NULL, score REAL, books INTEGER, state TEXT NOT NULL DEFAULT 'learned',"
-  " PRIMARY KEY(subject, term)) WITHOUT ROWID;"
   /* content hashes, filled on demand by lulibre.md5(); a row is good while
    * the file's size and mtime still match */
   "CREATE TABLE IF NOT EXISTS hashes("
