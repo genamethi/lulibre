@@ -9,9 +9,7 @@
  * callbacks asked for. A view's own events (keys, rows) are not shared
  * events: the task that owns the view pulls them (design 33). */
 
-#include <stdatomic.h>
-
-struct app;
+#include "core/queue.h"
 
 enum event_kind {
   EV_CURSOR,          /* the book under the cursor */
@@ -33,6 +31,8 @@ enum event_part {
   EP_HOLDER = 1 << 5,
   EP_SERVICE = 1 << 6,
 };
+/* In events_want: some callback, even one that asks for no part. */
+#define EP_LISTENED (1u << 31)
 
 struct event {
   enum event_kind kind;
@@ -50,24 +50,26 @@ struct event {
   const char *service; /* static: a service's name */
 };
 
-/* The parts wanted for each kind: the union over every callback, 0 when no
- * callback exists. Atomic, so a posting thread reads the bits without a
- * lock; the threads that register callbacks keep the bits current. */
-extern _Atomic unsigned events_wanted[EV_KINDS];
+/* The parts some callback wants for kind, over every loop; 0 when no
+ * callback exists. A poster builds only these parts, and posts nothing when
+ * there are none. Any thread. */
+unsigned events_want(enum event_kind kind);
 
-/* Posts ev, built with the parts events_wanted names; the receivers free
- * the event after dispatch. Posting a kind nobody wants is a no-op that
- * frees ev. */
-void events_post(struct app *app, struct event *ev);
+/* Posts ev, taking it: each loop with callbacks for the kind gets it by the
+ * queue, and the last to dispatch frees it. ev->parts says what was built.
+ * Any thread. */
+void events_post(struct event *ev);
+/* Frees an event and the parts it holds (service is static). */
+void events_free(struct event *ev);
 
-/* A C callback, on the thread that registers it (the indexer on
- * EV_RECORDS_CHANGED with EP_FILES). */
+/* A callback on loop `on`, called there; register and unregister on that
+ * loop's thread, or before it runs. The indexer: EV_RECORDS_CHANGED with
+ * EP_FILES. Unregistering during a dispatch is allowed. */
 typedef void event_fn(const struct event *ev, void *ud);
-void events_listen(struct app *app, enum event_kind kind, unsigned parts, event_fn *fn, void *ud);
-void events_unlisten(struct app *app, enum event_kind kind, event_fn *fn, void *ud);
-
-/* Lua's callbacks, all dropped at once when the lua_State is torn down
- * (design 7). */
-void events_drop_lua(struct app *app);
+void events_listen(enum loop_id on, enum event_kind kind, unsigned parts, event_fn *fn, void *ud);
+void events_unlisten(enum loop_id on, enum event_kind kind, event_fn *fn, void *ud);
+/* Every callback fn on loop `on`, of any kind: Lua's, when the lua_State is
+ * torn down (design 7). */
+void events_unlisten_all(enum loop_id on, event_fn *fn);
 
 #endif
