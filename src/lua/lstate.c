@@ -168,7 +168,8 @@ lua_State *lstate_new(struct app *app) {
   *(struct lctx **)lua_getextraspace(L) = app->lmain;
   luaL_openlibs(L);
   luaL_requiref(L, "setman", luaopen_setman, 1);
-  lua_pop(L, 1);
+  luaL_requiref(L, "evman", luaopen_evman, 1);
+  lua_pop(L, 2);
   l_setman_fill(L, app->settings);
   setup_paths(L);
   sched_init(app);
@@ -251,6 +252,7 @@ int lstate_run_init(struct app *app) {
 }
 
 void lstate_close(struct app *app) {
+  l_evman_close(app);
   sched_free(app);
   if (app->L) lua_close(app->L);
   app->L = NULL;

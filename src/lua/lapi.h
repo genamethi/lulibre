@@ -8,6 +8,7 @@
  * found it. The whole API is the one flat `lulibre` table:
  *
  *   l_setman.c setman (its own library)           settings
+ *   l_evman.c  evman (its own library)            callbacks on shared events
  *   l_job.c    spawn sleep yield tasks cancel     tasks
  *   l_db.c     ids books book count sql authors tags store reload
  *              source stage_refresh
@@ -70,6 +71,11 @@ int luaopen_setman(struct lua_State *L);
 void l_setman_fill(struct lua_State *L, const struct settings *st);
 struct setman_change *setman_change_new(const struct settings *st, int def);
 void l_setman_changed(struct app *app, void *arg);
+/* evman (l_evman.c); l_evman_close drops Lua's callbacks before the
+ * lua_State goes. */
+int luaopen_evman(struct lua_State *L);
+void l_evman_close(struct app *app);
+
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);

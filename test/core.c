@@ -5,10 +5,15 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <lauxlib.h>
+#include <lua.h>
+
+#include "app.h"
 #include "core/events.h"
 #include "core/queue.h"
 #include "core/settings.h"
 #include "core/util.h"
+#include "lua/sched.h"
 
 static int checks, fails;
 
@@ -383,10 +388,97 @@ static void test_events(void) {
   ok(uv_loop_close(&loop) == 0, "the loop closes");
 }
 
+/* ---- evman, in a lua_State ---- */
+
+static void close_any(uv_handle_t *h, void *arg) {
+  if (!uv_is_closing(h)) uv_close(h, NULL);
+}
+
+static void run_until_quiet(struct app *app, uv_loop_t *loop) {
+  for (int i = 0; i < 50; i++) uv_run(loop, UV_RUN_NOWAIT);
+}
+
+static long long lua_int(lua_State *L, const char *expr) {
+  char *code = xasprintf("return %s", expr);
+  long long v = -1;
+  if (luaL_dostring(L, code) == LUA_OK) v = lua_tointeger(L, -1);
+  else printf("      %s\n", lua_tostring(L, -1));
+  lua_pop(L, 1);
+  free(code);
+  return v;
+}
+
+static void test_evman(void) {
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+  keep_open(&loop);
+  struct app app = {0};
+  char *cfg = xasprintf("%s/config", tmpdir);
+  app_settings(&app, cfg, NULL, NULL, 0);
+  app.loop = app.lloop = &loop;
+  queue_open(&app, LOOP_UI, &loop);
+  queue_open(&app, LOOP_LUA, &loop);
+  lstate_new(&app);
+  lua_State *L = app.L;
+  const char *setup =
+    "seen, order, n = {}, {}, 0\n"
+    "counter = 0\n"
+    "local function per_event() counter = counter + 1; return counter end\n"
+    "id1 = evman.add('records_changed', function(p, a, b, c)\n"
+    "  seen.id, seen.field, seen.a, seen.b, seen.c = p.ids[1], p.fields[1], a, b, c\n"
+    "  order[#order + 1] = 1\n"
+    "end, 'fixed', per_event, function() return 'x', 'y' end)\n"
+    "id2 = evman.add('records_changed', function(p) order[#order + 1] = 2; seen.at_start = counter end)\n"
+    "id3 = evman.add('cursor', function(p) n = n + 1 end)\n";
+  ok(luaL_dostring(L, setup) == LUA_OK, "evman.add registers callbacks");
+  ok(events_wanted(EV_RECORDS_CHANGED) && events_wanted(EV_CURSOR), "the kinds Lua listens for are wanted");
+  ok(!events_wanted(EV_MARKS), "and no other");
+
+  events_post(records_changed(42));
+  run_until_quiet(&app, &loop);
+  ok(lua_int(L, "seen.id") == 42 && lua_int(L, "seen.field == 'title' and 1 or 0") == 1,
+     "the callback gets the payload");
+  ok(lua_int(L, "seen.a == 'fixed' and 1 or 0") == 1, "a value passed at registration");
+  ok(lua_int(L, "seen.b") == 1, "a function's first result, taken as the event comes");
+  ok(lua_int(L, "seen.c == 'x' and 1 or 0") == 1, "the last function's results, all of them");
+  ok(lua_int(L, "#order") == 2 && lua_int(L, "order[1]") == 1 && lua_int(L, "order[2]") == 2,
+     "callbacks run in the order they were added");
+  ok(lua_int(L, "seen.at_start") == 1, "the functions are called before any callback runs");
+
+  events_post(records_changed(43));
+  run_until_quiet(&app, &loop);
+  ok(lua_int(L, "seen.b") == 2, "and again for each event");
+
+  ok(luaL_dostring(L, "evman.rm(id1); evman.rm(id2)") == LUA_OK, "evman.rm removes callbacks");
+  ok(!events_wanted(EV_RECORDS_CHANGED), "the kind is no longer wanted once its last callback goes");
+  ok(luaL_dostring(L, "evman.rm(id1)") != LUA_OK, "removing one twice is an error");
+  lua_pop(L, 1);
+  ok(luaL_dostring(L, "evman.add('nothing', print)") != LUA_OK, "an unknown event is an error");
+  lua_pop(L, 1);
+
+  queue_drain(LOOP_LUA);
+  lstate_close(&app);
+  ok(!events_wanted(EV_CURSOR), "closing the lua_State drops its callbacks");
+  queue_close(LOOP_UI);
+  queue_close(LOOP_LUA);
+  keep_close();
+  uv_walk(&loop, close_any, NULL); /* the scheduler's handle: the program leaves it to exit */
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(uv_loop_close(&loop) == 0, "the loop closes");
+  settings_free(app.settings);
+  free(app.config_dir);
+  free(app.state_path);
+  free(cfg);
+}
+
 int main(void) {
   const char *base = getenv("TMPDIR");
   char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
   tmpdir = mkdtemp(t);
+  /* the tree's Lua runtime, not an installed one (make unit runs from the tree) */
+  char *rt = realpath("lua", NULL);
+  if (rt) setenv("LULIBRE_RUNTIME", rt, 1);
+  free(rt);
   if (!tmpdir) {
     perror("mkdtemp");
     return 1;
@@ -396,6 +488,7 @@ int main(void) {
   test_settings_state();
   test_queue();
   test_events();
+  test_evman();
   printf("core tests: %d checks, %d failed\n", checks, fails);
   char *rm = xasprintf("rm -rf '%s'", tmpdir);
   if (system(rm)) printf("could not remove %s\n", tmpdir);
