@@ -7,7 +7,6 @@
 
 struct listener {
   enum event_kind kind;
-  unsigned parts;
   event_fn *fn; /* NULL: removed during a dispatch, dropped after it */
   void *ud;
 };
@@ -17,7 +16,7 @@ static struct loop_listeners {
   struct listener *l;
   int n, cap;
   int dispatching;
-  _Atomic unsigned want[EV_KINDS];
+  atomic_int listened[EV_KINDS]; /* callbacks per kind */
 } loops[LOOPS];
 
 /* An event on its way to several loops: freed by the last. */
@@ -31,17 +30,17 @@ struct delivery {
   struct shared *sh;
 };
 
-unsigned events_want(enum event_kind kind) {
-  unsigned w = 0;
-  for (int i = 0; i < LOOPS; i++) w |= atomic_load(&loops[i].want[kind]);
-  return w;
+int events_wanted(enum event_kind kind) {
+  for (int i = 0; i < LOOPS; i++)
+    if (atomic_load(&loops[i].listened[kind])) return 1;
+  return 0;
 }
 
 static void recount(struct loop_listeners *ll, enum event_kind kind) {
-  unsigned w = 0;
+  int n = 0;
   for (int i = 0; i < ll->n; i++)
-    if (ll->l[i].fn && ll->l[i].kind == kind) w |= ll->l[i].parts | EP_LISTENED;
-  atomic_store(&ll->want[kind], w);
+    if (ll->l[i].fn && ll->l[i].kind == kind) n++;
+  atomic_store(&ll->listened[kind], n);
 }
 
 void events_free(struct event *ev) {
@@ -83,7 +82,7 @@ static void deliver(struct app *app, void *arg) {
 void events_post(struct event *ev) {
   int to[LOOPS], n = 0;
   for (int i = 0; i < LOOPS; i++)
-    if (atomic_load(&loops[i].want[ev->kind])) to[n++] = i;
+    if (atomic_load(&loops[i].listened[ev->kind])) to[n++] = i;
   if (!n) {
     events_free(ev);
     return;
@@ -99,13 +98,13 @@ void events_post(struct event *ev) {
   }
 }
 
-void events_listen(enum loop_id on, enum event_kind kind, unsigned parts, event_fn *fn, void *ud) {
+void events_listen(enum loop_id on, enum event_kind kind, event_fn *fn, void *ud) {
   struct loop_listeners *ll = &loops[on];
   if (ll->n == ll->cap) {
     ll->cap = ll->cap ? ll->cap * 2 : 8;
     ll->l = xrealloc(ll->l, ll->cap * sizeof *ll->l);
   }
-  ll->l[ll->n++] = (struct listener){kind, parts, fn, ud};
+  ll->l[ll->n++] = (struct listener){kind, fn, ud};
   recount(ll, kind);
 }
 

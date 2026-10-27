@@ -290,14 +290,12 @@ static void test_queue(void) {
 
 struct seen {
   int calls;
-  unsigned parts;
   long long first_id;
 };
 
 static void on_event(const struct event *ev, void *ud) {
   struct seen *s = ud;
   s->calls++;
-  s->parts = ev->parts;
   s->first_id = ev->nids ? ev->ids[0] : -1;
 }
 
@@ -310,19 +308,12 @@ static void remove_self(const struct event *ev, void *ud) {
 static struct event *records_changed(long long id) {
   struct event *ev = xcalloc(1, sizeof *ev);
   ev->kind = EV_RECORDS_CHANGED;
-  unsigned want = events_want(EV_RECORDS_CHANGED);
-  if (want & EP_IDS) {
-    ev->ids = xmalloc(sizeof *ev->ids);
-    ev->ids[0] = id;
-    ev->nids = 1;
-    ev->parts |= EP_IDS;
-  }
-  if (want & EP_FIELDS) {
-    ev->fields = xmalloc(sizeof *ev->fields);
-    ev->fields[0] = xstrdup("title");
-    ev->nfields = 1;
-    ev->parts |= EP_FIELDS;
-  }
+  ev->ids = xmalloc(sizeof *ev->ids);
+  ev->ids[0] = id;
+  ev->nids = 1;
+  ev->fields = xmalloc(sizeof *ev->fields);
+  ev->fields[0] = xstrdup("title");
+  ev->nfields = 1;
   return ev;
 }
 
@@ -332,42 +323,37 @@ static void test_events(void) {
   queue_open(NULL, LOOP_UI, &loop);
   queue_open(NULL, LOOP_LUA, &loop);
 
-  ok(events_want(EV_RECORDS_CHANGED) == 0, "no callback: nothing wanted");
+  ok(!events_wanted(EV_RECORDS_CHANGED), "no callback: nothing wanted");
   events_post(records_changed(1)); /* freed at once: nobody listens */
   uv_run(&loop, UV_RUN_NOWAIT);
 
   struct seen ui = {0}, lua = {0}, bare = {0};
-  events_listen(LOOP_UI, EV_RECORDS_CHANGED, EP_IDS, on_event, &ui);
-  ok(events_want(EV_RECORDS_CHANGED) == (EP_IDS | EP_LISTENED), "the parts one callback asks for are wanted");
-  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, EP_FIELDS, on_event, &lua);
-  events_listen(LOOP_LUA, EV_CURSOR, 0, on_event, &bare);
-  ok(events_want(EV_RECORDS_CHANGED) == (EP_IDS | EP_FIELDS | EP_LISTENED), "the union over loops");
-  ok(events_want(EV_CURSOR) == EP_LISTENED, "a callback that asks for no part still listens");
-  ok(events_want(EV_MARKS) == 0, "another kind is not wanted");
+  events_listen(LOOP_UI, EV_RECORDS_CHANGED, on_event, &ui);
+  ok(events_wanted(EV_RECORDS_CHANGED), "one callback: the kind is wanted");
+  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, on_event, &lua);
+  events_listen(LOOP_LUA, EV_CURSOR, on_event, &bare);
+  ok(!events_wanted(EV_MARKS), "another kind is not");
 
-  struct event *ev = records_changed(42);
-  ok(ev->parts == (EP_IDS | EP_FIELDS), "the poster builds what is wanted");
-  events_post(ev);
+  events_post(records_changed(42));
   ok(ui.calls == 0 && lua.calls == 0, "posting runs no callback in the poster's stack");
   uv_run(&loop, UV_RUN_NOWAIT);
   ok(ui.calls == 1 && lua.calls == 1 && ui.first_id == 42, "each loop's callback is called once");
   ok(bare.calls == 0, "a callback of another kind is not");
 
   events_unlisten(LOOP_UI, EV_RECORDS_CHANGED, on_event, &ui);
-  ok(events_want(EV_RECORDS_CHANGED) == (EP_FIELDS | EP_LISTENED), "a removed callback's parts are no longer wanted");
   events_post(records_changed(43));
   uv_run(&loop, UV_RUN_NOWAIT);
-  ok(ui.calls == 1 && lua.calls == 2 && lua.parts == EP_FIELDS, "nor is the callback called");
+  ok(ui.calls == 1 && lua.calls == 2, "a removed callback is not called; the other loop's is");
 
   struct seen once = {0};
-  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, 0, remove_self, &once);
+  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, remove_self, &once);
   events_post(records_changed(44));
   events_post(records_changed(45));
   uv_run(&loop, UV_RUN_NOWAIT);
   ok(once.calls == 1 && lua.calls == 4, "a callback may remove itself while called; the others go on");
 
   events_unlisten_all(LOOP_LUA, on_event);
-  ok(events_want(EV_RECORDS_CHANGED) == 0 && events_want(EV_CURSOR) == 0, "every callback of one function, dropped at once");
+  ok(!events_wanted(EV_RECORDS_CHANGED) && !events_wanted(EV_CURSOR), "every callback of one function, dropped at once");
   events_post(records_changed(46));
   uv_run(&loop, UV_RUN_NOWAIT);
   ok(lua.calls == 4, "and none is called after");
