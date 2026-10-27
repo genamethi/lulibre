@@ -46,6 +46,9 @@ int db_meta_set(struct db *db, const char *key, const char *val);
 /* Copy calibre's metadata into the index when metadata.db has changed (or
  * force is set). Returns 1 if a copy ran, 0 if already current, -1 on error. */
 int db_mirror(struct db *db, const char *library, int force, char **err);
+/* Copies made so far, by any connection: what was built from the records
+ * (the rarity of their words, match/similar.h) is built again after one. */
+extern _Atomic unsigned db_mirror_copies;
 
 /* Call fn with each book of the calibre database at path (read, never
  * written), as a row with the columns of the index's books table, named.

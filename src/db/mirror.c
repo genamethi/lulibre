@@ -13,6 +13,8 @@
 #include "core/util.h"
 #include "db/db.h"
 
+#include <stdatomic.h>
+
 /* Bump when the SQL below changes, so existing indexes re-copy. */
 #define MIRROR_VERSION "5"
 
@@ -155,6 +157,8 @@ static int mirror_custom(struct db *db, char **err) {
   return rc;
 }
 
+_Atomic unsigned db_mirror_copies;
+
 int db_mirror(struct db *db, const char *library, int force, char **err) {
   char *cal = xasprintf("%s/metadata.db", library);
   struct stat st;
@@ -221,6 +225,7 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
     }
     if (ok) {
       rc = 1;
+      atomic_fetch_add(&db_mirror_copies, 1);
       log_debug("calibre's metadata.db copied into the index (%s)", library);
     } else {
       char *ignored = NULL;

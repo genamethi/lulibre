@@ -190,6 +190,8 @@ lua_State *lstate_new(struct app *app) {
   luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
   lua_pushcfunction(L, luaopen_lulibre_reading);
   lua_setfield(L, -2, "lulibre.reading");
+  lua_pushcfunction(L, luaopen_lulibre_similar);
+  lua_setfield(L, -2, "lulibre.similar");
   lua_pop(L, 1);
   l_setman_fill(L, app->settings);
   keep_own(L, "path", LUA_OWN_PATH);

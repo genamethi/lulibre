@@ -16,6 +16,7 @@
 #include "db/db.h"
 #include "doc/doc.h"
 #include "doc/reading.h"
+#include "match/similar.h"
 #include "lua/sched.h"
 
 static int checks, fails;
@@ -511,6 +512,53 @@ static void test_reading(void) {
   free(path);
 }
 
+/* ---- similarity ---- */
+
+static void test_similar(void) {
+  double ab = similar(NULL, KIND_TEXT, "Topics in Additive Combinatorics", "Additive Combinatorics");
+  double ba = similar(NULL, KIND_TEXT, "Additive Combinatorics", "Topics in Additive Combinatorics");
+  ok(ba == 1 && ab < 1, "asymmetric: the shorter title is all in the longer");
+  ok(likeness(ab, ba, 0.7, 0.95) == LIKE_CONTAINS, "so one contains the other");
+  ok(similar(NULL, KIND_TEXT, "Erdős", "erdos") == 1, "folded: case and accents do not count");
+  double typo = similar(NULL, KIND_TEXT, "Combinatorics", "Combinatorcs");
+  ok(typo > 0.85 && typo < 1, "a typo is near");
+  ok(likeness(typo, similar(NULL, KIND_TEXT, "Combinatorcs", "Combinatorics"), 0.7, 0.95) == LIKE_NEAR,
+     "and near both ways");
+  ok(similar(NULL, KIND_TEXT, "Sieve Methods", "Modular Forms") < 0.5, "different words differ");
+  ok(similar(NULL, KIND_PEOPLE, "T. Tao", "Terence Tao") == 1, "an initial matches a name part");
+  ok(similar(NULL, KIND_PEOPLE, "Terence Tao", "T. Tao") == 1, "and the other way");
+  double two = similar(NULL, KIND_PEOPLE, "Terence Tao & Van Vu", "Terence Tao");
+  ok(two > 0.5 && two < 0.75, "two people, one found: about half");
+  ok(similar(NULL, KIND_PEOPLE, "Terence Tao", "Terence Tao & Van Vu") == 1, "the one is in the two");
+  ok(similar(NULL, KIND_TAGS, "math", "math/number-theory/additive") == 1, "a broader term is in a narrower tag");
+  ok(similar(NULL, KIND_TAGS, "math/number-theory/additive", "math") < 0.5, "but not the narrower in the broader");
+  ok(similar(NULL, KIND_DATE, "1942-05-03", "1942") == 1, "a day lies in its year");
+  double part = similar(NULL, KIND_DATE, "1942", "1942-05");
+  ok(part > 0.08 && part < 0.09, "a month is a twelfth of its year");
+  ok(similar(NULL, KIND_DATE, "1942", "1943") == 0, "other years differ");
+  ok(similar(NULL, KIND_IDENT, "isbn:0-306-40615-2", "isbn:978-0-306-40615-7") == 1, "ISBN-10 as ISBN-13");
+  ok(similar(NULL, KIND_IDENT, "doi:https://doi.org/10.1000/XYZ", "doi:10.1000/xyz") == 1, "a DOI without its URL, in lower case");
+  ok(similar(NULL, KIND_IDENT, "arxiv:1012.6008v1", "arxiv:1012.6008") == 1, "an arXiv number without its version");
+  ok(similar(NULL, KIND_IDENT, "isbn:9780306406157", "doi:10.1000/xyz") == 0, "different kinds of identifier differ");
+
+  /* rarity from a library: a word on every record weighs less than a rare one */
+  char *path = xasprintf("%s/index.db", tmpdir), *err = NULL;
+  struct db db = {0};
+  db_open(&db, path, &err);
+  db_exec(&db,
+          "DELETE FROM books; INSERT INTO books(id, title) VALUES (1, 'Lectures on Sieves'),"
+          " (2, 'Lectures on Groups'), (3, 'Lectures on Rings'), (4, 'Lectures on Fields');",
+          &err);
+  struct rarity *w = rarity_build(&db, &err);
+  ok(w != NULL, "rarity builds from the records");
+  double common = similar(w, KIND_TEXT, "Lectures Sieves", "Lectures Groups");
+  double rare = similar(w, KIND_TEXT, "Lectures Sieves", "Notes Sieves");
+  ok(rare > common, "sharing a rare word counts more than sharing a common one");
+  rarity_free(w);
+  db_close(&db);
+  free(path);
+}
+
 int main(void) {
   const char *base = getenv("TMPDIR");
   char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
@@ -530,6 +578,7 @@ int main(void) {
   test_events();
   test_evman();
   test_reading();
+  test_similar();
   printf("core tests: %d checks, %d failed\n", checks, fails);
   char *rm = xasprintf("rm -rf '%s'", tmpdir);
   if (system(rm)) printf("could not remove %s\n", tmpdir);

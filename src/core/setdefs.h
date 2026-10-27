@@ -25,6 +25,8 @@ enum setting_id {
   S_PREVIEW,
   S_SYNC_DIR,
   S_MOD_TREE,
+  S_SIMILAR_NEAR,
+  S_SIMILAR_SAME,
   S_SERVER,
   S_USER,
   S_PASSWORD_FILE,

@@ -32,6 +32,10 @@ const struct setting_def setting_defs[S_COUNT] = {
   [S_MOD_TREE] = {"mod_tree", SETTING_PATH, 0, "", NULL,
                   "a prefix of Lua modules: its share/lua/<version> and lib/lua/<version> are searched after "
                   "lulibre's own. Ignored in a pixi environment, where pixi's environment holds the modules"},
+  [S_SIMILAR_NEAR] = {"similar_near", SETTING_NUM, 0, "0.7", NULL,
+                      "two values are near when each is at least this much found in the other (0 to 1)"},
+  [S_SIMILAR_SAME] = {"similar_same", SETTING_NUM, 0, "0.95", NULL,
+                      "a value is all found in another at this much or more (0 to 1): both ways, they are equal"},
   [S_SERVER] = {"server", SETTING_STR, 0, "", NULL,
                 "calibre content server URL; changes go through it (http://127.0.0.1:8080)"},
   [S_USER] = {"user", SETTING_STR, 0, "", NULL, "content server user"},

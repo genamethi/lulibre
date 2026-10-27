@@ -140,7 +140,8 @@ static void lines_of(char *tsv, float scale, struct doc_page *pg) {
   struct oline *l = NULL;
   int n = 0, cap = 0, cur_block = -1, cur_par = -1, cur_line = -1;
   sbuf text = SBUF_INIT;
-  for (char *row = strtok(tsv, "\n"); row; row = strtok(NULL, "\n")) {
+  char *save = NULL; /* strtok_r: workers read pages at once */
+  for (char *row = strtok_r(tsv, "\n", &save); row; row = strtok_r(NULL, "\n", &save)) {
     int level, pageno, block, par, line, word, left, top, width, height;
     float conf;
     int used = 0;
