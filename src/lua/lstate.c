@@ -186,6 +186,11 @@ lua_State *lstate_new(struct app *app) {
   luaL_requiref(L, "setman", luaopen_setman, 1);
   luaL_requiref(L, "evman", luaopen_evman, 1);
   lua_pop(L, 2);
+  /* packaged modules written in C, found by require like the others */
+  luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+  lua_pushcfunction(L, luaopen_lulibre_reading);
+  lua_setfield(L, -2, "lulibre.reading");
+  lua_pop(L, 1);
   l_setman_fill(L, app->settings);
   keep_own(L, "path", LUA_OWN_PATH);
   keep_own(L, "cpath", LUA_OWN_CPATH);

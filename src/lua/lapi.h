@@ -80,6 +80,9 @@ void l_evman_close(struct app *app);
  * and mod_tree (lstate.c). */
 void lstate_paths(struct lua_State *L);
 
+/* lulibre.reading (l_reading.c), a module written in C, preloaded. */
+int luaopen_lulibre_reading(struct lua_State *L);
+
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);
