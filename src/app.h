@@ -44,6 +44,10 @@ long long app_int(const struct app *app, enum setting_id id);
 int app_bool(const struct app *app, enum setting_id id);
 /* A change from the main thread (:set): the Lua API's layer. */
 int app_set(struct app *app, const char *name, const char *text, char **err);
+/* An indexer run's options from the settings in effect (index/indexer.h),
+ * on the main thread; the indexer copies what it keeps. */
+struct index_opts;
+void app_index_opts(const struct app *app, struct index_opts *o);
 /* The index file in effect, for the library in effect; malloc'd. */
 char *app_index_path(const struct app *app);
 

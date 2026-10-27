@@ -77,8 +77,6 @@ static void ix_done(struct indexer *ix, const struct index_stats *st, void *ud) 
   else
     tui_msg(t, 0, "index is up to date");
   rows_reload(t); /* text-based filters may now match more */
-  if (s.ok > 0 && !strcmp(app_str(t->app, S_OCR), "auto")) tui_exec(t, "run ocr");
-  else if (s.ok > 0 && !strcmp(app_str(t->app, S_OCR), "always")) tui_exec(t, "run ocr is:indexed -is:ocr");
 }
 
 void tui_start_index(struct tui *t, int force) {
@@ -88,9 +86,8 @@ void tui_start_index(struct tui *t, int force) {
   }
   struct index_opts o = {0};
   char *err = NULL;
-  o.pages = (int)app_int(t->app, S_PAGES);
+  app_index_opts(t->app, &o);
   o.force = force;
-  o.inflight = app_jobs(t->app) + app_jobs(t->app) / 2;
   t->ix_done = t->ix_total = t->ix_failed = 0;
   t->ix = indexer_start(t->app->loop, &t->app->db, &o, ix_progress, ix_done, t, &err);
   if (!t->ix) {

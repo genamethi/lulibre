@@ -2,10 +2,12 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 #include "core/util.h"
 #include "doc/doc.h"
+#include "index/ocr.h"
 #include "index/outcome.h"
 
 struct job {
@@ -15,6 +17,8 @@ struct job {
   char *path, *format;
   long long size, mtime;
   struct doc_info info;
+  enum file_outcome outcome; /* set on the worker */
+  int ocr_pages;             /* pages OCR read, 0 when it did not */
 };
 
 struct indexer {
@@ -22,6 +26,8 @@ struct indexer {
   struct db *db;
   struct index_opts o;
   struct doc_opts dopts;
+  char *ocr_lang;  /* o.ocr_lang's copy */
+  char *tesseract; /* NULL: no OCR reader */
   indexer_cb *progress, *done;
   void *ud;
 
@@ -90,12 +96,6 @@ static void flush_para(struct indexer *ix, sqlite3_int64 first, sbuf *para) {
   sb_reset(para);
 }
 
-/* What reading the file came to. */
-static enum file_outcome outcome_of(const struct doc_info *d) {
-  if (d->error) return OUT_UNREADABLE;
-  return doc_text_usable(d->nchars, d->garbled, d->quality) ? OUT_READ : OUT_OCR_UNAVAILABLE;
-}
-
 /* Inside a transaction (txn_begin). The lines replace the file's lines, and
  * each paragraph is a row of paragraphs_fts: a paragraph starts at a line
  * flagged LINE_BLOCK, and at the first line of each page. */
@@ -142,7 +142,7 @@ static void store(struct indexer *ix, struct job *j) {
   sqlite3_stmt *u = ix->upd_file;
   sqlite3_bind_int64(u, 1, j->size);
   sqlite3_bind_int64(u, 2, j->mtime);
-  sqlite3_bind_int(u, 3, outcome_of(d));
+  sqlite3_bind_int(u, 3, j->outcome);
   bind_text(u, 4, d->error);
   sqlite3_bind_int(u, 5, d->npages);
   sqlite3_bind_int(u, 6, ix->dopts.pages);
@@ -150,12 +150,17 @@ static void store(struct indexer *ix, struct job *j) {
   sqlite3_bind_double(u, 8, d->quality);
   sqlite3_bind_double(u, 9, d->garbled);
   for (int k = 0; k < DOC_META_N; k++) bind_text(u, 10 + k, d->meta[k]);
-  sqlite3_bind_int64(u, 10 + DOC_META_N, j->file);
+  if (j->ocr_pages) {
+    sqlite3_bind_int(u, 10 + DOC_META_N, j->ocr_pages);
+    sqlite3_bind_text(u, 11 + DOC_META_N, ix->ocr_lang, -1, SQLITE_TRANSIENT);
+  }
+  sqlite3_bind_int64(u, 12 + DOC_META_N, j->file);
   run(u);
 
   ix->st.chars += d->nchars;
   if (d->error) ix->st.failed++;
   else ix->st.ok++;
+  if (j->ocr_pages) ix->st.ocr++;
 
   if (++ix->since_commit >= 200 || now_s() - ix->last_commit > 1.0) txn_commit(ix);
 }
@@ -179,9 +184,59 @@ static void finish(struct indexer *ix) {
   if (ix->done) ix->done(ix, &ix->st, ix->ud);
 }
 
+static int usable(const struct doc_info *d) {
+  return doc_text_usable(d->nchars, d->garbled, d->quality);
+}
+
+/* OCR's reading of the file's first pages, in place of the file's own text
+ * when OCR's is usable or the file's is not. */
+static void ocr_step(struct indexer *ix, struct job *j) {
+  struct doc_info *d = &j->info;
+  int n = d->n < ix->o.ocr_pages ? d->n : ix->o.ocr_pages;
+  struct doc_info o = {.npages = d->npages, .n = n};
+  o.pages = xcalloc((size_t)(n ? n : 1), sizeof *o.pages);
+  int read = 0;
+  for (int i = 0; i < n; i++) {
+    struct doc_page *pg = &o.pages[i];
+    pg->no = d->pages[i].no;
+    pg->w = d->pages[i].w;
+    pg->h = d->pages[i].h;
+    char *err = NULL;
+    if (ocr_page(ix->tesseract, j->path, pg->no - 1, ix->ocr_lang, pg, &err) == 0) read++;
+    else free(err); /* a page OCR could not read is a page without text */
+  }
+  doc_measure(&o);
+  if (read && (usable(&o) || !usable(d))) {
+    for (int k = 0; k < DOC_META_N; k++) o.meta[k] = d->meta[k], d->meta[k] = NULL;
+    doc_info_free(d);
+    *d = o;
+    j->ocr_pages = read;
+    j->outcome = usable(d) ? OUT_READ_OCR : OUT_OCR_NO_HELP;
+  } else {
+    doc_info_free(&o);
+    if (!usable(d)) j->outcome = read ? OUT_OCR_NO_HELP : OUT_OCR_UNAVAILABLE;
+  }
+}
+
+/* On a worker: extraction judges the text, and OCR reads the pages that
+ * need it; one reading is stored. */
 static void work_cb(uv_work_t *req) {
   struct job *j = req->data;
-  doc_extract(j->path, j->format, &j->ix->dopts, &j->info);
+  struct indexer *ix = j->ix;
+  doc_extract(j->path, j->format, &ix->dopts, &j->info);
+  if (j->info.error) {
+    j->outcome = OUT_UNREADABLE;
+    return;
+  }
+  /* a text file's text is the text: nothing to judge, nothing to OCR */
+  if (!strcasecmp(j->format, "txt") || !strcasecmp(j->format, "md")) {
+    j->outcome = OUT_READ;
+    return;
+  }
+  int good = usable(&j->info);
+  j->outcome = good ? OUT_READ : OUT_OCR_UNAVAILABLE;
+  int want = ix->o.ocr == OCR_ALWAYS || (ix->o.ocr == OCR_AUTO && !good);
+  if (want && ix->tesseract && ix->o.ocr_pages > 0) ocr_step(ix, j);
 }
 
 static void stored(struct indexer *ix, struct job *j) {
@@ -270,7 +325,7 @@ static void idle_finish(uv_idle_t *h) {
 
 static int plan(struct indexer *ix, char **err) {
   sbuf sql = SBUF_INIT;
-  sb_puts(&sql, "SELECT f.id, f.path, f.format, f.size, f.mtime, f.outcome, f.req_pages FROM files f");
+  sb_puts(&sql, "SELECT f.id, f.path, f.format, f.size, f.mtime, f.outcome, f.req_pages, f.ocr_pages FROM files f");
   if (ix->o.only)
     sb_printf(&sql, " WHERE f.book IN (SELECT b.id FROM books b WHERE %s)", ix->o.only->where);
   sb_puts(&sql, " ORDER BY f.id");
@@ -302,10 +357,13 @@ static int plan(struct indexer *ix, char **err) {
                sqlite3_column_int64(st, 3) == (sqlite3_int64)sb.st_size &&
                sqlite3_column_int64(st, 4) == (sqlite3_int64)sb.st_mtime;
     int enough = sqlite3_column_int(st, 6) >= ix->o.pages;
+    /* OCR on now, for a file that wanted it, or for every file */
+    int ocr_now = ix->tesseract && ((outcome == OUT_OCR_UNAVAILABLE && ix->o.ocr != OCR_NEVER) ||
+                                    (outcome == OUT_READ && ix->o.ocr == OCR_ALWAYS && !sqlite3_column_int(st, 7)));
     if (outcome == OUT_NO_TEXT) { ix->st.current++; continue; } /* marked so: nothing retries it */
     if (!ix->o.force && same) {
       if (outcome == OUT_UNREADABLE && !ix->o.retry) { ix->st.current++; continue; }
-      if (outcome != OUT_PENDING && outcome != OUT_MISSING && outcome != OUT_UNREADABLE && enough) {
+      if (outcome != OUT_PENDING && outcome != OUT_MISSING && outcome != OUT_UNREADABLE && enough && !ocr_now) {
         ix->st.current++;
         continue;
       }
@@ -352,6 +410,9 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
   ix->o = *o;
   if (ix->o.inflight < 1) ix->o.inflight = 4;
   ix->dopts = (struct doc_opts){o->pages, 0};
+  ix->ocr_lang = xstrdup(o->ocr_lang && o->ocr_lang[0] ? o->ocr_lang : "eng");
+  ix->o.ocr_lang = ix->ocr_lang;
+  if (o->ocr != OCR_NEVER) ix->tesseract = ocr_find();
   ix->progress = progress;
   ix->done = done;
   ix->ud = ud;
@@ -370,8 +431,8 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
                  "UPDATE files SET size = ?, mtime = ?, outcome = ?, error = ?, npages = ?,"
                  " req_pages = ?, nchars = ?, quality = ?, garbled = ?,"
                  " emb_title = ?, emb_author = ?, emb_subject = ?, emb_keywords = ?,"
-                 " emb_creator = ?, emb_producer = ?, indexed_at = strftime('%s', 'now')"
-                 " WHERE id = ?",
+                 " emb_creator = ?, emb_producer = ?, ocr_pages = ?, ocr_lang = ?,"
+                 " indexed_at = strftime('%s', 'now') WHERE id = ?",
                  &ix->upd_file, err) ||
       plan(ix, err)) {
     indexer_free(ix);
@@ -406,5 +467,7 @@ void indexer_free(struct indexer *ix) {
   sqlite3_finalize(ix->ins_para);
   sqlite3_finalize(ix->ins_line);
   sqlite3_finalize(ix->upd_file);
+  free(ix->ocr_lang);
+  free(ix->tesseract);
   free(ix);
 }

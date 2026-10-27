@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "core/queue.h"
+#include "index/indexer.h"
 #include "core/util.h"
 #include "lua/lapi.h"
 
@@ -72,6 +73,15 @@ int app_jobs(const struct app *app) {
   if (n < 1) n = 1;
   if (n > 64) n = 64;
   return n;
+}
+
+void app_index_opts(const struct app *app, struct index_opts *o) {
+  o->pages = (int)app_int(app, S_PAGES);
+  const char *ocr = app_str(app, S_OCR);
+  o->ocr = !strcmp(ocr, "auto") ? OCR_AUTO : !strcmp(ocr, "always") ? OCR_ALWAYS : OCR_NEVER;
+  o->ocr_pages = (int)app_int(app, S_OCR_PAGES);
+  o->ocr_lang = app_str(app, S_OCR_LANG);
+  o->inflight = app_jobs(app) + app_jobs(app) / 2;
 }
 
 char *app_index_path(const struct app *app) {

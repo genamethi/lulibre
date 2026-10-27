@@ -80,8 +80,7 @@ static int start_ui(lua_State *L) {
   struct app *app = w->app;
   struct index_opts o = {0};
   app_open_db(app);
-  o.pages = (int)app_int(app, S_PAGES); /* the interface thread (ui_call) */
-  o.inflight = app_jobs(app) + app_jobs(app) / 2;
+  app_index_opts(app, &o); /* the main thread */
   if (lua_istable(L, 1)) {
     lua_getfield(L, 1, "pages"); /* read this many pages of each file, not the option's number */
     if (lua_isinteger(L, -1) && lua_tointeger(L, -1) > 0) {

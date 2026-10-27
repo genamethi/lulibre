@@ -66,27 +66,34 @@ void doc_extract(const char *path, const char *format, const struct doc_opts *o,
   if (is_djvu) doc_djvu_extract(path, o, out);
   else if (!is_text) doc_mupdf_extract(path, o, out); /* pdf, epub, fb2, mobi, xps, cbz */
   if (out->error) return;
+  doc_measure(out);
+}
 
+void doc_measure(struct doc_info *d) {
   sbuf all = SBUF_INIT;
-  for (int i = 0; i < out->n; i++) {
-    sb_puts(&all, out->pages[i].text ? out->pages[i].text : "");
+  for (int i = 0; i < d->n; i++) {
+    sb_puts(&all, d->pages[i].text ? d->pages[i].text : "");
     sb_putc(&all, '\n');
   }
-  out->quality = doc_text_quality(all.s ? all.s : "", &out->nchars, &out->garbled);
+  d->quality = doc_text_quality(all.s ? all.s : "", &d->nchars, &d->garbled);
   sb_free(&all);
+}
+
+void doc_page_free(struct doc_page *pg) {
+  for (int j = 0; j < pg->nlines; j++) {
+    free(pg->lines[j].text);
+    free(pg->lines[j].math);
+  }
+  free(pg->lines);
+  free(pg->text);
+  pg->lines = NULL;
+  pg->text = NULL;
+  pg->nlines = pg->cap = 0;
 }
 
 void doc_info_free(struct doc_info *d) {
   for (int i = 0; i < DOC_META_N; i++) free(d->meta[i]);
-  for (int i = 0; i < d->n; i++) {
-    struct doc_page *pg = &d->pages[i];
-    for (int j = 0; j < pg->nlines; j++) {
-      free(pg->lines[j].text);
-      free(pg->lines[j].math);
-    }
-    free(pg->lines);
-    free(pg->text);
-  }
+  for (int i = 0; i < d->n; i++) doc_page_free(&d->pages[i]);
   free(d->pages);
   free(d->error);
   memset(d, 0, sizeof *d);

@@ -55,6 +55,10 @@ struct doc_opts {
 void doc_extract(const char *path, const char *format, const struct doc_opts *o,
                  struct doc_info *out);
 void doc_info_free(struct doc_info *d);
+/* nchars, quality and garbled, from the pages' text. */
+void doc_measure(struct doc_info *d);
+/* Frees a page's lines and text; its number and size stay. */
+void doc_page_free(struct doc_page *pg);
 
 /* One page rendered to pixels, `width` pixels wide. page is 0-based. aspect
  * is the height/width of one output pixel: 1 for real pixels, more when the

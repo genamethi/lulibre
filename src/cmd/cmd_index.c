@@ -91,8 +91,7 @@ int cmd_index(struct app *app, int argc, char **argv) {
   }
 
   app_open_db(app);
-  o.pages = (int)app_int(app, S_PAGES);
-  o.inflight = app_jobs(app) + app_jobs(app) / 2;
+  app_index_opts(app, &o); /* the main thread */
 
   struct query q = {0};
   if (filter.len) {
