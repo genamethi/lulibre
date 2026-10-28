@@ -50,8 +50,10 @@ struct uv_loop_s *lapi_loop(struct lua_State *L);
 /* Show a message from Lua land: the message line and log in the interface,
  * stderr otherwise. level: 0 info, 1 error. From either thread. */
 void lapi_report(struct app *app, int level, const char *msg);
-/* The set of tasks changed; lets the interface redraw its indicator. */
-void lapi_tasks_changed(struct app *app);
+/* The set of tasks changed: the list goes to the interface, for :tasks and
+ * its indicator. */
+struct sched_task_list;
+void lapi_tasks_changed(struct app *app, struct sched_task_list *list); /* takes list */
 
 /* Load and start a script as a task. args are passed as `...`. Returns the
  * task id, or 0 with *err set. On the thread that owns the Lua state. */

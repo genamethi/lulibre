@@ -107,8 +107,18 @@ void lapi_report(struct app *app, int level, const char *msg) {
   queue_post(LOOP_UI, report_ui, r);
 }
 
-void lapi_tasks_changed(struct app *app) {
-  bridge_redraw(app);
+/* The task list as last sent (lua/sched.h), the interface thread's: :tasks
+ * shows it at once, since a task that runs reads no message. */
+static struct sched_task_list *tasks_seen;
+
+static void tasks_arrived(struct app *app, void *arg) {
+  free(tasks_seen);
+  tasks_seen = arg;
+  if (app->tui) tui_dirty(app->tui);
+}
+
+void lapi_tasks_changed(struct app *app, struct sched_task_list *list) {
+  queue_post(LOOP_UI, tasks_arrived, list);
 }
 
 /* Most of what follows touches the interface, so it runs there (design
@@ -1008,33 +1018,20 @@ static int l_log(lua_State *L) {
   return 0;
 }
 
-static void tasks_pager_ui(struct app *app, void *arg) {
-  if (app->tui && app->tui->nc) tui_pager(app->tui, "tasks", arg);
-  free(arg);
-}
-
-static void list_tasks(struct app *app, void *arg) {
-  lua_State *L = app->L;
+static void c_tasks(struct tui *t, const char *args) {
   sbuf out = SBUF_INIT;
-  sched_push_tasks(L);
-  lua_Integer n = (lua_Integer)lua_rawlen(L, -1);
-  for (lua_Integer i = 1; i <= n; i++) {
-    lua_rawgeti(L, -1, i);
-    lua_getfield(L, -1, "id");
-    lua_getfield(L, -2, "state");
-    lua_getfield(L, -3, "name");
-    sb_printf(&out, "  %-4d %-10s %s\n", (int)lua_tointeger(L, -3), lua_tostring(L, -2),
-              lua_tostring(L, -1));
-    lua_pop(L, 4);
+  int running = sched_running_id();
+  for (int i = 0; tasks_seen && i < tasks_seen->n; i++) {
+    char state[32];
+    if (tasks_seen->task[i].cancelled) snprintf(state, sizeof state, "cancelling");
+    else if (tasks_seen->task[i].id == running) snprintf(state, sizeof state, "running %.1f s", sched_running_ms() / 1000.0);
+    else snprintf(state, sizeof state, "waiting");
+    sb_printf(&out, "  %-4d %-14s %s\n", tasks_seen->task[i].id, state, tasks_seen->task[i].name);
   }
-  lua_pop(L, 1);
   if (!out.len) sb_puts(&out, "no tasks are running\n");
   else sb_puts(&out, "\n:cancel ID stops one; :cancel all stops every task.\n");
-  queue_post(LOOP_UI, tasks_pager_ui, sb_take(&out));
-}
-
-static void c_tasks(struct tui *t, const char *args) {
-  queue_post(LOOP_LUA, list_tasks, NULL);
+  tui_pager(t, "tasks", out.s);
+  sb_free(&out);
 }
 
 static void cancel_tasks(struct app *app, void *arg) {

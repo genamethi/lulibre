@@ -82,6 +82,16 @@ void sched_signalled(void);
  * task resumes is reached by the hook too. */
 void sched_open_coroutines(struct lua_State *L);
 
+/* The tasks as they were at the last change, for the interface: sent with
+ * lapi_tasks_changed, the receiver's to free. */
+struct sched_task_list {
+  int n;
+  struct {
+    int id, cancelled;
+    char name[64];
+  } task[];
+};
+
 /* Push an array of {id=, name=, state=} onto L. */
 void sched_push_tasks(struct lua_State *L);
 int sched_current_id(struct lua_State *L); /* 0 outside a task */

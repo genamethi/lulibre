@@ -91,6 +91,21 @@ static void enqueue(struct sched *s, struct task *t) {
   }
 }
 
+/* The task list as the interface shows it (:tasks), sent at each change:
+ * it cannot ask the Lua thread while a task runs. */
+static void publish(struct sched *s) {
+  int n = 0;
+  for (struct task *t = s->all; t; t = t->next) n++;
+  struct sched_task_list *l = xcalloc(1, sizeof *l + (size_t)n * sizeof l->task[0]);
+  for (struct task *t = s->all; t; t = t->next) {
+    l->task[l->n].id = t->id;
+    l->task[l->n].cancelled = t->cancelled;
+    snprintf(l->task[l->n].name, sizeof l->task[l->n].name, "%s", t->name);
+    l->n++;
+  }
+  lapi_tasks_changed(s->app, l);
+}
+
 static void task_free(struct task *t) {
   free(t->name);
   free(t);
@@ -118,7 +133,7 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
       *p = t->next;
       break;
     }
-  lapi_tasks_changed(s->app);
+  publish(s);
   if (t->pending == 0) {
     task_free(t);
   } else { /* freed when its last wait ends */
@@ -302,7 +317,7 @@ int sched_spawn(lua_State *L, int nargs, const char *name) {
   s->live++;
   enqueue(s, t);
   log_debug("task %d started: %s", t->id, t->name);
-  lapi_tasks_changed(app);
+  publish(s);
   return t->id;
 }
 
@@ -510,6 +525,7 @@ void sched_on_cancel(struct task *t, sched_cancel_fn *fn, void *ud) {
 static void cancel(struct sched *s, struct task *t) {
   if (t->cancelled || t->state == T_DONE) return;
   t->cancelled = 1;
+  publish(s);
   if (t->state == T_READY) {
     enqueue(s, t); /* finished the next time it would have run */
   } else if (t->cancel_fn) {
