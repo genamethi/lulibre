@@ -325,11 +325,20 @@ ASK(l_filter, "filter")
  * The picker lives on the interface thread and the waiting task on the Lua
  * thread: the picker is built over there, its answer is sent back here. */
 
+/* Which lua_State a reference belongs to: one more at each restart, so a
+ * message about a reference into the old state is dropped. */
+static atomic_uint generation;
+
+void lapi_new_generation(void) {
+  atomic_fetch_add(&generation, 1);
+}
+
 struct pwait {
   struct app *app;
   struct task *task;
   struct tui *t; /* set on the interface thread when the picker opens */
   int items_ref;
+  unsigned gen; /* the lua_State items_ref is in */
 };
 
 struct pdone {
@@ -353,7 +362,7 @@ static void pick_done(struct app *app, void *arg) { /* Lua thread */
       sched_wake(w->task, 1);
     }
   }
-  luaL_unref(app->L, LUA_REGISTRYINDEX, w->items_ref);
+  if (w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->items_ref);
   free(w);
   free(d);
 }
@@ -429,6 +438,7 @@ static int l_pick(lua_State *L) {
   sched_require_task(L);
   if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct pwait *w = xcalloc(1, sizeof *w);
+  w->gen = atomic_load(&generation);
   w->app = lapi_app(L);
   lua_settop(L, 2);
   lua_pushvalue(L, 1);
@@ -448,6 +458,7 @@ struct iwait {
   struct task *task;
   struct tui *t;
   int change_ref; /* registry ref of on_change, or LUA_NOREF */
+  unsigned gen;   /* the lua_State change_ref is in */
 };
 
 struct itext {
@@ -466,9 +477,9 @@ static void input_event(struct app *app, void *arg) { /* Lua thread */
       else lua_pushnil(L);
       sched_wake(w->task, 1);
     }
-    luaL_unref(app->L, LUA_REGISTRYINDEX, w->change_ref);
+    if (w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->change_ref);
     free(w);
-  } else if (w->change_ref != LUA_NOREF) {
+  } else if (w->change_ref != LUA_NOREF && w->gen == atomic_load(&generation)) {
     /* on_change runs on the main state, between keystrokes: it cannot wait */
     lua_State *L = app->L;
     lua_rawgeti(L, LUA_REGISTRYINDEX, w->change_ref);
@@ -561,6 +572,7 @@ static int l_input(lua_State *L) {
   sched_require_task(L);
   if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct iwait *w = xcalloc(1, sizeof *w);
+  w->gen = atomic_load(&generation);
   w->app = lapi_app(L);
   w->change_ref = LUA_NOREF;
   lua_settop(L, 1);
@@ -789,14 +801,6 @@ int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char
 /* A command or key's function, run as a task with what the interface was
  * at when it was invoked (design 4, 34): fn{ name=, args=, book=,
  * selection = { id, ... } }. */
-/* Which lua_State a reference belongs to: one more at each restart, so a
- * message about a reference into the old state is dropped. */
-static atomic_uint generation;
-
-void lapi_new_generation(void) {
-  atomic_fetch_add(&generation, 1);
-}
-
 struct spawn_req {
   int ref;
   unsigned gen;
