@@ -15,17 +15,16 @@ Needs a C compiler, pkgconf and the development files of **libuv**,
 
     ./configure
     make                # build/lulibre, and build/lulibre-setup
-    make check          # optional: unit tests and a quick end-to-end test
+    make check          # optional: unit tests and the runtime's tests
 
 At run time:
 
 | For | Needs |
 |---|---|
 | changing the library | calibre's `calibredb` |
-| the sync folder, orphans, onboarding | the `luv` rock, on Lua's path or under `mod_tree`; `make rocks` installs it into the user-level tree, which `mod_tree = "~/.luarocks"` names |
 | OCR | `tesseract` |
-| looking books up (`:enrich`), fetching the databases below | `curl` |
-| arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
+| looking books up (`:enrich`) | `curl` |
+| grammars | the `lpeg` rock |
 
 `pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).
 
@@ -33,51 +32,23 @@ At run time:
 
 ## Set up
 
-    build/lulibre-setup
-
-One screen holds the choices of a setup. Basic: the level (user, under
-`~/.local`, or system, under `/usr/local`), pixi or not, the library, the
-content server and its password file. Advanced: the install prefix, luv,
-and every other option of lulibre's. The choices stay in `setup.conf`, in
-lulibre's folder, between runs. Install now hands the terminal to
-`setup/install.sh`, which shows each command before running it; sudo is
-used only by a system-level install. `sh setup/install.sh -n` lists the
-commands a plan would run.
-
-By hand, the same steps:
-
     make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
-    lulibre config --write        # writes ~/.config/lulibre/init.lua, every option commented
-    $EDITOR ~/.config/lulibre/init.lua
 
-Set at least the library. If you run calibre's content server, give its
-address and account and changes go through it; without one, lulibre changes
-the library folder directly.
+lulibre needs only to know where the library is: `-L DIR`,
+`$LULIBRE_LIBRARY`, or in `~/.config/lulibre/init.lua`:
 
 ```lua
-local o = lulibre.o
-o.library = "~/calibre-library"
-o.server = "http://127.0.0.1:8080"          -- optional
-o.user = "me"
-o.password_file = "~/.config/calibre/password-file"
+setman.set("library", "~/calibre-library")
+setman.set("server", "http://127.0.0.1:8080")          -- optional: calibre's content server
+setman.set("user", "me")
+setman.set("password_file", "~/.config/calibre/password-file")
 ```
 
+When calibre's content server has the library open, changes go through it;
+when nothing has it open, straight to the folder. lulibre never reads the
+password: calibredb gets the file's name.
+
     lulibre index                 # first run: a few seconds per thousand files
-
-Optional, now or any time later: databases for looking books up without
-asking anybody.
-
-    lulibre datasets              # says what there is and asks which to fetch
-
-| Dataset | Useful if you have | Size |
-|---|---|---|
-| `arxiv` | arXiv preprints | 1.7 GB to fetch, 5.6 GB on disk |
-| `openlibrary` | books with an ISBN | 9.7 GB |
-| `zbmath` | arXiv preprints in mathematics | 37 MB |
-
-They go in `~/.local/share/lulibre`. Run it again to renew them: what is
-here and fresh is left alone. Files you fetched yourself are taken up with
-`lulibre datasets add FILE...`. More in [docs/workflows.md](docs/workflows.md).
 
 ## Use
 
@@ -88,19 +59,15 @@ here and fresh is left alone. Files you fetched yourself are taken up with
 | `j` `k` `gg` `G` `<C-d>` `<C-u>` | move |
 | `/` then `n` `N` | search, next, previous |
 | `&` · `<BS>` | narrow the list as you type · show everything |
-| `f` `ga` `gs` · `gt` | fuzzy-find a book, author, subject · browse as a tree |
+| `f` `ga` `gs` | fuzzy-find a book, author, subject |
+| `gh` | the list as a tree: by author, subject, series, publisher, year, format |
 | `Space` · `V` | mark · select a range |
-| `e` | edit the selection, with ranked suggestions; `w` writes |
-| `gc` | capture fields from file names or titles by pattern |
-| `gr` | review proposed changes, surest first; `x` shows a book's other fields |
-| `gT` | titles in CAPITALS to title case |
-| `?` | every key: of the interface, or inside a panel, of that panel |
+| `e` | edit the selection; `w` writes |
+| `gp` · `gr` | propose metadata from the files · review the proposals |
 | `u` | undo the last change |
+| `?` | every key: of the interface, or inside a panel, of that panel |
 | `J` `K` `[` `]` · `P` | scroll and page the preview · text ⇄ page image |
 | mouse | click a row; wheel scrolls; drag over text anywhere to copy it, `<C-v>` pastes it into a field; drag the line between windows to resize |
-| `gd` · `go` | duplicate files (MD5) · orphaned records, files and links |
-| `gS` `S` `X` · `gl` | the sync folder: show, add, add-and-remove · back to the library |
-| `yb` `yk` `yp` | copy BibTeX, cite keys, paths |
 | `` ` `` · `:` · `q` | log console · command line · quit |
 
 Most actions apply to the selection: the range being selected, else the
@@ -114,25 +81,18 @@ From the shell:
     lulibre query 'author:unknown subject:number-theory'
     lulibre query -c 'text:"class field" year:>1990'
     lulibre show 1299                               # one book: metadata, file, indexed text
-    lulibre bib 'tag:math/algebra' > algebra.bib
-    lulibre run propose 'no:author'                 # read title pages; fills the review queue
-    lulibre dupes                                   # books whose files are byte-identical
-    lulibre orphans                                 # records with no file, files with no record
-    lulibre sync                                    # what is waiting in the sync folder
+    lulibre -o ocr=auto index                       # read the files, with OCR where their text is not usable
 
 In the interface:
 
-- **Label unknown books.** `&author:unknown`, then `:run propose`, then `gr`:
-  `a` accepts, `e` corrects, `A` accepts everything above a confidence, `w`
-  writes.
-- **Pull fields out of names.** Select books, `gc`, type
-  `%author% - %title% (%year%)`; the table follows your typing. `w` writes.
+- **Label unknown books.** `&author:unknown`, mark them, `gp`, then `gr`:
+  `a` accepts, `e` corrects, `r` rejects, Space shows the next alternative.
+- **Look them up.** Books with a DOI, ISBN or arXiv number: `:enrich`; the
+  answers propose too.
 - **Fix one thing on many books.** Mark them, `e`, `Enter` on *tags*, type
   `+math/topology, -misc`, `w`.
-- **Take in new files.** Set `o.sync_dir`, press `gS`, fix what needs fixing,
-  select all (`ggVG`) and `X`.
 
-A script is Lua with one table, `lulibre`:
+A script is Lua:
 
 ```lua
 -- ~/.config/lulibre/scripts/no-date.lua  —  :run no-date
@@ -148,7 +108,7 @@ end
 - Inside tmux the page-image preview (`P`) is drawn with block characters;
   tmux does not pass graphics through. Run directly in a terminal with the
   kitty graphics protocol, such as ghostty, lulibre asks notcurses for real
-  pixels (tested in ghostty); `lulibre.o.blitter = "sextant"` forces block
+  pixels (tested in ghostty); `setman.set("blitter", "sextant")` forces block
   characters if it misbehaves.
 
 ## Documentation
@@ -157,10 +117,10 @@ Inside lulibre, `?` shows the keys under headings (with a search), and
 `:help TOPIC` shows what these guides say about a word. `man lulibre`
 covers the command line.
 
-- [Workflows](docs/workflows.md) — editing, review, capture, duplicates, orphans, the sync folder, BibTeX, OCR
+- [Workflows](docs/workflows.md) — reading the files and OCR, editing, proposals and review, online lookups
 - [Filters](docs/filters.md) — the query language
 - [Keys and commands](docs/keys.md)
-- [Configuration](docs/configuration.md) — options, colours, key maps
+- [Configuration](docs/configuration.md) — settings, colours, key maps
 - [Lua API](docs/api.md)
 - [Development](docs/development.md) — builds, tests, source layout, releasing
 

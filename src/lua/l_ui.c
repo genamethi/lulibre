@@ -934,15 +934,21 @@ static void c_run(struct tui *t, const char *args) {
   picker_open(t, p);
 }
 
+/* :lua CODE: lulibre.eval.run(CODE) as a task */
 static void eval_line(struct app *app, void *arg) {
   lua_State *L = app->L;
-  lua_getglobal(L, "lulibre");
-  lua_getfield(L, -1, "_eval");
-  lua_remove(L, -2);
-  if (!lua_isfunction(L, -1)) {
+  if (!L) {
+    free(arg);
+    return;
+  }
+  lua_getglobal(L, "require");
+  lua_pushliteral(L, "lulibre.eval");
+  if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+    lapi_report(app, 1, lua_tostring(L, -1));
     lua_pop(L, 1);
-    lapi_report(app, 1, "the Lua runtime files were not found; :lua is unavailable");
   } else {
+    lua_getfield(L, -1, "run");
+    lua_remove(L, -2);
     lua_pushstring(L, arg);
     sched_spawn(L, 1, ":lua");
   }

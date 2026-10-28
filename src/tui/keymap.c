@@ -329,10 +329,8 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "<Leader><Space>", "mark none"},
     {MODE_NORMAL, "gr", "review"},
     {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
-    {MODE_NORMAL, "gC", "source config"},
     /* the sync folder (lua/lulibre/sync.lua) */
     {MODE_NORMAL, "1", "source library"},
-    {MODE_NORMAL, "3", "source config"},
     {MODE_NORMAL, "gl", "source library"},
     {MODE_NORMAL, "u", "undo"},
     /* misc */
