@@ -16,25 +16,22 @@ enum event_kind {
   EV_RECORDS_CHANGED, /* lulibre's writes and changes found in calibre */
   EV_HOLDER,          /* the library's holder (library.h) */
   EV_SOURCE_ARRIVED,  /* an online answer for a book */
-  EV_TASKS,           /* tasks started or ended */
   EV_KINDS
 };
 
 /* The payload, by kind:
  *   EV_CURSOR           book
  *   EV_MARKS            selection
- *   EV_RECORDS_CHANGED  ids, fields, files (new or changed: the indexer's trigger)
+ *   EV_RECORDS_CHANGED  ids; fields, those lulibre changed (none when the
+ *                       change was made outside lulibre)
  *   EV_HOLDER           holder
- *   EV_SOURCE_ARRIVED   book, service
- *   EV_TASKS            nothing */
+ *   EV_SOURCE_ARRIVED   book, service */
 struct event {
   enum event_kind kind;
   long long *ids;
   int nids;
   char **fields;
   int nfields;
-  long long *files;
-  int nfiles;
   long long book;
   long long *selection;
   int nselection;

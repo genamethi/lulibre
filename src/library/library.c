@@ -44,7 +44,16 @@ struct batch {
   int embedding;
   library_done *done;
   void *ud;
+  struct library *lib;
   struct batch *next_batch;
+};
+
+/* One who asked for calibre's records to be read again. */
+struct reload_wait {
+  library_reloaded *fn;
+  void *ud;
+  int force;
+  struct reload_wait *next;
 };
 
 struct library {
@@ -54,6 +63,8 @@ struct library {
   int ours; /* calibredb runs of ours straight on the folder: they take calibre's lock too */
   struct batch *head, *tail;
   int said_waiting;
+  struct reload_wait *waiting; /* for the next reading of the records */
+  int reloading, closing, probe_closed;
 };
 
 /* ---- the holder ---- */
@@ -516,27 +527,141 @@ static void batch_free(struct batch *b) {
   free(b);
 }
 
-/* The records changed: the index reads calibre's again, and says so. */
-static void records_changed(struct library *lib, struct batch *b) {
-  char *err = NULL;
-  if (db_mirror(&lib->app->db, b->library_dir, 1, &err) < 0) {
-    log_warn("reading calibre's records again: %s", err);
-    free(err);
+/* ---- reading calibre's records again, on a worker with a connection of
+ * its own: a copy takes a third of a second for a couple of thousand books,
+ * which the interface does not wait for ---- */
+
+struct reload {
+  uv_work_t req;
+  struct library *lib;
+  char *index, *library_dir;
+  int force, rc;
+  char *err;
+  long long *ids; /* the books the copy found changed */
+  int nids;
+  struct reload_wait *waits;
+};
+
+static void reload_work(uv_work_t *req) {
+  struct reload *r = req->data;
+  struct db db;
+  if (db_open_writer(&db, r->index, &r->err)) {
+    r->rc = -1;
+    return;
   }
-  if (!events_wanted(EV_RECORDS_CHANGED)) return;
+  r->rc = db_mirror(&db, r->library_dir, r->force, &r->err);
+  if (r->rc > 0) r->ids = db_mirror_changed(&db, &r->nids);
+  db_close(&db);
+}
+
+static void batch_reloaded(int rc, const char *err, void *ud);
+
+static void add_id(struct event *ev, long long id) {
+  for (int i = 0; i < ev->nids; i++)
+    if (ev->ids[i] == id) return;
+  ev->ids = xrealloc(ev->ids, (size_t)(ev->nids + 1) * sizeof *ev->ids);
+  ev->ids[ev->nids++] = id;
+}
+
+static void add_field(struct event *ev, const char *field) {
+  for (int i = 0; i < ev->nfields; i++)
+    if (!strcmp(ev->fields[i], field)) return;
+  ev->fields = xrealloc(ev->fields, (size_t)(ev->nfields + 1) * sizeof *ev->fields);
+  ev->fields[ev->nfields++] = xstrdup(field);
+}
+
+/* EV_RECORDS_CHANGED for a reading: the books it found changed and the
+ * batches' books, with the fields the batches changed; NULL when none. */
+static struct event *changed_event(const struct reload *r) {
+  if (!events_wanted(EV_RECORDS_CHANGED)) return NULL;
   struct event *ev = xcalloc(1, sizeof *ev);
   ev->kind = EV_RECORDS_CHANGED;
-  ev->ids = xcalloc((size_t)b->nbooks + 1, sizeof *ev->ids);
-  ev->fields = xcalloc(16, sizeof *ev->fields);
-  for (int i = 0; i < b->nbooks; i++) {
-    ev->ids[ev->nids++] = b->books[i].book;
-    for (int k = 0; k < b->books[i].n; k++) {
-      int seen = 0;
-      for (int f = 0; f < ev->nfields && !seen; f++) seen = !strcmp(ev->fields[f], b->books[i].fields[k]);
-      if (!seen && ev->nfields < 16) ev->fields[ev->nfields++] = xstrdup(b->books[i].fields[k]);
+  for (int i = 0; i < r->nids; i++) add_id(ev, r->ids[i]);
+  for (struct reload_wait *w = r->waits; w; w = w->next) {
+    if (w->fn != batch_reloaded) continue;
+    const struct batch *b = w->ud;
+    for (int i = 0; i < b->nbooks; i++) {
+      add_id(ev, b->books[i].book);
+      for (int k = 0; k < b->books[i].n; k++) add_field(ev, b->books[i].fields[k]);
     }
   }
-  events_post(ev);
+  if (!ev->nids) {
+    events_free(ev);
+    return NULL;
+  }
+  return ev;
+}
+
+static void reload_start(struct library *lib);
+
+static void reload_after(uv_work_t *req, int status) {
+  struct reload *r = req->data;
+  struct library *lib = r->lib;
+  lib->reloading = 0;
+  if (r->rc < 0) log_warn("reading calibre's records again: %s", r->err);
+  struct event *ev = lib->closing ? NULL : changed_event(r);
+  for (struct reload_wait *w = r->waits, *n; w; w = n) {
+    n = w->next;
+    if (!lib->closing) w->fn(r->rc, r->err, w->ud);
+    else if (w->fn == batch_reloaded) batch_free(w->ud);
+    free(w);
+  }
+  /* after the batches' callbacks: the files they embedded into are known */
+  if (ev) events_post(ev);
+  free(r->ids);
+  free(r->err);
+  free(r->index);
+  free(r->library_dir);
+  free(r);
+  if (lib->closing) {
+    if (lib->probe_closed) free(lib);
+  } else if (lib->waiting) {
+    reload_start(lib);
+  }
+}
+
+static void reload_start(struct library *lib) {
+  struct app *app = lib->app;
+  struct reload *r = xcalloc(1, sizeof *r);
+  r->req.data = r;
+  r->lib = lib;
+  r->index = xstrdup(app->db.path);
+  char *real = realpath(app_str(app, S_LIBRARY), NULL);
+  r->library_dir = real ? real : xstrdup(app_str(app, S_LIBRARY));
+  r->waits = lib->waiting;
+  lib->waiting = NULL;
+  for (struct reload_wait *w = r->waits; w; w = w->next) r->force |= w->force;
+  lib->reloading = 1;
+  if (uv_queue_work(app->loop, &r->req, reload_work, reload_after)) {
+    r->rc = -1;
+    r->err = xstrdup("no worker to read calibre's records on");
+    reload_after(&r->req, 0);
+  }
+}
+
+void library_reload(struct library *lib, int force, library_reloaded *done, void *ud) {
+  struct reload_wait *w = xcalloc(1, sizeof *w), **p = &lib->waiting;
+  w->fn = done;
+  w->ud = ud;
+  w->force = force;
+  while (*p) p = &(*p)->next;
+  *p = w;
+  if (!lib->reloading) reload_start(lib);
+}
+
+/* ---- batches, finishing ---- */
+
+static void batch_done(struct batch *b) {
+  if (b->done) b->done(b->id, b->first_err ? OP_FAILED : OP_APPLIED, b->first_err, b->ud);
+  batch_free(b);
+}
+
+/* The records read again after a batch: the files it embedded into take
+ * their new size and time, then the batch is done. */
+static void batch_reloaded(int rc, const char *err, void *ud) {
+  struct batch *b = ud;
+  if (rc >= 0 && b->embedding == 2) embedded(b->lib, b);
+  batch_done(b);
 }
 
 static void finish_batch(struct library *lib, struct batch *b) {
@@ -561,10 +686,8 @@ static void finish_batch(struct library *lib, struct batch *b) {
       free(err);
     }
   }
-  if (b->applied && !b->argv) records_changed(lib, b);
-  if (b->applied && b->embedding == 2) embedded(lib, b); /* from the records just read */
-  if (b->done) b->done(b->id, b->first_err ? OP_FAILED : OP_APPLIED, b->first_err, b->ud);
-  batch_free(b);
+  if (b->applied && !b->argv) library_reload(lib, 1, batch_reloaded, b);
+  else batch_done(b);
 }
 
 static int allowed(const struct library *lib, const struct batch *b) {
@@ -631,6 +754,7 @@ static struct batch *batch_new(struct library *lib, enum op_need need, library_d
   if (b->jobs < 1) b->jobs = 1;
   b->done = done;
   b->ud = ud;
+  b->lib = lib;
   return b;
 }
 
@@ -886,16 +1010,25 @@ struct library *library_open(struct app *app) {
 }
 
 static void probe_closed(uv_handle_t *h) {
-  free(h->data);
+  struct library *lib = h->data;
+  lib->probe_closed = 1;
+  if (!lib->reloading) free(lib); /* else when the reading ends */
 }
 
 void library_close(struct library *lib) {
   if (!lib) return;
+  for (struct reload_wait *w = lib->waiting, *n; w; w = n) {
+    n = w->next;
+    if (w->fn == batch_reloaded) batch_free(w->ud);
+    free(w);
+  }
+  lib->waiting = NULL;
   while (lib->head) {
     struct batch *b = lib->head;
     lib->head = b->next_batch;
     batch_free(b); /* what has not run stays queued in the journal */
   }
+  lib->closing = 1;
   uv_timer_stop(&lib->probe);
   uv_close((uv_handle_t *)&lib->probe, probe_closed);
 }

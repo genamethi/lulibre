@@ -12,8 +12,9 @@
  * the library folder; while calibre's program has the library, it waits.
  * No caller asks for the route. The journal records every operation
  * through one lifecycle: queued, running, applied or failed, undone. An
- * operation that applies posts EV_RECORDS_CHANGED, after embedding the
- * records in the books' files when the operation asks. */
+ * operation that applies reads calibre's records again (library_reload),
+ * after embedding the records in the books' files when the operation asks,
+ * and is done once they are read. */
 
 struct app;
 
@@ -67,6 +68,14 @@ enum library_holder library_holder(const struct library *lib);
  * when nothing was to change. Returns -1 with *err for a change that
  * cannot be made (an unknown field, a malformed value). */
 int library_submit(struct library *lib, const struct operation *op, library_done *done, void *ud, char **err);
+
+/* Reads calibre's records into the index again, on a worker: when
+ * metadata.db has changed, or always with force. done runs on the main loop
+ * with rc as db_mirror's (db/db.h). The books found changed, and those of
+ * the operations it was read for with the fields they changed, are posted
+ * as EV_RECORDS_CHANGED. Readings asked for while one runs share the next. */
+typedef void library_reloaded(int rc, const char *err, void *ud);
+void library_reload(struct library *lib, int force, library_reloaded *done, void *ud);
 
 /* Puts a batch's old values back, as an operation of its own. */
 int library_undo(struct library *lib, long long batch, library_done *done, void *ud, char **err);

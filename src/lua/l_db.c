@@ -11,7 +11,8 @@
  *   lulibre.store(sql, ...) the same, but may also write lulibre's own tables
  *                           (proposals, lookups, kv ...); returns rows, rows
  *                           changed, last insert id
- *   lulibre.reload()        pick up changes calibre has made since the last look
+ *   lulibre.reload()        pick up changes calibre has made since the last
+ *                           look; waits
  *   lulibre.source([name])  what the list shows, "library" or "sync"; sets it
  *                           when given. A filter that does not say in: applies
  *                           to that.
@@ -29,10 +30,13 @@
 #include <lauxlib.h>
 
 #include "app.h"
+#include "core/queue.h"
 #include "core/util.h"
 #include "db/query.h"
+#include "library/library.h"
 #include "lua/bridge.h"
 #include "lua/lapi.h"
+#include "lua/sched.h"
 #include "tui/tui.h"
 
 #define BOOK_COLS \
@@ -233,8 +237,7 @@ static int store_authorizer(void *ud, int action, const char *a, const char *b, 
       /* not the journal: the library alone writes it (library/library.h) */
       return a && (!strcmp(a, "proposals") || !strcmp(a, "kv") || !strcmp(a, "staged") || !strcmp(a, "lookups") ||
                    /* (the custom fields' tables, in their own database only) */
-                   ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")) ||
-                   !strcmp(a, "mirror_prev"))
+                   ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")))
                ? SQLITE_OK : SQLITE_DENY;
     case SQLITE_SELECT:
     case SQLITE_READ:
@@ -256,7 +259,7 @@ static int run_sql(lua_State *L, int writable) {
   if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
   if (prc) {
     lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write lulibre's own tables: proposals, kv, staged, lookups, mirror_prev, custom.fields, custom.data"
+                        ? "lulibre.store may only write lulibre's own tables: proposals, kv, staged, lookups, custom.fields, custom.data"
                         : err);
     free(err);
     return lua_error(L);
@@ -348,26 +351,46 @@ static int l_calibre_books(lua_State *L) {
   return 1;
 }
 
-static int reload_ui(lua_State *L) {
-  struct app *app = lapi_app(L);
-  if (app->tui) tui_reload(app->tui);
-  return 0;
+/* lulibre.reload(): calibre's records read again by the library, on a
+ * worker; the task waits for it (the list follows EV_RECORDS_CHANGED) */
+struct reload_msg {
+  struct task *task;
+  int rc;
+  char *err;
+};
+
+static void reload_answered(struct app *app, void *arg) { /* the Lua thread */
+  struct reload_msg *m = arg;
+  lua_State *L = sched_end_wait(m->task);
+  if (L && m->rc < 0) {
+    lua_pushnil(L);
+    lua_pushstring(L, m->err ? m->err : "failed");
+    sched_wake(m->task, 2);
+  } else if (L) {
+    lua_pushboolean(L, 1);
+    sched_wake(m->task, 1);
+  }
+  free(m->err);
+  free(m);
 }
 
-/* calibre's database read on this thread's connection, so the interface
- * does not wait for it; then the list */
+static void reloaded(int rc, const char *err, void *ud) { /* the main thread */
+  struct reload_msg *m = ud;
+  m->rc = rc;
+  m->err = err ? xstrdup(err) : NULL;
+  queue_post(LOOP_LUA, reload_answered, m);
+}
+
+static void reload_main(struct app *app, void *arg) {
+  app_open_db(app);
+  library_reload(app->library, 0, reloaded, arg);
+}
+
 static int l_reload(lua_State *L) {
-  char *err = NULL, *library = lapi_setting_str(L, S_LIBRARY);
-  char *real = realpath(library, NULL);
-  int rc = db_mirror(lapi_db(L), real ? real : library, 0, &err);
-  free(real);
-  free(library);
-  if (rc < 0) {
-    lua_pushstring(L, err);
-    free(err);
-    return lua_error(L);
-  }
-  return ui_send(L, reload_ui, "reload");
+  struct reload_msg *m = xcalloc(1, sizeof *m);
+  m->task = sched_begin_wait(L);
+  queue_post(LOOP_UI, reload_main, m);
+  return lua_yield(L, 0);
 }
 
 static int l_stage_refresh(lua_State *L) {

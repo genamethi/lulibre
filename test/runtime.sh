@@ -61,11 +61,14 @@ printf '' >"$cfg/init.lua"
 cat >"$t/store.lua" <<'LUA'
 local stores = require "lulibre.stores"
 local library = require "lulibre.library"
-local seen = {}
+local seen, changed = {}, nil
+evman.add("records_changed", function(ev) changed = table.concat(ev.ids, ",") .. "|" .. table.concat(ev.fields, ",") end)
 function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
 local batch = library.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
 local row = lulibre.sql("SELECT store, state FROM history.journal WHERE batch = ?", batch)[1]
 print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
+for _ = 1, 50 do if changed then break end lulibre.sleep(20) end
+print("changed|" .. tostring(changed))
 function stores.calibre() return nil, "not today" end
 print("refused|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Again" } }))))
 LUA
@@ -90,4 +93,5 @@ if command -v sqlite3 >/dev/null; then
 fi
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
+contains "a change that applied posts records_changed with its books and fields" "changed|1|title" "$store"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -79,7 +79,7 @@ lists the settings and their precedence.
 |---|---|
 | `cursor` | `{book=}`: the cursor came to rest on a book |
 | `marks` | `{selection = {id, ...}}`: the marks changed |
-| `records_changed` | `{ids=, fields=, files=}`: lulibre wrote to the library, or calibre's records changed |
+| `records_changed` | `{ids=, fields=}`: the books' records changed; `fields` lists those lulibre changed, and is empty when the change was made in calibre |
 | `holder` | `{holder = "none" \| "server" \| "program"}`: who has the library open |
 | `source_arrived` | `{book=, service=}`: an online answer came |
 
@@ -123,7 +123,7 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 | `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index; the journal is `history.journal` |
 | `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables: proposals, lookups, kv, staged, custom fields |
-| `lulibre.reload()` | read calibre's records again |
+| `lulibre.reload()` | waits: read calibre's records again, when calibre has changed them |
 
 A **book** is `{ id, title, authors = {...}, author = "A & B", tags =
 {...}, year, pubdate, publisher, series, series_index, lang, idents =

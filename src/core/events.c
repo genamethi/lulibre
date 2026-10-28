@@ -48,7 +48,6 @@ void events_free(struct event *ev) {
   free(ev->ids);
   for (int i = 0; i < ev->nfields; i++) free(ev->fields[i]);
   free(ev->fields);
-  free(ev->files);
   free(ev->selection);
   free(ev);
 }

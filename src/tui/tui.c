@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "core/events.h"
 #include "core/log.h"
 #include "core/queue.h"
 #include "library/library.h"
@@ -126,45 +127,38 @@ static void tick_cb(uv_timer_t *h) {
 
 struct remirror {
   struct tui *t;
-  int force, told, rc;
-  char *library; /* resolved when the message was made */
-  char *err;
+  int told;
 };
 
-static void remirror_done(struct app *app, void *arg) { /* interface thread */
-  struct remirror *m = arg;
+static void remirrored(int rc, const char *err, void *ud) {
+  struct remirror *m = ud;
   struct tui *t = m->t;
   t->mirroring = 0;
-  if (!t->quit) {
-    if (m->rc < 0) {
-      if (m->told) tui_msg(t, 1, "%s", m->err);
-    } else {
-      if (m->rc > 0 || m->force) rows_reload(t);
-      if (m->told) tui_msg(t, 0, "reloaded from calibre");
-      else if (m->rc > 0) tui_start_index(t, 0);
-    }
+  if (!t->quit && m->told) {
+    if (rc < 0) tui_msg(t, 1, "%s", err);
+    else tui_msg(t, 0, "reloaded from calibre");
   }
-  free(m->err);
-  free(m->library);
   free(m);
 }
 
-static void remirror_lua(struct app *app, void *arg) { /* Lua thread, between tasks */
-  struct remirror *m = arg;
-  m->rc = db_mirror(app->ldb ? app->ldb : &app->db, m->library, m->force, &m->err);
-  queue_post(LOOP_UI, remirror_done, m);
-}
-
+/* calibre's records are read on a worker (library_reload); the list
+ * follows EV_RECORDS_CHANGED */
 void tui_mirror(struct tui *t, int force, int told) {
-  if (t->mirroring) return;
+  if (t->mirroring || !t->app->library) return;
   t->mirroring = 1;
   struct remirror *m = xcalloc(1, sizeof *m);
   m->t = t;
-  m->force = force;
   m->told = told;
-  m->library = realpath(app_str(t->app, S_LIBRARY), NULL); /* taken now (design 4) */
-  if (!m->library) m->library = xstrdup(app_str(t->app, S_LIBRARY));
-  bridge_lua(t->app, remirror_lua, m);
+  library_reload(t->app->library, force, remirrored, m);
+}
+
+/* The records changed: the list shows them; a change made in calibre may
+ * bring files to read. */
+static void records_changed(const struct event *ev, void *ud) {
+  struct tui *t = ud;
+  if (t->quit) return;
+  rows_reload(t);
+  if (!ev->nfields && !t->ix) tui_start_index(t, 0);
 }
 
 /* -------------------------------------------------------------------- run */
@@ -310,6 +304,7 @@ int tui_run(struct app *app) {
   app->tui = t;
   rows_init(t);
   wm_init(t);
+  events_listen(LOOP_UI, EV_RECORDS_CHANGED, records_changed, t);
 
   uv_loop_t *loop = app->loop;
   input_watch(t);
@@ -364,6 +359,7 @@ int tui_run(struct app *app) {
   uv_close((uv_handle_t *)&t->held_timer, closed);
   uv_run(loop, UV_RUN_DEFAULT);
 
+  events_unlisten_all(LOOP_UI, records_changed);
   rows_free(t);
   sb_free(&t->paste);
   clip_free();

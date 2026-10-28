@@ -224,7 +224,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
 - **The Lua thread** (while the interface is up) owns the Lua state, the
   task scheduler, a second loop and its own database connection.
 - **The libuv pool** does extraction, OCR, rendering, readings, hashing,
-  and the list's queries. A job touches only what it was given and what it
+  reading calibre's records into the index, and the list's queries. A job touches only what it was given and what it
   opens itself. Its result arrives on the loop that queued it.
 
 The threads talk by messages (`src/core/queue.h`): each loop has an inbox,

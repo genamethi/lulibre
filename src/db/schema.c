@@ -66,12 +66,6 @@ const char db_schema[] =
   " id INTEGER PRIMARY KEY, path TEXT UNIQUE NOT NULL, size INTEGER, mtime INTEGER,"
   " title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL, publisher TEXT,"
   " pubdate TEXT, idents TEXT, languages TEXT, added INTEGER, twin INTEGER, note TEXT);"
-  /* the books as they were the last time changes made outside lulibre were
-   * looked for (db/mirror.c keeps it, lua/lulibre/snapshots.lua compares it
-   * with the books as they are now and empties it) */
-  "CREATE TABLE IF NOT EXISTS mirror_prev("
-  " id INTEGER PRIMARY KEY, title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL,"
-  " publisher TEXT, pubdate TEXT, languages TEXT, idents TEXT, formats TEXT, path TEXT);"
 
   /* ---- files and what reading them came to (design 37, 38) ---- */
   "CREATE TABLE IF NOT EXISTS files("

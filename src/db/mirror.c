@@ -49,20 +49,12 @@
   "  b.timestamp AS added, b.last_modified AS modified" \
   " FROM cal.books b"
 
-/* Before the books are replaced, what they were is kept in mirror_prev, so
- * that changes made outside lulibre can be found and logged
- * (lua/lulibre/snapshots.lua). While an earlier copy waits there unexamined
- * (kv 'history:pending') it is left alone: several refreshes between two
- * looks come out as one change. */
-static const char prev_sql[] =
-  "DELETE FROM mirror_prev WHERE NOT EXISTS(SELECT 1 FROM kv WHERE key = 'history:pending');"
-  "INSERT INTO mirror_prev(id, title, authors, tags, series, series_index, publisher, pubdate,"
-  " languages, idents, formats, path)"
-  " SELECT id, title, authors, tags, series, series_index, publisher, pubdate, languages, idents,"
-  "  formats, path FROM books"
-  " WHERE id > 0 AND NOT EXISTS(SELECT 1 FROM kv WHERE key = 'history:pending');"
-  "INSERT OR REPLACE INTO kv(key, value)"
-  " SELECT 'history:pending', '1' WHERE EXISTS(SELECT 1 FROM mirror_prev);";
+/* Before the books are replaced, when each was last modified, on this
+ * connection: db_mirror_changed compares the books with it. */
+static const char was_sql[] =
+  "CREATE TEMP TABLE IF NOT EXISTS mirror_was(id INTEGER PRIMARY KEY, modified);"
+  "DELETE FROM temp.mirror_was;"
+  "INSERT INTO temp.mirror_was SELECT id, modified FROM books WHERE id > 0;";
 
 static const char mirror_sql[] =
   "DELETE FROM books; DELETE FROM authors; DELETE FROM book_authors;"
@@ -193,7 +185,7 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
   rc = -1;
   if (db_exec(db, "BEGIN IMMEDIATE", err) == 0) {
     sqlite3_stmt *cf = NULL;
-    int ok = db_exec(db, prev_sql, err) == 0 && db_exec(db, mirror_sql, err) == 0 &&
+    int ok = db_exec(db, was_sql, err) == 0 && db_exec(db, mirror_sql, err) == 0 &&
              db_prepare(db, files_sql, &cf, err) == 0;
     if (ok) {
       sqlite3_bind_text(cf, 1, library, -1, SQLITE_STATIC);
@@ -238,6 +230,25 @@ out:
   free(stamp);
   free(cal);
   return rc;
+}
+
+long long *db_mirror_changed(struct db *db, int *n) {
+  *n = 0;
+  sqlite3_stmt *st;
+  if (sqlite3_prepare_v2(db->h,
+                         "SELECT b.id FROM books b LEFT JOIN temp.mirror_was w ON w.id = b.id"
+                         " WHERE b.id > 0 AND (w.id IS NULL OR w.modified IS NOT b.modified)"
+                         " UNION SELECT w.id FROM temp.mirror_was w WHERE NOT EXISTS(SELECT 1 FROM books b WHERE b.id = w.id)",
+                         -1, &st, NULL) != SQLITE_OK)
+    return NULL;
+  long long *ids = NULL;
+  int cap = 0;
+  while (sqlite3_step(st) == SQLITE_ROW) {
+    if (*n == cap) ids = xrealloc(ids, (size_t)(cap = cap ? cap * 2 : 64) * sizeof *ids);
+    ids[(*n)++] = sqlite3_column_int64(st, 0);
+  }
+  sqlite3_finalize(st);
+  return ids;
 }
 
 int db_calibre_books(struct db *db, const char *path, int (*fn)(void *ud, sqlite3_stmt *st), void *ud,

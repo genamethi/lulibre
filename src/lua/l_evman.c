@@ -8,8 +8,8 @@
  *                               loop's callbacks get it as they get C's
  *
  * event: "cursor" {book=}, "marks" {selection={...}}, "records_changed"
- * {ids=, fields=, files=}, "holder" {holder="none"|"server"|"program"},
- * "source_arrived" {book=, service=}, "tasks" {}.
+ * {ids=, fields=}, "holder" {holder="none"|"server"|"program"},
+ * "source_arrived" {book=, service=}.
  *
  * Each time the event comes, fn runs as a task with the payload and then
  * the trailing values: fn(payload, ...). A trailing value that is a
@@ -39,7 +39,7 @@ static const char CALLBACKS[] = "lulibre.evman", IDS[] = "lulibre.evman.ids";
 static const char *const names[EV_KINDS] = {
   [EV_CURSOR] = "cursor",          [EV_MARKS] = "marks",
   [EV_RECORDS_CHANGED] = "records_changed", [EV_HOLDER] = "holder",
-  [EV_SOURCE_ARRIVED] = "source_arrived", [EV_TASKS] = "tasks",
+  [EV_SOURCE_ARRIVED] = "source_arrived",
 };
 
 /* Lua's callbacks per kind, kept here for the Lua thread's listener. */
@@ -75,8 +75,6 @@ static void push_payload(lua_State *L, const struct event *ev) {
       lua_rawseti(L, -2, i + 1);
     }
     lua_setfield(L, -2, "fields");
-    push_ids(L, ev->files, ev->nfiles);
-    lua_setfield(L, -2, "files");
     break;
   case EV_HOLDER:
     lua_pushstring(L, holders[ev->holder]);
@@ -88,7 +86,6 @@ static void push_payload(lua_State *L, const struct event *ev) {
     lua_pushstring(L, ev->service);
     lua_setfield(L, -2, "service");
     break;
-  case EV_TASKS:
   case EV_KINDS:
     break;
   }
@@ -274,7 +271,6 @@ static int l_post(lua_State *L) {
   lua_pop(L, 2);
   ev->ids = ids_of(L, 2, "ids", &ev->nids);
   ev->selection = ids_of(L, 2, "selection", &ev->nselection);
-  ev->files = ids_of(L, 2, "files", &ev->nfiles);
   events_post(ev);
   return 0;
 }
