@@ -66,6 +66,9 @@ void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg)
 /* Releases a function's reference in the main lua_State, from either
  * thread: by message to the Lua thread. */
 void lapi_unref(int ref);
+/* A new lua_State is coming (:restart-scripts): references into the old
+ * one, still on their way in messages, are dropped where they land. */
+void lapi_new_generation(void);
 int luaopen_keymap(struct lua_State *L);
 int luaopen_cmd(struct lua_State *L);
 

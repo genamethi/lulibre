@@ -27,6 +27,10 @@ void bridge_start(struct app *app);
  * and take the Lua state back. */
 void bridge_stop(struct app *app);
 
+/* Interface thread: stop the Lua thread as bridge_stop does, without
+ * waiting for it: once it is gone, then(app) runs on the interface loop,
+ * with the old Lua state still there for it to close (:restart-scripts). */
+void bridge_restart(struct app *app, void (*then)(struct app *app));
 /* Run fn(app, arg) on the Lua thread, later; fn owns arg. */
 void bridge_lua(struct app *app, void (*fn)(struct app *, void *), void *arg);
 

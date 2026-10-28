@@ -76,6 +76,10 @@ void tui_reload(struct tui *t); /* refresh the list: calibre's database was read
 struct lua_State *lstate_new(struct app *app);
 int lstate_run_init(struct app *app); /* loads ~/.config/lulibre/init.lua if present */
 void lstate_close(struct app *app);
+/* :restart-scripts (design 7): the lua_State torn down and made again,
+ * init.lua its first task; keys and commands from Lua go with the old one.
+ * The interface goes on meanwhile. */
+void lstate_restart(struct app *app);
 /* When the binary runs from a source tree that has since become another
  * version: a sentence saying so (the caller frees it), else NULL. */
 char *lstate_tree_mismatch(void);

@@ -31,6 +31,10 @@ struct task {
   sched_cancel_fn *cancel_fn;
   void *cancel_ud;
   struct task *qnext, *next;
+  struct sched *s; /* its scheduler, while there is one */
+  /* the lua_State is gone (:restart-scripts) while a wait of this task's
+   * was still out: the wait's end finds no task to wake, and frees it */
+  int orphan;
 };
 
 struct sched {
@@ -38,6 +42,7 @@ struct sched {
   lua_State *L;
   struct task *qhead, *qtail; /* run queue */
   struct task *all;
+  struct task *limbo; /* finished, with waits still out */
   int next_id;
   int jobs; /* worker jobs begun and not yet ended */
   atomic_int live, failed; /* read by the interface thread for its status line */
@@ -97,7 +102,12 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
       break;
     }
   lapi_tasks_changed(s->app);
-  if (t->pending == 0) task_free(t); /* else freed when its last wait ends */
+  if (t->pending == 0) {
+    task_free(t);
+  } else { /* freed when its last wait ends */
+    t->next = s->limbo;
+    s->limbo = t;
+  }
 }
 
 static void slice_hook(lua_State *L, lua_Debug *ar) {
@@ -181,10 +191,22 @@ void sched_free(struct app *app) {
   /* the handles go when the loop next turns, if it does */
   uv_close((uv_handle_t *)s->idle, handle_free);
   uv_close((uv_handle_t *)s->keep, handle_free);
-  /* tasks still alive here are released with the Lua state */
+  /* tasks still alive here are released with the Lua state; one with a
+   * wait still out is freed when the wait ends (orphan) */
   for (struct task *t = s->all, *n; t; t = n) {
     n = t->next;
-    task_free(t);
+    if (t->pending > 0) {
+      t->orphan = 1;
+      t->state = T_DONE;
+      t->co = NULL;
+      t->s = NULL;
+    } else {
+      task_free(t);
+    }
+  }
+  for (struct task *t = s->limbo; t; t = t->next) {
+    t->orphan = 1;
+    t->s = NULL;
   }
   free(s);
   app->sched = NULL;
@@ -196,6 +218,7 @@ int sched_spawn(lua_State *L, int nargs, const char *name) {
   struct task *t = xcalloc(1, sizeof *t);
   t->ctx.app = app;
   t->ctx.task = t;
+  t->s = s;
   t->id = s->next_id++;
   t->name = xstrdup(name && *name ? name : "task");
   t->co = lua_newthread(L);
@@ -242,24 +265,48 @@ struct task *sched_begin_wait(lua_State *L) {
   struct task *t = task_of(L);
   t->state = T_WAITING;
   t->pending++;
-  waits_add(t->ctx.app->sched, 1);
+  waits_add(t->s, 1);
   return t;
 }
 
+/* A wait's end for an orphan: nothing to wake. */
+static void orphan_end(struct task *t) {
+  if (--t->pending == 0) task_free(t);
+}
+
+static void limbo_drop(struct sched *s, struct task *t) {
+  for (struct task **p = &s->limbo; *p; p = &(*p)->next)
+    if (*p == t) {
+      *p = t->next;
+      return;
+    }
+}
+
 void sched_abort_wait(struct task *t) {
+  if (t->orphan) {
+    orphan_end(t);
+    return;
+  }
   t->state = T_READY;
   t->pending--;
-  waits_add(t->ctx.app->sched, -1);
+  waits_add(t->s, -1);
   t->cancel_fn = NULL;
 }
 
 lua_State *sched_end_wait(struct task *t) {
-  struct sched *s = t->ctx.app->sched;
+  if (t->orphan) {
+    orphan_end(t);
+    return NULL;
+  }
+  struct sched *s = t->s;
   t->pending--;
   waits_add(s, -1);
   t->cancel_fn = NULL;
   if (t->state == T_DONE) {
-    if (t->pending == 0) task_free(t);
+    if (t->pending == 0) {
+      limbo_drop(s, t);
+      task_free(t);
+    }
     return NULL;
   }
   if (t->cancelled) {
@@ -271,12 +318,12 @@ lua_State *sched_end_wait(struct task *t) {
 
 struct task *sched_begin_job(lua_State *L) {
   struct task *t = sched_begin_wait(L);
-  t->ctx.app->sched->jobs++;
+  t->s->jobs++;
   return t;
 }
 
 lua_State *sched_end_job(struct task *t) {
-  t->ctx.app->sched->jobs--; /* before sched_end_wait, which may free t */
+  if (t->s) t->s->jobs--; /* before sched_end_wait, which may free t */
   return sched_end_wait(t);
 }
 
@@ -287,7 +334,7 @@ int sched_jobs(const struct app *app) {
 void sched_wake(struct task *t, int nargs) {
   t->state = T_READY;
   t->nargs = nargs;
-  enqueue(t->ctx.app->sched, t);
+  enqueue(t->s, t);
 }
 
 void sched_on_cancel(struct task *t, sched_cancel_fn *fn, void *ud) {

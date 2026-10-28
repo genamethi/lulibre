@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "core/log.h"
+#include "app.h"
 #include "lua/lapi.h"
 #include "tui/tui.h"
 
@@ -42,6 +43,22 @@ void command_register(const char *name, command_fn *fn, const char *help) {
 
 void command_register_lua(const char *name, int ref, const char *help) {
   add(name, NULL, ref, help);
+}
+
+void commands_drop_lua(void) {
+  for (int i = 0; i < ncmds;) {
+    if (cmds[i].fn) {
+      i++;
+      continue;
+    }
+    free(cmds[i].name);
+    free(cmds[i].help);
+    cmds[i] = cmds[--ncmds];
+  }
+}
+
+static void c_restart_scripts(struct tui *t, const char *args) {
+  lstate_restart(t->app);
 }
 
 int command_remove_lua(const char *name) {
@@ -555,6 +572,8 @@ static void c_pick(struct tui *t, const char *args) {
 
 void commands_builtin(void) {
   edit_commands();
+  command_register("restart-scripts", c_restart_scripts,
+                   "start the scripts again in a new Lua state: init.lua runs first, as at start");
   command_register("quit", c_quit, "leave lulibre");
   command_register("move", c_move, "+N | -N | top | bottom | half-down | half-up | page-down | page-up");
   command_register("filter", c_filter, "[filter]  show only matching books; no argument shows all");

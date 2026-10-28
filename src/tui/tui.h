@@ -524,6 +524,8 @@ void command_register_lua(const char *name, int ref, const char *help);
 void edit_commands(void);
 /* Removes a command defined in Lua: 0, or -1 when there is none. */
 int command_remove_lua(const char *name);
+/* Every command defined in Lua goes, with the lua_State (:restart-scripts). */
+void commands_drop_lua(void);
 /* Run "name args". Unknown commands report in the message line. */
 void tui_exec(struct tui *t, const char *line);
 void commands_builtin(void);

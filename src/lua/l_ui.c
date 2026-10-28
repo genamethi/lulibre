@@ -46,6 +46,7 @@
  * This file also holds the ':' commands that exist because of Lua:
  * run, lua, messages, tasks, cancel. */
 #include <dirent.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -793,8 +794,17 @@ int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char
 /* A command or key's function, run as a task with what the interface was
  * at when it was invoked (design 4, 34): fn{ name=, args=, book=,
  * selection = { id, ... } }. */
+/* Which lua_State a reference belongs to: one more at each restart, so a
+ * message about a reference into the old state is dropped. */
+static atomic_uint generation;
+
+void lapi_new_generation(void) {
+  atomic_fetch_add(&generation, 1);
+}
+
 struct spawn_req {
   int ref;
+  unsigned gen;
   char *name, *arg;
   long long book;
   long long *selection;
@@ -804,7 +814,7 @@ struct spawn_req {
 static void spawn_ref(struct app *app, void *arg) {
   struct spawn_req *r = arg;
   lua_State *L = app->L;
-  if (L) {
+  if (L && r->gen == atomic_load(&generation)) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, r->ref);
     lua_createtable(L, 0, 4);
     lua_pushstring(L, r->name);
@@ -833,6 +843,7 @@ static void spawn_ref(struct app *app, void *arg) {
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg) {
   struct spawn_req *r = xcalloc(1, sizeof *r);
   r->ref = ref;
+  r->gen = atomic_load(&generation);
   r->name = xstrdup(name);
   r->arg = xstrdup(arg ? arg : "");
   struct tui *t = app->tui;
@@ -846,12 +857,23 @@ void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg)
   queue_post(LOOP_LUA, spawn_ref, r);
 }
 
+struct unref_req {
+  int ref;
+  unsigned gen;
+};
+
 static void unref(struct app *app, void *arg) {
-  if (app->L) luaL_unref(app->L, LUA_REGISTRYINDEX, (int)(intptr_t)arg);
+  struct unref_req *u = arg;
+  if (app->L && u->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, u->ref);
+  free(u);
 }
 
 void lapi_unref(int ref) {
-  if (ref > 0) queue_post(LOOP_LUA, unref, (void *)(intptr_t)ref);
+  if (ref <= 0) return;
+  struct unref_req *u = xcalloc(1, sizeof *u);
+  u->ref = ref;
+  u->gen = atomic_load(&generation);
+  queue_post(LOOP_LUA, unref, u);
 }
 
 /* "path\0arg arg": load the script and start it */

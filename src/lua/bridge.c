@@ -9,6 +9,7 @@
 #include <uv.h>
 
 #include "app.h"
+#include "core/queue.h"
 #include "core/util.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -34,6 +35,8 @@ static struct bridge {
   atomic_int redraw, exited;
   uv_timer_t winddown;
   double stop_at;
+  int handles;                   /* the handles that outlive a restart are made */
+  void (*then)(struct app *app); /* a restart's next step, once the Lua thread is gone */
   int said_jobs;
   struct db ldb;
 } B;
@@ -59,8 +62,11 @@ static int bridge_on_ui(const struct app *app) {
 /* ---- Lua -> interface: a redraw; every call goes by the queue
  * (core/queue.h, lua/uicall.c) ---- */
 
+static void restart_done(void);
+
 static void to_ui_cb(uv_async_t *h) {
   if (atomic_exchange(&B.redraw, 0) && B.app->tui) tui_dirty(B.app->tui);
+  if (B.then && atomic_load(&B.exited)) restart_done();
 }
 
 void bridge_redraw(struct app *app) {
@@ -118,9 +124,12 @@ void bridge_start(struct app *app) {
   char *err = NULL;
   if (db_open_writer(&B.ldb, app->db.path, &err)) die("%s", err);
   app->ldb = &B.ldb;
-  uv_mutex_init(&B.mu);
-  uv_async_init(app->loop, &B.to_ui, to_ui_cb);
-  uv_async_init(&B.lloop, &B.to_lua, to_lua_cb);
+  if (!B.handles) { /* once: a restart keeps them */
+    B.handles = 1;
+    uv_mutex_init(&B.mu);
+    uv_async_init(app->loop, &B.to_ui, to_ui_cb);
+    uv_async_init(&B.lloop, &B.to_lua, to_lua_cb);
+  }
   B.ui_thread = uv_thread_self();
   atomic_store(&B.exited, 0);
   atomic_store(&B.running, 1);
@@ -140,7 +149,11 @@ static void winddown_cb(uv_timer_t *h) {
     }
     return;
   }
-  if (sched_live(B.app) == 0 || now_s() > B.stop_at) uv_stop(&B.lloop);
+  if (sched_live(B.app) == 0 || now_s() > B.stop_at) {
+    uv_timer_stop(&B.winddown);
+    uv_close((uv_handle_t *)&B.winddown, NULL);
+    uv_stop(&B.lloop);
+  }
 }
 
 static void stop_on_lua(struct app *app, void *arg) {
@@ -153,20 +166,12 @@ static void stop_on_lua(struct app *app, void *arg) {
 static void closed(uv_handle_t *h) {
 }
 
-void bridge_stop(struct app *app) {
-  if (!atomic_load(&B.running)) return;
-  bridge_lua(app, stop_on_lua, NULL);
-  /* Tasks being cancelled may still call in (to close a panel, to report);
-   * keep answering until the thread is gone. */
-  while (!atomic_load(&B.exited)) uv_run(app->loop, UV_RUN_ONCE);
+/* After the Lua thread has gone: what is left for it runs here, on the
+ * old lua_State, which is the caller's to close. */
+static void after_thread(struct app *app) {
   uv_thread_join(&B.lua_thread);
   log_debug("Lua thread ended");
   atomic_store(&B.running, 0);
-  to_ui_cb(&B.to_ui);
-  uv_close((uv_handle_t *)&B.to_ui, closed);
-  /* Messages that arrived too late for the Lua thread. There is one thread
-   * again, which is how bridge_lua runs a message from here on, so they run
-   * now: each owns what it carries and is what frees it. */
   for (;;) {
     struct lua_msg *m = B.lua_head;
     if (!m) break;
@@ -175,6 +180,35 @@ void bridge_stop(struct app *app) {
     m->fn(app, m->arg);
     free(m);
   }
+  queue_drain(LOOP_LUA);
   db_close(&B.ldb);
   app->ldb = NULL;
+}
+
+static void restart_done(void) {
+  void (*then)(struct app *) = B.then;
+  B.then = NULL;
+  after_thread(B.app);
+  then(B.app);
+}
+
+void bridge_restart(struct app *app, void (*then)(struct app *app)) {
+  if (!atomic_load(&B.running) || B.then) return;
+  B.then = then;
+  B.said_jobs = 0;
+  bridge_lua(app, stop_on_lua, NULL);
+}
+
+void bridge_stop(struct app *app) {
+  if (!atomic_load(&B.running)) return;
+  bridge_lua(app, stop_on_lua, NULL);
+  /* Tasks being cancelled may still call in (to close a panel, to report);
+   * keep answering until the thread is gone. */
+  while (!atomic_load(&B.exited)) uv_run(app->loop, UV_RUN_ONCE);
+  B.then = NULL;
+  /* messages that arrived too late for the Lua thread run here: each owns
+   * what it carries and is what frees it */
+  after_thread(app);
+  to_ui_cb(&B.to_ui);
+  uv_close((uv_handle_t *)&B.to_ui, closed);
 }

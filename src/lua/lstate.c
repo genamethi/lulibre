@@ -16,7 +16,9 @@
 #include "core/registry.h"
 #include "core/util.h"
 #include "lua/lapi.h"
+#include "lua/bridge.h"
 #include "lua/sched.h"
+#include "tui/tui.h"
 
 struct app *lapi_app(lua_State *L) {
   return (*(struct lctx **)lua_getextraspace(L))->app;
@@ -285,4 +287,24 @@ void lstate_close(struct app *app) {
   app->L = NULL;
   free(app->lmain);
   app->lmain = NULL;
+}
+
+/* The Lua thread is gone; the old state goes and a new one comes. */
+static void rebuild(struct app *app) {
+  commands_drop_lua();
+  keymap_free(&tui_keymap);
+  keymap_defaults(&tui_keymap);
+  ctx_defaults();
+  lapi_new_generation();
+  lstate_close(app);
+  lstate_new(app);
+  lstate_run_init(app);
+  bridge_start(app);
+  if (app->tui) tui_msg(app->tui, 0, "the scripts started again");
+}
+
+void lstate_restart(struct app *app) {
+  if (!app->tui) return;
+  if (app->tui) tui_msg(app->tui, 0, "stopping the scripts...");
+  bridge_restart(app, rebuild);
 }
