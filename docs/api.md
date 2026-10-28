@@ -121,7 +121,7 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
 | `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
-| `bookman` `store` `wit` `net` `txt` `expr` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
+| `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
 
 ## The library: bookman
 
@@ -205,6 +205,23 @@ txt returns a string.
 | `expr.list(words)` | any of the words or phrases, as whole words, the longest first |
 | `expr.chain(step, ...)` | a function applying its steps in order: a function, or `{patt, repl}` for gsub |
 | `expr.fold(s)` `expr.lower(s)` `expr.upper(s)` | without case, accents or styled letters (as filters compare); case beyond ASCII |
+
+### Ready-made patterns: lex
+
+    local lex = require "lex"
+    expr.match("ISBN 0-387-90040-3", lex.isbn)          --> "9780387900407"
+    for doi in expr.gmatch(t, lex.doi) do ... end
+    expr.match("arXiv:1012.6008v1 [math.CO]", lex.arxiv) --> "1012.6008", "math.CO"
+
+| | |
+|---|---|
+| `lex.isbn` | an ISBN, 10 or 13 digits, captured as 13; hyphens between the digits, or spaces after the label ISBN |
+| `lex.issn` | an ISSN after its label, captured as `0012-7094` |
+| `lex.doi` | a DOI, with or without `doi:` or `https://doi.org/`, captured in lower case without them |
+| `lex.arxiv` | an arXiv number after `arXiv:`, captured without its version; then the class, when the margin stamp gives one |
+
+An identifier's pattern matches only where its check digit is right, and
+captures the canonical form `mesr.canonical` gives.
 
 ## Sequences: iter
 

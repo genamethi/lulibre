@@ -166,6 +166,21 @@ say("diff", iter(files):diff({ { p = "a" } }, function(f) return f.p end):map(fu
 LUA
 it=$("$bin" -L "$t/lib" run "$t/iter.lua" 2>&1)
 
+# lex: identifiers in their canonical form, where the check digit is right
+cat >"$t/lex.lua" <<'LUA'
+local expr, lex = require "expr", require "lex"
+local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
+say("isbn", expr.match("ISBN 0-387-90040-3", lex.isbn), expr.match("ISBN 0 387 90040 3", lex.isbn),
+  expr.match("see 978-0-387-90040-7.", lex.isbn))
+say("not isbn", expr.match("phone 0387900404", lex.isbn), expr.match("x 0 387 90040 3", lex.isbn))
+say("issn", expr.match("ISSN 0012-7094", lex.issn), expr.match("ISSN 0012-7095", lex.issn))
+say("doi", expr.match("https://doi.org/10.1016/S1570-7954(96)80014-3.", lex.doi),
+  expr.match("(see doi:10.1000/x)", lex.doi))
+say("arxiv", expr.match("arXiv:1012.6008v1 [math.CO] 29 Dec 2010", lex.arxiv))
+say("arxiv old", expr.match("arXiv:math/0601054", lex.arxiv), expr.match("1012.6008", lex.arxiv))
+LUA
+lx=$("$bin" -L "$t/lib" run "$t/lex.lua" 2>&1)
+
 # lsqlite3, built in: a database of the script's own, with lulibre's SQL
 # functions on its connection
 cat >"$t/sql.lua" <<'LUA'
@@ -237,6 +252,12 @@ contains "find, any, all" "find any all|4|true|true" "$it"
 contains "an iterator function" "function|abc" "$it"
 contains "group: by key, in the order first met" "group|3:ac,5:b" "$it"
 contains "diff: the items whose key the other has not" "diff|b,c" "$it"
+contains "lex.isbn: 10 digits as 13, with hyphens, spaces after its label, or 13" "isbn|9780387900407|9780387900407|9780387900407" "$lx"
+contains "but not a wrong check digit, nor spaces without the label" "not isbn|nil|nil" "$lx"
+contains "lex.issn, by its check digit" "issn|0012-7094|nil" "$lx"
+contains "lex.doi: its label off, lower case, its own parentheses kept, a sentence's not" "doi|10.1016/s1570-7954(96)80014-3|10.1000/x" "$lx"
+contains "lex.arxiv: the number without its version, and the class" "arxiv|1012.6008|math.CO" "$lx"
+contains "and the old form; never without the label" "arxiv old|math/0601054|nil" "$lx"
 contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
