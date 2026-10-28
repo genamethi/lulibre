@@ -118,15 +118,12 @@ void app_open_db(struct app *app) {
   free(path);
   if (db_mirror(&app->db, real, 0, &err) < 0) {
     /* calibre's database there, but not to be read (damaged): lulibre goes
-     * on with the library as it last read it, so that `lulibre backup` can
-     * check it and put a copy back */
+     * on with the library as it last read it */
     char *cal = xasprintf("%s/metadata.db", real);
     int there = access(cal, R_OK) == 0;
     free(cal);
     if (!there) die("%s", err);
-    warnf("calibre's database could not be read (%s): lulibre goes on with the library as it last read it; "
-          "`lulibre backup check` checks the database",
-          err);
+    warnf("calibre's database could not be read (%s): lulibre goes on with the library as it last read it", err);
     free(err);
   }
   free(real);
