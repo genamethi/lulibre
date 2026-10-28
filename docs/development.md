@@ -108,7 +108,10 @@ A sanitizer build should pass all of them cleanly:
     ./configure --sanitize=thread && make check
 
 (`use_sigaltstack=0` is needed because notcurses installs its own alternate
-signal stack.)
+signal stack. Without it, the interface exits with status 1 and ASan reports
+"failed to deallocate 0x34c0 (13504) bytes ... (error code: 22)": ASan
+cannot free its own stack once notcurses has replaced it. The 0.2 code does
+the same, and with the option set the report is gone.)
 
 ## calibre's server and the opf files
 
