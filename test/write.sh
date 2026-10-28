@@ -37,6 +37,8 @@ say("undo", tostring(library.undo(batch)))
 b = lulibre.book(1)
 say("after undo", b.title, b.author)
 say("undone", lulibre.sql("SELECT count(*) AS n FROM history.journal WHERE batch = ? AND state = 4", batch)[1].n)
+library.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
+say("in order", table.concat(lulibre.book(1).tags, ","))
 LUA
 
 cat > "$t/embed.lua" <<'LUA'
@@ -106,6 +108,7 @@ expect "the journal keeps where a value came from" "provenance|7|front"
 expect "undo is a batch of its own" "undo|2"
 expect "and puts the old values back" "after undo|paper|Unknown"
 expect "the batch put back is undone, all five rows" "undone|5"
+expect "two changes to one field apply one after the other" "in order|y"
 expect "a proposal accepted is a change with its provenance" "accept|1"
 expect "a proposal rejected is a decision in the journal" "reject|2"
 expect "the record has the one, not the other" "decided|Topics in Additive Combinatorics|Unknown|0"

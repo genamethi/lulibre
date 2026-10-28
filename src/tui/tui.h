@@ -520,6 +520,8 @@ typedef void command_fn(struct tui *t, const char *args);
 void command_register(const char *name, command_fn *fn, const char *help);
 /* A command implemented in Lua: ref is a registry reference to the function. */
 void command_register_lua(const char *name, int ref, const char *help);
+/* :edit and :undo (tui/edit.c) */
+void edit_commands(void);
 /* Removes a command defined in Lua: 0, or -1 when there is none. */
 int command_remove_lua(const char *name);
 /* Run "name args". Unknown commands report in the message line. */

@@ -624,9 +624,22 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
                         int n, long long undoes, char **err) {
   struct db *db = &lib->app->db;
   char **olds = xcalloc((size_t)n + 1, sizeof *olds), **news = xcalloc((size_t)n + 1, sizeof *news);
+  /* several changes to one field of one book ("+c, -a") apply one after
+   * the other: each starts from the one before, which it replaces */
+  char *gone = xcalloc((size_t)n + 1, 1);
   int rc = 0;
   for (int i = 0; i < n && !rc; i++) {
     const struct change *c = &changes[i];
+    int before = -1;
+    for (int j = i - 1; j >= 0 && before < 0; j--)
+      if (!gone[j] && changes[j].book == c->book && !strcmp(changes[j].field, c->field)) before = j;
+    if (before >= 0) {
+      olds[i] = xstrdup(olds[before]);
+      news[i] = c->value ? field_resolve(c->field, c->op, news[before], c->value, err) : xstrdup(news[before]);
+      gone[before] = 1;
+      if (!news[i]) rc = -1;
+      continue;
+    }
     if (c->book < 0 && field_is_own(c->field)) {
       *err = xasprintf("a staged file has no field %s", c->field);
       rc = -1;
@@ -646,6 +659,7 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
     int rows = 0;
     for (int i = 0; i < n; i++) {
       const struct change *c = &changes[i];
+      if (gone[i]) continue;
       if (!strcmp(olds[i], news[i])) {
         /* no change; a decision on a proposal is kept all the same, for
          * the parse's track record (design 21) */
@@ -680,6 +694,7 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
   }
   free(olds);
   free(news);
+  free(gone);
   return rc;
 }
 

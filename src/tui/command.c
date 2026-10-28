@@ -554,6 +554,7 @@ static void c_pick(struct tui *t, const char *args) {
 }
 
 void commands_builtin(void) {
+  edit_commands();
   command_register("quit", c_quit, "leave lulibre");
   command_register("move", c_move, "+N | -N | top | bottom | half-down | half-up | page-down | page-up");
   command_register("filter", c_filter, "[filter]  show only matching books; no argument shows all");
