@@ -181,6 +181,20 @@ say("arxiv old", expr.match("arXiv:math/0601054", lex.arxiv), expr.match("1012.6
 LUA
 lx=$("$bin" -L "$t/lib" run "$t/lex.lua" 2>&1)
 
+# the bundled scripts dupes and orphans, on a library of their own: book 3
+# a byte-for-byte copy of book 1, book 4's file gone, a stray file and an
+# empty folder
+sh "$src/mklib.sh" "$t/two" >/dev/null 2>&1
+mkdir -p "$t/two/Copy/paper (3)" "$t/two/Empty/x (9)"
+cp "$t/two/Unknown/paper (1)/paper - Unknown.pdf" "$t/two/Copy/paper (3)/paper - Copy.pdf"
+echo stray >"$t/two/Unknown/paper (1)/stray.txt"
+sqlite3 "$t/two/metadata.db" "INSERT INTO books(id, title, sort, path, last_modified) VALUES
+  (3, 'paper copy', 'paper copy', 'Copy/paper (3)', '2024-01-03 00:00:00+00:00'),
+  (4, 'gone', 'gone', 'Copy/gone (4)', '2024-01-03 00:00:00+00:00');
+  INSERT INTO data VALUES (3, 3, 'PDF', 0, 'paper - Copy'), (4, 4, 'EPUB', 0, 'gone - Copy');"
+dupes=$("$bin" -L "$t/two" run dupes 2>&1)
+orphans=$("$bin" -L "$t/two" run orphans 2>&1)
+
 # lsqlite3, built in: a database of the script's own, with lulibre's SQL
 # functions on its connection
 cat >"$t/sql.lua" <<'LUA'
@@ -260,4 +274,9 @@ contains "lex.arxiv: the number without its version, and the class" "arxiv|1012.
 contains "and the old form; never without the label" "arxiv old|math/0601054|nil" "$lx"
 contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
+contains "dupes: files of the same bytes, a group" "468 bytes  2 copies" "$dupes"
+contains "with each book" "    3  paper copy" "$dupes"
+contains "orphans: a file a record names, not on disk" "    4  Copy/gone (4)/gone - Copy.epub" "$orphans"
+contains "a file no record names" "files no record names: 1" "$orphans"
+contains "an empty folder" "Empty/x (9)" "$orphans"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -4,10 +4,17 @@ lulibre runs Lua 5.4 or 5.5. `~/.config/lulibre/init.lua` runs at start, as
 the first task. Empty, or missing, lulibre works the same: everything
 below is there without it.
 
-    :run NAME [args]            a script from ~/.config/lulibre/scripts
+    :run NAME [args]            a script from ~/.config/lulibre/scripts, or one lulibre comes with
     lulibre run FILE [args]     a script with no interface; print goes to stdout
     :restart-scripts            a new Lua state; init.lua runs first, as at start
     :tasks   :cancel ID|all
+
+lulibre comes with these scripts, which change nothing:
+
+| | |
+|---|---|
+| `dupes` | books whose files hold the same bytes: files of the same size hashed, grouped by hash |
+| `orphans` | files a record names that are not on disk, files in the books' folders no record names, empty folders |
 
 ## How scripts run
 
