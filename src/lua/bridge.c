@@ -14,13 +14,6 @@
 #include "lua/sched.h"
 #include "tui/tui.h"
 
-struct ui_req {
-  void (*fn)(void *);
-  void *arg;
-  uv_sem_t done;
-  struct ui_req *next;
-};
-
 struct lua_msg {
   void (*fn)(struct app *, void *);
   void *arg;
@@ -37,7 +30,6 @@ static struct bridge {
   uv_thread_t ui_thread, lua_thread;
   uv_async_t to_ui, to_lua;
   uv_mutex_t mu;
-  struct ui_req *ui_head, *ui_tail;
   struct lua_msg *lua_head, *lua_tail;
   atomic_int redraw, exited;
   uv_timer_t winddown;
@@ -64,76 +56,11 @@ static int bridge_on_ui(const struct app *app) {
   return uv_thread_equal(&self, &B.ui_thread);
 }
 
-/* ---- Lua -> interface ---- */
+/* ---- Lua -> interface: a redraw; every call goes by the queue
+ * (core/queue.h, lua/uicall.c) ---- */
 
 static void to_ui_cb(uv_async_t *h) {
-  for (;;) {
-    uv_mutex_lock(&B.mu);
-    struct ui_req *r = B.ui_head;
-    if (r) {
-      B.ui_head = r->next;
-      if (!B.ui_head) B.ui_tail = NULL;
-    }
-    uv_mutex_unlock(&B.mu);
-    if (!r) break;
-    r->fn(r->arg);
-    uv_sem_post(&r->done);
-  }
   if (atomic_exchange(&B.redraw, 0) && B.app->tui) tui_dirty(B.app->tui);
-}
-
-void bridge_ui(struct app *app, void (*fn)(void *), void *arg) {
-  if (bridge_on_ui(app)) {
-    fn(arg);
-    return;
-  }
-  struct ui_req r = {.fn = fn, .arg = arg};
-  uv_sem_init(&r.done, 0);
-  uv_mutex_lock(&B.mu);
-  if (B.ui_tail) B.ui_tail->next = &r;
-  else B.ui_head = &r;
-  B.ui_tail = &r;
-  uv_mutex_unlock(&B.mu);
-  uv_async_send(&B.to_ui);
-  uv_sem_wait(&r.done);
-  uv_sem_destroy(&r.done);
-}
-
-struct lcall {
-  lua_State *L;
-  lua_CFunction fn;
-  int status;
-};
-
-static void lcall_run(void *arg) {
-  struct lcall *c = arg;
-  lua_State *L = c->L;
-  int n = lua_gettop(L);
-  lua_pushcfunction(L, c->fn);
-  lua_insert(L, 1);
-  c->status = lua_pcall(L, n, LUA_MULTRET, 0);
-}
-
-int ui_pcall(lua_State *L, lua_CFunction fn) {
-  struct app *app = lapi_app(L);
-  struct lcall c = {L, fn, LUA_OK};
-  if (bridge_on_ui(app)) {
-    lcall_run(&c);
-    return c.status;
-  }
-  /* The collector must not run over there: finalizers (a luv handle's, say)
-   * belong to this thread and its loop. */
-  int collecting = lua_gc(L, LUA_GCISRUNNING);
-  if (collecting) lua_gc(L, LUA_GCSTOP);
-  bridge_ui(app, lcall_run, &c);
-  if (collecting) lua_gc(L, LUA_GCRESTART);
-  return c.status;
-}
-
-int ui_call(lua_State *L, lua_CFunction fn) {
-  if (bridge_on_ui(lapi_app(L))) return fn(L);
-  if (ui_pcall(L, fn) != LUA_OK) return lua_error(L);
-  return lua_gettop(L);
 }
 
 void bridge_redraw(struct app *app) {

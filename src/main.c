@@ -59,6 +59,7 @@ static int finish(struct app *app, int rc) {
   }
   queue_drain(LOOP_LUA); /* what was on its way to the copy, before the lua_State goes */
   lstate_close(app);
+  ui_state_close();
   library_close(app->library);
   if (app->db_ready) db_close(&app->db);
   tui_teardown();

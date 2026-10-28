@@ -63,48 +63,61 @@
 #include "lua/bridge.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
+#include "core/queue.h"
 #include "tui/tui.h"
 
 /* ---- reporting ---- */
 
-struct report {
-  struct app *app;
-  int level;
-  const char *msg;
-};
-
-static void report_ui(void *arg) {
-  struct report *r = arg;
-  struct tui *t = r->app->tui;
-  const char *msg = r->msg;
-  log_text(r->level ? LOG_ERROR : LOG_INFO, msg); /* without the interface, errors print from there */
+/* On the interface thread: the message line and the log, or stderr. */
+static void report_show(struct app *app, int level, const char *msg) {
+  struct tui *t = app->tui;
+  log_text(level ? LOG_ERROR : LOG_INFO, msg); /* without the interface, errors print from there */
   if (!t || !t->nc) {
-    if (!r->level) fprintf(stderr, "%s\n", msg);
+    if (!level) fprintf(stderr, "%s\n", msg);
     return;
   }
   const char *nl = strchr(msg, '\n');
   if (nl) {
     char *first = xasprintf("%.*s   (` shows the rest)", (int)(nl - msg), msg);
-    tui_show_msg(t, r->level, first);
+    tui_show_msg(t, level, first);
     free(first);
   } else {
-    tui_show_msg(t, r->level, msg);
+    tui_show_msg(t, level, msg);
   }
 }
 
+struct report {
+  int level;
+  char *msg;
+};
+
+static void report_ui(struct app *app, void *arg) {
+  struct report *r = arg;
+  report_show(app, r->level, r->msg);
+  free(r->msg);
+  free(r);
+}
+
+/* From either thread: a message, shown in the order sent. */
 void lapi_report(struct app *app, int level, const char *msg) {
-  struct report r = {app, level, msg ? msg : ""};
-  bridge_ui(app, report_ui, &r);
+  struct report *r = xcalloc(1, sizeof *r);
+  r->level = level;
+  r->msg = xstrdup(msg ? msg : "");
+  queue_post(LOOP_UI, report_ui, r);
 }
 
 void lapi_tasks_changed(struct app *app) {
   bridge_redraw(app);
 }
 
-/* Most of what follows touches the interface, so it runs there: each
- * lulibre.x is a one-line wrapper that sends its x_ui over (lua/bridge.h). */
-#define ON_UI(name) \
-  static int name(lua_State *L) { return ui_call(L, name##_ui); }
+/* Most of what follows touches the interface, so it runs there (design
+ * 34): a call that answers nothing is sent as a message, a call that
+ * answers yields the task until the answer comes (lua/uicall.c). Each
+ * lulibre.x is a one-line wrapper around its x_ui. */
+#define SEND(name, word) \
+  static int name(lua_State *L) { return ui_send(L, name##_ui, word); }
+#define ASK(name, word) \
+  static int name(lua_State *L) { return ui_ask(L, name##_ui, word); }
 
 static int l_notify_ui(lua_State *L) {
   const char *msg = luaL_tolstring(L, 1, NULL);
@@ -112,7 +125,7 @@ static int l_notify_ui(lua_State *L) {
   lapi_report(lapi_app(L), !strcmp(level, "error"), msg);
   return 0;
 }
-ON_UI(l_notify)
+SEND(l_notify, "notify")
 
 static int l_print_ui(lua_State *L) {
   struct app *app = lapi_app(L);
@@ -133,7 +146,7 @@ static int l_print_ui(lua_State *L) {
   else puts(out);
   return 0;
 }
-ON_UI(l_print)
+SEND(l_print, "print")
 
 static struct tui *need_tui(lua_State *L) {
   struct tui *t = lapi_app(L)->tui;
@@ -145,14 +158,14 @@ static struct tui *need_tui(lua_State *L) {
 
 static int l_command_ui(lua_State *L) {
   const char *name = luaL_checkstring(L, 1);
-  luaL_checktype(L, 2, LUA_TFUNCTION);
+  /* the function, as its reference in the main lua_State (lua/uicall.c) */
+  int ref = (int)luaL_checkinteger(L, 2);
   const char *help = luaL_optstring(L, 3, "(defined in Lua)");
   luaL_argcheck(L, *name && !strchr(name, ' '), 1, "a command name is one word");
-  lua_pushvalue(L, 2);
-  command_register_lua(name, luaL_ref(L, LUA_REGISTRYINDEX), help);
+  command_register_lua(name, ref, help);
   return 0;
 }
-ON_UI(l_command)
+SEND(l_command, "command")
 
 /* lulibre.map(modes, keys, target [, about])
  * target: a command line, or a function (which runs as a task).
@@ -173,10 +186,9 @@ static int l_map_ui(lua_State *L) {
   const char *about = lua_type(L, 4) == LUA_TSTRING ? lua_tostring(L, 4) : NULL;
   char name[32];
   const char *target;
-  if (lua_isfunction(L, 3)) {
+  if (lua_isinteger(L, 3)) { /* a function, as its reference in the main lua_State */
     snprintf(name, sizeof name, "lua.%d", ++anon);
-    lua_pushvalue(L, 3);
-    command_register_lua(name, luaL_ref(L, LUA_REGISTRYINDEX), about ? about : "(a Lua function)");
+    command_register_lua(name, (int)lua_tointeger(L, 3), about ? about : "(a Lua function)");
     target = name;
     if (!about) about = "a Lua function";
   } else {
@@ -186,7 +198,7 @@ static int l_map_ui(lua_State *L) {
     return luaL_error(L, "cannot parse the key sequence '%s'", keys);
   return 0;
 }
-ON_UI(l_map)
+SEND(l_map, "map")
 
 /* lulibre.key(command [, mode]): the keys bound to that command line, as
  * they are typed ("gr", "<C-w>v"), or nil when nothing is. For messages
@@ -200,7 +212,7 @@ static int l_key_ui(lua_State *L) {
   sb_free(&out);
   return 1;
 }
-ON_UI(l_key)
+ASK(l_key, "key")
 
 /* lulibre.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... } */
 static int l_maps_ui(lua_State *L) {
@@ -229,7 +241,7 @@ static int l_maps_ui(lua_State *L) {
   }
   return 1;
 }
-ON_UI(l_maps)
+ASK(l_maps, "maps")
 
 /* lulibre.commands(): every command there is, { {name = "group", help = "..."}, ... } */
 static int add_command(const char *name, const char *help, void *ud) {
@@ -248,7 +260,7 @@ static int l_commands_ui(lua_State *L) {
   command_each(add_command, L);
   return 1;
 }
-ON_UI(l_commands)
+ASK(l_commands, "commands")
 
 /* lulibre._place_map(place, key, action): the binding of a key to an action
  * of a place that has keys of its own ("panel", "line", "picker", "pager",
@@ -269,7 +281,7 @@ static int l_place_map_ui(lua_State *L) {
   lua_pushboolean(L, 1);
   return 1;
 }
-ON_UI(l_place_map)
+ASK(l_place_map, "place_map")
 
 /* lulibre.place_keys(place): the keys of a place as lines of text, each
  * "keys   what they do"; nil for no such place. */
@@ -285,13 +297,13 @@ static int l_place_keys_ui(lua_State *L) {
   sb_free(&out);
   return 1;
 }
-ON_UI(l_place_keys)
+ASK(l_place_keys, "place_keys")
 
 static int l_exec_ui(lua_State *L) {
   tui_exec(need_tui(L), luaL_checkstring(L, 1));
   return 0;
 }
-ON_UI(l_exec)
+SEND(l_exec, "exec")
 
 /* ---- the list ---- */
 
@@ -302,7 +314,7 @@ static int l_current_ui(lua_State *L) {
   else lua_pushnil(L);
   return 1;
 }
-ON_UI(l_current)
+ASK(l_current, "current")
 
 /* With the cursor in a panel that follows the list (review, duplicates,
  * orphans), "the book under the cursor" is the one that panel's row stands
@@ -346,7 +358,7 @@ static int l_selection_ui(lua_State *L) {
   free(ids);
   return 1;
 }
-ON_UI(l_selection)
+ASK(l_selection, "selection")
 
 static int l_mark_ui(lua_State *L) {
   struct tui *t = need_tui(L);
@@ -354,7 +366,7 @@ static int l_mark_ui(lua_State *L) {
   rows_mark(t, id, lua_isnoneornil(L, 2) ? -1 : lua_toboolean(L, 2));
   return 0;
 }
-ON_UI(l_mark)
+SEND(l_mark, "mark")
 
 static int l_filter_ui(lua_State *L) {
   struct tui *t = need_tui(L);
@@ -365,7 +377,7 @@ static int l_filter_ui(lua_State *L) {
   rows_set_filter(t, luaL_checkstring(L, 1));
   return 0;
 }
-ON_UI(l_filter)
+ASK(l_filter, "filter")
 
 /* ---- pick ----
  * The picker lives on the interface thread and the waiting task on the Lua
@@ -374,7 +386,7 @@ ON_UI(l_filter)
 struct pwait {
   struct app *app;
   struct task *task;
-  struct tui *t;
+  struct tui *t; /* set on the interface thread when the picker opens */
   int items_ref;
 };
 
@@ -408,7 +420,7 @@ static void pick_finish(struct pwait *w, sqlite3_int64 index) {
   struct pdone *d = xcalloc(1, sizeof *d);
   d->w = w;
   d->index = index;
-  bridge_lua(w->app, pick_done, d);
+  queue_post(LOOP_LUA, pick_done, d);
 }
 
 static void pick_accept(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
@@ -419,19 +431,23 @@ static void pick_cancel(struct tui *t, void *ud) {
   pick_finish(ud, 0);
 }
 
-static void picker_close_ui(void *arg) {
-  picker_close(arg); /* reports back through pick_cancel */
+static void picker_close_ui(struct app *app, void *arg) {
+  struct pwait *w = arg;
+  if (w->t) picker_close(w->t); /* reports back through pick_cancel */
 }
 
 static void pick_task_cancelled(void *ud) {
-  struct pwait *w = ud;
-  bridge_ui(w->app, picker_close_ui, w->t);
+  queue_post(LOOP_UI, picker_close_ui, ud);
 }
 
-/* items, options, the pwait */
+/* items, options, the pwait (an integer) */
 static int pick_open_ui(lua_State *L) {
-  struct tui *t = need_tui(L);
-  struct pwait *w = lua_touserdata(L, 3);
+  struct pwait *w = (struct pwait *)(intptr_t)luaL_checkinteger(L, 3);
+  struct tui *t = lapi_app(L)->tui;
+  if (!t || !t->nc) {
+    pick_finish(w, 0);
+    return 0;
+  }
   const char *title = "pick";
   if (lua_istable(L, 2)) {
     lua_getfield(L, 2, "title");
@@ -469,21 +485,17 @@ static int pick_open_ui(lua_State *L) {
 static int l_pick(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
   sched_require_task(L);
+  if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct pwait *w = xcalloc(1, sizeof *w);
   w->app = lapi_app(L);
   lua_settop(L, 2);
   lua_pushvalue(L, 1);
   w->items_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-  lua_pushlightuserdata(L, w);
+  lua_pushinteger(L, (lua_Integer)(intptr_t)w);
   /* waiting before the picker exists, so its answer cannot come too early */
   w->task = sched_begin_wait(L);
   sched_on_cancel(w->task, pick_task_cancelled, w);
-  if (ui_pcall(L, pick_open_ui) != LUA_OK) {
-    sched_abort_wait(w->task);
-    luaL_unref(L, LUA_REGISTRYINDEX, w->items_ref);
-    free(w);
-    return lua_error(L);
-  }
+  ui_send(L, pick_open_ui, "pick");
   return lua_yield(L, 0);
 }
 
@@ -533,7 +545,7 @@ static void input_send(struct iwait *w, const char *text, int final) {
   e->w = w;
   e->text = text ? xstrdup(text) : NULL;
   e->final = final;
-  bridge_lua(w->app, input_event, e);
+  queue_post(LOOP_LUA, input_event, e);
 }
 
 static void input_answer(struct tui *t, const char *text, void *ud) {
@@ -544,19 +556,23 @@ static void input_changed(struct tui *t, const char *text, void *ud) {
   input_send(ud, text ? text : "", 0);
 }
 
-static void input_cancel_ui(void *arg) {
-  tui_input_cancel(arg);
+static void input_cancel_ui(struct app *app, void *arg) {
+  struct iwait *w = arg;
+  if (w->t) tui_input_cancel(w->t);
 }
 
 static void input_task_cancelled(void *ud) {
-  struct iwait *w = ud;
-  bridge_ui(w->app, input_cancel_ui, w->t);
+  queue_post(LOOP_UI, input_cancel_ui, ud);
 }
 
-/* the options table (or prompt string), the iwait */
+/* the options table (or prompt string), the iwait (an integer) */
 static int input_open_ui(lua_State *L) {
-  struct tui *t = need_tui(L);
-  struct iwait *w = lua_touserdata(L, 2);
+  struct iwait *w = (struct iwait *)(intptr_t)luaL_checkinteger(L, 2);
+  struct tui *t = lapi_app(L)->tui;
+  if (!t || !t->nc) {
+    input_send(w, NULL, 1);
+    return 0;
+  }
   const char *prompt = "> ", *initial = "", *sep = NULL;
   const char **texts = NULL, **details = NULL;
   int nsugg = 0;
@@ -601,6 +617,7 @@ static int input_open_ui(lua_State *L) {
 
 static int l_input(lua_State *L) {
   sched_require_task(L);
+  if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct iwait *w = xcalloc(1, sizeof *w);
   w->app = lapi_app(L);
   w->change_ref = LUA_NOREF;
@@ -610,15 +627,10 @@ static int l_input(lua_State *L) {
     if (lua_isfunction(L, -1)) w->change_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     else lua_pop(L, 1);
   }
-  lua_pushlightuserdata(L, w);
+  lua_pushinteger(L, (lua_Integer)(intptr_t)w);
   w->task = sched_begin_wait(L);
   sched_on_cancel(w->task, input_task_cancelled, w);
-  if (ui_pcall(L, input_open_ui) != LUA_OK) {
-    sched_abort_wait(w->task);
-    luaL_unref(L, LUA_REGISTRYINDEX, w->change_ref);
-    free(w);
-    return lua_error(L);
-  }
+  ui_send(L, input_open_ui, "input");
   return lua_yield(L, 0);
 }
 
@@ -637,7 +649,7 @@ static int l_clipboard_ui(lua_State *L) {
   lua_pushboolean(L, clip_copy(s, n));
   return 1;
 }
-ON_UI(l_clipboard)
+ASK(l_clipboard, "clipboard")
 
 /* lulibre.edit_file(path): the editor ($VISUAL, $EDITOR, else vim or vi) on
  * a file, with the terminal handed over until it exits. Returns its exit
@@ -666,7 +678,7 @@ static int l_edit_file_ui(lua_State *L) {
   lua_pushinteger(L, status);
   return 1;
 }
-ON_UI(l_edit_file)
+ASK(l_edit_file, "edit_file")
 
 /* lulibre.in_terminal(argv): a program with the terminal handed over until
  * it exits (sudo asking for a password, say); argv[1] is looked for on
@@ -707,7 +719,7 @@ static int l_in_terminal_ui(lua_State *L) {
   lua_pushinteger(L, status);
   return 1;
 }
-ON_UI(l_in_terminal)
+ASK(l_in_terminal, "in_terminal")
 
 static int l_progress_ui(lua_State *L) {
   struct app *app = lapi_app(L);
@@ -715,7 +727,7 @@ static int l_progress_ui(lua_State *L) {
   if (app->tui && app->tui->nc) tui_progress(app->tui, text);
   return 0;
 }
-ON_UI(l_progress)
+SEND(l_progress, "progress")
 
 static int l_status_ui(lua_State *L) {
   static const char *const styles[] = {"accent", "ok", "warn", "error", "dim", NULL};
@@ -728,7 +740,7 @@ static int l_status_ui(lua_State *L) {
   if (app->tui && app->tui->nc) tui_badge(app->tui, name, text, color);
   return 0;
 }
-ON_UI(l_status)
+SEND(l_status, "status")
 
 static int l_goto_ui(lua_State *L) {
   struct tui *t = need_tui(L);
@@ -740,7 +752,7 @@ static int l_goto_ui(lua_State *L) {
   lua_pushboolean(L, found);
   return 1;
 }
-ON_UI(l_goto)
+SEND(l_goto, "goto")
 
 static int l_show_ui(lua_State *L) {
   struct app *app = lapi_app(L);
@@ -765,7 +777,7 @@ static int l_show_ui(lua_State *L) {
   else fputs(text, stdout);
   return 0;
 }
-ON_UI(l_show)
+SEND(l_show, "show")
 
 /* ---- scripts ---- */
 
@@ -983,9 +995,9 @@ static int l_log(lua_State *L) {
   return 0;
 }
 
-static void tasks_pager_ui(void *arg) {
-  struct app *app = ((void **)arg)[0];
-  if (app->tui && app->tui->nc) tui_pager(app->tui, "tasks", ((void **)arg)[1]);
+static void tasks_pager_ui(struct app *app, void *arg) {
+  if (app->tui && app->tui->nc) tui_pager(app->tui, "tasks", arg);
+  free(arg);
 }
 
 static void list_tasks(struct app *app, void *arg) {
@@ -1005,9 +1017,7 @@ static void list_tasks(struct app *app, void *arg) {
   lua_pop(L, 1);
   if (!out.len) sb_puts(&out, "no tasks are running\n");
   else sb_puts(&out, "\n:cancel ID stops one; :cancel all stops every task.\n");
-  void *args[2] = {app, out.s};
-  bridge_ui(app, tasks_pager_ui, args);
-  sb_free(&out);
+  queue_post(LOOP_UI, tasks_pager_ui, sb_take(&out));
 }
 
 static void c_tasks(struct tui *t, const char *args) {

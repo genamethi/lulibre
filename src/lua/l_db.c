@@ -368,7 +368,7 @@ static int l_reload(lua_State *L) {
     free(err);
     return lua_error(L);
   }
-  return ui_call(L, reload_ui);
+  return ui_send(L, reload_ui, "reload");
 }
 
 static int l_stage_refresh(lua_State *L) {
@@ -395,7 +395,7 @@ static int source_ui(lua_State *L) {
 }
 
 static int l_source(lua_State *L) {
-  return ui_call(L, source_ui);
+  return ui_ask(L, source_ui, "source");
 }
 
 void l_db_open(lua_State *L) {

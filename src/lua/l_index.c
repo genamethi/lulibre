@@ -21,6 +21,7 @@
 #include "core/util.h"
 #include "db/query.h"
 #include "index/indexer.h"
+#include "core/queue.h"
 #include "lua/bridge.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -33,12 +34,17 @@ struct iwait {
   struct query only;
   int has_only;
   struct indexer *ix; /* headless: ours to free */
+  char *err;          /* the run did not start */
 };
 
 static void finished(struct app *app, void *arg) { /* Lua thread */
   struct iwait *w = arg;
   lua_State *L = sched_end_wait(w->task);
-  if (L) {
+  if (L && w->err) {
+    lua_pushnil(L);
+    lua_pushstring(L, w->err);
+    sched_wake(w->task, 2);
+  } else if (L) {
     const struct index_stats *s = &w->stats;
     lua_createtable(L, 0, 6);
     lua_pushinteger(L, s->files);
@@ -56,6 +62,7 @@ static void finished(struct app *app, void *arg) { /* Lua thread */
     sched_wake(w->task, 1);
   }
   if (w->has_only) query_free(&w->only);
+  free(w->err);
   free(w);
 }
 
@@ -64,7 +71,7 @@ static void on_done(const struct index_stats *st, void *ud) {
   struct iwait *w = ud;
   w->stats = *st;
   w->stats.last_path = w->stats.last_error = NULL;
-  bridge_lua(w->app, finished, w);
+  queue_post(LOOP_LUA, finished, w);
 }
 
 static void headless_done(struct indexer *ix, const struct index_stats *st, void *ud) {
@@ -74,9 +81,16 @@ static void headless_done(struct indexer *ix, const struct index_stats *st, void
   on_done(&s, w);
 }
 
-/* the options table (or nil), the iwait */
+/* The run did not start: the task hears why. */
+static int not_started(struct iwait *w, char *err) {
+  w->err = err;
+  queue_post(LOOP_LUA, finished, w);
+  return 0;
+}
+
+/* the options table (or nil), the iwait (an integer) */
 static int start_ui(lua_State *L) {
-  struct iwait *w = lua_touserdata(L, 2);
+  struct iwait *w = (struct iwait *)(intptr_t)luaL_checkinteger(L, 2);
   struct app *app = w->app;
   struct index_opts o = {0};
   app_open_db(app);
@@ -95,9 +109,9 @@ static int start_ui(lua_State *L) {
     if (lua_isstring(L, -1)) {
       char *err = NULL;
       if (query_compile_in(lua_tostring(L, -1), SCOPE_ALL, &w->only, &err)) {
-        lua_pushfstring(L, "filter: %s", err);
+        char *msg = xasprintf("filter: %s", err);
         free(err);
-        return lua_error(L);
+        return not_started(w, msg);
       }
       w->has_only = 1;
       o.only = &w->only;
@@ -106,19 +120,11 @@ static int start_ui(lua_State *L) {
   }
   char *err = NULL;
   if (app->tui && app->tui->nc) {
-    if (tui_index(app->tui, &o, on_done, w, &err)) {
-      lua_pushstring(L, err);
-      free(err);
-      return lua_error(L);
-    }
+    if (tui_index(app->tui, &o, on_done, w, &err)) return not_started(w, err);
     return 0;
   }
   w->ix = indexer_start(app->loop, &app->db, &o, NULL, headless_done, w, &err);
-  if (!w->ix) {
-    lua_pushstring(L, err);
-    free(err);
-    return lua_error(L);
-  }
+  if (!w->ix) return not_started(w, err);
   return 0;
 }
 
@@ -127,14 +133,9 @@ static int l_index(lua_State *L) {
   struct iwait *w = xcalloc(1, sizeof *w);
   w->app = lapi_app(L);
   lua_settop(L, 1);
-  lua_pushlightuserdata(L, w);
+  lua_pushinteger(L, (lua_Integer)(intptr_t)w);
   w->task = sched_begin_wait(L);
-  if (ui_pcall(L, start_ui) != LUA_OK) {
-    sched_abort_wait(w->task);
-    if (w->has_only) query_free(&w->only);
-    free(w);
-    return lua_error(L);
-  }
+  ui_send(L, start_ui, "index");
   return lua_yield(L, 0);
 }
 

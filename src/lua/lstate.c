@@ -253,28 +253,21 @@ lua_State *lstate_new(struct app *app) {
   return L;
 }
 
+/* init.lua runs as the first task (design 46), its first slice at once:
+ * the settings it sets before it first waits are sent to the store before
+ * this returns. */
 int lstate_run_init(struct app *app) {
   char *init = xasprintf("%s/init.lua", app->config_dir);
   int rc = 0;
-  if (access(init, R_OK) == 0 && luaL_dofile(app->L, init) != LUA_OK) {
-    warnf("%s", lua_tostring(app->L, -1));
-    lua_pop(app->L, 1);
-    rc = -1;
-  }
-  /* what the prelude does once init.lua has had its say (lulibre._after_init) */
-  lua_getglobal(app->L, "lulibre");
-  if (lua_istable(app->L, -1)) {
-    lua_getfield(app->L, -1, "_after_init");
-    if (lua_isfunction(app->L, -1)) {
-      if (lua_pcall(app->L, 0, 0, 0) != LUA_OK) {
-        warnf("%s", lua_tostring(app->L, -1));
-        lua_pop(app->L, 1);
-      }
-    } else {
+  if (access(init, R_OK) == 0) {
+    if (luaL_loadfile(app->L, init) != LUA_OK) {
+      warnf("%s", lua_tostring(app->L, -1));
       lua_pop(app->L, 1);
+      rc = -1;
+    } else {
+      sched_spawn_now(app->L, 0, "init.lua");
     }
   }
-  lua_pop(app->L, 1);
   free(init);
   return rc;
 }

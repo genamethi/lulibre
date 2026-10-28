@@ -213,6 +213,24 @@ int sched_spawn(lua_State *L, int nargs, const char *name) {
   return t->id;
 }
 
+int sched_spawn_now(lua_State *L, int nargs, const char *name) {
+  struct sched *s = lapi_app(L)->sched;
+  int id = sched_spawn(L, nargs, name);
+  struct task *t = s->qtail; /* the one just queued */
+  for (struct task **p = &s->qhead; *p; p = &(*p)->qnext)
+    if (*p == t) {
+      *p = t->qnext;
+      if (s->qtail == t) {
+        s->qtail = NULL;
+        for (struct task *q = s->qhead; q; q = q->qnext) s->qtail = q;
+      }
+      break;
+    }
+  t->queued = 0;
+  run_one(s, t);
+  return id;
+}
+
 void sched_require_task(lua_State *L) {
   if (!task_of(L) || !lua_isyieldable(L))
     luaL_error(L, "this function waits for something, so it must run in a task: "

@@ -67,6 +67,7 @@
 
 #include "app.h"
 #include "core/util.h"
+#include "core/queue.h"
 #include "lua/bridge.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -76,41 +77,69 @@
 #define QUEUE 16
 
 /* The panel itself belongs to the interface thread; this, the script's side
- * of it, to the Lua thread. Keys travel from one to the other as messages.
- * It is allocated apart from the Lua object so that a key still on its way
- * when the object is collected has somewhere to land. */
+ * of it, to the Lua thread. Each side knows the other only by the panel's
+ * number: calls go to the interface as messages (lua/uicall.c), keys come
+ * back as messages, and a message for a panel a side no longer has is
+ * dropped there. */
 struct lpanel {
   struct app *app;
-  struct panel *p; /* NULL once closed from Lua */
+  long long id;
   struct task *waiter;
   struct {
     char key[32];
     int row;
   } q[QUEUE];
   int qhead, qn;
-  int closed;
-  int dead;            /* the Lua object is gone */
-  atomic_int inflight; /* keys sent and not yet delivered */
+  int closed; /* the panel has closed, or was closed from Lua */
 };
 
+/* ---- the panels by number: each table belongs to its thread ---- */
+
+struct slot {
+  long long id;
+  void *v;
+};
+
+struct table {
+  struct slot *s;
+  int n;
+};
+
+static void *find(struct table *t, long long id) {
+  for (int i = 0; i < t->n; i++)
+    if (t->s[i].id == id) return t->s[i].v;
+  return NULL;
+}
+
+static void put(struct table *t, long long id, void *v) {
+  t->s = xrealloc(t->s, (size_t)(t->n + 1) * sizeof *t->s);
+  t->s[t->n++] = (struct slot){id, v};
+}
+
+static void drop(struct table *t, long long id) {
+  for (int i = 0; i < t->n; i++)
+    if (t->s[i].id == id) t->s[i] = t->s[--t->n];
+}
+
+static struct table lua_side; /* the Lua thread's: id -> struct lpanel */
+static struct table ui_side;  /* the interface thread's: id -> struct panel */
+static long long next_id;
+
 struct pevent {
-  struct lpanel *lp;
+  long long id;
   int has_key, row;
   char key[32];
 };
 
 static void deliver(struct app *app, void *arg) { /* Lua thread */
   struct pevent *e = arg;
-  struct lpanel *lp = e->lp;
+  struct lpanel *lp = find(&lua_side, e->id);
   char keybuf[32];
   memcpy(keybuf, e->key, sizeof keybuf);
   const char *key = e->has_key ? keybuf : NULL;
-  int row = e->row, left = atomic_fetch_sub(&lp->inflight, 1) - 1;
+  int row = e->row;
   free(e);
-  if (lp->dead) {
-    if (left == 0) free(lp);
-    return;
-  }
+  if (!lp) return; /* the Lua object is gone */
   if (!key) lp->closed = 1;
   if (lp->waiter) {
     struct task *t = lp->waiter;
@@ -149,22 +178,37 @@ static void deliver(struct app *app, void *arg) { /* Lua thread */
 /* interface thread: a key the panel does not handle itself, or NULL when the
  * panel has closed */
 static void on_event(struct panel *p, const char *key, int row, void *ud) {
-  struct lpanel *lp = ud;
   struct pevent *e = xcalloc(1, sizeof *e);
-  e->lp = lp;
+  e->id = (long long)(intptr_t)ud;
   e->row = row;
   if (key) {
     e->has_key = 1;
     snprintf(e->key, sizeof e->key, "%s", key);
   }
-  atomic_fetch_add(&lp->inflight, 1);
-  bridge_lua(lp->app, deliver, e);
+  queue_post(LOOP_LUA, deliver, e);
 }
 
 static struct lpanel *check(lua_State *L) {
   struct lpanel **ud = luaL_checkudata(L, 1, MT);
   if (!*ud) luaL_error(L, "this panel is gone");
   return *ud;
+}
+
+/* interface thread: the panel a call names by its number (argument 1), or
+ * NULL when it has gone */
+static struct panel *panel_of(lua_State *L) {
+  struct panel *p = find(&ui_side, luaL_checkinteger(L, 1));
+  return p && panel_is_open(p) ? p : NULL;
+}
+
+/* Lua thread: the call fn, made on the interface thread with the panel's
+ * number in place of the panel */
+static int to_ui(lua_State *L, lua_CFunction fn, const char *name, int ask) {
+  struct lpanel *lp = check(L);
+  if (lp->closed) return 0;
+  lua_pushinteger(L, lp->id);
+  lua_replace(L, 1);
+  return ask ? ui_ask(L, fn, name) : ui_send(L, fn, name);
 }
 
 static int style_of(lua_State *L, int idx) {
@@ -264,9 +308,14 @@ static void set_columns(lua_State *L, struct panel *p, int idx) {
   lua_settop(L, base);
 }
 
+/* interface thread: the options, the panel's number */
 static int l_panel_ui(lua_State *L) {
   struct tui *t = lapi_app(L)->tui;
-  if (!t || !t->nc) return luaL_error(L, "panels need the interface, which is not running");
+  long long id = luaL_checkinteger(L, 2);
+  if (!t || !t->nc) {
+    on_event(NULL, NULL, 0, (void *)(intptr_t)id); /* closed at once */
+    return luaL_error(L, "panels need the interface, which is not running");
+  }
   luaL_checktype(L, 1, LUA_TTABLE);
   lua_getfield(L, 1, "side");
   char side = !lua_isstring(L, -1) ? 'b' : lua_tostring(L, -1)[0] == 'l' ? 'l' : lua_tostring(L, -1)[0] == 'm' ? 'm' : 'b';
@@ -274,188 +323,211 @@ static int l_panel_ui(lua_State *L) {
   float size = (float)luaL_optnumber(L, -1, side == 'l' ? 0.28 : 0.45);
   lua_pop(L, 2);
 
-  struct lpanel **ud = lua_newuserdatauv(L, sizeof *ud, 0);
-  *ud = NULL;
-  luaL_setmetatable(L, MT);
-  struct lpanel *lp = *ud = xcalloc(1, sizeof *lp);
-  lp->app = lapi_app(L);
   lua_getfield(L, 1, "focus");
   int keep_focus = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
   lua_getfield(L, 1, "screen_tab");
   int screen_tab = lua_toboolean(L, -1);
   lua_pop(L, 2);
   struct node *was = t->focus;
-  lp->p = panel_open(t, size, side);
+  struct panel *p = panel_open(t, size, side);
+  put(&ui_side, id, p);
   if (keep_focus && was) t->focus = was;
-  panel_on_event(lp->p, on_event, lp);
-  if (screen_tab) panel_set_screen_tab(lp->p);
+  panel_on_event(p, on_event, (void *)(intptr_t)id);
+  if (screen_tab) panel_set_screen_tab(p);
 
   lua_getfield(L, 1, "title");
-  if (lua_isstring(L, -1)) panel_set_title(lp->p, lua_tostring(L, -1));
+  if (lua_isstring(L, -1)) panel_set_title(p, lua_tostring(L, -1));
   lua_getfield(L, 1, "help");
-  if (lua_isstring(L, -1)) panel_set_help(lp->p, lua_tostring(L, -1));
+  if (lua_isstring(L, -1)) panel_set_help(p, lua_tostring(L, -1));
   lua_getfield(L, 1, "follow");
-  panel_set_follow(lp->p, lua_toboolean(L, -1));
+  panel_set_follow(p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "moves");
-  panel_set_moves(lp->p, lua_toboolean(L, -1));
+  panel_set_moves(p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "dialog");
-  panel_set_dialog(lp->p, lua_toboolean(L, -1));
+  panel_set_dialog(p, lua_toboolean(L, -1));
   lua_getfield(L, 1, "reloads");
-  panel_set_reloads(lp->p, lua_toboolean(L, -1));
+  panel_set_reloads(p, lua_toboolean(L, -1));
   lua_pop(L, 2);
   lua_getfield(L, 1, "pass");
-  if (lua_isstring(L, -1)) panel_set_pass(lp->p, lua_tostring(L, -1));
+  if (lua_isstring(L, -1)) panel_set_pass(p, lua_tostring(L, -1));
   lua_getfield(L, 1, "keys");
-  if (lua_istable(L, -1)) set_own(L, lp->p, -1);
+  if (lua_istable(L, -1)) set_own(L, p, -1);
   lua_pop(L, 6);
   lua_getfield(L, 1, "columns");
-  if (lua_istable(L, -1)) set_columns(L, lp->p, -1);
+  if (lua_istable(L, -1)) set_columns(L, p, -1);
   lua_pop(L, 1);
   lua_getfield(L, 1, "tab");
   int tab = (int)luaL_optinteger(L, -1, 1) - 1;
   lua_getfield(L, 1, "tabs");
-  if (lua_istable(L, -1)) set_tabs(L, lp->p, -1, tab);
+  if (lua_istable(L, -1)) set_tabs(L, p, -1, tab);
   lua_pop(L, 2);
   lua_getfield(L, 1, "rows");
-  if (lua_istable(L, -1)) set_rows(L, lp->p, -1);
+  if (lua_istable(L, -1)) set_rows(L, p, -1);
   lua_pop(L, 1);
   lua_getfield(L, 1, "preview");
-  if (lua_isinteger(L, -1)) panel_set_preview(lp->p, 1, lua_tointeger(L, -1), NULL);
-  else if (lua_type(L, -1) == LUA_TSTRING) panel_set_preview(lp->p, 1, 0, lua_tostring(L, -1));
+  if (lua_isinteger(L, -1)) panel_set_preview(p, 1, lua_tointeger(L, -1), NULL);
+  else if (lua_type(L, -1) == LUA_TSTRING) panel_set_preview(p, 1, 0, lua_tostring(L, -1));
   lua_pop(L, 1);
-  panel_set_cursor(lp->p, 0);
+  panel_set_cursor(p, 0);
+  return 0;
+}
+
+/* Lua thread: the Lua object, at once; the panel follows on the
+ * interface thread. */
+static int l_panel(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_settop(L, 1);
+  struct lpanel **ud = lua_newuserdatauv(L, sizeof *ud, 0);
+  *ud = NULL;
+  luaL_setmetatable(L, MT);
+  struct lpanel *lp = *ud = xcalloc(1, sizeof *lp);
+  lp->app = lapi_app(L);
+  lp->id = ++next_id;
+  put(&lua_side, lp->id, lp);
+  lua_State *T = lua_newthread(L); /* a stack whose arguments are the options and the number */
+  lua_pushvalue(L, 1);
+  lua_xmove(L, T, 1);
+  lua_pushinteger(T, lp->id);
+  ui_send(T, l_panel_ui, "panel");
+  lua_settop(L, 2);
   return 1;
 }
 
 /* The methods that touch the panel run on the interface thread. */
-#define ON_UI(name) \
-  static int name(lua_State *L) { return ui_call(L, name##_ui); }
-ON_UI(l_panel)
+#define SEND(name) \
+  static int name(lua_State *L) { return to_ui(L, name##_ui, #name + 2, 0); }
+#define ASK(name) \
+  static int name(lua_State *L) { return to_ui(L, name##_ui, #name + 2, 1); }
 
 static int m_rows_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
+  struct panel *p = panel_of(L);
   luaL_checktype(L, 2, LUA_TTABLE);
-  if (lp->p && !lp->closed) {
-    int cur = panel_cursor(lp->p);
-    set_rows(L, lp->p, 2);
-    panel_set_cursor(lp->p, cur < 0 ? 0 : cur);
+  if (p) {
+    int cur = panel_cursor(p);
+    set_rows(L, p, 2);
+    panel_set_cursor(p, cur < 0 ? 0 : cur);
   }
   return 0;
 }
-ON_UI(m_rows)
+SEND(m_rows)
 
 static int m_title_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_set_title(lp->p, luaL_checkstring(L, 2));
+  struct panel *p = panel_of(L);
+  if (p) panel_set_title(p, luaL_checkstring(L, 2));
   return 0;
 }
-ON_UI(m_title)
+SEND(m_title)
 
 static int m_help_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_set_help(lp->p, luaL_checkstring(L, 2));
+  struct panel *p = panel_of(L);
+  if (p) panel_set_help(p, luaL_checkstring(L, 2));
   return 0;
 }
-ON_UI(m_help)
+SEND(m_help)
 
 static int m_columns_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
+  struct panel *p = panel_of(L);
   luaL_checktype(L, 2, LUA_TTABLE);
-  if (lp->p && !lp->closed) set_columns(L, lp->p, 2);
+  if (p) set_columns(L, p, 2);
   return 0;
 }
-ON_UI(m_columns)
+SEND(m_columns)
 
 static int m_cursor_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (!lp->p || lp->closed) return 0;
-  if (!lua_isnoneornil(L, 2)) panel_set_cursor(lp->p, (int)luaL_checkinteger(L, 2) - 1);
-  int cur = panel_cursor(lp->p);
+  struct panel *p = panel_of(L);
+  if (!p) return 0;
+  if (!lua_isnoneornil(L, 2)) panel_set_cursor(p, (int)luaL_checkinteger(L, 2) - 1);
+  int cur = panel_cursor(p);
   if (cur < 0) lua_pushnil(L);
   else lua_pushinteger(L, cur + 1);
   return 1;
 }
-ON_UI(m_cursor)
+ASK(m_cursor)
 
 static int m_hide_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_hide(lp->p);
+  struct panel *p = panel_of(L);
+  if (p) panel_hide(p);
   return 0;
 }
-ON_UI(m_hide)
+SEND(m_hide)
 
 static int m_preview_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) {
-    if (lua_isinteger(L, 2)) panel_set_preview(lp->p, 1, lua_tointeger(L, 2), NULL);
-    else if (lua_type(L, 2) == LUA_TSTRING) panel_set_preview(lp->p, 1, 0, lua_tostring(L, 2));
-    else panel_set_preview(lp->p, 0, 0, NULL);
+  struct panel *p = panel_of(L);
+  if (p) {
+    if (lua_isinteger(L, 2)) panel_set_preview(p, 1, lua_tointeger(L, 2), NULL);
+    else if (lua_type(L, 2) == LUA_TSTRING) panel_set_preview(p, 1, 0, lua_tostring(L, 2));
+    else panel_set_preview(p, 0, 0, NULL);
   }
   return 0;
 }
-ON_UI(m_preview)
+SEND(m_preview)
 
 static int m_show_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_show(lp->p);
+  struct panel *p = panel_of(L);
+  if (p) panel_show(p);
   return 0;
 }
-ON_UI(m_show)
+SEND(m_show)
 
 static int m_focus_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_focus(lp->p);
+  struct panel *p = panel_of(L);
+  if (p) panel_focus(p);
   return 0;
 }
-ON_UI(m_focus)
+SEND(m_focus)
 
 static int m_height_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
-  if (lp->p && !lp->closed) panel_set_size(lp->p, (float)luaL_checknumber(L, 2));
+  struct panel *p = panel_of(L);
+  if (p) panel_set_size(p, (float)luaL_checknumber(L, 2));
   return 0;
 }
-ON_UI(m_height)
+SEND(m_height)
 
 static int m_keys_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
+  struct panel *p = panel_of(L);
   luaL_checktype(L, 2, LUA_TTABLE);
-  if (lp->p && !lp->closed) set_own(L, lp->p, 2);
+  if (p) set_own(L, p, 2);
   return 0;
 }
-ON_UI(m_keys)
+SEND(m_keys)
 
 static int m_tabs_ui(lua_State *L) {
-  struct lpanel *lp = check(L);
+  struct panel *p = panel_of(L);
   luaL_checktype(L, 2, LUA_TTABLE);
-  if (lp->p && !lp->closed) set_tabs(L, lp->p, 2, (int)luaL_optinteger(L, 3, 1) - 1);
+  if (p) set_tabs(L, p, 2, (int)luaL_optinteger(L, 3, 1) - 1);
   return 0;
 }
-ON_UI(m_tabs)
+SEND(m_tabs)
 
 /* Lua thread: a key from another task, as if the panel had sent it */
 static int m_send(lua_State *L) {
   struct lpanel *lp = check(L);
   const char *key = luaL_checkstring(L, 2);
   int row = (int)luaL_optinteger(L, 3, 1) - 1;
-  if (lp->closed || !lp->p) return 0;
+  if (lp->closed) return 0;
   struct pevent *e = xcalloc(1, sizeof *e);
-  e->lp = lp;
+  e->id = lp->id;
   e->row = row;
   e->has_key = 1;
   snprintf(e->key, sizeof e->key, "%s", key);
-  atomic_fetch_add(&lp->inflight, 1);
   deliver(lp->app, e);
   return 0;
 }
 
-static void close_ui(void *arg) {
-  struct panel *p = arg;
-  if (panel_is_open(p)) panel_close(p); /* reports back through on_event */
+/* interface thread: the panel's number; closing reports back through
+ * on_event */
+static int close_ui(lua_State *L) {
+  struct panel *p = panel_of(L);
+  if (p) panel_close(p);
+  return 0;
 }
 
 static void wait_cancelled(void *ud) {
   struct lpanel *lp = ud;
-  if (lp->p) bridge_ui(lp->app, close_ui, lp->p);
+  lua_State *T = lua_newthread(lp->app->L); /* a stack whose only argument is the number */
+  lua_pushinteger(T, lp->id);
+  ui_send(T, close_ui, "panel close");
+  lua_pop(lp->app->L, 1);
 }
 
 static int m_wait(lua_State *L) {
@@ -467,7 +539,7 @@ static int m_wait(lua_State *L) {
     lp->qn--;
     return 2;
   }
-  if (lp->closed || !lp->p) {
+  if (lp->closed) {
     lua_pushnil(L);
     return 1;
   }
@@ -476,24 +548,30 @@ static int m_wait(lua_State *L) {
   return lua_yield(L, 0);
 }
 
-static void release_ui(void *arg) {
-  struct panel *p = arg;
+/* interface thread: the panel's number */
+static int release_ui(lua_State *L) {
+  long long id = luaL_checkinteger(L, 1);
+  struct panel *p = find(&ui_side, id);
+  if (!p) return 0;
+  drop(&ui_side, id);
   if (panel_is_open(p)) panel_close(p); /* a waiter is woken with nil */
   panel_on_event(p, NULL, NULL);        /* no key is sent after this */
   panel_unref(p);
+  return 0;
 }
 
-static void release(struct lpanel *lp) {
-  if (!lp->p) return;
-  struct panel *p = lp->p;
-  lp->p = NULL;
-  lp->closed = 1;
-  bridge_ui(lp->app, release_ui, p);
+static void release(lua_State *L, struct lpanel *lp) {
+  if (lp->closed == 2) return;
+  lp->closed = 2; /* released */
+  lua_State *T = lua_newthread(L);
+  lua_pushinteger(T, lp->id);
+  ui_send(T, release_ui, "panel close");
+  lua_pop(L, 1);
 }
 
 static int m_close(lua_State *L) {
   struct lpanel **ud = luaL_checkudata(L, 1, MT);
-  if (*ud) release(*ud);
+  if (*ud) release(L, *ud);
   return 0;
 }
 
@@ -502,15 +580,15 @@ static int m_gc(lua_State *L) {
   struct lpanel *lp = *ud;
   if (!lp) return 0;
   *ud = NULL;
-  release(lp);
-  lp->dead = 1;
-  if (atomic_load(&lp->inflight) == 0) free(lp); /* else when the last key lands */
+  release(L, lp);
+  drop(&lua_side, lp->id); /* a key still on its way finds no panel, and is dropped */
+  free(lp);
   return 0;
 }
 
 static int m_is_open(lua_State *L) {
   struct lpanel *lp = check(L);
-  lua_pushboolean(L, lp->p && !lp->closed);
+  lua_pushboolean(L, !lp->closed);
   return 1;
 }
 

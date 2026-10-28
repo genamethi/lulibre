@@ -85,6 +85,14 @@ int luaopen_lulibre_reading(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
 int luaopen_lulibre_library(struct lua_State *L);
 
+/* Calls into the interface (lua/uicall.c): fn runs on the interface thread
+ * with copies of L's arguments, on a lua_State that holds only values.
+ * ui_send returns at once (fn's errors are reported); ui_ask yields the
+ * task until fn's results come back, and raises fn's error. */
+int ui_send(struct lua_State *L, int (*fn)(struct lua_State *), const char *name);
+int ui_ask(struct lua_State *L, int (*fn)(struct lua_State *), const char *name);
+void ui_state_close(void);
+
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);

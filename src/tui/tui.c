@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "core/log.h"
+#include "core/queue.h"
 #include "library/library.h"
 #include "lua/bridge.h"
 #include "tui/tui.h"
@@ -130,7 +131,7 @@ struct remirror {
   char *err;
 };
 
-static void remirror_done(void *arg) { /* interface thread */
+static void remirror_done(struct app *app, void *arg) { /* interface thread */
   struct remirror *m = arg;
   struct tui *t = m->t;
   t->mirroring = 0;
@@ -151,7 +152,7 @@ static void remirror_done(void *arg) { /* interface thread */
 static void remirror_lua(struct app *app, void *arg) { /* Lua thread, between tasks */
   struct remirror *m = arg;
   m->rc = db_mirror(app->ldb ? app->ldb : &app->db, m->library, m->force, &m->err);
-  bridge_ui(app, remirror_done, m);
+  queue_post(LOOP_UI, remirror_done, m);
 }
 
 void tui_mirror(struct tui *t, int force, int told) {

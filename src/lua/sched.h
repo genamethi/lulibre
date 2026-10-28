@@ -24,6 +24,10 @@ void sched_free(struct app *app);
  * the task id. */
 int sched_spawn(struct lua_State *L, int nargs, const char *name);
 
+/* The same, but the task runs its first slice now, until it first waits,
+ * yields or ends: what it does before that is done when this returns. */
+int sched_spawn_now(struct lua_State *L, int nargs, const char *name);
+
 /* ---- for C functions that wait ----
  *
  *   struct task *t = sched_begin_wait(L);   // raises unless L is a task
