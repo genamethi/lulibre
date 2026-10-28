@@ -13,6 +13,7 @@
  *
  * Each runs on the main thread, which owns the library; the task waits for
  * the answer and the interface does not. */
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,6 +22,7 @@
 
 #include "app.h"
 #include "core/queue.h"
+#include "core/registry.h"
 #include "core/util.h"
 #include "library/library.h"
 #include "lua/lapi.h"
@@ -189,6 +191,79 @@ static int l_holder(lua_State *L) {
   if (!app->library) lapi_db(L); /* opens the index, and the library with it */
   static const char *const names[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "server", [HOLDER_PROGRAM] = "program"};
   lua_pushstring(L, app->library ? names[library_holder(app->library)] : "none");
+  return 1;
+}
+
+/* ---- the calibre store, when Lua has put one in calibredb's place:
+ * lulibre.stores.calibre(book, fields) as a task, its answer back to the
+ * main thread (library/library.h) ---- */
+
+struct store_answer {
+  struct store_req *q;
+  char *err;
+};
+
+static void store_answered(struct app *app, void *arg) { /* the main thread */
+  struct store_answer *a = arg;
+  a->q->answer(a->q, a->err);
+  free(a->err);
+  free(a);
+}
+
+static void store_fail(struct store_req *q, const char *why) {
+  struct store_answer *a = xcalloc(1, sizeof *a);
+  a->q = q;
+  a->err = xstrdup(why);
+  queue_post(LOOP_UI, store_answered, a);
+}
+
+static void store_start(struct app *app, void *arg) { /* the Lua thread */
+  struct store_req *q = arg;
+  lua_State *L = app->L;
+  if (!L) {
+    store_fail(q, "no lua_State: the scripts are restarting");
+    return;
+  }
+  lua_getglobal(L, "require");
+  lua_pushliteral(L, "lulibre.stores");
+  if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+    store_fail(q, lua_tostring(L, -1));
+    lua_pop(L, 1);
+    return;
+  }
+  lua_getfield(L, -1, "_run");
+  lua_remove(L, -2);
+  lua_pushinteger(L, (lua_Integer)(intptr_t)q);
+  lua_pushinteger(L, q->book);
+  lua_createtable(L, 0, q->n);
+  for (int i = 0; i < q->n; i++) {
+    lua_pushstring(L, q->values[i]);
+    lua_setfield(L, -2, q->fields[i]);
+  }
+  sched_spawn(L, 3, "store (lulibre.stores.calibre)");
+}
+
+void lapi_store_write(struct store_req *q) {
+  queue_post(LOOP_LUA, store_start, q);
+}
+
+/* answer(handle [, err]) */
+static int l_store_answer(lua_State *L) {
+  struct store_answer *a = xcalloc(1, sizeof *a);
+  a->q = (struct store_req *)(intptr_t)luaL_checkinteger(L, 1);
+  a->err = lua_isstring(L, 2) ? xstrdup(lua_tostring(L, 2)) : NULL;
+  queue_post(LOOP_UI, store_answered, a);
+  return 0;
+}
+
+static int l_store_filled(lua_State *L) {
+  registry_set_lua(REG_STORE, lua_toboolean(L, 1));
+  return 0;
+}
+
+int luaopen_lulibre_stores_core(lua_State *L) {
+  static const luaL_Reg fns[] = {{"answer", l_store_answer}, {"filled", l_store_filled}, {NULL, NULL}};
+  luaL_newlib(L, fns);
   return 1;
 }
 

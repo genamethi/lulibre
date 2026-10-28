@@ -13,6 +13,7 @@
 
 enum registry_kind {
   REG_READER, /* how a file's page images become text (design 37): lulibre.ocr.read */
+  REG_STORE,  /* how a book's changes reach calibre (design 28): lulibre.stores.calibre */
   REG_KINDS
 };
 

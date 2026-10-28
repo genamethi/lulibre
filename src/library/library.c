@@ -12,6 +12,7 @@
 #include "app.h"
 #include "core/events.h"
 #include "core/log.h"
+#include "core/registry.h"
 #include "core/util.h"
 #include "library/fields.h"
 
@@ -265,6 +266,7 @@ struct run {
   int direct;
   int64_t status;
   int closed; /* of the three handles */
+  char *lua_err; /* the answer of a store of Lua's: why it failed */
 };
 
 enum { RUN_EMBED = -1, RUN_COMMAND = -2 };
@@ -273,7 +275,10 @@ enum { RUN_EMBED = -1, RUN_COMMAND = -2 };
 static void ran(struct run *r) {
   struct library *lib = r->lib;
   struct batch *b = r->b;
-  char *err = r->status ? library_failure((int)r->status, r->text.s ? r->text.s : "", b->server) : NULL;
+  char *err = r->lua_err ? r->lua_err
+             : r->status ? library_failure((int)r->status, r->text.s ? r->text.s : "", b->server)
+                         : NULL;
+  r->lua_err = NULL;
   if (r->book >= 0) {
     struct book_job *j = &b->books[r->book];
     for (int i = 0; i < j->n; i++) row_state(lib, j->rows[i], err ? OP_FAILED : OP_APPLIED, err);
@@ -384,9 +389,46 @@ static void spawn(struct library *lib, struct batch *b, int book, char **args) {
   uv_read_start((uv_stream_t *)&r->err, alloc_cb, read_cb);
 }
 
+/* A store of Lua's answered for one book. */
+static void stored_by_lua(struct store_req *q, const char *err) {
+  struct run *r = q->ud;
+  if (err) {
+    r->status = 1;
+    r->lua_err = xstrdup(err);
+  }
+  free(q);
+  struct library *lib = r->lib;
+  ran(r);
+  r->b->running--;
+  free(r);
+  pump(lib);
+}
+
+/* The book's changes to the store Lua has put in calibredb's place. */
+static void start_lua_store(struct library *lib, struct batch *b, int i) {
+  struct book_job *j = &b->books[i];
+  struct run *r = xcalloc(1, sizeof *r);
+  r->lib = lib;
+  r->b = b;
+  r->book = i;
+  struct store_req *q = xcalloc(1, sizeof *q);
+  q->book = j->book;
+  q->n = j->n;
+  q->fields = j->fields;
+  q->values = j->values; /* the batch's, which lives until it finishes */
+  q->answer = stored_by_lua;
+  q->ud = r;
+  b->running++;
+  lapi_store_write(q);
+}
+
 /* calibredb set_metadata ID --field f:v ... */
 static void start_book(struct library *lib, struct batch *b, int i) {
   struct book_job *j = &b->books[i];
+  if (registry_lua(REG_STORE)) {
+    start_lua_store(lib, b, i);
+    return;
+  }
   char **args = xcalloc((size_t)(2 * j->n + 3), sizeof *args);
   int n = 0;
   args[n++] = xstrdup("set_metadata");
@@ -526,6 +568,8 @@ static void finish_batch(struct library *lib, struct batch *b) {
 }
 
 static int allowed(const struct library *lib, const struct batch *b) {
+  /* a store of Lua's takes its own route: the holder is its to mind */
+  if (b->need == NEED_ANY && !b->argv && registry_lua(REG_STORE)) return 1;
   if (lib->holder == HOLDER_PROGRAM) return 0;
   if (b->need == NEED_CLOSED) return lib->holder == HOLDER_NONE;
   return lib->holder == HOLDER_NONE || *b->server;

@@ -57,6 +57,20 @@ db=$(ls "$t"/data/lulibre/lib-*.db | grep -v 'journal\|custom')
 ocr=$(sqlite3 "$db" "SELECT group_concat(text, '|') FROM lines WHERE file = 1" 2>/dev/null || true)
 printf '' >"$cfg/init.lua"
 
+# a calibre store of Lua's in calibredb's place (lulibre.stores.calibre)
+cat >"$t/store.lua" <<'LUA'
+local stores = require "lulibre.stores"
+local library = require "lulibre.library"
+local seen = {}
+function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
+local batch = library.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
+local row = lulibre.sql("SELECT store, state FROM history.journal WHERE batch = ?", batch)[1]
+print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
+function stores.calibre() return nil, "not today" end
+print("refused|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Again" } }))))
+LUA
+store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
+
 fails=0
 contains() { # description, needle, haystack
   case "$3" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$3" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
@@ -74,4 +88,6 @@ contains "and read back at the next start" "ocr|auto" "$again"
 if command -v sqlite3 >/dev/null; then
   contains "OCR reads with the reader Lua put in tesseract's place" "Read By Lua|page 1 eng" "$ocr"
 fi
+contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
+contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

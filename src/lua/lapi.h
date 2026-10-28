@@ -93,6 +93,7 @@ int luaopen_lulibre_reading(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
 int luaopen_lulibre_library(struct lua_State *L);
 int luaopen_lulibre_ocr_core(struct lua_State *L);
+int luaopen_lulibre_stores_core(struct lua_State *L);
 /* Hands an OCR request to lulibre.ocr.read (l_ocr.c); any thread. */
 struct ocr_req;
 void lapi_ocr_read(struct ocr_req *req);

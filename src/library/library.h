@@ -71,6 +71,19 @@ int library_submit(struct library *lib, const struct operation *op, library_done
 /* Puts a batch's old values back, as an operation of its own. */
 int library_undo(struct library *lib, long long batch, library_done *done, void *ud, char **err);
 
+/* One book's changes for the calibre store Lua has put in calibredb's place
+ * (core/registry.h): fields[i] gets values[i], in the form library/fields.h
+ * gives. answer() runs on the main loop with err NULL when they were made. */
+struct store_req {
+  long long book;
+  int n;
+  char **fields, **values;
+  void (*answer)(struct store_req *req, const char *err);
+  void *ud;
+};
+/* Hands a request to lulibre.stores.calibre (lua/l_library.c); any thread. */
+void lapi_store_write(struct store_req *req);
+
 /* What went wrong with a calibredb run, in words: the one place its error
  * text is read. status: its exit status; out: what it printed. malloc'd. */
 char *library_failure(int status, const char *out, const char *server);
