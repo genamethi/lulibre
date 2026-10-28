@@ -81,6 +81,22 @@ print("cancelled|" .. tostring(select(2, library.apply({ { book = 1, field = "ti
 LUA
 store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
 
+# coroutine.resume and coroutine.wrap are lulibre's, and behave as Lua's
+cat >"$t/co.lua" <<'LUA'
+local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
+local co = coroutine.create(function(a, b) local c = coroutine.yield(a + b) return c * 2 end)
+say("co", coroutine.resume(co, 1, 2))
+say("co", coroutine.resume(co, 5))
+say("co", coroutine.resume(co))
+say("co", coroutine.resume(coroutine.create(function() error("boom", 0) end)))
+local gen = coroutine.wrap(function() for i = 1, 3 do coroutine.yield(i) end end)
+say("wrap", gen(), gen(), gen())
+local ok, err = pcall(coroutine.wrap(function() error("inside") end))
+say("wrap error", ok, err)
+say("nested", coroutine.wrap(function() return coroutine.wrap(function() coroutine.yield("deep") end)() end)())
+LUA
+co=$("$bin" -L "$t/lib" run "$t/co.lua" 2>&1)
+
 fails=0
 contains() { # description, needle, haystack
   case "$3" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$3" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
@@ -102,4 +118,11 @@ contains "a change goes to the calibre store Lua put in calibredb's place, journ
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 contains "a change that applied posts records_changed with its books and fields" "changed|1|title" "$store"
 contains "a store's task cancelled before it answers fails the write" "cancelled|the task that was to answer ended" "$store"
+contains "coroutine.resume passes values both ways" "co|true|3" "$co"
+contains "and returns the function's results at its end" "co|true|10" "$co"
+contains "a dead coroutine is refused, as Lua refuses it" "co|false|cannot resume dead coroutine" "$co"
+contains "an error inside is false and the error" "co|false|boom" "$co"
+contains "coroutine.wrap yields its values" "wrap|1|2|3" "$co"
+contains "and raises the error inside, where it was called" "wrap error|false|" "$co"
+contains "a coroutine inside a coroutine" "nested|deep" "$co"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

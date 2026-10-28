@@ -186,6 +186,7 @@ lua_State *lstate_new(struct app *app) {
   app->lmain->app = app;
   *(struct lctx **)lua_getextraspace(L) = app->lmain;
   luaL_openlibs(L);
+  sched_open_coroutines(L);
   luaL_requiref(L, "setman", luaopen_setman, 1);
   luaL_requiref(L, "evman", luaopen_evman, 1);
   luaL_requiref(L, "keymap", luaopen_keymap, 1);

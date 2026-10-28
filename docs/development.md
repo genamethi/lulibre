@@ -277,7 +277,9 @@ in tasks that take turns where they wait.
   stops it once cancelled, by yielding, which no pcall catches. No hook
   runs otherwise: a count hook makes every Lua instruction about twice as
   slow. `:cancel` reaches a running task the same way, since a task that
-  runs reads no message.
+  runs reads no message. `coroutine.resume` and `coroutine.wrap` are the
+  scheduler's own (as Lua's otherwise), so the hook goes on a coroutine the
+  task resumed, and a cancelled task yields up through each resume.
 - Code that may run again while it waits takes its values once, at its
   start, in `<const>` locals (`setman.get`), and passes them down: the
   functions it calls take them as arguments.

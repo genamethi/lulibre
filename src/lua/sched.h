@@ -78,6 +78,10 @@ void sched_stop_running(int id);
  * signal). */
 void sched_signalled(void);
 
+/* coroutine.resume and coroutine.wrap in L, as Lua's, but the coroutine a
+ * task resumes is reached by the hook too. */
+void sched_open_coroutines(struct lua_State *L);
+
 /* Push an array of {id=, name=, state=} onto L. */
 void sched_push_tasks(struct lua_State *L);
 int sched_current_id(struct lua_State *L); /* 0 outside a task */

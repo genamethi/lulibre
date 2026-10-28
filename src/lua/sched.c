@@ -68,6 +68,10 @@ static atomic_int running_id;
 static atomic_llong running_since; /* ms, uv_hrtime's clock */
 static atomic_int stop_id;         /* a task to stop as it runs */
 
+/* The task running, on the Lua thread: a coroutine the task resumed has no
+ * task of its own, and its hook finds the task here. */
+static struct task *current;
+
 static long long now_ms(void) {
   return (long long)(uv_hrtime() / 1000000);
 }
@@ -123,14 +127,16 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
   }
 }
 
-/* Installed only while a task has run too long (sched_signalled): says so
- * once, and stops the task when it is cancelled. It stops it by yielding,
- * which no pcall catches: run_one then finishes the task, closing what it
- * holds. Where a yield cannot cross (a C function's callback), it raises an
- * error, and stays to raise again. */
+/* Installed only while a task has run too long (sched_signalled), on the
+ * coroutine running then: the task's, or one it resumed. Says so once, and
+ * stops the task when it is cancelled. It stops it by yielding, which no
+ * pcall catches: in the task's coroutine, run_one then finishes the task,
+ * closing what it holds; in one the task resumed, the resume yields the
+ * task in turn (co_resume). Where a yield cannot cross (a C function's
+ * callback), it raises an error, and stays to raise again. */
 static void watch_hook(lua_State *L, lua_Debug *ar) {
   (void)ar;
-  struct task *t = task_of(L);
+  struct task *t = current;
   if (!t) {
     lua_sethook(L, NULL, 0, 0);
     return;
@@ -179,6 +185,7 @@ static void run_one(struct sched *s, struct task *t) {
   }
   int nres = 0;
   t->warned = 0;
+  current = t;
   atomic_store(&running_id, t->id);
   atomic_store(&running_since, now_ms());
   atomic_store(&running_co, t->co);
@@ -186,6 +193,7 @@ static void run_one(struct sched *s, struct task *t) {
   atomic_store(&running_co, NULL);
   atomic_store(&running_since, 0);
   atomic_store(&running_id, 0);
+  current = NULL;
   int stop = t->id;
   atomic_compare_exchange_strong(&stop_id, &stop, 0);
   lua_sethook(t->co, NULL, 0, 0);
@@ -314,6 +322,99 @@ int sched_spawn_now(lua_State *L, int nargs, const char *name) {
   t->queued = 0;
   run_one(s, t);
   return id;
+}
+
+/* ---- coroutines a task resumes ----
+ *
+ * coroutine.resume and coroutine.wrap, as Lua's, but the coroutine they
+ * resume is the one a hook goes on while it runs (running_co), and a task
+ * cancelled while it ran yields on the resume's return, up to the
+ * scheduler: a task looping in a coroutine of its own is reached too. */
+
+/* lcorolib's auxresume: the results on L, or -1 and the error on L. */
+static int resume(lua_State *L, lua_State *co, int narg) {
+  if (!lua_checkstack(co, narg)) {
+    lua_pushliteral(L, "too many arguments to resume");
+    return -1;
+  }
+  lua_xmove(L, co, narg);
+  lua_State *outer = atomic_load(&running_co);
+  if (outer) atomic_store(&running_co, co);
+  int nres, status = lua_resume(co, L, narg, &nres);
+  if (outer) atomic_store(&running_co, outer);
+  if (status == LUA_OK || status == LUA_YIELD) {
+    if (!lua_checkstack(L, nres + 1)) {
+      lua_pop(co, nres);
+      lua_pushliteral(L, "too many results to resume");
+      return -1;
+    }
+    lua_xmove(co, L, nres);
+    return nres;
+  }
+  lua_xmove(co, L, 1);
+  return -1;
+}
+
+/* The task was cancelled while the coroutine ran: on up. */
+static int stopping(lua_State *L) {
+  if (!current || !current->cancelled) return 0;
+  if (lua_isyieldable(L)) return 1;
+  luaL_error(L, "cancelled");
+  return 0;
+}
+
+static int co_resume(lua_State *L) {
+  lua_State *co = lua_tothread(L, 1);
+  luaL_argexpected(L, co, 1, "coroutine");
+  int r = resume(L, co, lua_gettop(L) - 1);
+  if (stopping(L)) return lua_yield(L, 0);
+  if (r < 0) {
+    lua_pushboolean(L, 0);
+    lua_insert(L, -2);
+    return 2;
+  }
+  lua_pushboolean(L, 1);
+  lua_insert(L, -(r + 1));
+  return r + 1;
+}
+
+/* lcorolib's auxwrap */
+static int co_wrapped(lua_State *L) {
+  lua_State *co = lua_tothread(L, lua_upvalueindex(1));
+  int r = resume(L, co, lua_gettop(L));
+  if (stopping(L)) return lua_yield(L, 0);
+  if (r < 0) {
+    int status = lua_status(co);
+    if (status != LUA_OK && status != LUA_YIELD) { /* an error in the coroutine */
+      status = lua_closethread(co, L);
+      lua_xmove(co, L, 1);
+    }
+    if (status != LUA_ERRMEM && lua_type(L, -1) == LUA_TSTRING) {
+      luaL_where(L, 1);
+      lua_insert(L, -2);
+      lua_concat(L, 2);
+    }
+    return lua_error(L);
+  }
+  return r;
+}
+
+static int co_wrap(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TFUNCTION);
+  lua_State *co = lua_newthread(L);
+  lua_pushvalue(L, 1);
+  lua_xmove(L, co, 1);
+  lua_pushcclosure(L, co_wrapped, 1);
+  return 1;
+}
+
+void sched_open_coroutines(lua_State *L) {
+  lua_getglobal(L, "coroutine");
+  lua_pushcfunction(L, co_resume);
+  lua_setfield(L, -2, "resume");
+  lua_pushcfunction(L, co_wrap);
+  lua_setfield(L, -2, "wrap");
+  lua_pop(L, 1);
 }
 
 void sched_require_task(lua_State *L) {
