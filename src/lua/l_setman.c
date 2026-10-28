@@ -12,7 +12,10 @@
  * at once and sends the change to the store; the store orders the changes
  * it receives and sends each value that changed back, so the copy ends on
  * the store's value. An emptied value reaches the copy only that way, one
- * turn of the loop later. */
+ * turn of the loop later. A value sent back carries the number of the last
+ * set the store had taken; the copy takes it only when no later set of the
+ * same setting is still on its way, so two sets in a row do not show the
+ * first again while the second travels. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,8 +33,15 @@ static const char COPY[] = "lulibre.settings";
 
 struct setman_change {
   int def;
+  unsigned long seq; /* the last set the store had taken */
   union setting_value v;
 };
+
+/* The Lua thread's: the number of the last set, and per setting the
+ * number of its last set. */
+static unsigned long seq, pending[S_COUNT];
+/* The main thread's: the number of the last set the store took. */
+static unsigned long taken;
 
 static int is_text(const struct setting_def *d) {
   return d->type == SETTING_STR || d->type == SETTING_PATH;
@@ -73,11 +83,13 @@ void l_setman_fill(lua_State *L, const struct settings *st) {
   lua_createtable(L, 0, S_COUNT);
   lua_setfield(L, LUA_REGISTRYINDEX, COPY);
   for (int i = 0; i < S_COUNT; i++) put(L, i, settings_value(st, i));
+  memset(pending, 0, sizeof pending);
 }
 
 struct setman_change *setman_change_new(const struct settings *st, int def) {
   struct setman_change *c = xcalloc(1, sizeof *c);
   c->def = def;
+  c->seq = taken;
   c->v = *settings_value(st, def);
   if (is_text(&setting_defs[def])) c->v.s = xstrdup(c->v.s);
   return c;
@@ -85,7 +97,7 @@ struct setman_change *setman_change_new(const struct settings *st, int def) {
 
 void l_setman_changed(struct app *app, void *arg) {
   struct setman_change *c = arg;
-  if (app->L) {
+  if (app->L && c->seq >= pending[c->def]) {
     put(app->L, c->def, &c->v);
     if (c->def == S_MOD_TREE) lstate_paths(app->L);
   }
@@ -97,11 +109,13 @@ void l_setman_changed(struct app *app, void *arg) {
 
 struct to_store {
   int def;
+  unsigned long seq;
   char *text; /* NULL: empty the API's value */
 };
 
 static void store_change(struct app *app, void *arg) {
   struct to_store *m = arg;
+  taken = m->seq;
   const char *name = setting_defs[m->def].name;
   char *err = NULL;
   int rc = m->text ? settings_set(app->settings, name, m->text, FROM_API, &err)
@@ -163,6 +177,7 @@ static int l_set(lua_State *L) {
     if (def == S_MOD_TREE) lstate_paths(L); /* the next require already searches it */
     if (is_text(d)) free(v.s);
   }
+  m->seq = pending[def] = ++seq;
   queue_post(LOOP_UI, store_change, m);
   return 0;
 }
