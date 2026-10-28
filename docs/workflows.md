@@ -176,7 +176,9 @@ calibre lets one program at a time have a library open. lulibre watches
 for it: when calibre's content server has the library, changes go through
 the server (the settings `server`, `user`, `password_file`); when nothing
 has it, straight to the folder; while calibre's own program has it,
-changes wait, and run once it closes. Changes that wait are in the
+changes wait, and run once it closes. calibre's lock is one for all of a
+user's libraries: while a calibre program has another library open (a
+copy of this one, say), changes wait too. Changes that wait are in the
 journal, and run at the next start if lulibre is closed first.
 
 With `embed`, each change is also written into the books' files

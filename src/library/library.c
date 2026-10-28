@@ -7,6 +7,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <dirent.h>
+#include <limits.h>
 #include <uv.h>
 
 #include "app.h"
@@ -61,6 +63,8 @@ struct library {
   uv_timer_t probe;
   _Atomic int holder; /* enum library_holder: changed on the main thread, read from any */
   int ours; /* calibredb runs of ours straight on the folder: they take calibre's lock too */
+  unsigned long lock_ino; /* the lock's socket, as last seen */
+  int lock_pid;           /* the process that holds it, or 0 */
   struct batch *head, *tail;
   int said_waiting;
   struct reload_wait *waiting; /* for the next reading of the records */
@@ -69,29 +73,121 @@ struct library {
 
 /* ---- the holder ---- */
 
+/* The process of ours that holds the socket with inode ino, or 0. */
+static int socket_owner(unsigned long ino) {
+  char want[64], path[300], link[128];
+  snprintf(want, sizeof want, "socket:[%lu]", ino);
+  DIR *proc = opendir("/proc");
+  if (!proc) return 0;
+  int found = 0;
+  for (struct dirent *e; !found && (e = readdir(proc));) {
+    if (e->d_name[0] < '1' || e->d_name[0] > '9') continue;
+    snprintf(path, sizeof path, "/proc/%s/fd", e->d_name);
+    DIR *fds = opendir(path); /* another user's: not readable, passed over */
+    if (!fds) continue;
+    for (struct dirent *d; (d = readdir(fds));) {
+      char fd[600];
+      snprintf(fd, sizeof fd, "%s/%s", path, d->d_name);
+      ssize_t n = readlink(fd, link, sizeof link - 1);
+      if (n <= 0) continue;
+      link[n] = '\0';
+      if (!strcmp(link, want)) {
+        found = atoi(e->d_name);
+        break;
+      }
+    }
+    closedir(fds);
+  }
+  closedir(proc);
+  return found;
+}
+
+/* Whether process pid has the library in folder dir open: its metadata.db
+ * among the process's files, or the folder among its arguments (calibre's
+ * server opens a library at its first request). 1 yes, 0 it has others
+ * open, -1 nothing tells. */
+static int holds(int pid, const char *dir) {
+  char path[64], fd[340], link[PATH_MAX];
+  char *db = xasprintf("%s/metadata.db", dir);
+  int known = 0, yes = 0;
+  snprintf(path, sizeof path, "/proc/%d/fd", pid);
+  DIR *fds = opendir(path);
+  for (struct dirent *d; fds && !yes && (d = readdir(fds));) {
+    snprintf(fd, sizeof fd, "%s/%s", path, d->d_name);
+    ssize_t n = readlink(fd, link, sizeof link - 1);
+    if (n <= 0) continue;
+    link[n] = '\0';
+    size_t len = (size_t)n;
+    if (len < 12 || strcmp(link + len - 12, "/metadata.db")) continue;
+    known = 1;
+    yes = !strcmp(link, db);
+  }
+  if (fds) closedir(fds);
+  snprintf(path, sizeof path, "/proc/%d/cmdline", pid);
+  FILE *f = yes ? NULL : fopen(path, "r");
+  if (f) {
+    char arg[PATH_MAX];
+    int c, n = 0;
+    while (!yes && (c = fgetc(f)) != EOF) {
+      if (c && n < (int)sizeof arg - 1) {
+        arg[n++] = (char)c;
+        continue;
+      }
+      arg[n] = '\0';
+      n = 0;
+      char *real = arg[0] == '/' ? realpath(arg, NULL) : NULL;
+      if (!real) continue;
+      char *cal = xasprintf("%s/metadata.db", real);
+      if (access(cal, F_OK) == 0) {
+        known = 1;
+        yes = !strcmp(real, dir);
+      }
+      free(cal);
+      free(real);
+    }
+    fclose(f);
+  }
+  free(db);
+  return yes ? 1 : known ? 0 : -1;
+}
+
 /* calibre's lock is an abstract unix socket per user, not per library:
  * calibre-singleinstance-<uid>-db, held by any calibre program that has a
  * library open (the program, calibre-server, calibredb opening one
  * directly), and ...-GUI by the program. Reading the list of sockets takes
- * nothing; binding the name to test it would take the lock. */
-static enum library_holder observe(const struct library *lib) {
+ * nothing; binding the name to test it would take the lock. Since it is
+ * one lock for every library, a server with another library open holds
+ * this one too, and is no route to it: then changes wait. */
+static enum library_holder observe(struct library *lib) {
   FILE *f = fopen("/proc/net/unix", "r");
   if (!f) return HOLDER_NONE;
   char db[96], gui[96], line[512];
   snprintf(db, sizeof db, "@calibre-singleinstance-%u-db", (unsigned)getuid());
   snprintf(gui, sizeof gui, "@calibre-singleinstance-%u-GUI", (unsigned)getuid());
-  int has_db = 0, has_gui = 0;
+  int has_gui = 0;
+  unsigned long db_ino = 0;
   while (fgets(line, sizeof line, f)) {
     char *name = strrchr(line, ' ');
     if (!name) continue;
     name++;
     name[strcspn(name, "\n")] = '\0';
-    if (!strcmp(name, db)) has_db = 1;
+    if (!strcmp(name, db)) sscanf(line, "%*s %*s %*s %*s %*s %*s %lu", &db_ino);
     if (!strcmp(name, gui)) has_gui = 1;
   }
   fclose(f);
   if (has_gui) return HOLDER_PROGRAM;
-  return has_db ? HOLDER_SERVER : HOLDER_NONE;
+  if (!db_ino) return HOLDER_NONE;
+  if (db_ino != lib->lock_ino) {
+    lib->lock_ino = db_ino;
+    lib->lock_pid = socket_owner(db_ino);
+  }
+  if (!lib->lock_pid) return HOLDER_SERVER;
+  char *dir = realpath(app_str(lib->app, S_LIBRARY), NULL);
+  int h = dir ? holds(lib->lock_pid, dir) : -1;
+  free(dir);
+  /* nothing tells: the server, and the library's name in the address
+   * keeps a change from another library (server_url) */
+  return h == 0 ? HOLDER_OTHER : HOLDER_SERVER;
 }
 
 static void pump(struct library *lib);
@@ -99,7 +195,11 @@ static void pump(struct library *lib);
 static void set_holder(struct library *lib, enum library_holder h) {
   if ((int)h == lib->holder) return;
   lib->holder = h;
-  log_debug("the library's holder: %s", h == HOLDER_SERVER ? "calibre's server" : h == HOLDER_PROGRAM ? "calibre's program" : "none");
+  static const char *const says[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "calibre's server",
+                                     [HOLDER_PROGRAM] = "calibre's program",
+                                     [HOLDER_OTHER] = "a calibre program with another library open"};
+  (void)says; /* the debug log may be compiled out */
+  log_debug("the library's holder: %s", says[h]);
   if (events_wanted(EV_HOLDER)) {
     struct event *ev = xcalloc(1, sizeof *ev);
     ev->kind = EV_HOLDER;
@@ -340,6 +440,21 @@ static void read_cb(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   if (n < 0) uv_close((uv_handle_t *)s, run_closed);
 }
 
+/* The server's address with the library named in it, as calibre's server
+ * names a library: its folder's name, spaces made underscores. Without
+ * it calibredb changes the server's first library, which need not be this
+ * one. An address that names one already is left as it is. */
+static char *server_url(const char *server, const char *dir) {
+  if (strchr(server, '#')) return xstrdup(server);
+  const char *slash = strrchr(dir, '/');
+  char *id = xstrdup(slash ? slash + 1 : dir);
+  for (char *p = id; *p; p++)
+    if (*p == ' ') *p = '_';
+  char *url = xasprintf("%s#%s", server, id);
+  free(id);
+  return url;
+}
+
 /* calibredb, by the route the holder allows, then args. The run counts in
  * b->running until its handles are closed, failed to start or not. */
 static void spawn(struct library *lib, struct batch *b, int book, char **args) {
@@ -348,11 +463,11 @@ static void spawn(struct library *lib, struct batch *b, int book, char **args) {
   int n = 0;
   argv[n++] = "calibredb";
   argv[n++] = "--with-library";
-  char *password = NULL;
+  char *password = NULL, *url = NULL;
   if (direct) {
     argv[n++] = b->library_dir;
   } else {
-    argv[n++] = b->server;
+    argv[n++] = url = server_url(b->server, b->library_dir);
     if (*b->user) {
       argv[n++] = "--username";
       argv[n++] = b->user;
@@ -385,6 +500,7 @@ static void spawn(struct library *lib, struct batch *b, int book, char **args) {
   b->running++;
   int rc = uv_spawn(lib->app->loop, &r->proc, &o);
   free(password);
+  free(url);
   if (rc) {
     r->closed = 1; /* no process to close */
     r->status = 127;
@@ -693,7 +809,7 @@ static void finish_batch(struct library *lib, struct batch *b) {
 static int allowed(const struct library *lib, const struct batch *b) {
   /* a store of Lua's takes its own route: the holder is its to mind */
   if (b->need == NEED_ANY && !b->argv && registry_lua(REG_STORE)) return 1;
-  if (lib->holder == HOLDER_PROGRAM) return 0;
+  if (lib->holder == HOLDER_PROGRAM || lib->holder == HOLDER_OTHER) return 0;
   if (b->need == NEED_CLOSED) return lib->holder == HOLDER_NONE;
   return lib->holder == HOLDER_NONE || *b->server;
 }
@@ -715,6 +831,7 @@ static void pump(struct library *lib) {
       if (!lib->said_waiting) {
         lib->said_waiting = 1;
         log_info(lib->holder == HOLDER_PROGRAM ? "changes wait while calibre's program has the library open"
+                 : lib->holder == HOLDER_OTHER ? "changes wait while a calibre program has another library open"
                                                : "changes wait: calibre's server has the library open, and the setting "
                                                  "server does not say where it is");
       }

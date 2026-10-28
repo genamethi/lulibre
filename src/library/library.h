@@ -18,7 +18,9 @@
 
 struct app;
 
-enum library_holder { HOLDER_NONE, HOLDER_SERVER, HOLDER_PROGRAM };
+/* HOLDER_OTHER: calibre's lock is held by a program with another library
+ * open; calibre's lock is one for all of a user's libraries. */
+enum library_holder { HOLDER_NONE, HOLDER_SERVER, HOLDER_PROGRAM, HOLDER_OTHER };
 
 enum op_need { NEED_ANY, NEED_CLOSED };
 

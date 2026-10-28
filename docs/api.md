@@ -80,7 +80,7 @@ lists the settings and their precedence.
 | `cursor` | `{book=}`: the cursor came to rest on a book |
 | `marks` | `{selection = {id, ...}}`: the marks changed |
 | `records_changed` | `{ids=, fields=}`: the books' records changed; `fields` lists those lulibre changed, and is empty when the change was made in calibre |
-| `holder` | `{holder = "none" \| "server" \| "program"}`: who has the library open |
+| `holder` | `{holder = "none" \| "server" \| "program" \| "other"}`: who has the library open; `other`, a calibre program with another library open |
 | `source_arrived` | `{book=, service=}`: an online answer came |
 
 The callback runs as a task with the payload, then the values after the
@@ -139,12 +139,12 @@ language](filters.md).
     }, "a label")                      -- waits
     library.undo(batch)                -- waits
     library.command({ "add_custom_column", "partof", "Part of", "text" })  -- waits
-    library.holder()                   -- "none" | "server" | "program"
+    library.holder()                   -- "none" | "server" | "program" | "other"
 
 One call is one operation, one batch of the journal. It runs through
 calibre's content server when the server holds the library, straight to
 the folder when nothing does, and waits while calibre's program has it
-open. `op` is `set` (the default), `add` or `remove`; add and remove apply
+open, or a calibre program has another library open. `op` is `set` (the default), `add` or `remove`; add and remove apply
 to lists (authors, tags, identifiers, languages) and keep the other items.
 Several changes to one field apply in order. A field of lulibre's own is
 `"#name"`. A change with `proposal=`, `proposed=` and `source=` keeps where

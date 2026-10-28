@@ -89,6 +89,11 @@ i=0
 while [ $i -lt 60 ] && ! grep -q 'calibre-singleinstance' /proc/net/unix 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
 sleep 1
 "$bin" -L "$t/lib" -o server=http://127.0.0.1:8099 run "$t/embed.lua" 2>&1
+# a copy of the library, under the same folder name: the server holds
+# calibre's lock but has the other open
+mkdir -p "$t/copy" && cp -a "$t/lib" "$t/copy/lib"
+echo 'print("copy holder|" .. require("lulibre.library").holder())' > "$t/holder.lua"
+"$bin" -L "$t/copy/lib" -o server=http://127.0.0.1:8099 run "$t/holder.lua" 2>&1
 kill $pid; wait $pid 2>/dev/null || true
 IN
 
@@ -116,5 +121,6 @@ expect "a rejection changes nothing but is kept" "rejection|review|authors|2|fro
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
 expect "the content server is seen to hold the library" "holder|server"
 expect "a change goes through the server" "apply|1"
+expect "a copy of the library the server has open is not reached through it" "copy holder|other"
 expect "embedding updates what the index knows of the file" "emb|Embedded Title"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

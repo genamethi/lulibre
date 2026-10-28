@@ -9,7 +9,7 @@
  *   library.command(args [, label])    a structural calibredb command
  *     ({ "add_custom_column", ... }), run once nothing holds the library
  *   library.undo(batch)                puts a batch's old values back
- *   library.holder()                   "none" | "server" | "program"
+ *   library.holder()                   "none" | "server" | "program" | "other"
  *
  * Each runs on the main thread, which owns the library; the task waits for
  * the answer and the interface does not. */
@@ -189,7 +189,8 @@ static int l_undo(lua_State *L) {
 static int l_holder(lua_State *L) {
   struct app *app = lapi_app(L);
   if (!app->library) lapi_db(L); /* opens the index, and the library with it */
-  static const char *const names[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "server", [HOLDER_PROGRAM] = "program"};
+  static const char *const names[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "server", [HOLDER_PROGRAM] = "program",
+                                       [HOLDER_OTHER] = "other"};
   lua_pushstring(L, app->library ? names[library_holder(app->library)] : "none");
   return 1;
 }

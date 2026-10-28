@@ -8,7 +8,7 @@
  *                               loop's callbacks get it as they get C's
  *
  * event: "cursor" {book=}, "marks" {selection={...}}, "records_changed"
- * {ids=, fields=}, "holder" {holder="none"|"server"|"program"},
+ * {ids=, fields=}, "holder" {holder="none"|"server"|"program"|"other"},
  * "source_arrived" {book=, service=}.
  *
  * Each time the event comes, fn runs as a task with the payload and then
@@ -55,7 +55,8 @@ static void push_ids(lua_State *L, const long long *ids, int n) {
 }
 
 static void push_payload(lua_State *L, const struct event *ev) {
-  static const char *holders[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "server", [HOLDER_PROGRAM] = "program"};
+  static const char *holders[] = {[HOLDER_NONE] = "none", [HOLDER_SERVER] = "server", [HOLDER_PROGRAM] = "program",
+                                       [HOLDER_OTHER] = "other"};
   lua_newtable(L);
   switch (ev->kind) {
   case EV_CURSOR:

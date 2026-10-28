@@ -59,7 +59,7 @@ removed.
 | `embed` | `false` | every change to a record is also written into the book's files, once per batch |
 | `write_jobs` | `4` | calibredb processes at once through the content server; straight to the folder, one |
 | `contact_email` | | sent to the metadata services with each request, when set |
-| `server` `user` `password_file` | | calibre's content server, which changes go through while it holds the library. lulibre never reads the password: calibredb gets the file's name |
+| `server` `user` `password_file` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |
 
 ## Colours
 
