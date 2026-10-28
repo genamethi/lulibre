@@ -263,7 +263,7 @@ static void run_one(struct sched *s, struct task *t) {
   t->nargs = 0;
   if (st == LUA_YIELD) {
     lua_pop(t->co, nres);
-    if (t->state == T_READY) enqueue(s, t); /* lulibre.yield() */
+    if (t->state == T_READY) enqueue(s, t); /* taskman.yield() */
   } else if (st == LUA_OK) {
     finish(s, t, 1, NULL);
   } else {
@@ -486,7 +486,7 @@ void sched_open_coroutines(lua_State *L) {
 void sched_require_task(lua_State *L) {
   if (!task_of(L) || !lua_isyieldable(L))
     luaL_error(L, "this function waits for something, so it must run in a task: "
-                  "call it from a script, a command, or lulibre.spawn(function() ... end)");
+                  "call it from a script, a command, or taskman.spawn(function() ... end)");
 }
 
 struct task *sched_begin_wait(lua_State *L) {

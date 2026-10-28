@@ -1,15 +1,16 @@
-/* lulibre.library: calibre's library as a resource (design 24-31;
- * library/library.h), a packaged module written in C.
+/* store: calibre's library as a resource (design 24-31; library/library.h),
+ * a module written in C, preloaded.
  *
- *   library.apply(changes [, label])   the changes as one operation; waits
+ *   store.apply(changes [, label])   the changes as one operation; waits
  *     until it has applied or failed: the batch (nil when nothing was to
  *     change), or nil and why. changes: { {book=, field=, value=,
  *     op = "set"|"add"|"remove", proposal=, proposed=, source=}, ... };
  *     no value: the field keeps its value, a decision on a proposal
- *   library.command(args [, label])    a structural calibredb command
+ *   store.command(args [, label])      a structural calibredb command
  *     ({ "add_custom_column", ... }), run once nothing holds the library
- *   library.undo(batch)                puts a batch's old values back
- *   library.holder()                   "none" | "server" | "program" | "other"
+ *   store.undo(batch)                  puts a batch's old values back
+ *   store.holder()                     "none" | "server" | "program" | "other"
+ *   store.reload()                     calibre's records read again (l_db.c)
  *
  * Each runs on the background thread, which owns the library (work.h);
  * the task waits for the answer and the interface does not. */
@@ -280,9 +281,10 @@ int luaopen_lulibre_stores_core(lua_State *L) {
   return 1;
 }
 
-int luaopen_lulibre_library(lua_State *L) {
+int luaopen_store(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"apply", l_apply}, {"command", l_command}, {"undo", l_undo}, {"holder", l_holder}, {NULL, NULL},
+    {"apply", l_apply}, {"command", l_command}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
+    {NULL, NULL},
   };
   luaL_newlib(L, fns);
   return 1;

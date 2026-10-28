@@ -1,7 +1,7 @@
 # Filters
 
 lulibre has one filter language. `lulibre query`, `&` and `/` in the
-interface, and Lua functions such as `lulibre.ids(filter)` all use it.
+interface, and Lua functions such as `bookman.ids(filter)` all use it.
 `lulibre query -h` prints a summary.
 
     term term ...        all must hold

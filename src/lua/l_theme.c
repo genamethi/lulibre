@@ -1,8 +1,8 @@
-/* lulibre.theme -- the interface's colours, by name.
+/* uiman.theme -- the interface's colours, by name.
  *
- *   lulibre.theme.border = "#9aa5ce"     or 0x9aa5ce
- *   lulibre.theme.bar_bg                 "#343a55"
- *   lulibre.theme()                      every name with its colour
+ *   uiman.theme.border = "#9aa5ce"     or 0x9aa5ce
+ *   uiman.theme.bar_bg                 "#343a55"
+ *   uiman.theme()                      every name with its colour
  *
  * Names: dim accent warn error ok cursor_bg cursor_bg_blur visual_bg mark
  * title border (the line between windows) bar_bg bar_fg (a window's top

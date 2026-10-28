@@ -185,7 +185,7 @@ static void run(struct app *app, void *arg) { /* the interface thread */
   c->ok = lua_pcall(U, c->nargs, LUA_MULTRET, 0) == LUA_OK;
   if (!c->task) {
     if (!c->ok) {
-      char *msg = xasprintf("lulibre.%s: %s", c->name, lua_tostring(U, -1));
+      char *msg = xasprintf("uiman.%s: %s", c->name, lua_tostring(U, -1));
       lapi_report(app, 1, msg);
       free(msg);
     }

@@ -1,7 +1,7 @@
 /* Panels: tables a script fills and steers. The edit form, proposal review
  * and pattern capture are Lua scripts built on this.
  *
- *   local p <close> = lulibre.panel{
+ *   local p <close> = uiman.panel{
  *     title = "review", help = "a accept  r reject  w write",
  *     columns = { {"Field", 12}, "Current", "Proposed", {"Source", 18} },
  *     rows = { {"authors", "Unknown", "E. Di Nardo", "title page", id = 1299, style = "ok"} },

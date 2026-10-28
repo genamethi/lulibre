@@ -1,6 +1,6 @@
 /* Content hashes, for telling whether two files hold the same bytes.
  *
- *   lulibre.md5(path)   32 hex digits, or nil and a message
+ *   lulib.md5(path)   32 hex digits, or nil and a message
  *
  * The first call for a file reads it on a worker thread (so it must be made
  * from a task) and remembers the answer in the index; later calls return at

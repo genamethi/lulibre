@@ -1,6 +1,6 @@
 /* libuv for scripts, on the loop lulibre runs Lua on.
  *
- * `require "luv"` (or `lulibre.uv`, which is the same module) loads the luv
+ * `require "luv"` loads the luv
  * rock from the Lua path as usual, with three differences made here before it
  * initialises: it is given the loop of the Lua thread instead of creating
  * its own, so its handles and the `lulibre` API's timers, subprocesses and
@@ -78,18 +78,6 @@ static int preload_luv(lua_State *L) {
   return 1;
 }
 
-/* lulibre.uv, resolved on first use so luv is only loaded when wanted */
-static int lulibre_index(lua_State *L) {
-  const char *key = lua_tostring(L, 2);
-  if (!key || strcmp(key, "uv") != 0) return 0;
-  lua_getglobal(L, "require");
-  lua_pushliteral(L, "luv");
-  lua_call(L, 1, 1);
-  lua_pushvalue(L, -1);
-  lua_setfield(L, 1, "uv"); /* cache: later reads skip the metamethod */
-  return 1;
-}
-
 /* Load luv now, on the main state, if it is installed. */
 void l_uv_preload(lua_State *L) {
   lua_getglobal(L, "require");
@@ -103,9 +91,4 @@ void l_uv_open(lua_State *L) {
   lua_pushcfunction(L, preload_luv);
   lua_setfield(L, -2, "luv");
   lua_pop(L, 2);
-
-  lua_newtable(L);
-  lua_pushcfunction(L, lulibre_index);
-  lua_setfield(L, -2, "__index");
-  lua_setmetatable(L, -2);
 }

@@ -1,18 +1,11 @@
-/* Tasks.
+/* Tasks: the taskman global.
  *
- *   lulibre.spawn(fn, ...)   run fn as a background task; returns its id
- *   lulibre.sleep(ms)        wait without blocking anything
- *   lulibre.yield()          give the other tasks a turn now: a task that
+ *   taskman.spawn(fn, ...)   run fn as a background task; returns its id
+ *   taskman.sleep(ms)        wait without blocking anything
+ *   taskman.yield()          give the other tasks a turn now: a task that
  *                            computes for long, between steps
- *   lulibre.tasks()          { {id=, name=, state=}, ... }
- *   lulibre.cancel(id)       ask a task to stop
- *   lulibre.task_id()        id of the running task, or nil outside one
- *   lulibre.claim(t, key [, value])
- *                            t[key] = value (default true) if it is nil:
- *                            true if this call set it, false if it was set.
- *                            Give it back with t[key] = nil. (From when
- *                            tasks were interrupted anywhere; between two
- *                            waits, a test and a set are one step now.)
+ *   taskman.tasks()          { {id=, name=, state=}, ... }
+ *   taskman.cancel(id)       ask a task to stop
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,25 +17,6 @@
 #include "core/util.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
-
-/* One C call is one step for the scheduler: the count hook that interrupts
- * tasks runs between Lua instructions, never inside a C function. Raw
- * access, so no metamethod (Lua code) runs in between. */
-static int l_claim(lua_State *L) {
-  luaL_checktype(L, 1, LUA_TTABLE);
-  luaL_checkany(L, 2);
-  lua_pushvalue(L, 2);
-  if (lua_rawget(L, 1) != LUA_TNIL) {
-    lua_pushboolean(L, 0);
-    return 1;
-  }
-  lua_pushvalue(L, 2);
-  if (lua_isnoneornil(L, 3)) lua_pushboolean(L, 1);
-  else lua_pushvalue(L, 3);
-  lua_rawset(L, 1);
-  lua_pushboolean(L, 1);
-  return 1;
-}
 
 static int l_spawn(lua_State *L) {
   luaL_checktype(L, 1, LUA_TFUNCTION);
@@ -105,17 +79,10 @@ static int l_cancel(lua_State *L) {
   return 1;
 }
 
-static int l_task_id(lua_State *L) {
-  int id = sched_current_id(L);
-  if (id) lua_pushinteger(L, id);
-  else lua_pushnil(L);
-  return 1;
-}
-
 void l_job_open(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"spawn", l_spawn}, {"sleep", l_sleep},   {"yield", l_yield},
-    {"tasks", l_tasks}, {"cancel", l_cancel}, {"task_id", l_task_id}, {"claim", l_claim},
+    {"tasks", l_tasks}, {"cancel", l_cancel},
     {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);

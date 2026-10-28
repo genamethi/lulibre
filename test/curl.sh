@@ -73,19 +73,19 @@ local started, ended = os.time(), 0
 local clock = require("luv").now
 local t0 = clock()
 for i = 1, 3 do
-  lulibre.spawn(function()
+  taskman.spawn(function()
     curl.req(base .. "/slow")
     ended = ended + 1
     if ended == 3 then say("at once", clock() - t0 < 1900) end
   end)
 end
-local id = lulibre.spawn(function()
+local id = taskman.spawn(function()
   local _ <close> = setmetatable({}, { __close = function() say("cancelled ends", clock() - t0 < 600) end })
   curl.req(base .. "/slow")
   say("cancelled", "answered anyway")
 end)
-lulibre.sleep(100)
-lulibre.cancel(id)
+taskman.sleep(100)
+taskman.cancel(id)
 LUA
 
 cat >"$t/inside.sh" <<'IN'

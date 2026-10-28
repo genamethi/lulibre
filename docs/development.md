@@ -72,8 +72,8 @@ builds, plus each build's `.diff`.
 The log is kept in the repository's own directory
 (`.git/lulibre-builds/VERSION/`), which every worktree shares, so builds in
 different checkouts share one sequence of numbers. The log is not
-committed. In Lua, the build's number and commit are `lulibre.build.number`
-and `lulibre.build.commit`, and a crash log names both.
+committed. In Lua, the build's number and commit are `lulib.build.number`
+and `lulib.build.commit`, and a crash log names both.
 
 ## Tests
 
@@ -238,7 +238,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
 The threads talk by messages (`src/core/queue.h`): each loop has an inbox,
 a message is a function and the value it owns, and it runs on the inbox's
 loop, never in the sender's stack. Neither thread waits for the other. A
-`lulibre.x` that touches the interface is a one-line wrapper around `x_ui`:
+`uiman.x` that touches the interface is a one-line wrapper around `x_ui`:
 `SEND` copies the arguments into a message and returns; `ASK` yields the
 task until the answer comes back as a message (`src/lua/uicall.c`). The
 interface runs `x_ui` on a lua_State of its own that holds only the copied

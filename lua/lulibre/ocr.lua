@@ -5,7 +5,7 @@
 --
 --     local ocr = require "lulibre.ocr"
 --     function ocr.read(path, page, lang)
---       local r = lulibre.system({ "my-ocr", path, tostring(page) })
+--       local r = lulib.exec({ "my-ocr", path, tostring(page) })
 --       return r and r.code == 0 and r.stdout or nil
 --     end
 --

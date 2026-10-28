@@ -146,7 +146,7 @@ and paste it with `<C-v>`.
 ## Inside a panel
 
 The edit form and review are panels, and so are the panels scripts open
-(`lulibre.panel`). In a panel:
+(`uiman.panel`). In a panel:
 
 - `j` `k` `gg` `G` and the paging keys move.
 - `q` closes the panel.
@@ -206,8 +206,8 @@ undoes") name the keys as they are bound now.
 
 ```lua
 keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
-keymap.set({"n", "v"}, "gx", function(o) lulibre.notify(#o.selection .. " selected") end)
-cmd.create("unlabelled", function(o) lulibre.filter("author:unknown no:tags " .. o.args) end,
+keymap.set({"n", "v"}, "gx", function(o) uiman.notify(#o.selection .. " selected") end)
+cmd.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
            { desc = "[filter]  books with neither an author nor a subject" })
 ```
 

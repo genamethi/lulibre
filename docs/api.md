@@ -20,7 +20,7 @@ task until the answer comes.
 
 Scripts run as **tasks** that take turns: a script, a command's function,
 a key's function, a callback, init.lua. A task gives the others their turn
-where it waits, and only there (or at `lulibre.yield()`): what it does
+where it waits, and only there (or at `taskman.yield()`): what it does
 between two waits, no other task sees half done. A task that computes for
 long holds the other tasks up, not the interface; after 2 s without
 waiting it is reported, and `:cancel` stops it. A function that waits
@@ -115,34 +115,46 @@ command line or a function. A function runs as a task with what the
 interface was at when it was invoked: `{name=, args=, book=, selection =
 {id, ...}}`. [Keys and commands](keys.md) has the key notation.
 
-## The library
+## What scripts reach
 
 | | |
 |---|---|
-| `lulibre.ids(filter)` | `{ id, ... }` |
-| `lulibre.books(filter)` | `{ book, ... }` |
-| `lulibre.book(id)` | a book, or nil |
-| `lulibre.count(filter)` | number |
-| `lulibre.authors()` `lulibre.tags()` | `{ {name=, books=}, ... }`, most used first |
+| `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
+| `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
+| `bookman` `store` `txt` `expr` `iter` `curl` `lsqlite3` | modules, by `require` |
+| `lulibre.sql` `lulibre.store` `lulibre.fuzzy` | until the modules that keep data take them |
+
+## The library: bookman
+
+    local bookman = require "bookman"
+
+| | |
+|---|---|
+| `bookman.ids(filter)` | `{ id, ... }` |
+| `bookman.books(filter)` | `{ book, ... }` |
+| `bookman.book(id)` | a book, or nil |
+| `bookman.count(filter)` | number |
+| `bookman.authors()` `bookman.tags()` | `{ {name=, books=}, ... }`, most used first |
+| `bookman.files(id)` | what the index holds of the book's files: `{ {path=, format=, outcome=, pages=, ...}, ... }` |
 | `lulibre.sql(sql, ...)` | rows of a read-only query against the index; the journal is `history.journal` |
 | `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables: proposals, lookups, kv, staged, custom fields |
-| `lulibre.reload()` | waits: read calibre's records again, when calibre has changed them |
 
 A **book** is `{ id, title, authors = {...}, author = "A & B", tags =
 {...}, year, pubdate, publisher, series, series_index, lang, idents =
 {doi=, isbn=, ...}, formats = {...}, dir }`. Filters are [the filter
 language](filters.md).
 
-### Changing it: lulibre.library
+### Changing it: store
 
-    local library = require "lulibre.library"
-    local batch, err = library.apply({
+    local store = require "store"
+    local batch, err = store.apply({
       { book = 12, field = "title", value = "Topics in Additive Combinatorics" },
       { book = 12, field = "tags", value = "math", op = "add" },
     }, "a label")                      -- waits
-    library.undo(batch)                -- waits
-    library.command({ "add_custom_column", "partof", "Part of", "text" })  -- waits
-    library.holder()                   -- "none" | "server" | "program" | "other"
+    store.undo(batch)                  -- waits
+    store.command({ "add_custom_column", "partof", "Part of", "text" })  -- waits
+    store.holder()                     -- "none" | "server" | "program" | "other"
+    store.reload()                     -- waits: calibre's records read again, when calibre has changed them
 
 One call is one operation, one batch of the journal. It runs through
 calibre's content server when the server holds the library, straight to
@@ -233,7 +245,7 @@ grammar's parse of a text.
 | `proposals.accept(id [, value])` | waits: the proposal, or the value edited from it, as an operation |
 | `proposals.reject(id)` | waits: kept in the journal; the field keeps its value |
 | `lulibre.rank`, `lulibre.track`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
-| `lulibre.similar.compare(kind, a, b)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
+| `require("lulibre.similar").compare(kind, a, b)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
 
 ## Online lookups
 
@@ -277,21 +289,31 @@ followed, and `url` is where the answer came from. `headers` are by
 lower-case name, repeated ones joined by ", ". The method is GET, or POST
 with a body; `timeout` is in milliseconds.
 
-## The interface
+## The interface: uiman
 
 | | |
 |---|---|
-| `lulibre.notify(msg [, "error"])` `print(...)` | the message line, and the log |
-| `lulibre.exec(line)` | run a command line |
-| `lulibre.mark(id [, on])` `lulibre.jump(id)` | |
-| `lulibre.filter([text])` | waits: the filter, or set it |
-| `lulibre.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
-| `lulibre.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
-| `lulibre.key(command [, mode])` `lulibre.maps()` `lulibre.commands()` | waits |
-| `lulibre.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys |
-| `lulibre.clipboard([text])` `lulibre.edit_file(path)` `lulibre.in_terminal(argv)` | wait |
-| `lulibre.index{pages=, force=, filter=}` | waits: index the files |
-| `lulibre.system(argv [, {stdin=, cwd=, timeout=}])` | waits: `{code=, stdout=, stderr=, ...}` |
-| `lulibre.spawn(fn, name)` `lulibre.sleep(ms)` `lulibre.yield()` | tasks |
+| `uiman.notify(msg [, "error"])` `print(...)` | the message line, and the log |
+| `uiman.exec(line)` | run a command line |
+| `uiman.mark(id [, on])` `uiman.jump(id)` | |
+| `uiman.filter([text])` | waits: the filter, or set it |
+| `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
+| `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
+| `uiman.key(command [, mode])` `uiman.maps()` `uiman.commands()` | waits |
+| `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys |
+| `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
+| `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
+| `uiman.theme.<name> = colour` | the interface's colours |
+
+## Tasks, processes, indexing: taskman, lulib
+
+| | |
+|---|---|
+| `taskman.spawn(fn, ...)` | a task running `fn(...)`; its id |
+| `taskman.sleep(ms)` `taskman.yield()` | waits |
+| `taskman.tasks()` `taskman.cancel(id)` | |
+| `lulib.exec(argv [, {stdin=, cwd=, timeout=}])` | waits: `{code=, stdout=, stderr=, ...}` |
+| `lulib.index{pages=, force=, filter=}` | waits: index the files |
+| `lulib.md5(path)` | waits: the file's MD5, kept in the index |
 
 Each C module documents itself at the top of its `src/lua/l_*.c`.

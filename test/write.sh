@@ -17,9 +17,10 @@ t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 
 cat > "$t/apply.lua" <<'LUA'
-local library = require "lulibre.library"
+local store = require "store"
+local bookman = require "bookman"
 local function say(...) print(table.concat({ ... }, "|")) end
-local batch, err = library.apply({
+local batch, err = store.apply({
   { book = 1, field = "title", value = "Topics in Additive Combinatorics", proposal = 7,
     proposed = "Topics in Additive Combinatorics", source = "front" },
   { book = 1, field = "authors", value = "Terence Tao & Van Vu" },
@@ -28,25 +29,25 @@ local batch, err = library.apply({
   { book = 1, field = "#partof", value = "Cambridge Studies" },
 }, "a test")
 say("apply", tostring(batch), tostring(err))
-local b = lulibre.book(1)
+local b = bookman.book(1)
 say("record", b.title, b.author, table.concat(b.tags, ","), b.pubdate)
-say("same", tostring(library.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
-say("bad", select(2, library.apply({ { book = 1, field = "pubdate", value = "soon" } })))
+say("same", tostring(store.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
+say("bad", select(2, store.apply({ { book = 1, field = "pubdate", value = "soon" } })))
 local r = lulibre.sql("SELECT proposal, source FROM history.journal WHERE field = 'title'")[1]
 say("provenance", r.proposal, r.source)
-say("undo", tostring(library.undo(batch)))
-b = lulibre.book(1)
+say("undo", tostring(store.undo(batch)))
+b = bookman.book(1)
 say("after undo", b.title, b.author)
 say("undone", lulibre.sql("SELECT count(*) AS n FROM history.journal WHERE batch = ? AND state = 4", batch)[1].n)
-library.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
-say("in order", table.concat(lulibre.book(1).tags, ","))
+store.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
+say("in order", table.concat(bookman.book(1).tags, ","))
 LUA
 
 cat > "$t/embed.lua" <<'LUA'
-local library = require "lulibre.library"
+local store = require "store"
 setman.set("embed", true)
-print("holder|" .. library.holder())
-print("apply|" .. tostring(library.apply({ { book = 1, field = "title", value = "Embedded Title" } })))
+print("holder|" .. store.holder())
+print("apply|" .. tostring(store.apply({ { book = 1, field = "title", value = "Embedded Title" } })))
 local f = lulibre.sql("SELECT emb_title FROM files WHERE book = 1")[1]
 print("emb|" .. tostring(f and f.emb_title))
 LUA
@@ -54,13 +55,14 @@ LUA
 cat > "$t/review.lua" <<'LUA'
 local proposals = require "lulibre.proposals"
 local track = require "lulibre.track"
+local bookman = require "bookman"
 -- a parse of the scan, as the front grammar would give it, stored as proposals
 lulibre.store("INSERT INTO proposals(id, book, field, value, parse, alt) VALUES"
   .. " (1, 1, 'title', 'Topics in Additive Combinatorics', 'front', 1),"
   .. " (2, 1, 'authors', 'Terence Tao & Van Vu', 'front', 1)")
 print("accept|" .. tostring(proposals.accept(1)))
 print("reject|" .. tostring(proposals.reject(2)))
-local b = lulibre.book(1)
+local b = bookman.book(1)
 print("decided|" .. b.title .. "|" .. b.author .. "|" .. #proposals.of(1))
 local r = lulibre.sql("SELECT store, field, proposal, source FROM history.journal WHERE batch = 2")[1]
 print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
@@ -123,7 +125,7 @@ sleep 1
 # a copy of the library, under the same folder name: the server holds
 # calibre's lock but has the other open
 mkdir -p "$t/copy" && cp -a "$t/lib" "$t/copy/lib"
-echo 'print("copy holder|" .. require("lulibre.library").holder())' > "$t/holder.lua"
+echo 'print("copy holder|" .. require("store").holder())' > "$t/holder.lua"
 "$bin" -L "$t/copy/lib" -o server=http://127.0.0.1:8099 run "$t/holder.lua" 2>&1
 kill $pid; wait $pid 2>/dev/null || true
 IN

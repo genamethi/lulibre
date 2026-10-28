@@ -97,7 +97,7 @@ A script is Lua:
 
 ```lua
 -- ~/.config/lulibre/scripts/no-date.lua  —  :run no-date
-for _, book in ipairs(lulibre.books("no:date has:doi")) do
+for _, book in ipairs(require("bookman").books("no:date has:doi")) do
   print(book.id, book.title, book.idents.doi)
 end
 ```

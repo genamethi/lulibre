@@ -56,7 +56,7 @@ local serve
 local function start(s)
   if s.busy then return end
   s.busy = true
-  lulibre.spawn(function() serve(s) end, "lookups: " .. s.name)
+  taskman.spawn(function() serve(s) end, "lookups: " .. s.name)
 end
 
 -- The service's task: asks for what waits, at its pace, in batches. It
@@ -75,7 +75,7 @@ function serve(s)
       break
     end
     local wait = s.next_at - now()
-    if wait > 0 then lulibre.sleep(wait * 1000) end
+    if wait > 0 then taskman.sleep(wait * 1000) end
     local keys = {}
     while #s.queue > 0 and #keys < (s.how.batch or 1) do keys[#keys + 1] = table.remove(s.queue, 1) end
     local started = now()
@@ -113,7 +113,7 @@ function M.ask(name, key)
     table.insert(s.queue, key)
   end
   start(s)
-  while not s.answers[key] do lulibre.sleep(200) end
+  while not s.answers[key] do taskman.sleep(200) end
   local a = s.answers[key]
   s.asking[key] = nil
   if a[1] == nil then return nil, a[2] end

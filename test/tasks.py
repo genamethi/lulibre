@@ -51,7 +51,7 @@ pump(3)
 for n, loop in enumerate(LOOPS, 1):
     line(":lua " + loop, 2.5 if n == 1 else 0.5)
     line(":cancel all", 0.5)
-    line(':lua lulibre.notify("after %d")' % n, 0.5)
+    line(':lua uiman.notify("after %d")' % n, 0.5)
 line(":lua while true do end", 0.5)
 line(":q", 0)
 end = time.time() + 5

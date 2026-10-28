@@ -1,47 +1,38 @@
-/* The interface, from Lua.
+/* The interface, from Lua: the uiman global.
  *
- *   lulibre.notify(msg [, "error"])     message line (stderr when headless)
- *   print(...)                          same, joined with tabs; never stdout
- *                                       while the interface is up
- *   lulibre.command(name, fn [, help])  define a ':' command; fn(args) runs
- *                                       as a task
- *   lulibre.map(modes, keys, target)    bind keys ("n", "v" or "nv") to a
- *                                       command line or a function
- *   lulibre.exec(line)                  run a command line
- *   lulibre.current()                   id under the cursor, or nil
- *   lulibre.selection()                 ids an action applies to: the range
- *                                       being selected, else marked books in
- *                                       the list, else the current book
- *   lulibre.mark(id [, on])             mark, unmark, or toggle (on omitted)
- *   lulibre.filter([expr])              get, or set, the list filter
- *   lulibre.pick(items [, {title=}])    fuzzy-pick one; returns item, index
- *                                       or nil if cancelled (waits)
- *   lulibre.input([{prompt=, default=, suggestions=, separator=, on_change=}])
- *                                       a line of text, or nil (waits).
- *                                       suggestions: strings or {text=, detail=},
- *                                       best first; Tab takes the highlighted one.
- *                                       separator (" & "): the value is a list and
- *                                       completion applies to its last item.
- *                                       on_change(text) runs after each keystroke.
- *   lulibre.progress(text | nil)        a note in the status line while a
- *                                       script works
- *   lulibre.status(name, text [, style])  a badge in the status line, beside
- *                                       the mode, under a name of your own:
- *                                       set again to change it, with nil to
- *                                       take it away. style: accent (default)
- *                                       ok warn error dim
- *   lulibre.jump(id)                    move the list cursor to a book; false if
- *                                       it is not in the list
- *   lulibre.show(text [, title])        scrollable overlay; text may be a
- *                                       list of lines
- *   lulibre.clipboard(text)             copy to the clipboard: through tmux when
- *                                       inside it, else OSC 52 (works over ssh)
- *   lulibre.clipboard()                 what was copied last (tmux's newest
- *                                       buffer inside tmux), or nil
- *   lulibre.log(text [, level])         write to the log the console (`) shows:
- *                                       "info", "warn", "error", or "debug"
- *                                       (kept only by a debug build)
- *   lulibre.headless                    true when there is no interface
+ *   uiman.notify(msg [, "error"])     message line (stderr when headless)
+ *   print(...)                        same, joined with tabs; never stdout
+ *                                     while the interface is up
+ *   uiman.exec(line)                  run a command line
+ *   uiman.mark(id [, on])             mark, unmark, or toggle (on omitted)
+ *   uiman.filter([expr])              get, or set, the list filter
+ *   uiman.pick(items [, {title=}])    fuzzy-pick one; returns item, index
+ *                                     or nil if cancelled (waits)
+ *   uiman.input([{prompt=, default=, suggestions=, separator=, on_change=}])
+ *                                     a line of text, or nil (waits).
+ *                                     suggestions: strings or {text=, detail=},
+ *                                     best first; Tab takes the highlighted one.
+ *                                     separator (" & "): the value is a list and
+ *                                     completion applies to its last item.
+ *                                     on_change(text) runs after each keystroke.
+ *   uiman.progress(text | nil)        a note in the status line while a
+ *                                     script works
+ *   uiman.status(name, text [, style])  a badge in the status line, beside
+ *                                     the mode, under a name of your own:
+ *                                     set again to change it, with nil to
+ *                                     take it away. style: accent (default)
+ *                                     ok warn error dim
+ *   uiman.jump(id)                    move the list cursor to a book; false if
+ *                                     it is not in the list
+ *   uiman.clipboard(text)             copy to the clipboard: through tmux when
+ *                                     inside it, else OSC 52 (works over ssh)
+ *   uiman.clipboard()                 what was copied last (tmux's newest
+ *                                     buffer inside tmux), or nil
+ *   uiman.log(text [, level])         write to the log the console (`) shows:
+ *                                     "info", "warn", "error", or "debug"
+ *                                     (kept only by a debug build)
+ *   uiman.edit_file(path), uiman.in_terminal(argv), uiman.commands(),
+ *   uiman.key(command [, mode]), uiman.maps()   (below)
  *
  * This file also holds the ':' commands that exist because of Lua:
  * run, lua, messages, tasks, cancel. */
@@ -124,7 +115,7 @@ void lapi_tasks_changed(struct app *app, struct sched_task_list *list) {
 /* Most of what follows touches the interface, so it runs there (design
  * 34): a call that answers nothing is sent as a message, a call that
  * answers yields the task until the answer comes (lua/uicall.c). Each
- * lulibre.x is a one-line wrapper around its x_ui. */
+ * uiman.x is a one-line wrapper around its x_ui. */
 #define SEND(name, word) \
   static int name(lua_State *L) { return ui_send(L, name##_ui, word); }
 #define ASK(name, word) \
@@ -209,7 +200,7 @@ static int l_map_ui(lua_State *L) {
   return 0;
 }
 
-/* lulibre.key(command [, mode]): the keys bound to that command line, as
+/* uiman.key(command [, mode]): the keys bound to that command line, as
  * they are typed ("gr", "<C-w>v"), or nil when nothing is. For messages
  * that name a key, so they name the one in force. */
 static int l_key_ui(lua_State *L) {
@@ -223,7 +214,7 @@ static int l_key_ui(lua_State *L) {
 }
 ASK(l_key, "key")
 
-/* lulibre.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... } */
+/* uiman.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... } */
 static int l_maps_ui(lua_State *L) {
   lua_newtable(L);
   int n = 0;
@@ -287,21 +278,6 @@ static int l_place_map_ui(lua_State *L) {
   return 1;
 }
 
-/* lulibre.place_keys(place): the keys of a place as lines of text, each
- * "keys   what they do"; nil for no such place. */
-static int l_place_keys_ui(lua_State *L) {
-  int c = ctx_named(luaL_checkstring(L, 1));
-  if (c < 0) {
-    lua_pushnil(L);
-    return 1;
-  }
-  sbuf out = SBUF_INIT;
-  ctx_describe(c, &out, 0);
-  lua_pushstring(L, out.s ? out.s : "");
-  sb_free(&out);
-  return 1;
-}
-ASK(l_place_keys, "place_keys")
 
 static int l_exec_ui(lua_State *L) {
   tui_exec(need_tui(L), luaL_checkstring(L, 1));
@@ -598,7 +574,7 @@ static int l_input(lua_State *L) {
   return lua_yield(L, 0);
 }
 
-/* lulibre.clipboard(text) copies; lulibre.clipboard() gives back what was
+/* uiman.clipboard(text) copies; lulibre.clipboard() gives back what was
  * copied last (tui/clip.c says where from). */
 static int l_clipboard_ui(lua_State *L) {
   if (lua_isnoneornil(L, 1)) {
@@ -615,7 +591,7 @@ static int l_clipboard_ui(lua_State *L) {
 }
 ASK(l_clipboard, "clipboard")
 
-/* lulibre.edit_file(path): the editor ($VISUAL, $EDITOR, else vim or vi) on
+/* uiman.edit_file(path): the editor ($VISUAL, $EDITOR, else vim or vi) on
  * a file, with the terminal handed over until it exits. Returns its exit
  * status, or nil and why when none could be run. */
 static int l_edit_file_ui(lua_State *L) {
@@ -644,7 +620,7 @@ static int l_edit_file_ui(lua_State *L) {
 }
 ASK(l_edit_file, "edit_file")
 
-/* lulibre.in_terminal(argv): a program with the terminal handed over until
+/* uiman.in_terminal(argv): a program with the terminal handed over until
  * it exits (sudo asking for a password, say); argv[1] is looked for on
  * $PATH. Without the interface it runs in the terminal lulibre runs in.
  * Returns its exit status, or nil and why when it could not be run. */
@@ -718,30 +694,6 @@ static int l_goto_ui(lua_State *L) {
 }
 SEND(l_goto, "goto")
 
-static int l_show_ui(lua_State *L) {
-  struct app *app = lapi_app(L);
-  const char *title = luaL_optstring(L, 2, "");
-  if (lua_istable(L, 1)) { /* a list of lines */
-    luaL_Buffer b;
-    luaL_buffinit(L, &b);
-    lua_Integer n = (lua_Integer)lua_rawlen(L, 1);
-    for (lua_Integer i = 1; i <= n; i++) {
-      lua_rawgeti(L, 1, i);
-      luaL_tolstring(L, -1, NULL);
-      lua_remove(L, -2);
-      luaL_addvalue(&b);
-      luaL_addchar(&b, '\n');
-    }
-    luaL_pushresult(&b);
-  } else {
-    luaL_tolstring(L, 1, NULL);
-  }
-  const char *text = lua_tostring(L, -1);
-  if (app->tui && app->tui->nc) tui_pager(app->tui, title, text);
-  else fputs(text, stdout);
-  return 0;
-}
-SEND(l_show, "show")
 
 /* ---- scripts ---- */
 
@@ -1007,7 +959,7 @@ static void c_console(struct tui *t, const char *args) {
   tui_dirty(t);
 }
 
-/* lulibre.log(text [, level]): level is "info" (default), "warn", "error" or
+/* uiman.log(text [, level]): level is "info" (default), "warn", "error" or
  * "debug"; debug entries are dropped by a release build. Any thread. */
 static int l_log(lua_State *L) {
   static const char *const levels[] = {"error", "warn", "info", "debug", NULL};
@@ -1185,12 +1137,11 @@ void l_ui_open(lua_State *L) {
     {"notify", l_notify},
     {"exec", l_exec},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
-    {"input", l_input},   {"show", l_show},       {"progress", l_progress},
+    {"input", l_input},   {"progress", l_progress},
     {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},
     {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
-    {"key", l_key},       {"maps", l_maps},       
-    {"place_keys", l_place_keys}, {NULL, NULL},
+    {"key", l_key},       {"maps", l_maps},       {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
   lua_pushcfunction(L, l_print);

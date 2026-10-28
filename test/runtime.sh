@@ -60,24 +60,24 @@ printf '' >"$cfg/init.lua"
 # a calibre store of Lua's in calibredb's place (lulibre.stores.calibre)
 cat >"$t/store.lua" <<'LUA'
 local stores = require "lulibre.stores"
-local library = require "lulibre.library"
+local store = require "store"
 local seen, changed = {}, nil
 evman.add("records_changed", function(ev) changed = table.concat(ev.ids, ",") .. "|" .. table.concat(ev.fields, ",") end)
 function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
-local batch = library.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
+local batch = store.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
 local row = lulibre.sql("SELECT store, state FROM history.journal WHERE batch = ?", batch)[1]
 print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
-for _ = 1, 50 do if changed then break end lulibre.sleep(20) end
+for _ = 1, 50 do if changed then break end taskman.sleep(20) end
 print("changed|" .. tostring(changed))
 function stores.calibre() return nil, "not today" end
-print("refused|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Again" } }))))
+print("refused|" .. tostring(select(2, store.apply({ { book = 1, field = "title", value = "Again" } }))))
 -- a store whose task is cancelled while it waits still answers: the write fails
-function stores.calibre() lulibre.sleep(60000) return true end
-lulibre.spawn(function()
-  lulibre.sleep(100)
-  for _, t in ipairs(lulibre.tasks()) do if t.name:find("lulibre.stores.calibre", 1, true) then lulibre.cancel(t.id) end end
+function stores.calibre() taskman.sleep(60000) return true end
+taskman.spawn(function()
+  taskman.sleep(100)
+  for _, t in ipairs(taskman.tasks()) do if t.name:find("lulibre.stores.calibre", 1, true) then taskman.cancel(t.id) end end
 end)
-print("cancelled|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Never" } }))))
+print("cancelled|" .. tostring(select(2, store.apply({ { book = 1, field = "title", value = "Never" } }))))
 LUA
 store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
 
@@ -102,8 +102,8 @@ co=$("$bin" -L "$t/lib" run "$t/co.lua" 2>&1)
 # allocates: under TSan, a signal waits for a call into the C library.
 cat >"$t/busy.lua" <<'LUA'
 local function busy(s) local t = os.clock() while os.clock() - t < s do local _ = {} end end
-lulibre.spawn(function() coroutine.wrap(busy)(2.5) print("busy|done") end)
-lulibre.spawn(function() for _ = 1, 25 do busy(0.1) lulibre.sleep(0) end print("polite|done") end)
+taskman.spawn(function() coroutine.wrap(busy)(2.5) print("busy|done") end)
+taskman.spawn(function() for _ = 1, 25 do busy(0.1) taskman.sleep(0) end print("polite|done") end)
 LUA
 busy=$("$bin" -L "$t/lib" run "$t/busy.lua" 2>&1)
 

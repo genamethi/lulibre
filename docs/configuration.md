@@ -64,21 +64,21 @@ removed.
 ## Colours
 
 ```lua
-local c = lulibre.theme
+local c = uiman.theme
 c.border = "#7982a9"      -- the line between windows
 c.bar_bg = "#343a55"      -- a window's top line; the focused window's is `accent`
 ```
 
 The colour names are `dim accent warn error ok cursor_bg cursor_bg_blur
-visual_bg mark title border bar_bg bar_fg on_accent`. `lulibre.theme()` returns them
+visual_bg mark title border bar_bg bar_fg on_accent`. `uiman.theme()` returns them
 with their values. The defaults assume a dark terminal.
 
 ## Keys, commands, scripts
 
 ```lua
 keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
-keymap.set({"n", "v"}, "gx", function(o) lulibre.notify(#o.selection .. " selected") end)
-cmd.create("unlabelled", function(o) lulibre.filter("author:unknown no:tags " .. o.args) end,
+keymap.set({"n", "v"}, "gx", function(o) uiman.notify(#o.selection .. " selected") end)
+cmd.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
            { desc = "[filter]  books with neither an author nor a subject" })
 ```
 

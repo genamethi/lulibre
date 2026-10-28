@@ -23,7 +23,7 @@ net.services.crossref.how.request = function(keys) asked = asked + 1; return { [
 say("keys", net.keys(2)[1].service, net.keys(2)[1].key)
 say("enrich", net.enrich(2))
 say("kept", net.enrich(2), asked)
-lulibre.sleep(300)
+taskman.sleep(300)
 for _, f in ipairs(proposals.of(2)) do say("proposal", f.field, f.alts[1].value, f.alts[1].parse) end
 local a = net.services.arxiv.how.record([[<entry><id>http://arxiv.org/abs/1012.6008v1</id><published>2010-12-30T00:00:00Z</published><title>A Note on
  Sieve Methods</title><author><name>Ben Green</name></author><author><name>T. Tao</name></author></entry>]])
@@ -34,10 +34,10 @@ say("openlibrary", o.title, o.authors, o.publisher, o.year)
 -- request that fails answers with its error and the service goes on
 local svc = require "lulibre.net.service"
 local n = 0
-svc.define("twice", { pace = 0, request = function(keys) n = n + 1; lulibre.sleep(50); return { [keys[1]] = "rec" } end })
+svc.define("twice", { pace = 0, request = function(keys) n = n + 1; taskman.sleep(50); return { [keys[1]] = "rec" } end })
 local got = {}
-for i = 1, 2 do lulibre.spawn(function() got[i] = net.ask("twice", "k") end) end
-for _ = 1, 50 do if got[1] and got[2] then break end lulibre.sleep(20) end
+for i = 1, 2 do taskman.spawn(function() got[i] = net.ask("twice", "k") end) end
+for _ = 1, 50 do if got[1] and got[2] then break end taskman.sleep(20) end
 say("twice", got[1], got[2], n)
 svc.define("broken", { pace = 0, request = function() error("down") end })
 say("broken", select(2, net.ask("broken", "k")) ~= nil, (net.ask("broken", "j")))

@@ -15,7 +15,7 @@ local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
 local similar = require "lulibre.similar"
 local track = require "lulibre.track"
-local library = require "lulibre.library"
+local store = require "store"
 
 local M = {}
 
@@ -101,7 +101,7 @@ local proposing = {}
 -- @tparam table w M.settings()
 function M.propose(book, w)
   -- one at a time per book: its rows are deleted and written again
-  while proposing[book] do lulibre.sleep(50) end
+  while proposing[book] do taskman.sleep(50) end
   proposing[book] = true
   local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
   local r <close> = txt.of(book)
@@ -176,7 +176,7 @@ end
 function M.accept(id, value)
   local p = row(id)
   if not p then return nil, "no proposal " .. id end
-  local batch, err = library.apply({ change(p, value or p.value) }, "review: " .. p.field)
+  local batch, err = store.apply({ change(p, value or p.value) }, "review: " .. p.field)
   if err then return nil, err end
   decided(p)
   return batch
@@ -188,7 +188,7 @@ end
 function M.reject(id)
   local p = row(id)
   if not p then return nil, "no proposal " .. id end
-  local batch, err = library.apply({ change(p, nil) }, "review: " .. p.field .. " rejected")
+  local batch, err = store.apply({ change(p, nil) }, "review: " .. p.field .. " rejected")
   if err then return nil, err end
   decided(p)
   return batch

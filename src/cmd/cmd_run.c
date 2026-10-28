@@ -28,7 +28,7 @@ int cmd_run(struct app *app, int argc, char **argv) {
     return 1;
   }
   lua_State *L = app->L;
-  lua_getglobal(L, "lulibre");
+  lua_getglobal(L, "lulib");
   lua_pushboolean(L, 1);
   lua_setfield(L, -2, "headless");
   lua_pop(L, 1);

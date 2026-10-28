@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
    * tell: the systemd units are made as the options say in the interface
    * only, never by a command (lulibre offline, run from one of them) */
   if (!interface) {
-    lua_getglobal(app.L, "lulibre");
+    lua_getglobal(app.L, "lulib");
     lua_pushboolean(app.L, 1);
     lua_setfield(app.L, -2, "headless");
     lua_pop(app.L, 1);

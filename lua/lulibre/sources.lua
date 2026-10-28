@@ -3,6 +3,8 @@
 -- parse is not a source.
 --
 -- @library lulibre.sources
+local bookman = require "bookman"
+
 local M = {}
 
 --- How much each kind of source weighs in agreement (lulibre.rank).
@@ -29,7 +31,7 @@ end
 -- fields = { [field] = value } }`
 function M.of(book, t)
   local out = {}
-  local b = lulibre.book(book)
+  local b = bookman.book(book)
   if b then out[#out + 1] = { name = "record", kind = "record", fields = record(b) } end
   local meta = t and t.meta
   if meta and (meta.title or meta.author) then

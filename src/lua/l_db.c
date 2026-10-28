@@ -318,40 +318,7 @@ static int l_store(lua_State *L) {
   return run_sql(L, 1);
 }
 
-static int push_cal_row(void *ud, sqlite3_stmt *st) {
-  lua_State *L = ud;
-  int ncol = sqlite3_column_count(st);
-  lua_createtable(L, 0, ncol);
-  for (int c = 0; c < ncol; c++) {
-    switch (sqlite3_column_type(st, c)) {
-      case SQLITE_INTEGER: lua_pushinteger(L, sqlite3_column_int64(st, c)); break;
-      case SQLITE_FLOAT: lua_pushnumber(L, sqlite3_column_double(st, c)); break;
-      case SQLITE_NULL: continue;
-      default:
-        lua_pushlstring(L, (const char *)sqlite3_column_text(st, c), (size_t)sqlite3_column_bytes(st, c));
-    }
-    lua_setfield(L, -2, sqlite3_column_name(st, c));
-  }
-  lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
-  return 0;
-}
-
-/* lulibre.calibre_books(path): the books of another calibre database (a
- * copy kept from before, say), read-only, as rows with the columns of the
- * index's books table */
-static int l_calibre_books(lua_State *L) {
-  const char *path = luaL_checkstring(L, 1);
-  char *err = NULL;
-  lua_newtable(L);
-  if (db_calibre_books(db_of(L), path, push_cal_row, L, &err)) {
-    lua_pushstring(L, err);
-    free(err);
-    return lua_error(L);
-  }
-  return 1;
-}
-
-/* lulibre.reload(): calibre's records read again by the library, on a
+/* store.reload(): calibre's records read again by the library, on a
  * worker; the task waits for it (the list follows EV_RECORDS_CHANGED) */
 struct reload_msg {
   struct task *task;
@@ -386,7 +353,7 @@ static void reload_main(struct app *app, void *arg) {
   else reloaded(-1, "the library is closed", arg);
 }
 
-static int l_reload(lua_State *L) {
+int l_db_reload(lua_State *L) {
   lapi_db(L); /* the index open, and the library with it */
   struct reload_msg *m = xcalloc(1, sizeof *m);
   m->task = sched_begin_wait(L);
@@ -394,39 +361,18 @@ static int l_reload(lua_State *L) {
   return lua_yield(L, 0);
 }
 
-static int l_stage_refresh(lua_State *L) {
-  char *err = NULL;
-  if (db_stage_refresh(lapi_db(L), 0, &err)) {
-    lua_pushstring(L, err);
-    free(err);
-    return lua_error(L);
-  }
-  return 0;
-}
-
-static int source_ui(lua_State *L) {
-  struct app *app = lapi_app(L);
-  if (!lua_isnoneornil(L, 1)) {
-    const char *name = luaL_checkstring(L, 1);
-    int to = !strcmp(name, "sync");
-    if (!to && strcmp(name, "library")) return luaL_error(L, "a source is \"library\" or \"sync\"");
-    if (app->tui) rows_set_source(app->tui, to);
-    else atomic_store(&app->source, to); /* headless: only the default scope of filters */
-  }
-  lua_pushstring(L, atomic_load(&app->source) ? "sync" : "library");
-  return 1;
-}
-
-static int l_source(lua_State *L) {
-  return ui_ask(L, source_ui, "source");
-}
-
+/* sql and store, in the lulibre table until the modules that keep data
+ * (wit, net) own it */
 void l_db_open(lua_State *L) {
+  static const luaL_Reg fns[] = {{"sql", l_sql}, {"store", l_store}, {NULL, NULL}};
+  luaL_setfuncs(L, fns, 0);
+}
+
+int luaopen_bookman(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"ids", l_ids},         {"books", l_books}, {"book", l_book}, {"count", l_count},
-    {"authors", l_authors}, {"tags", l_tags},   {"sql", l_sql},   {"store", l_store},
-    {"reload", l_reload},   {"source", l_source}, {"stage_refresh", l_stage_refresh}, {"calibre_books", l_calibre_books},
-    {NULL, NULL},
+    {"authors", l_authors}, {"tags", l_tags},   {"files", l_doc_files}, {NULL, NULL},
   };
-  luaL_setfuncs(L, fns, 0);
+  luaL_newlib(L, fns);
+  return 1;
 }

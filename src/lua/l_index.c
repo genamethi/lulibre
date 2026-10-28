@@ -1,6 +1,6 @@
 /* Indexing, from Lua.
  *
- *   lulibre.index([{filter=, force=, retry=, pages=}])
+ *   lulib.index([{filter=, force=, retry=, pages=}])
  *
  * Extract text from files that are new or have changed (every file with
  * force; only books matching a filter with filter), and wait until it is

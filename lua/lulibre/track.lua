@@ -10,6 +10,7 @@
 -- across every parse.
 --
 -- @library lulibre.track
+local bookman = require "bookman"
 local similar = require "lulibre.similar"
 
 local M = {}
@@ -33,7 +34,7 @@ function M.field(f)
 end
 
 local function now(book, field)
-  local b = lulibre.book(book)
+  local b = bookman.book(book)
   if not b then return "" end
   if field == "authors" then return (b.author == "Unknown" or b.author == "()") and "" or b.author or "" end
   if field == "tags" then return table.concat(b.tags or {}, ", ") end

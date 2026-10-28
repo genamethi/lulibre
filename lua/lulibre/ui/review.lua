@@ -10,6 +10,7 @@
 -- row, space shows the next alternative, q closes.
 --
 -- @library lulibre.ui.review
+local bookman = require "bookman"
 local proposals = require "lulibre.proposals"
 
 local M = {}
@@ -26,7 +27,7 @@ function M.cells(entry, current)
 end
 
 local function current(book, field)
-  local b = lulibre.book(book)
+  local b = bookman.book(book)
   if not b then return "" end
   if field == "authors" then return b.author end
   if field == "year" then return b.pubdate end
@@ -41,7 +42,7 @@ local function entries(books)
   for _, book in ipairs(books) do
     local fields = proposals.of(book)
     if #fields > 0 then
-      local b = lulibre.book(book)
+      local b = bookman.book(book)
       out[#out + 1] = { book = book, head = (b and b.title or ("book " .. book)) }
       for _, f in ipairs(fields) do
         out[#out + 1] = { book = book, field = f.field, alts = f.alts, i = 1 }
@@ -71,7 +72,7 @@ end
 function M.open(books)
   local w <const> = proposals.settings()
   local list = entries(books)
-  local p <close> = lulibre.panel {
+  local p <close> = uiman.panel {
     title = "review", help = M.help, follow = true, keys = { "a", "e", "r", "<Space>" },
     columns = { { "Field", 10 }, "Record", "Proposed", { "From", 12 }, { "Sources", 20 } },
     rows = rows_of(list),
@@ -103,12 +104,12 @@ function M.open(books)
       elseif key == "a" then
         acted, err = true, select(2, proposals.accept(alt.id))
       elseif key == "e" then
-        local value = lulibre.input { prompt = e.field .. ": ", default = alt.value }
+        local value = uiman.input { prompt = e.field .. ": ", default = alt.value }
         if value then acted, err = true, select(2, proposals.accept(alt.id, value)) end
       elseif key == "r" then
         acted, err = true, select(2, proposals.reject(alt.id))
       end
-      if err then lulibre.notify(err, "error") end
+      if err then uiman.notify(err, "error") end
       if acted then
         list = entries(books)
         p:rows(rows_of(list))

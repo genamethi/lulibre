@@ -1,6 +1,7 @@
 --- The packaged commands (design 12): each a module function run as a
 -- task, called through the module's table, so a redefinition in init.lua
 -- takes effect (design 6).
+local bookman = require "bookman"
 local proposals = require "lulibre.proposals"
 local review = require "lulibre.ui.review"
 
@@ -10,9 +11,9 @@ local M = {}
 -- selection at the time it was invoked (`selection` says so outright).
 function M.books(o, otherwise)
   local args = o.args or ""
-  if args ~= "" and args ~= "selection" then return lulibre.ids(args) end
+  if args ~= "" and args ~= "selection" then return bookman.ids(args) end
   if o.selection and #o.selection > 0 then return o.selection end
-  return otherwise and lulibre.ids(otherwise) or {}
+  return otherwise and bookman.ids(otherwise) or {}
 end
 
 --- :propose [filter]: proposals for the books, for :review.

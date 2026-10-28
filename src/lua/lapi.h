@@ -3,29 +3,26 @@
 
 /* Internal interface between the Lua API translation units.
  *
- * Each l_*.c exposes one l_<module>_open(L), called with the `lulibre` table
- * on top of the stack; it adds its functions and leaves the stack as it
- * found it. The whole API is the one flat `lulibre` table:
+ * What scripts reach, and from where (lstate.c builds it):
  *
- *   l_setman.c setman (its own library)           settings
- *   l_evman.c  evman (its own library)            callbacks on shared events
- *   l_job.c    spawn sleep yield tasks cancel     tasks
- *   l_db.c     ids books book count sql authors tags store reload
- *              source stage_refresh
- *   l_doc.c    text lines files extract           indexed text, extraction
- *   l_proc.c   system                             subprocesses
- *   l_hash.c   md5                                content hashes, cached
- *   l_copy.c   copy_db check_db                   copies of SQLite databases, their integrity
- *   l_index.c  index                              run the indexer, and wait
- *   l_theme.c  theme                              colours
- *   l_match.c  fold fuzzy                         matching
- *   l_ui.c     notify command map exec current selection mark filter
- *              pick input show                    the interface
- *   bridge.c   (no Lua functions)                 the Lua thread and its calls
- *                                                 to and from the interface
- *   l_uv.c     lulibre.uv, require "luv"          libuv on the host loop
- *   l_panel.c  lulibre.panel                      tables a script fills and steers
- */
+ *   globals     lulib     (version, build, headless) l_proc.c exec,
+ *                         l_hash.c md5, l_index.c index
+ *               taskman   l_job.c: spawn sleep yield tasks cancel
+ *               uiman     l_ui.c, l_panel.c panel, l_theme.c theme
+ *               setman    l_setman.c        evman  l_evman.c
+ *               keymap, cmd                 (l_ui.c's callers)
+ *               lulibre   l_db.c sql store, l_match.c fuzzy: until wit,
+ *                         net and mesr take them
+ *   preloaded   bookman   l_db.c, l_doc.c files
+ *               store     l_library.c, l_db.c reload
+ *               txt       l_txt.c           curl    l_curl.c
+ *               expr.core l_match.c         lsqlite3 (vendor/)
+ *               lulibre.similar, lulibre.ocr.core, lulibre.stores.core
+ *   luv         l_uv.c: luv on the Lua loop
+ *
+ * Each l_<name>_open(L) adds its functions to the table on top of the
+ * stack and leaves the stack as it found it; each luaopen_* returns its
+ * module. */
 
 #include "core/setdefs.h"
 
@@ -95,7 +92,10 @@ int luaopen_txt(struct lua_State *L);
 /* expr.core (l_match.c): fold, lower and upper, for expr (lua/expr.lua). */
 int luaopen_expr_core(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
-int luaopen_lulibre_library(struct lua_State *L);
+int luaopen_store(struct lua_State *L);
+int luaopen_bookman(struct lua_State *L);
+int l_db_reload(struct lua_State *L);  /* store.reload */
+int l_doc_files(struct lua_State *L);  /* bookman.files */
 int luaopen_lulibre_ocr_core(struct lua_State *L);
 int luaopen_lulibre_stores_core(struct lua_State *L);
 /* curl (l_curl.c): requests through libcurl on the Lua loop, preloaded. */
@@ -127,17 +127,14 @@ char *lapi_setting_str(struct lua_State *L, enum setting_id id);
 
 void l_job_open(struct lua_State *L);
 void l_db_open(struct lua_State *L);
-void l_doc_open(struct lua_State *L);
 void l_proc_open(struct lua_State *L);
 void l_hash_open(struct lua_State *L);
-void l_copy_open(struct lua_State *L);
 void l_index_open(struct lua_State *L);
 void l_theme_open(struct lua_State *L);
 void l_match_open(struct lua_State *L);
-void l_learn_open(struct lua_State *L);
 void l_ui_open(struct lua_State *L);
 void l_uv_open(struct lua_State *L);
-void l_uv_preload(struct lua_State *L); /* after the lulibre table exists */
+void l_uv_preload(struct lua_State *L); /* after the globals exist */
 void l_panel_open(struct lua_State *L);
 
 #endif

@@ -200,8 +200,10 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "expr.core");
   lua_pushcfunction(L, luaopen_lulibre_similar);
   lua_setfield(L, -2, "lulibre.similar");
-  lua_pushcfunction(L, luaopen_lulibre_library);
-  lua_setfield(L, -2, "lulibre.library");
+  lua_pushcfunction(L, luaopen_store);
+  lua_setfield(L, -2, "store");
+  lua_pushcfunction(L, luaopen_bookman);
+  lua_setfield(L, -2, "bookman");
   lua_pushcfunction(L, luaopen_lulibre_ocr_core);
   lua_setfield(L, -2, "lulibre.ocr.core");
   lua_pushcfunction(L, luaopen_lulibre_stores_core);
@@ -218,8 +220,9 @@ lua_State *lstate_new(struct app *app) {
   lstate_paths(L);
   sched_init(app);
 
+  /* lulib.version: "0.1.0-alpha"; lulib.build: its parts and the kind of
+   * build; lulib.headless: set without the interface (main.c) */
   lua_newtable(L);
-  /* lulibre.version: "0.1.0-alpha"; lulibre.build: its parts and the kind of build */
   lua_pushstring(L, LULIBRE_VERSION);
   lua_setfield(L, -2, "version");
   lua_createtable(L, 0, 9);
@@ -243,20 +246,23 @@ lua_State *lstate_new(struct app *app) {
   lua_pushstring(L, lulibre_build_commit);
   lua_setfield(L, -2, "commit");
   lua_setfield(L, -2, "build");
-  l_job_open(L);
-  l_db_open(L);
-  l_doc_open(L);
   l_proc_open(L);
   l_hash_open(L);
-  l_copy_open(L);
   l_index_open(L);
-  l_theme_open(L);
-  l_match_open(L);
-  l_learn_open(L);
+  lua_setglobal(L, "lulib");
+  lua_newtable(L);
+  l_job_open(L);
+  lua_setglobal(L, "taskman");
+  lua_newtable(L);
   l_ui_open(L);
   l_panel_open(L);
-  l_uv_open(L);
+  l_theme_open(L);
+  lua_setglobal(L, "uiman");
+  lua_newtable(L);
+  l_db_open(L);
+  l_match_open(L);
   lua_setglobal(L, "lulibre");
+  l_uv_open(L);
   l_uv_preload(L);
 
   /* the part of the API written in Lua */

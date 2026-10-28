@@ -5,6 +5,7 @@
 -- when set. An answer arriving posts "source_arrived" for the book.
 --
 -- @library lulibre.net
+local bookman = require "bookman"
 local service = require "lulibre.net.service"
 local similar = require "lulibre.similar"
 local curl = require "curl"
@@ -16,7 +17,7 @@ M.services = service.services
 --- The User-Agent requests send; the contact address only when set.
 -- @tparam string mail the setting contact_email, taken by the caller
 function M.agent(mail)
-  return ("lulibre/%s (library metadata lookup%s)"):format(lulibre.version, mail ~= "" and "; mailto:" .. mail or "")
+  return ("lulibre/%s (library metadata lookup%s)"):format(lulib.version, mail ~= "" and "; mailto:" .. mail or "")
 end
 
 --- Fetches a URL: the body, the HTTP status and Retry-After, or nil and
@@ -35,7 +36,7 @@ end
 --- The services that can be asked about a book, with the key each is
 -- asked by: `{ {service=, key=}, ... }`.
 function M.keys(book)
-  local out, b = {}, lulibre.book(book)
+  local out, b = {}, bookman.book(book)
   if not b then return out end
   for name, s in pairs(service.services) do
     local value = b.idents and b.idents[s.how.ident]
