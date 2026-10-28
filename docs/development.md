@@ -272,12 +272,14 @@ in tasks that take turns where they wait.
   others. A task that waits in the middle of an update (a test, then a
   wait, then a write) owns what it updates across the wait, by a flag it
   sets before waiting.
-- A task that runs 2 s without waiting gets a hook, installed by a signal
-  from the interface thread (`src/lua/bridge.c`): it reports the task, and
-  stops it once cancelled, by yielding, which no pcall catches. No hook
-  runs otherwise: a count hook makes every Lua instruction about twice as
-  slow. `:cancel` reaches a running task the same way, since a task that
-  runs reads no message. `coroutine.resume` and `coroutine.wrap` are the
+- A task that runs 2 s without waiting gets a hook, installed by a signal:
+  each run arms a timer that sends it to the thread running Lua, and a run
+  that waits sooner disarms it (`src/lua/sched.c`), with the interface or
+  without. The hook reports the task, and stops it once cancelled, by
+  yielding, which no pcall catches. No hook runs otherwise: a count hook
+  makes every Lua instruction about twice as slow. `:cancel` reaches a
+  running task by the same signal, sent by the interface thread
+  (`src/lua/bridge.c`), since a task that runs reads no message. `coroutine.resume` and `coroutine.wrap` are the
   scheduler's own (as Lua's otherwise), so the hook goes on a coroutine the
   task resumed, and a cancelled task yields up through each resume.
   `:tasks` shows the list the scheduler sent at its last change, and the
@@ -295,8 +297,9 @@ in tasks that take turns where they wait.
 A test for a race between threads must hold the window open: otherwise
 the test passes whether or not the fix is in. `./configure
 --sanitize=thread` builds with ThreadSanitizer for the C side. TSan holds
-a signal back until the thread calls into the C library, so under TSan a
-task that only computes is neither reported nor stopped.
+a signal back until the thread calls into the C library (allocating
+counts), so under TSan a task that computes without allocating is neither
+reported nor stopped.
 
 ## The index
 

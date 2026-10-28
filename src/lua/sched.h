@@ -70,13 +70,15 @@ void sched_note_failure(struct app *app);
 long long sched_running_ms(void);
 int sched_running_id(void);
 /* Any thread: task id is to stop if it is running when the hook next
- * looks (sched_signalled). */
+ * looks; the caller then sends sched_watch_signal() to the thread running
+ * Lua (lua/bridge.c). */
 void sched_stop_running(int id);
-/* From a signal handler on the Lua thread: a hook on the running task,
- * which says it runs too long (once a run) and stops it when it is
- * cancelled or named by sched_stop_running (lua/bridge.c sends the
- * signal). */
-void sched_signalled(void);
+/* A run that goes 2 s without waiting is reported, by a hook a signal
+ * installs; the hook also stops a cancelled task. sched_watch_here: the
+ * calling thread runs Lua from now on, and the signal goes to it
+ * (sched_init calls it; so does the Lua thread as it starts). */
+void sched_watch_here(void);
+int sched_watch_signal(void);
 
 /* coroutine.resume and coroutine.wrap in L, as Lua's, but the coroutine a
  * task resumes is reached by the hook too. */

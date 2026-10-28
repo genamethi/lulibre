@@ -1,9 +1,13 @@
 #include "core/log.h"
 #include "lua/sched.h"
 
+#include <pthread.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -142,7 +146,7 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
   }
 }
 
-/* Installed only while a task has run too long (sched_signalled), on the
+/* Installed only while a task has run too long (on_watch_signal), on the
  * coroutine running then: the task's, or one it resumed. Says so once, and
  * stops the task when it is cancelled. It stops it by yielding, which no
  * pcall catches: in the task's coroutine, run_one then finishes the task,
@@ -160,7 +164,7 @@ static void watch_hook(lua_State *L, lua_Debug *ar) {
   if (!t->warned) {
     t->warned = 1;
     char *msg = xasprintf("task %d (%s) has run %.1f s without waiting%s", t->id, t->name,
-                          (now_ms() - atomic_load(&running_since)) / 1000.0, t->cancelled ? "" : "; :cancel stops it");
+                          (now_ms() - atomic_load(&running_since)) / 1000.0, t->cancelled || !t->ctx.app->tui ? "" : "; :cancel stops it");
     lapi_report(t->ctx.app, 1, msg);
     free(msg);
   }
@@ -175,14 +179,56 @@ static void watch_hook(lua_State *L, lua_Debug *ar) {
   luaL_error(L, "cancelled");
 }
 
-void sched_signalled(void) {
-  lua_State *co = atomic_load(&running_co);
-  if (co) lua_sethook(co, watch_hook, LUA_MASKCOUNT, HOOK_COUNT);
-}
-
 long long sched_running_ms(void) {
   long long since = atomic_load(&running_since);
   return since ? now_ms() - since : 0;
+}
+
+/* ---- the clock on a run ----
+ *
+ * A run (one resume of a task) arms a timer that signals the thread running
+ * Lua once the run has gone 2 s; the signal puts the hook on the coroutine
+ * running then, as lua.c does for Ctrl-C. A run that waits sooner disarms
+ * it, and no signal comes. The same signal, sent by another thread, brings
+ * the hook to a task stopped as it runs (sched_stop_running). */
+
+#define TOO_LONG_MS 2000
+
+static timer_t clock_;
+static int clocked;
+
+int sched_watch_signal(void) {
+  return SIGRTMIN + 1;
+}
+
+static void on_watch_signal(int sig) {
+  (void)sig;
+  lua_State *co = atomic_load(&running_co);
+  /* a signal that arrives as a run ends, or in the next one, finds nothing to do */
+  if (!co || (sched_running_ms() < TOO_LONG_MS && atomic_load(&stop_id) != atomic_load(&running_id))) return;
+  lua_sethook(co, watch_hook, LUA_MASKCOUNT, HOOK_COUNT);
+}
+
+void sched_watch_here(void) {
+  static int handled;
+  if (!handled) {
+    handled = 1;
+    struct sigaction sa = {.sa_handler = on_watch_signal, .sa_flags = SA_RESTART};
+    sigemptyset(&sa.sa_mask);
+    sigaction(sched_watch_signal(), &sa, NULL);
+  }
+  if (clocked) timer_delete(clock_);
+  struct sigevent ev = {.sigev_notify = SIGEV_THREAD_ID, .sigev_signo = sched_watch_signal()};
+  ev._sigev_un._tid = gettid();
+  clocked = timer_create(CLOCK_MONOTONIC, &ev, &clock_) == 0;
+  if (!clocked) log_debug("no clock on runs: a task that runs too long is not reported");
+}
+
+/* ms > 0 arms the clock; 0 disarms it */
+static void clock_set(long long ms) {
+  if (!clocked) return;
+  struct itimerspec it = {.it_value = {.tv_sec = ms / 1000, .tv_nsec = (ms % 1000) * 1000000}};
+  timer_settime(clock_, 0, &it, NULL);
 }
 
 int sched_running_id(void) {
@@ -204,7 +250,9 @@ static void run_one(struct sched *s, struct task *t) {
   atomic_store(&running_id, t->id);
   atomic_store(&running_since, now_ms());
   atomic_store(&running_co, t->co);
+  clock_set(TOO_LONG_MS);
   int st = lua_resume(t->co, s->L, t->nargs, &nres);
+  clock_set(0);
   atomic_store(&running_co, NULL);
   atomic_store(&running_since, 0);
   atomic_store(&running_id, 0);
@@ -267,11 +315,14 @@ void sched_init(struct app *app) {
   uv_async_init(app->lloop, s->keep, NULL);
   uv_unref((uv_handle_t *)s->keep);
   app->sched = s;
+  sched_watch_here(); /* the thread making the state runs it first */
 }
 
 void sched_free(struct app *app) {
   struct sched *s = app->sched;
   if (!s) return;
+  if (clocked) timer_delete(clock_);
+  clocked = 0;
   uv_idle_stop(s->idle);
   /* the handles go when the loop next turns, if it does */
   uv_close((uv_handle_t *)s->idle, handle_free);
