@@ -113,7 +113,7 @@ cat >"$t/sql.lua" <<'LUA'
 local sqlite = require "lsqlite3"
 local db = sqlite.open(os.getenv("SQLDB"))
 db:exec("CREATE TABLE t(name TEXT); INSERT INTO t VALUES ('Paul Erdős'), ('Terence Tao')")
-for row in db:nrows("SELECT name, fold(name) AS key FROM t WHERE ihas(name, 'erdos')") do
+for row in db:nrows("SELECT name, fold(name) AS key FROM t WHERE find(fold(name), '^paul')") do
   print("sql|" .. row.name .. "|" .. row.key)
 end
 db:close()

@@ -215,12 +215,12 @@ alone for its hold when it says it is asked too much.
 
     local sqlite = require "lsqlite3"
     local db = sqlite.open(path)
-    for row in db:nrows("SELECT name FROM t WHERE ihas(name, ?)") do ... end
+    for row in db:nrows("SELECT name FROM t WHERE instr(fold(name), ?) > 0") do ... end
 
 [lsqlite3](https://lua.sqlite.org/home/doc/tip/doc/lsqlite3.wiki), built
-into lulibre. Every connection it opens has lulibre's SQL functions:
-`fold(s)`, `ihas`, `ieq`, `istarts` (folded comparisons), `isubject`
-(a tag and the subjects under it) and `lmatch` (a Lua pattern). Queries
+into lulibre. Every connection it opens has lulibre's two SQL functions:
+`fold(s)`, s without case, accents or styled letters, the key filters
+compare by; and `find(s, pattern)`, a Lua pattern match. Queries
 run on the Lua thread and do not wait like the calls above: a long one
 holds the other tasks up.
 

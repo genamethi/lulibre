@@ -144,11 +144,11 @@ static void test_query(void) {
 
   ok(query_compile("author:=\"A B\" -tag:x year:1990-1999", &q, &err) == 0, "a compound filter compiles");
   ok(q.nparams == 2, "its text values are bound, its numbers inlined");
-  eq(q.params[0], "A B", "a quoted value keeps its space");
+  eq(q.params[0], "a b", "a quoted value keeps its space, and is bound folded");
   ok(strstr(q.where, "NOT ") && strstr(q.where, "BETWEEN 1990 AND 1999"), "negation and ranges");
   query_free(&q);
   ok(compiles("a or b", SCOPE_LIBRARY, ") OR ("), "or starts an alternative");
-  ok(compiles("title:~^The", SCOPE_LIBRARY, "lmatch("), "~ is a Lua pattern");
+  ok(compiles("title:~^The", SCOPE_LIBRARY, "find("), "~ is a Lua pattern");
   ok(compiles("sort:-year", SCOPE_LIBRARY, NULL), "sort");
   ok(compiles("is:dupe is:missing has:doi no:tags", SCOPE_LIBRARY, NULL), "is, has, no");
 
