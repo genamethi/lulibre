@@ -1,7 +1,11 @@
 /* Marks: the books marked by hand, kept in the index's marks table so they
  * outlast the session and the filter is:marked reads them; and the
  * selection, the books an action applies to. */
+#include <stdlib.h>
 #include <string.h>
+
+#include "core/events.h"
+#include "core/util.h"
 
 #include "tui/bits.h"
 #include "tui/tui.h"
@@ -31,10 +35,26 @@ static void persist(struct tui *t, sqlite3_int64 id, int on) {
   sqlite3_finalize(st);
 }
 
+/* The marks changed: EV_MARKS, with the books an action now applies to
+ * (design 5). */
+static void marks_changed(struct tui *t) {
+  if (!events_wanted(EV_MARKS)) return;
+  struct event *ev = xcalloc(1, sizeof *ev);
+  ev->kind = EV_MARKS;
+  int n;
+  sqlite3_int64 *ids = rows_selection(t, &n);
+  ev->selection = xcalloc((size_t)n + 1, sizeof *ev->selection);
+  for (int i = 0; i < n; i++) ev->selection[i] = ids[i];
+  ev->nselection = n;
+  free(ids);
+  events_post(ev);
+}
+
 void rows_mark(struct tui *t, sqlite3_int64 id, int on) {
   if (on < 0) on = !rows_marked(t, id);
   set_mark(&t->rows, id, on);
   persist(t, id, on);
+  marks_changed(t);
   tui_dirty(t);
 }
 
@@ -55,6 +75,7 @@ void rows_mark_all(struct tui *t, int how) {
     }
   }
   if (own_txn) sqlite3_exec(h, "COMMIT", NULL, NULL, NULL);
+  marks_changed(t);
   tui_dirty(t);
 }
 

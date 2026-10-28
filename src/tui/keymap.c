@@ -141,6 +141,20 @@ int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const ch
   return 0;
 }
 
+int keymap_unbind(struct keymap *km, unsigned modes, const char *spec) {
+  uint32_t keys[KEYSEQ_MAX];
+  int n = key_parse(spec, keys), found = 0;
+  if (!n) return -1;
+  for (int i = 0; i < km->n; i++) {
+    struct binding *b = &km->b[i];
+    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
+      b->modes &= ~modes;
+      found = 1;
+    }
+  }
+  return found ? 0 : 1;
+}
+
 /* Does what was typed match a binding's keys? A <Leader> in the binding is
  * matched by the leader key. */
 static int keys_match(const struct keymap *km, const uint32_t *bound, const uint32_t *typed, int n) {

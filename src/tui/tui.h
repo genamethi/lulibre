@@ -114,6 +114,9 @@ void key_format(sbuf *out, const uint32_t *keys, int n);
  * from it. */
 int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
                    int hidden);
+/* Takes a binding out of these modes: 0, 1 when there was none, -1 when
+ * spec is no key sequence. */
+int keymap_unbind(struct keymap *km, unsigned modes, const char *spec);
 /* Feed one key. Returns a command to run, or NULL (pending or unbound). */
 const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
 /* Does a binding in this mode begin with key and run one of these commands
@@ -517,6 +520,8 @@ typedef void command_fn(struct tui *t, const char *args);
 void command_register(const char *name, command_fn *fn, const char *help);
 /* A command implemented in Lua: ref is a registry reference to the function. */
 void command_register_lua(const char *name, int ref, const char *help);
+/* Removes a command defined in Lua: 0, or -1 when there is none. */
+int command_remove_lua(const char *name);
 /* Run "name args". Unknown commands report in the message line. */
 void tui_exec(struct tui *t, const char *line);
 void commands_builtin(void);
@@ -545,6 +550,7 @@ struct tui {
   uv_timer_t settle;   /* fires once the cursor has rested on a book */
   uv_timer_t ftimer;   /* live filter: runs shortly after the last keystroke */
   int settled;
+  sqlite3_int64 posted_book; /* the book EV_CURSOR last said was under the cursor */
   int dirty, quit;
 
   unsigned mode;

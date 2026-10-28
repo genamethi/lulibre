@@ -22,6 +22,7 @@ static int ncmds, capcmds;
 static void add(const char *name, command_fn *fn, int ref, const char *help) {
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name)) { /* redefining a command replaces it */
+      if (!cmds[i].fn) lapi_unref(cmds[i].lua_ref); /* the function it replaces */
       cmds[i].fn = fn;
       cmds[i].lua_ref = ref;
       free(cmds[i].help);
@@ -41,6 +42,18 @@ void command_register(const char *name, command_fn *fn, const char *help) {
 
 void command_register_lua(const char *name, int ref, const char *help) {
   add(name, NULL, ref, help);
+}
+
+int command_remove_lua(const char *name) {
+  for (int i = 0; i < ncmds; i++)
+    if (!strcmp(cmds[i].name, name) && !cmds[i].fn) {
+      lapi_unref(cmds[i].lua_ref);
+      free(cmds[i].name);
+      free(cmds[i].help);
+      cmds[i] = cmds[--ncmds];
+      return 0;
+    }
+  return -1;
 }
 
 void command_each(int (*fn)(const char *name, const char *help, void *ud), void *ud) {

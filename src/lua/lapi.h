@@ -63,6 +63,11 @@ char **lapi_script_dirs(struct app *app);
 /* Run a registered Lua function (by registry ref) as a task with one string
  * argument. From the interface thread; the task starts on the Lua thread. */
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg);
+/* Releases a function's reference in the main lua_State, from either
+ * thread: by message to the Lua thread. */
+void lapi_unref(int ref);
+int luaopen_keymap(struct lua_State *L);
+int luaopen_cmd(struct lua_State *L);
 
 /* setman (l_setman.c). The copy of the settings in the registry: filled
  * when the lua_State is made, and kept current by l_setman_changed, a

@@ -25,7 +25,7 @@ function M.review(args)
   review.open(lulibre.ids(args))
 end
 
-lulibre.command("propose", function(args) M.propose(args) end, "[filter]  propose metadata from the files, for :review")
-lulibre.command("review", function(args) M.review(args) end, "[filter]  the books' proposals: accept, edit, reject")
+cmd.create("propose", function(o) M.propose(o.args) end, { desc = "[filter]  propose metadata from the files, for :review" })
+cmd.create("review", function(o) M.review(o.args) end, { desc = "[filter]  the books' proposals: accept, edit, reject" })
 
 return M

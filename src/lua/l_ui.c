@@ -165,7 +165,6 @@ static int l_command_ui(lua_State *L) {
   command_register_lua(name, ref, help);
   return 0;
 }
-SEND(l_command, "command")
 
 /* lulibre.map(modes, keys, target [, about])
  * target: a command line, or a function (which runs as a task).
@@ -198,7 +197,6 @@ static int l_map_ui(lua_State *L) {
     return luaL_error(L, "cannot parse the key sequence '%s'", keys);
   return 0;
 }
-SEND(l_map, "map")
 
 /* lulibre.key(command [, mode]): the keys bound to that command line, as
  * they are typed ("gr", "<C-w>v"), or nil when nothing is. For messages
@@ -307,58 +305,6 @@ SEND(l_exec, "exec")
 
 /* ---- the list ---- */
 
-static int l_current_ui(lua_State *L) {
-  struct tui *t = lapi_app(L)->tui;
-  sqlite3_int64 id = t ? rows_current(t) : 0;
-  if (id) lua_pushinteger(L, id);
-  else lua_pushnil(L);
-  return 1;
-}
-ASK(l_current, "current")
-
-/* With the cursor in a panel that follows the list (review, duplicates,
- * orphans), "the book under the cursor" is the one that panel's row stands
- * for. The list normally sits on the same book; when it cannot (the book was
- * removed, or the filter leaves it out) the list's own cursor is on some
- * other book, and acting on that one instead would be a nasty surprise. */
-static void selection_under_panel(lua_State *L, struct tui *t) {
-  sqlite3_int64 id;
-  if (!t->focus || t->focus->cls != &view_panel || !panel_points_at(t->focus->state, &id)) return;
-  if (id == rows_current(t) && id != 0) return;
-  if (id == 0) {
-    lua_pushliteral(L, "the row under the cursor is not a book: nothing is selected");
-    lua_error(L);
-  }
-  if (rows_reveal(t, id)) { /* under a closed heading, it is brought out */
-    preview_book_changed(t);
-    return;
-  }
-  lua_pushfstring(L, "book %I is not in the list any more (removed, or the filter leaves it out): nothing is selected",
-                  (lua_Integer)id);
-  lua_error(L);
-}
-
-static int l_selection_ui(lua_State *L) {
-  struct tui *t = lapi_app(L)->tui;
-  lua_newtable(L);
-  if (!t) return 1;
-  int n;
-  sqlite3_int64 *ids = rows_selection(t, &n);
-  /* a range or marks say for themselves what is meant; the cursor alone does not */
-  int by_cursor = t->mode != MODE_VISUAL && (n == 0 || (n == 1 && !rows_marked(t, ids[0])));
-  if (by_cursor) {
-    free(ids);
-    selection_under_panel(L, t); /* raises, or leaves the list on the panel's book */
-    ids = rows_selection(t, &n);
-  }
-  for (int i = 0; i < n; i++) {
-    lua_pushinteger(L, ids[i]);
-    lua_rawseti(L, -2, i + 1);
-  }
-  free(ids);
-  return 1;
-}
-ASK(l_selection, "selection")
 
 static int l_mark_ui(lua_State *L) {
   struct tui *t = need_tui(L);
@@ -844,28 +790,68 @@ int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char
 /* ---- what the interface asks of Lua: each request is sent to the Lua
  * thread, which answers through lapi_report or the pager ---- */
 
+/* A command or key's function, run as a task with what the interface was
+ * at when it was invoked (design 4, 34): fn{ name=, args=, book=,
+ * selection = { id, ... } }. */
 struct spawn_req {
   int ref;
   char *name, *arg;
+  long long book;
+  long long *selection;
+  int nselection;
 };
 
 static void spawn_ref(struct app *app, void *arg) {
   struct spawn_req *r = arg;
   lua_State *L = app->L;
-  lua_rawgeti(L, LUA_REGISTRYINDEX, r->ref);
-  lua_pushstring(L, r->arg);
-  sched_spawn(L, 1, r->name);
+  if (L) {
+    lua_rawgeti(L, LUA_REGISTRYINDEX, r->ref);
+    lua_createtable(L, 0, 4);
+    lua_pushstring(L, r->name);
+    lua_setfield(L, -2, "name");
+    lua_pushstring(L, r->arg);
+    lua_setfield(L, -2, "args");
+    if (r->book) {
+      lua_pushinteger(L, r->book);
+      lua_setfield(L, -2, "book");
+    }
+    lua_createtable(L, r->nselection, 0);
+    for (int i = 0; i < r->nselection; i++) {
+      lua_pushinteger(L, r->selection[i]);
+      lua_rawseti(L, -2, i + 1);
+    }
+    lua_setfield(L, -2, "selection");
+    sched_spawn(L, 1, r->name);
+  }
+  free(r->selection);
   free(r->name);
   free(r->arg);
   free(r);
 }
 
+/* The interface thread. */
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg) {
   struct spawn_req *r = xcalloc(1, sizeof *r);
   r->ref = ref;
   r->name = xstrdup(name);
   r->arg = xstrdup(arg ? arg : "");
-  bridge_lua(app, spawn_ref, r);
+  struct tui *t = app->tui;
+  if (t) {
+    r->book = rows_current(t);
+    sqlite3_int64 *ids = rows_selection(t, &r->nselection);
+    r->selection = xcalloc((size_t)r->nselection + 1, sizeof *r->selection);
+    for (int i = 0; i < r->nselection; i++) r->selection[i] = ids[i];
+    free(ids);
+  }
+  queue_post(LOOP_LUA, spawn_ref, r);
+}
+
+static void unref(struct app *app, void *arg) {
+  if (app->L) luaL_unref(app->L, LUA_REGISTRYINDEX, (int)(intptr_t)arg);
+}
+
+void lapi_unref(int ref) {
+  if (ref > 0) queue_post(LOOP_LUA, unref, (void *)(intptr_t)ref);
 }
 
 /* "path\0arg arg": load the script and start it */
@@ -1041,10 +1027,118 @@ static void c_cancel(struct tui *t, const char *args) {
   bridge_lua(t->app, cancel_tasks, xstrdup(args));
 }
 
+/* ---- keymap and cmd: key bindings and commands, as Neovim's ----
+ *
+ *   keymap.set(mode, lhs, rhs [, opts])  mode "n", "v", "nv" or {"n", "v"};
+ *                                        rhs a command line, or a function
+ *                                        run as a task with {book=,
+ *                                        selection=}; opts {desc=, hidden=}
+ *   keymap.del(mode, lhs)
+ *   cmd.create(name, fn [, opts])        :name runs fn{name=, args=, book=,
+ *                                        selection=} as a task; opts {desc=};
+ *                                        a command of that name is replaced
+ *   cmd.del(name)
+ *
+ * Each is a message to the interface (design 34): an error there (a key
+ * sequence it cannot read) is reported, not raised. */
+
+static const char *modes_of(lua_State *L, int idx) {
+  if (lua_istable(L, idx)) {
+    int n = (int)lua_rawlen(L, idx);
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+    for (int i = 1; i <= n; i++) {
+      lua_rawgeti(L, idx, i);
+      luaL_addvalue(&b);
+    }
+    luaL_pushresult(&b);
+    lua_replace(L, idx);
+  }
+  const char *m = luaL_checkstring(L, idx);
+  for (const char *p = m; *p; p++)
+    if (*p != 'n' && *p != 'v') luaL_argerror(L, idx, "modes are \"n\" (normal), \"v\" (selecting) or both");
+  return m;
+}
+
+static int keymap_set(lua_State *L) {
+  modes_of(L, 1);
+  luaL_checkstring(L, 2);
+  uint32_t keys[KEYSEQ_MAX];
+  if (!key_parse(lua_tostring(L, 2), keys)) return luaL_argerror(L, 2, "not a key sequence (\"gr\", \"<C-w>v\", \"<Space>\")");
+  if (!lua_isfunction(L, 3)) luaL_checkstring(L, 3);
+  /* the about l_map_ui takes: the description, or false to hide the key */
+  int hidden = 0;
+  const char *desc = NULL;
+  if (lua_istable(L, 4)) {
+    lua_getfield(L, 4, "hidden");
+    hidden = lua_toboolean(L, -1);
+    lua_getfield(L, 4, "desc");
+    desc = lua_tostring(L, -1);
+    lua_pop(L, 2);
+  }
+  lua_settop(L, 3);
+  if (hidden) lua_pushboolean(L, 0);
+  else if (desc) lua_pushstring(L, desc);
+  return ui_send(L, l_map_ui, "keymap.set");
+}
+
+static int keymap_del_ui(lua_State *L) {
+  const char *modes = luaL_checkstring(L, 1);
+  unsigned mask = (strchr(modes, 'n') ? MODE_NORMAL : 0) | (strchr(modes, 'v') ? MODE_VISUAL : 0);
+  if (keymap_unbind(&tui_keymap, mask, luaL_checkstring(L, 2)) > 0)
+    return luaL_error(L, "nothing is bound to %s", lua_tostring(L, 2));
+  return 0;
+}
+
+static int keymap_del(lua_State *L) {
+  modes_of(L, 1);
+  luaL_checkstring(L, 2);
+  lua_settop(L, 2);
+  return ui_send(L, keymap_del_ui, "keymap.del");
+}
+
+static int cmd_create(lua_State *L) {
+  const char *name = luaL_checkstring(L, 1);
+  luaL_argcheck(L, *name && !strchr(name, ' '), 1, "a command name is one word");
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  const char *desc = NULL;
+  if (lua_istable(L, 3)) {
+    lua_getfield(L, 3, "desc");
+    desc = lua_tostring(L, -1);
+    lua_pop(L, 1);
+  }
+  lua_settop(L, 2);
+  lua_pushstring(L, desc ? desc : "(defined in Lua)");
+  return ui_send(L, l_command_ui, "cmd.create");
+}
+
+static int cmd_del_ui(lua_State *L) {
+  if (command_remove_lua(luaL_checkstring(L, 1))) return luaL_error(L, "no command %s was made in Lua", lua_tostring(L, 1));
+  return 0;
+}
+
+static int cmd_del(lua_State *L) {
+  luaL_checkstring(L, 1);
+  lua_settop(L, 1);
+  return ui_send(L, cmd_del_ui, "cmd.del");
+}
+
+int luaopen_keymap(lua_State *L) {
+  static const luaL_Reg fns[] = {{"set", keymap_set}, {"del", keymap_del}, {NULL, NULL}};
+  luaL_newlib(L, fns);
+  return 1;
+}
+
+int luaopen_cmd(lua_State *L) {
+  static const luaL_Reg fns[] = {{"create", cmd_create}, {"del", cmd_del}, {NULL, NULL}};
+  luaL_newlib(L, fns);
+  return 1;
+}
+
 void l_ui_open(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"notify", l_notify}, {"command", l_command}, {"map", l_map},
-    {"exec", l_exec},     {"current", l_current}, {"selection", l_selection},
+    {"notify", l_notify},
+    {"exec", l_exec},
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"show", l_show},       {"progress", l_progress},
     {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},

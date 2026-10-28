@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/events.h"
 #include "db/db.h"
 #include "doc/doc.h"
 #include "index/outcome.h"
@@ -1008,9 +1009,19 @@ void preview_toggle_graphic(struct tui *t) {
   tui_dirty(t);
 }
 
+/* The cursor has come to rest: the preview follows, and so does EV_CURSOR
+ * (design 5), once per book it rests on. */
 static void settle_cb(uv_timer_t *h) {
   struct tui *t = h->data;
   t->settled = 1;
+  sqlite3_int64 book = rows_current(t);
+  if (book != t->posted_book && events_wanted(EV_CURSOR)) {
+    struct event *ev = xcalloc(1, sizeof *ev);
+    ev->kind = EV_CURSOR;
+    ev->book = book;
+    events_post(ev);
+  }
+  t->posted_book = book;
   tui_dirty(t);
 }
 
