@@ -905,7 +905,7 @@ static void run_named(struct tui *t, const char *line) {
     char *msg = xmalloc(pl + al + 2);
     memcpy(msg, path, pl + 1);
     memcpy(msg + pl + 1, args, al + 1);
-    bridge_lua(t->app, run_line, msg);
+    queue_post(LOOP_LUA, run_line, msg);
   }
   free(path);
   free(name);
@@ -960,7 +960,7 @@ static void eval_line(struct app *app, void *arg) {
 }
 
 static void c_lua(struct tui *t, const char *args) {
-  bridge_lua(t->app, eval_line, xstrdup(args));
+  queue_post(LOOP_LUA, eval_line, xstrdup(args));
 }
 
 static void message_line(const struct log_entry *e, void *ud) {
@@ -1034,7 +1034,7 @@ static void list_tasks(struct app *app, void *arg) {
 }
 
 static void c_tasks(struct tui *t, const char *args) {
-  bridge_lua(t->app, list_tasks, NULL);
+  queue_post(LOOP_LUA, list_tasks, NULL);
 }
 
 static void cancel_tasks(struct app *app, void *arg) {
@@ -1051,7 +1051,7 @@ static void cancel_tasks(struct app *app, void *arg) {
 }
 
 static void c_cancel(struct tui *t, const char *args) {
-  bridge_lua(t->app, cancel_tasks, xstrdup(args));
+  queue_post(LOOP_LUA, cancel_tasks, xstrdup(args));
 }
 
 /* ---- keymap and cmd: key bindings and commands, as Neovim's ----
