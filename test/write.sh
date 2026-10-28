@@ -2,7 +2,8 @@
 # The write path against throwaway calibre libraries, inside a private
 # network namespace (unshare -rn), where calibre's lock and server are the
 # test's own: changes straight to the library folder, the journal, undo,
-# and through a content server with embedding. Needs calibre and unshare.
+# and through a content server with embedding; calibre's records read
+# again after calibre changes them. Needs calibre and unshare.
 #   write.sh BUILT_BINARY
 set -eu
 
@@ -77,6 +78,36 @@ calibredb --with-library "$t/lib" add --empty --title paper --authors Unknown >/
 "$bin" -L "$t/lib" run "$t/apply.lua" 2>&1
 echo "calibre|$(calibredb --with-library "$t/lib" list --fields title --for-machine 2>/dev/null | tr -d '\n ' )"
 rm -rf "$t/lib" "$t/data" "$t/state"
+# calibre's records read again: only the books calibre changed, as a copy of
+# every book would have them
+(
+  export XDG_DATA_HOME=$t/rr
+  r=$t/rrlib
+  mkdir -p "$r"
+  for n in one two three; do calibredb --with-library "$r" add --empty --title $n --authors "A Author" >/dev/null 2>&1; done
+  calibredb --with-library "$r" add_custom_column genre Genre text --is-multiple >/dev/null 2>&1
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  idx=$(ls "$t"/rr/lulibre/*.db | grep -v 'journal\|custom')
+  sqlite3 "$idx" "UPDATE books SET sort = 'untouched' WHERE id = 3"
+  calibredb --with-library "$r" set_metadata 1 -f title:Uno -f authors:"B Author & A Author" -f tags:x >/dev/null 2>&1
+  calibredb --with-library "$r" set_custom genre 1 "poetry,history" >/dev/null 2>&1
+  calibredb --with-library "$r" remove 2 >/dev/null 2>&1
+  calibredb --with-library "$r" add --empty --title four --authors "C Author" >/dev/null 2>&1
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  echo "reread untouched|$(sqlite3 "$idx" "SELECT sort FROM books WHERE id = 3")"
+  sqlite3 "$idx" "UPDATE books SET sort = 'three' WHERE id = 3"
+  dump() {
+    for q in "SELECT * FROM books" "SELECT * FROM book_authors ORDER BY book, ord" "SELECT * FROM authors" \
+      "SELECT * FROM tags" "SELECT * FROM book_tags ORDER BY book, tag" "SELECT rowid, * FROM books_fts ORDER BY rowid" \
+      "SELECT * FROM cal_values ORDER BY book, ord"; do sqlite3 "$idx" "$q"; done
+  }
+  dump >"$t/rr/changed"
+  sqlite3 "$idx" "DELETE FROM meta WHERE key = 'calibre_stamp'"
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  dump >"$t/rr/every"
+  cmp -s "$t/rr/changed" "$t/rr/every" && echo "reread same|yes" || diff "$t/rr/changed" "$t/rr/every"
+  echo "reread has|$(sqlite3 "$idx" "SELECT group_concat(title || ':' || authors || ':' || coalesce(tags, ''), ',') FROM books ORDER BY id")|$(sqlite3 "$idx" "SELECT group_concat(value) FROM cal_values")"
+)
 mkdir -p "$t/lib"
 calibredb --with-library "$t/lib" add "$pdf" >/dev/null 2>&1
 "$bin" -L "$t/lib" index >/dev/null 2>&1
@@ -123,4 +154,7 @@ expect "the content server is seen to hold the library" "holder|server"
 expect "a change goes through the server" "apply|1"
 expect "a copy of the library the server has open is not reached through it" "copy holder|other"
 expect "embedding updates what the index knows of the file" "emb|Embedded Title"
+expect "calibre's records read again: a book calibre did not change is not copied again" "reread untouched|untouched"
+expect "the books it changed, added and removed are as a copy of every book has them" "reread same|yes"
+expect "and as calibre has them" "reread has|Uno:B Author & A Author:x,three:A Author:,four:C Author:|poetry,history"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

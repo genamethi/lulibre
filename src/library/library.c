@@ -645,8 +645,7 @@ static void batch_free(struct batch *b) {
 }
 
 /* ---- reading calibre's records again, on a worker with a connection of
- * its own: a copy takes a third of a second for a couple of thousand books,
- * which the interface does not wait for ---- */
+ * its own, so the background thread does not wait for it either ---- */
 
 struct reload {
   uv_work_t req;
@@ -747,7 +746,8 @@ static void reload_start(struct library *lib) {
   r->library_dir = real ? real : xstrdup(work_str(S_LIBRARY));
   r->waits = lib->waiting;
   lib->waiting = NULL;
-  for (struct reload_wait *w = r->waits; w; w = w->next) r->force |= w->force;
+  for (struct reload_wait *w = r->waits; w; w = w->next)
+    if (w->force > r->force) r->force = w->force;
   lib->reloading = 1;
   if (uv_queue_work(app->wloop, &r->req, reload_work, reload_after)) {
     r->rc = -1;

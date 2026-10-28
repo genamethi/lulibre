@@ -43,8 +43,10 @@ int db_prepare(struct db *db, const char *sql, sqlite3_stmt **st, char **err);
 char *db_meta_get(struct db *db, const char *key); /* malloc'd or NULL */
 int db_meta_set(struct db *db, const char *key, const char *val);
 
-/* Copy calibre's metadata into the index when metadata.db has changed (or
- * force is set). Returns 1 if a copy ran, 0 if already current, -1 on error. */
+/* Copy calibre's metadata into the index: the books calibre changed since
+ * the last copy, when metadata.db has changed (force 0) or at once (1);
+ * every book (2). Returns 1 if a copy ran, 0 if already current, -1 on
+ * error. */
 int db_mirror(struct db *db, const char *library, int force, char **err);
 /* After a copy on the same connection: the books added, removed or
  * modified by it (malloc'd, *n of them; NULL when none). */

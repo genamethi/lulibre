@@ -29,7 +29,7 @@ runs a command by name.
 | `V` | `visual` | select a range; `Esc` ends it |
 | `gp` | `propose` | propose metadata for what is selected, from the files themselves and the online answers kept for them |
 | `<Leader><Space>` | `mark none` | unmark every book |
-| `R` | `reload` | read calibre's metadata again now |
+| `R` | `reload` | read calibre's metadata again now, every book |
 
 ## The preview
 

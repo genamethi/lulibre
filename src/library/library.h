@@ -84,7 +84,8 @@ enum library_holder library_holder(const struct library *lib);
 int library_submit(struct library *lib, const struct operation *op, library_done *done, void *ud, char **err);
 
 /* Reads calibre's records into the index again, on a worker: when
- * metadata.db has changed, or always with force. done runs on the main loop
+ * metadata.db has changed, or always with force; force 2 reads every book,
+ * not only those calibre changed (db_mirror, db/db.h). done runs on the main loop
  * with rc as db_mirror's (db/db.h). The books found changed, and those of
  * the operations it was read for with the fields they changed, are posted
  * as EV_RECORDS_CHANGED. Readings asked for while one runs share the next. */

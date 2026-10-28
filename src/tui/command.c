@@ -340,7 +340,7 @@ static void c_reload(struct tui *t, const char *args) {
     tui_msg(t, 1, "calibre's database is being read already");
     return;
   }
-  tui_mirror(t, 1, 1);
+  tui_mirror(t, 2, 1); /* asked for: every book, not only those calibre marked changed */
 }
 
 static void c_set(struct tui *t, const char *args) {
@@ -598,7 +598,7 @@ void commands_builtin(void) {
                    "scroll N | page N | graphic | zoom +1|-1|0 | pan N  (zoom and pan: image only)");
   command_register("pick", c_pick, "books | authors | subjects | filters  fuzzy finder");
   command_register("index", c_index, "[force]  extract text from new or changed files");
-  command_register("reload", c_reload, "re-read calibre's metadata now");
+  command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
                    "[library | sync | config]  the bar's tabs: the calibre library or the sync folder in the list, or the configuration window");
   command_register("set", c_set, "name[=value]  show or change an option");

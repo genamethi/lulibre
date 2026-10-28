@@ -304,8 +304,13 @@ reported nor stopped, and `test/tasks.py` fails.
 ## The index
 
 The index is one SQLite file per library (WAL). Most of it either mirrors
-calibre's `metadata.db`, and is replaced whole when that changes, or holds
-what was read from the files: their outcomes and their lines (the only
+calibre's `metadata.db` or holds what was read from the files. When
+`metadata.db` changes, only the books calibre marked changed (its
+`last_modified`) are copied again, along with the books it added or
+removed, and the tables of names are replaced. Every book is copied again
+when the copy's SQL changes (`MIRROR_VERSION`, `src/db/mirror.c`), when the
+library moves, when calibre's custom columns change, or on `:reload`. From
+the files, the index holds their outcomes and their lines (the only
 stored text), and a contentless full-text row per paragraph. A new version
 of its tables (`SCHEMA_VERSION`, `src/db/db.c`) drops all that and reads
 again; `lookups` (every online answer), `staged` and `kv` stay.
