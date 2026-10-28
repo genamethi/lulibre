@@ -17,4 +17,21 @@ char *ocr_find(void);
 int ocr_page(const char *tesseract, const char *path, int page, const char *lang, struct doc_page *out,
              char **err);
 
+/* A file's pages for a reader of Lua's (core/registry.h), and its answer:
+ * out[i] is page pages[i] (0-based) as lines, when ok[i]. done runs on the
+ * loop that asked. */
+struct ocr_req {
+  char *path, *lang;
+  int n;
+  int *pages;
+  float *w, *h;
+  struct doc_page *out;
+  int *ok;
+  char *err;
+  void (*done)(struct ocr_req *req);
+  void *ud;
+};
+
+void ocr_req_free(struct ocr_req *req);
+
 #endif

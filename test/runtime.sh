@@ -47,6 +47,16 @@ rm -f "$t/state/lulibre/settings"
 printf '' >"$cfg/init.lua"
 again=$("$bin" -L "$t/lib" -o persistent=true run "$t/probe.lua" 2>&1)
 
+# a reader of Lua's in tesseract's place (lulibre.ocr.read), and back
+cat >"$cfg/init.lua" <<'LUA'
+local ocr = require "lulibre.ocr"
+function ocr.read(path, page, lang) return "Read By Lua\npage " .. page .. " " .. lang end
+LUA
+"$bin" -L "$t/lib" -o ocr=auto index >/dev/null 2>&1
+db=$(ls "$t"/data/lulibre/lib-*.db | grep -v 'journal\|custom')
+ocr=$(sqlite3 "$db" "SELECT group_concat(text, '|') FROM lines WHERE file = 1" 2>/dev/null || true)
+printf '' >"$cfg/init.lua"
+
 fails=0
 contains() { # description, needle, haystack
   case "$3" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$3" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
@@ -61,4 +71,7 @@ contains "a command-line-only setting is refused from Lua" "cli only|false" "$ou
 contains "a bad value is refused, saying which are allowed" "never|auto|always" "$out"
 contains "persistence on: the state is written at exit, the API's values in it" "ocr=auto" "$state"
 contains "and read back at the next start" "ocr|auto" "$again"
+if command -v sqlite3 >/dev/null; then
+  contains "OCR reads with the reader Lua put in tesseract's place" "Read By Lua|page 1 eng" "$ocr"
+fi
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

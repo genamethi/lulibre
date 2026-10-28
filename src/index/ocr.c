@@ -200,3 +200,18 @@ int ocr_page(const char *tesseract, const char *path, int page, const char *lang
   doc_page_finish(out);
   return 0;
 }
+
+void ocr_req_free(struct ocr_req *req) {
+  if (!req) return;
+  if (req->out)
+    for (int i = 0; i < req->n; i++) doc_page_free(&req->out[i]);
+  free(req->out);
+  free(req->ok);
+  free(req->pages);
+  free(req->w);
+  free(req->h);
+  free(req->path);
+  free(req->lang);
+  free(req->err);
+  free(req);
+}

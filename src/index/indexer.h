@@ -5,6 +5,7 @@
 
 #include "db/db.h"
 #include "db/query.h"
+#include "index/ocr.h"
 
 /* Extract the leading pages of every file into the index.
  *
@@ -23,6 +24,9 @@ struct index_opts {
   enum index_ocr ocr;
   int ocr_pages;        /* pages OCR reads, from the first */
   const char *ocr_lang; /* tesseract's -l; copied */
+  /* hands a request to the OCR reader Lua has put in tesseract's place
+   * (core/registry.h); its answer comes back on the indexer's loop */
+  void (*ocr_lua)(struct ocr_req *req);
   int force;                 /* re-extract even when size and mtime are unchanged */
   int retry;                 /* retry files that failed last time */
   int inflight;              /* jobs handed to the pool at once */

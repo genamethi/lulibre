@@ -7,6 +7,8 @@
 
 #include "core/util.h"
 #include "doc/doc.h"
+#include "core/log.h"
+#include "core/registry.h"
 #include "index/ocr.h"
 #include "index/outcome.h"
 
@@ -19,6 +21,7 @@ struct job {
   struct doc_info info;
   enum file_outcome outcome; /* set on the worker */
   int ocr_pages;             /* pages OCR read, 0 when it did not */
+  int ocr_lua;               /* OCR is for the reader Lua put in tesseract's place */
 };
 
 struct indexer {
@@ -188,8 +191,24 @@ static int usable(const struct doc_info *d) {
   return doc_text_usable(d->nchars, d->garbled, d->quality);
 }
 
-/* OCR's reading of the file's first pages, in place of the file's own text
- * when OCR's is usable or the file's is not. */
+/* OCR's reading o of the file's first pages (read of them), in place of
+ * the file's own text when OCR's is usable or the file's is not. */
+static void ocr_choose(struct job *j, struct doc_info o, int read) {
+  struct doc_info *d = &j->info;
+  doc_measure(&o);
+  if (read && (usable(&o) || !usable(d))) {
+    for (int k = 0; k < DOC_META_N; k++) o.meta[k] = d->meta[k], d->meta[k] = NULL;
+    doc_info_free(d);
+    *d = o;
+    j->ocr_pages = read;
+    j->outcome = usable(d) ? OUT_READ_OCR : OUT_OCR_NO_HELP;
+  } else {
+    doc_info_free(&o);
+    if (!usable(d)) j->outcome = read ? OUT_OCR_NO_HELP : OUT_OCR_UNAVAILABLE;
+  }
+}
+
+/* tesseract on the worker. */
 static void ocr_step(struct indexer *ix, struct job *j) {
   struct doc_info *d = &j->info;
   int n = d->n < ix->o.ocr_pages ? d->n : ix->o.ocr_pages;
@@ -205,17 +224,7 @@ static void ocr_step(struct indexer *ix, struct job *j) {
     if (ocr_page(ix->tesseract, j->path, pg->no - 1, ix->ocr_lang, pg, &err) == 0) read++;
     else free(err); /* a page OCR could not read is a page without text */
   }
-  doc_measure(&o);
-  if (read && (usable(&o) || !usable(d))) {
-    for (int k = 0; k < DOC_META_N; k++) o.meta[k] = d->meta[k], d->meta[k] = NULL;
-    doc_info_free(d);
-    *d = o;
-    j->ocr_pages = read;
-    j->outcome = usable(d) ? OUT_READ_OCR : OUT_OCR_NO_HELP;
-  } else {
-    doc_info_free(&o);
-    if (!usable(d)) j->outcome = read ? OUT_OCR_NO_HELP : OUT_OCR_UNAVAILABLE;
-  }
+  ocr_choose(j, o, read);
 }
 
 /* On a worker: extraction judges the text, and OCR reads the pages that
@@ -236,7 +245,56 @@ static void work_cb(uv_work_t *req) {
   int good = usable(&j->info);
   j->outcome = good ? OUT_READ : OUT_OCR_UNAVAILABLE;
   int want = ix->o.ocr == OCR_ALWAYS || (ix->o.ocr == OCR_AUTO && !good);
-  if (want && ix->tesseract && ix->o.ocr_pages > 0) ocr_step(ix, j);
+  if (!want || ix->o.ocr_pages <= 0) return;
+  if (ix->o.ocr_lua && registry_lua(REG_READER)) j->ocr_lua = 1; /* asked from the loop: after_cb */
+  else if (ix->tesseract) ocr_step(ix, j);
+}
+
+static void after_cb(uv_work_t *req, int status);
+
+/* The Lua reader's answer, on the indexer's loop: the job goes on as if
+ * its worker had read the pages. */
+static void lua_read(struct ocr_req *r) {
+  struct job *j = r->ud;
+  struct doc_info o = {.npages = j->info.npages, .n = r->n};
+  o.pages = xcalloc((size_t)(r->n ? r->n : 1), sizeof *o.pages);
+  int read = 0;
+  for (int i = 0; i < r->n; i++) {
+    o.pages[i] = r->out[i];
+    memset(&r->out[i], 0, sizeof r->out[i]);
+    o.pages[i].no = r->pages[i] + 1;
+    if (r->ok[i]) {
+      doc_page_finish(&o.pages[i]);
+      read++;
+    }
+  }
+  if (r->err) log_warn("OCR (lulibre.ocr.read): %s", r->err);
+  ocr_choose(j, o, read);
+  ocr_req_free(r);
+  j->ocr_lua = 0;
+  after_cb(&j->req, 0);
+}
+
+static void ask_lua(struct indexer *ix, struct job *j) {
+  struct doc_info *d = &j->info;
+  int n = d->n < ix->o.ocr_pages ? d->n : ix->o.ocr_pages;
+  struct ocr_req *r = xcalloc(1, sizeof *r);
+  r->path = xstrdup(j->path);
+  r->lang = xstrdup(ix->ocr_lang);
+  r->n = n;
+  r->pages = xcalloc((size_t)n + 1, sizeof *r->pages);
+  r->w = xcalloc((size_t)n + 1, sizeof *r->w);
+  r->h = xcalloc((size_t)n + 1, sizeof *r->h);
+  r->out = xcalloc((size_t)n + 1, sizeof *r->out);
+  r->ok = xcalloc((size_t)n + 1, sizeof *r->ok);
+  for (int i = 0; i < n; i++) {
+    r->pages[i] = d->pages[i].no - 1;
+    r->w[i] = r->out[i].w = d->pages[i].w;
+    r->h[i] = r->out[i].h = d->pages[i].h;
+  }
+  r->done = lua_read;
+  r->ud = j;
+  ix->o.ocr_lua(r);
 }
 
 static void stored(struct indexer *ix, struct job *j) {
@@ -284,6 +342,10 @@ static void hold(struct indexer *ix, struct job *j) {
 static void after_cb(uv_work_t *req, int status) {
   struct job *j = req->data;
   struct indexer *ix = j->ix;
+  if (status == 0 && j->ocr_lua) {
+    ask_lua(ix, j); /* goes on in lua_read */
+    return;
+  }
   if (status != 0) {
     ix->inflight--;
     job_free(j);

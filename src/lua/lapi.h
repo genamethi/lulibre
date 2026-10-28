@@ -89,6 +89,10 @@ void lstate_paths(struct lua_State *L);
 int luaopen_lulibre_reading(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
 int luaopen_lulibre_library(struct lua_State *L);
+int luaopen_lulibre_ocr_core(struct lua_State *L);
+/* Hands an OCR request to lulibre.ocr.read (l_ocr.c); any thread. */
+struct ocr_req;
+void lapi_ocr_read(struct ocr_req *req);
 
 /* Calls into the interface (lua/uicall.c): fn runs on the interface thread
  * with copies of L's arguments, on a lua_State that holds only values.

@@ -13,6 +13,7 @@
 #include "app.h"
 #include "config.h"
 #include "version.h"
+#include "core/registry.h"
 #include "core/util.h"
 #include "lua/lapi.h"
 #include "lua/sched.h"
@@ -196,6 +197,8 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "lulibre.similar");
   lua_pushcfunction(L, luaopen_lulibre_library);
   lua_setfield(L, -2, "lulibre.library");
+  lua_pushcfunction(L, luaopen_lulibre_ocr_core);
+  lua_setfield(L, -2, "lulibre.ocr.core");
   lua_pop(L, 1);
   l_setman_fill(L, app->settings);
   keep_own(L, "path", LUA_OWN_PATH);
@@ -276,6 +279,7 @@ int lstate_run_init(struct app *app) {
 
 void lstate_close(struct app *app) {
   l_evman_close(app);
+  registry_clear_lua(); /* every part goes back to C's own */
   sched_free(app);
   if (app->L) lua_close(app->L);
   app->L = NULL;
