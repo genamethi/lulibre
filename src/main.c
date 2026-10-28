@@ -77,6 +77,7 @@ int main(int argc, char **argv) {
   memset(&app, 0, sizeof app);
   crash_install();
   curl_global_init(CURL_GLOBAL_DEFAULT); /* before any thread: curl.h */
+  db_functions_everywhere();             /* before any connection, scripts' too */
   signal(SIGPIPE, SIG_IGN); /* a helper process that exits early is an error to report, not a death */
 
   /* global options come before the command */

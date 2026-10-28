@@ -211,6 +211,19 @@ Library and arXiv come with lulibre. Every answer is kept in the index's
 sooner than its pace, as many works at once as its batch, and is left
 alone for its hold when it says it is asked too much.
 
+## Databases: lsqlite3
+
+    local sqlite = require "lsqlite3"
+    local db = sqlite.open(path)
+    for row in db:nrows("SELECT name FROM t WHERE ihas(name, ?)") do ... end
+
+[lsqlite3](https://lua.sqlite.org/home/doc/tip/doc/lsqlite3.wiki), built
+into lulibre. Every connection it opens has lulibre's SQL functions:
+`fold(s)`, `ihas`, `ieq`, `istarts` (folded comparisons), `isubject`
+(a tag and the subjects under it) and `lmatch` (a Lua pattern). Queries
+run on the Lua thread and do not wait like the calls above: a long one
+holds the other tasks up.
+
 ## Requests: curl
 
     local curl = require "curl"

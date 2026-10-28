@@ -107,6 +107,19 @@ lulibre.spawn(function() for _ = 1, 25 do busy(0.1) lulibre.sleep(0) end print("
 LUA
 busy=$("$bin" -L "$t/lib" run "$t/busy.lua" 2>&1)
 
+# lsqlite3, built in: a database of the script's own, with lulibre's SQL
+# functions on its connection
+cat >"$t/sql.lua" <<'LUA'
+local sqlite = require "lsqlite3"
+local db = sqlite.open(os.getenv("SQLDB"))
+db:exec("CREATE TABLE t(name TEXT); INSERT INTO t VALUES ('Paul Erdős'), ('Terence Tao')")
+for row in db:nrows("SELECT name, fold(name) AS key FROM t WHERE ihas(name, 'erdos')") do
+  print("sql|" .. row.name .. "|" .. row.key)
+end
+db:close()
+LUA
+sql=$(SQLDB="$t/own.db" "$bin" -L "$t/lib" run "$t/sql.lua" 2>&1)
+
 fails=0
 contains() { # description, needle, haystack
   case "$3" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$3" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
@@ -141,5 +154,6 @@ contains "a coroutine inside a coroutine" "nested|deep" "$co"
 contains "a task that runs 2 s without waiting is reported" "busy.lua:2) has run 2." "$busy"
 contains "and goes on" "busy|done" "$busy"
 lacks "one that waits as often is not" "busy.lua:3)" "$busy"
+contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

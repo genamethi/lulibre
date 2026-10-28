@@ -1,4 +1,5 @@
-/* SQL functions used by the filter language.
+/* SQL functions used by the filter language, on every connection the
+ * process opens: lulibre's own, and those scripts open (lsqlite3).
  *
  *   ihas(hay, needle)      folded substring test
  *   ieq(a, b)              folded equality
@@ -94,32 +95,32 @@ static void close_lua(void *p) {
   lua_close(p);
 }
 
-int db_register_functions(struct db *db, char **err) {
+/* On each connection as it opens (db_functions_everywhere). */
+static int on_open(sqlite3 *h, char **errmsg, const struct sqlite3_api_routines *api) {
+  (void)api;
   static const struct { const char *name; int kind; } cmp[] = {
     {"ihas", CMP_HAS}, {"ieq", CMP_EQ}, {"istarts", CMP_STARTS}, {"isubject", CMP_SUBJECT},
   };
   int flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC;
   for (size_t i = 0; i < ARRAY_LEN(cmp); i++)
-    if (sqlite3_create_function(db->h, cmp[i].name, 2, flags, (void *)(intptr_t)cmp[i].kind,
-                                fn_cmp, NULL, NULL) != SQLITE_OK)
+    if (sqlite3_create_function(h, cmp[i].name, 2, flags, (void *)(intptr_t)cmp[i].kind, fn_cmp, NULL, NULL) !=
+        SQLITE_OK)
       goto fail;
-  if (sqlite3_create_function(db->h, "fold", 1, flags, NULL, fn_fold, NULL, NULL) != SQLITE_OK)
-    goto fail;
-
+  if (sqlite3_create_function(h, "fold", 1, flags, NULL, fn_fold, NULL, NULL) != SQLITE_OK) goto fail;
+  /* lmatch's own Lua state, closed with the connection */
   lua_State *L = luaL_newstate();
-  if (!L) {
-    *err = xstrdup("cannot create Lua state");
-    return -1;
-  }
+  if (!L) goto fail;
   luaL_requiref(L, "string", luaopen_string, 0);
   lua_getfield(L, -1, "find");
   lua_remove(L, 1);
-  db->L = L;
-  if (sqlite3_create_function_v2(db->h, "lmatch", 2, flags, L, fn_lmatch, NULL, NULL,
-                                 close_lua) != SQLITE_OK)
+  if (sqlite3_create_function_v2(h, "lmatch", 2, flags, L, fn_lmatch, NULL, NULL, close_lua) != SQLITE_OK)
     goto fail;
-  return 0;
+  return SQLITE_OK;
 fail:
-  *err = xasprintf("registering SQL functions: %s", sqlite3_errmsg(db->h));
-  return -1;
+  *errmsg = sqlite3_mprintf("registering lulibre's SQL functions: %s", sqlite3_errmsg(h));
+  return SQLITE_ERROR;
+}
+
+void db_functions_everywhere(void) {
+  sqlite3_auto_extension((void (*)(void))on_open); /* a second call is a no-op */
 }

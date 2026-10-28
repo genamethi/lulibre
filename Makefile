@@ -10,7 +10,9 @@ endif
 BIN  := build/lulibre
 # core/config.c: the 0.2 options, which only lulibre-setup still lists
 SRC  := $(filter-out src/setup/% src/core/config.c,$(wildcard src/*.c src/*/*.c))
-OBJ  := $(SRC:%.c=build/%.o)
+# libraries carried as their authors wrote them (vendor/*/README.md)
+VENDOR := vendor/lsqlite3/lsqlite3.c
+OBJ  := $(SRC:%.c=build/%.o) $(VENDOR:%.c=build/%.o)
 LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
 # the guides, which :help reads
 DOCS := $(wildcard docs/*.md)
@@ -85,6 +87,11 @@ builds:
 build/%.o: %.c config.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -MMD -MP -c -o $@ $<
+
+# their code, their warnings
+build/vendor/lsqlite3/lsqlite3.o: vendor/lsqlite3/lsqlite3.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -w $(CFLAGS) $(DEP_CFLAGS) -DLSQLITE_VERSION='"0.9.7"' -MMD -MP -c -o $@ $<
 
 config.h: config.mk
 

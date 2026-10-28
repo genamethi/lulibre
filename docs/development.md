@@ -204,7 +204,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/main.c      argument parsing, command dispatch
     src/app.c       what every part shares: the settings, the index, the library
     src/work.c      the background thread: the library and the indexer
-    src/core/       the settings store, the message queue, shared events, the registry, strings, the log
+    src/core/       the settings store, the message queue, shared events, the registry, requests (libcurl), strings, the log
     src/db/         schema, calibre mirror, staged files, SQL functions, the filter language
     src/doc/        text extraction and rendering (mupdf, djvulibre, plain text); a file's reading
     src/index/      the parallel indexer, OCR, what reading a file came to
@@ -215,6 +215,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
     lua/lulibre/    the runtime written in Lua: grammars, proposals, ranking, lookups, review
+    vendor/         libraries carried as their authors wrote them, built in (lsqlite3)
     test/  tools/
 
 ## Threads

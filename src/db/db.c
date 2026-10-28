@@ -190,6 +190,7 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
 
 int db_open(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   char *tmp = xstrdup(path);
   mkdir_p(dirname(tmp));
   free(tmp);
@@ -208,7 +209,7 @@ int db_open(struct db *db, const char *path, char **err) {
               err) ||
       reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
       db_exec(db, history_schema, err) || attach_custom(db, "rwc", err) ||
-      db_exec(db, custom_schema, err) || db_register_functions(db, err)) {
+      db_exec(db, custom_schema, err)) {
     db_close(db);
     return -1;
   }
@@ -218,6 +219,7 @@ int db_open(struct db *db, const char *path, char **err) {
 
 int db_open_reader(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   if (sqlite3_open_v2(path, &db->h, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, NULL) != SQLITE_OK) {
     *err = xasprintf("cannot open index %s: %s", path, db->h ? sqlite3_errmsg(db->h) : "?");
     db_close(db);
@@ -226,7 +228,7 @@ int db_open_reader(struct db *db, const char *path, char **err) {
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   /* the custom fields, for filters on them (the file is made by db_open) */
-  if (attach_custom(db, "ro", err) || db_register_functions(db, err)) {
+  if (attach_custom(db, "ro", err)) {
     db_close(db);
     return -1;
   }
@@ -235,6 +237,7 @@ int db_open_reader(struct db *db, const char *path, char **err) {
 
 int db_open_writer(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   if (sqlite3_open_v2(path, &db->h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI, NULL) != SQLITE_OK) {
     *err = xasprintf("cannot open index %s: %s", path, db->h ? sqlite3_errmsg(db->h) : "?");
     db_close(db);
@@ -243,7 +246,7 @@ int db_open_writer(struct db *db, const char *path, char **err) {
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   if (db_exec(db, "PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA temp_store=MEMORY;", err) ||
-      attach_history(db, 0, err) || attach_custom(db, "rw", err) || db_register_functions(db, err)) {
+      attach_history(db, 0, err) || attach_custom(db, "rw", err)) {
     db_close(db);
     return -1;
   }
@@ -255,5 +258,4 @@ void db_close(struct db *db) {
   db->h = NULL;
   free(db->path);
   db->path = NULL;
-  /* db->L is closed in dbfuncs.c's destructor, run by sqlite3_close */
 }

@@ -9,7 +9,6 @@ struct lua_State;
  * read-only and copied from; every write to calibre goes through calibredb. */
 struct db {
   sqlite3 *h;
-  struct lua_State *L; /* private state backing the lmatch() SQL function */
   char *path;
 };
 
@@ -62,7 +61,9 @@ int db_calibre_books(struct db *db, const char *path, int (*fn)(void *ud, sqlite
                      char **err);
 
 /* dbfuncs.c */
-int db_register_functions(struct db *db, char **err);
+/* lulibre's SQL functions on every connection opened from now on, by
+ * anything in the process; db_open* call it. */
+void db_functions_everywhere(void);
 
 extern const char db_schema[];
 

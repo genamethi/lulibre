@@ -206,6 +206,8 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "lulibre.stores.core");
   lua_pushcfunction(L, luaopen_curl);
   lua_setfield(L, -2, "curl");
+  lua_pushcfunction(L, luaopen_lsqlite3);
+  lua_setfield(L, -2, "lsqlite3");
   lua_pop(L, 1);
   l_setman_fill(L, app->settings);
   keep_own(L, "path", LUA_OWN_PATH);
