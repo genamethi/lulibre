@@ -210,9 +210,9 @@ static void store_answered(struct app *app, void *arg) { /* the main thread */
   free(a);
 }
 
-static void store_fail(struct store_req *q, const char *why) {
+static void store_fail(void *req, const char *why) {
   struct store_answer *a = xcalloc(1, sizeof *a);
-  a->q = q;
+  a->q = req;
   a->err = xstrdup(why);
   queue_post(LOOP_UI, store_answered, a);
 }
@@ -233,7 +233,7 @@ static void store_start(struct app *app, void *arg) { /* the Lua thread */
   }
   lua_getfield(L, -1, "_run");
   lua_remove(L, -2);
-  lua_pushinteger(L, (lua_Integer)(intptr_t)q);
+  lapi_push_reply(L, q, store_fail);
   lua_pushinteger(L, q->book);
   lua_createtable(L, 0, q->n);
   for (int i = 0; i < q->n; i++) {
@@ -249,8 +249,9 @@ void lapi_store_write(struct store_req *q) {
 
 /* answer(handle [, err]) */
 static int l_store_answer(lua_State *L) {
+  struct store_req *q = lapi_take_reply(L, 1);
   struct store_answer *a = xcalloc(1, sizeof *a);
-  a->q = (struct store_req *)(intptr_t)luaL_checkinteger(L, 1);
+  a->q = q;
   a->err = lua_isstring(L, 2) ? xstrdup(lua_tostring(L, 2)) : NULL;
   queue_post(LOOP_UI, store_answered, a);
   return 0;

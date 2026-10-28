@@ -23,7 +23,8 @@ static void answer_main(struct app *app, void *arg) { /* the indexer's loop */
   r->done(r);
 }
 
-static void fail(struct ocr_req *r, const char *why) {
+static void fail(void *req, const char *why) {
+  struct ocr_req *r = req;
   free(r->err);
   r->err = xstrdup(why);
   queue_post(LOOP_UI, answer_main, r);
@@ -46,7 +47,7 @@ static void start(struct app *app, void *arg) {
   }
   lua_getfield(L, -1, "_run");
   lua_remove(L, -2);
-  lua_pushinteger(L, (lua_Integer)(intptr_t)r);
+  lapi_push_reply(L, r, fail);
   lua_pushstring(L, r->path);
   lua_createtable(L, r->n, 0);
   for (int i = 0; i < r->n; i++) {
@@ -103,7 +104,7 @@ static void page_of(lua_State *L, int idx, struct doc_page *pg) {
 
 /* answer(handle, results [, err]): results[i], page i's answer or false */
 static int l_answer(lua_State *L) {
-  struct ocr_req *r = (struct ocr_req *)(intptr_t)luaL_checkinteger(L, 1);
+  struct ocr_req *r = lapi_take_reply(L, 1);
   if (lua_istable(L, 2))
     for (int i = 0; i < r->n; i++) {
       lua_rawgeti(L, 2, i + 1);

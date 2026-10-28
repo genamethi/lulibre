@@ -268,7 +268,9 @@ in tasks that can be interrupted at any point.
   start, in `<const>` locals (`setman.get`), and passes them down: the
   functions it calls take them as arguments.
 - A resource lives on the stack of the task that opened it, in a `<close>`
-  variable.
+  variable. A request C hands a task to answer (`src/lua/reply.c`) is one:
+  closed unanswered, it fails the request, so C never waits for an answer
+  that cannot come.
 
 **Testing it**
 

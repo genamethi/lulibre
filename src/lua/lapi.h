@@ -98,6 +98,13 @@ int luaopen_lulibre_stores_core(struct lua_State *L);
 struct ocr_req;
 void lapi_ocr_read(struct ocr_req *req);
 
+/* lua/reply.c: a handle on a request a task answers once; fail runs with
+ * the request when the handle is closed or collected unanswered. take
+ * returns the request, and raises an error when it was answered. */
+typedef void lapi_reply_fail(void *req, const char *why);
+void lapi_push_reply(struct lua_State *L, void *req, lapi_reply_fail *fail);
+void *lapi_take_reply(struct lua_State *L, int idx);
+
 /* Calls into the interface (lua/uicall.c): fn runs on the interface thread
  * with copies of L's arguments, on a lua_State that holds only values.
  * ui_send returns at once (fn's errors are reported); ui_ask yields the

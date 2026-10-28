@@ -22,6 +22,7 @@ local M, own = {}, {}
 --- Reads the pages of a request from the indexer; the indexer's, not a
 -- user's to call.
 function own._run(handle, path, pages, lang)
+  local _ <close> = handle -- unanswered, it fails the request as it closes
   local results, why = {}, nil
   for i, page in ipairs(pages) do
     local ok, text = pcall(M.read, path, page, lang)

@@ -23,6 +23,7 @@ local M, own = {}, {}
 
 --- Writes one book's changes; the library's, not a user's to call.
 function own._run(handle, book, fields)
+  local _ <close> = handle -- unanswered, it fails the write as it closes
   local ok, done, why = pcall(M.calibre, book, fields)
   if not ok then
     core.answer(handle, tostring(done))

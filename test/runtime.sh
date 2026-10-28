@@ -71,6 +71,13 @@ for _ = 1, 50 do if changed then break end lulibre.sleep(20) end
 print("changed|" .. tostring(changed))
 function stores.calibre() return nil, "not today" end
 print("refused|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Again" } }))))
+-- a store whose task is cancelled while it waits still answers: the write fails
+function stores.calibre() lulibre.sleep(60000) return true end
+lulibre.spawn(function()
+  lulibre.sleep(100)
+  for _, t in ipairs(lulibre.tasks()) do if t.name:find("lulibre.stores.calibre", 1, true) then lulibre.cancel(t.id) end end
+end)
+print("cancelled|" .. tostring(select(2, library.apply({ { book = 1, field = "title", value = "Never" } }))))
 LUA
 store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
 
@@ -94,4 +101,5 @@ fi
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 contains "a change that applied posts records_changed with its books and fields" "changed|1|title" "$store"
+contains "a store's task cancelled before it answers fails the write" "cancelled|the task that was to answer ended" "$store"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
