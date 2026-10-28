@@ -30,8 +30,8 @@ A resource lives on the stack of the task that opened it: hold it in a
 `<close>` variable, and it is released at the end of its scope, or when
 the task fails or is cancelled.
 
-    local reading = require "lulibre.reading"
-    local r <close> = reading.of(book)
+    local txt = require "txt"
+    local t <close> = txt.of(book)
 
 `:restart-scripts` tears the state down and makes it again. The commands,
 keys and callbacks Lua made go with the old state; the settings stay.
@@ -156,37 +156,58 @@ records a rejected proposal. `apply` returns nil when nothing was to
 change, and nil and why when the operation failed. With the setting
 `embed`, each operation also writes the records into the books' files.
 
-## Reading files
+## A file's text: txt
 
-    local reading = require "lulibre.reading"
-    local r <close>, err = reading.of(book)   -- waits: the book's file, as lines
-    local r <close> = reading.load(file)      -- waits: a file by its id in the index
+    local txt = require "txt"
+    local t <close>, err = txt.of(book)   -- waits: the book's file, as lines
+    local t <close> = txt.load(file)      -- waits: a file by its id in the index
 
 | | |
 |---|---|
-| `r.text` | the lines joined: a line break between lines, a blank line before a paragraph, a form feed between pages |
-| `#r`, `r:line(i)` | the lines: `{text=, page=, n=, start=, stop=, size=, x0=, y0=, x1=, y1=, math=, bold=, italic=, super=, rotated=, mono=, block=, index=}`; `start` and `stop` as `string.sub` takes them |
-| `r:line_at(pos)` | the line at a position of `r.text`, or nil on a page break |
-| `r:largest(page)` `r:height(page)` | the largest line size on a page, and how far down its lines reach |
-| `r.meta` | the file's own metadata: `{title=, author=, subject=, keywords=, creator=, producer=}` |
-| `r.file` `r.pages` | |
+| `t.text` | the lines joined: a line break between lines, a blank line before a paragraph, a form feed between pages |
+| `#t`, `t:line(i)` | the lines: `{text=, page=, n=, start=, stop=, size=, x0=, y0=, x1=, y1=, math=, bold=, italic=, super=, rotated=, mono=, block=, index=}`; `start` and `stop` as `string.sub` takes them |
+| `t:at(pos)` | the line at a position of `t.text`, or nil on a page break |
+| `t:largest(page)` `t:height(page)` | the largest line size on a page, and how far down its lines reach |
+| `t.meta` | the file's own metadata: `{title=, author=, subject=, keywords=, creator=, producer=}` |
+| `t.file` `t.pages` | |
+
+## Patterns: expr
+
+    local expr = require "expr"
+    expr.find(s, patt [, init])     -- as string.find
+    expr.match(s, patt [, init])    -- as string.match
+    expr.gmatch(s, patt)            -- as string.gmatch
+    expr.gsub(s, patt, repl [, n])  -- as string.gsub: repl a string, a table or a function
+
+`s` is a string or a txt; `patt` a Lua pattern, or an LPeg pattern made
+with LPeg's constructors, which `expr` reaches (`expr.P`, `expr.C`,
+`expr.Cmt`, ...). An LPeg pattern is searched for from `init`, as a Lua
+pattern is; `-expr.B(1) * patt` matches only at the start. A gsub over a
+txt returns a string.
+
+| | |
+|---|---|
+| `expr.where(test)` | matches, consuming nothing, where the line at the position passes `test(line, t)`; never over a string |
+| `expr.line` `expr.eol` | a line's text up to its line or page break; the breaks after it |
+| `expr.upto(p)` | whole lines up to the first where `p` matches |
+| `expr.list(words)` | any of the words or phrases, as whole words, the longest first |
+| `expr.chain(step, ...)` | a function applying its steps in order: a function, or `{patt, repl}` for gsub |
+| `expr.fold(s)` `expr.lower(s)` `expr.upper(s)` | without case, accents or styled letters (as filters compare); case beyond ASCII |
 
 ## Grammars and proposals
 
+    local expr = require "expr"
     local grammar = require "lulibre.grammar"
-    local lpeg = require "lpeg"
-    local field, line, eol = grammar.field, grammar.line, grammar.eol
     local here = grammar.page(1) * grammar.bold
-    grammar.add("my-series", lpeg.Ct(grammar.skip_to(here) * field("title", line) * eol * field("authors", line)),
-                "My Series")
+    grammar.add("my-series", expr.Ct(expr.upto(here) * grammar.field("title", expr.line) * expr.eol
+                                    * grammar.field("authors", expr.line)), "My Series")
 
-A grammar is an LPeg pattern matched from the start of a reading's text.
+A grammar is a pattern matched from the start of a book's text.
 `field(name, patt)` captures a field's value with its positions. The
 predicates test the line at the current position: `largest`, `bold`,
 `block` (a paragraph's first line), `page(n)`, `near_top(share)`, and
-`at(function(line, reading) ... end)` for one of yours. `skip_to(p)` passes
-whole lines up to the first where `p` holds. `grammar.parse(r)` returns
-every grammar's parse of a reading.
+`expr.where` for one of yours. `grammar.parse(t)` returns every
+grammar's parse of a text.
 
 | | |
 |---|---|

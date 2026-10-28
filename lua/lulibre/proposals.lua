@@ -9,7 +9,7 @@
 -- first value equals the record's is not proposed.
 --
 -- @library lulibre.proposals
-local reading = require "lulibre.reading"
+local txt = require "txt"
 local grammar = require "lulibre.grammar"
 local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
@@ -95,7 +95,7 @@ end
 local proposing = {}
 
 --- Reads, parses, ranks and stores a book's proposals; returns how many
--- fields have one. A book with no reading is proposed for from its online
+-- fields have one. A book with no text is proposed for from its online
 -- records alone.
 -- @tparam integer book
 -- @tparam table w M.settings()
@@ -104,7 +104,7 @@ function M.propose(book, w)
   while proposing[book] do lulibre.sleep(50) end
   proposing[book] = true
   local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
-  local r <close> = reading.of(book)
+  local r <close> = txt.of(book)
   local srcs = sources.of(book, r)
   -- an online record is a parse too (design 39), ranked beside the grammars'
   local parses = r and grammar.parse(r) or {}

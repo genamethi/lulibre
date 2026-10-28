@@ -24,14 +24,14 @@ end
 --- Returns the book's sources: the record, the file's own metadata, and
 -- each online record kept for it (lulibre.net).
 -- @tparam integer book
--- @param[opt] reading the book's reading, for the file's own metadata
+-- @param[opt] t the book's text (txt), for the file's own metadata
 -- @treturn {table,...} each `{ name=, kind = "record"|"embedded"|"online",
 -- fields = { [field] = value } }`
-function M.of(book, reading)
+function M.of(book, t)
   local out = {}
   local b = lulibre.book(book)
   if b then out[#out + 1] = { name = "record", kind = "record", fields = record(b) } end
-  local meta = reading and reading.meta
+  local meta = t and t.meta
   if meta and (meta.title or meta.author) then
     out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = meta.title, authors = meta.author } }
   end

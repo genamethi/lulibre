@@ -107,6 +107,34 @@ lulibre.spawn(function() for _ = 1, 25 do busy(0.1) lulibre.sleep(0) end print("
 LUA
 busy=$("$bin" -L "$t/lib" run "$t/busy.lua" 2>&1)
 
+# expr: string's operations over strings and texts, with Lua and LPeg
+# patterns
+cat >"$t/expr.lua" <<'LUA'
+local expr = require "expr"
+local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
+local word = expr.C(expr.R("az", "AZ") ^ 1)
+say("find", expr.find("one two", word, 4))
+say("find lua", expr.find("one two", "%a+", 4))
+say("match", expr.match("x = 12", expr.C(expr.R"09" ^ 1)))
+say("match whole", expr.match("x = 12", expr.R"09" ^ 1))
+local seen = {}
+for w in expr.gmatch("a bb ccc", word) do seen[#seen + 1] = w end
+say("gmatch", table.concat(seen, ","))
+say("gsub", expr.gsub("erdos paul", word, function(w) return w:sub(1, 1):upper() .. w:sub(2) end))
+say("gsub table", expr.gsub("a b c", word, { a = "1", c = "3" }))
+say("gsub string", expr.gsub("Erdos, Paul", word * ", " * word, "%2 %1"))
+say("gsub n", expr.gsub("a a a", "a", "b", 2))
+say("anchored", expr.find("ab ab", -expr.B(1) * "ab", 2))
+say("list", expr.gsub("the art of the deal", expr.list { "of", "the", "the art" }, "_"))
+local key = expr.chain(expr.fold, { "%p", " " }, { "%s+", " " })
+say("chain", key("Éléments  de Géométrie!"))
+local t = { text = "Title\nby Someone\n", at = function(_, pos) return { bold = pos <= 6 } end }
+local bold = expr.where(function(line) return line.bold end)
+say("where", expr.match(t, bold * expr.C(expr.line)), expr.match("Title", bold * expr.C(expr.line)))
+say("upto", expr.match(t, expr.upto(expr.P "by") * expr.C(expr.line)))
+LUA
+ex=$("$bin" -L "$t/lib" run "$t/expr.lua" 2>&1)
+
 # lsqlite3, built in: a database of the script's own, with lulibre's SQL
 # functions on its connection
 cat >"$t/sql.lua" <<'LUA'
@@ -154,6 +182,20 @@ contains "a coroutine inside a coroutine" "nested|deep" "$co"
 contains "a task that runs 2 s without waiting is reported" "busy.lua:2) has run 2." "$busy"
 contains "and goes on" "busy|done" "$busy"
 lacks "one that waits as often is not" "busy.lua:3)" "$busy"
+contains "expr.find, with an LPeg pattern, as string.find" "find|5|7|two" "$ex"
+contains "with a Lua pattern, string.find itself" "find lua|5|7" "$ex"
+contains "expr.match: the captures" "match|12" "$ex"
+contains "or the whole match" "match whole|12" "$ex"
+contains "expr.gmatch" "gmatch|a,bb,ccc" "$ex"
+contains "expr.gsub with a function" "gsub|Erdos Paul|2" "$ex"
+contains "with a table, a missing key keeping the match" "gsub table|1 b 3|3" "$ex"
+contains "with a string and its captures" "gsub string|Paul Erdos|1" "$ex"
+contains "at most n" "gsub n|b b a|2" "$ex"
+contains "-B(1) anchors at the start" "anchored|nil" "$ex"
+contains "expr.list: whole words, the longest first" "list|_ _ _ deal|3" "$ex"
+contains "expr.chain: fold, then the gsubs in order" "chain|elements de geometrie " "$ex"
+contains "expr.where tests the line at the position; a string has none" "where|Title|nil" "$ex"
+contains "expr.upto: whole lines up to a match" "upto|by Someone" "$ex"
 contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

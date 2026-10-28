@@ -25,7 +25,7 @@ At run time:
 | changing the library | calibre's `calibredb` |
 | OCR | `tesseract` |
 | looking books up (`:enrich`) | the `dkjson` rock |
-| grammars | the `lpeg` rock |
+| scripts (`expr`, grammars) | the `lpeg` rock |
 
 `pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).
 

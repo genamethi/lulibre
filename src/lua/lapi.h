@@ -90,8 +90,10 @@ void l_evman_close(struct app *app);
  * and mod_tree (lstate.c). */
 void lstate_paths(struct lua_State *L);
 
-/* lulibre.reading (l_reading.c), a module written in C, preloaded. */
-int luaopen_lulibre_reading(struct lua_State *L);
+/* txt (l_txt.c), a module written in C, preloaded. */
+int luaopen_txt(struct lua_State *L);
+/* expr.core (l_match.c): fold, lower and upper, for expr (lua/expr.lua). */
+int luaopen_expr_core(struct lua_State *L);
 int luaopen_lulibre_similar(struct lua_State *L);
 int luaopen_lulibre_library(struct lua_State *L);
 int luaopen_lulibre_ocr_core(struct lua_State *L);

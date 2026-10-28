@@ -194,8 +194,10 @@ lua_State *lstate_new(struct app *app) {
   lua_pop(L, 4);
   /* packaged modules written in C, found by require like the others */
   luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
-  lua_pushcfunction(L, luaopen_lulibre_reading);
-  lua_setfield(L, -2, "lulibre.reading");
+  lua_pushcfunction(L, luaopen_txt);
+  lua_setfield(L, -2, "txt");
+  lua_pushcfunction(L, luaopen_expr_core);
+  lua_setfield(L, -2, "expr.core");
   lua_pushcfunction(L, luaopen_lulibre_similar);
   lua_setfield(L, -2, "lulibre.similar");
   lua_pushcfunction(L, luaopen_lulibre_library);

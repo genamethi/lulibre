@@ -1,8 +1,9 @@
-/* lulibre.reading: a file's reading in Lua (design 13, 14; doc/reading.h).
+/* txt: a file's text with its attributes at each position, in Lua (design
+ * 13, 14; doc/reading.h), a module written in C, preloaded.
  *
- *   local reading = require "lulibre.reading"
- *   local r <close> = reading.of(book)     the reading of the book's file
- *   local r <close> = reading.load(file)   of a file, by its id in the index
+ *   local txt = require "txt"
+ *   local r <close> = txt.of(book)     the text of the book's file
+ *   local r <close> = txt.load(file)   of a file, by its id in the index
  *     both wait (the lines are read on a worker); nil and the reason when
  *     the file has no lines
  *
@@ -13,12 +14,12 @@
  *                       size=, x0=, y0=, x1=, y1=, math=, bold=, italic=,
  *                       super=, rotated=, mono=, block=, index=}; start and
  *                       stop are positions in r.text, as string.sub takes them
- *   r:line_at(pos)      the line holding position pos of r.text, or nil on a
+ *   r:at(pos)           the line holding position pos of r.text, or nil on a
  *                       page break; a line break counts as the line before's
  *   r:largest(page)     the largest line size on the page
  *   r:height(page)      the page's height, as far as its lines reach
  *
- * A reading never changes. It is released when its <close> variable goes
+ * A text never changes. It is released when its <close> variable goes
  * out of scope, or by the collector. */
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,7 @@
 #include "lua/lapi.h"
 #include "lua/sched.h"
 
-static const char META[] = "lulibre.reading";
+static const char META[] = "txt";
 
 struct ud {
   struct reading *r;
@@ -44,7 +45,7 @@ struct ud {
 
 static struct reading *check(lua_State *L, int idx) {
   struct ud *u = luaL_checkudata(L, idx, META);
-  if (!u->r) luaL_argerror(L, idx, "a reading already closed");
+  if (!u->r) luaL_argerror(L, idx, "a text already closed");
   return u->r;
 }
 
@@ -106,7 +107,7 @@ static int m_line(lua_State *L) {
   return 1;
 }
 
-static int m_line_at(lua_State *L) {
+static int m_at(lua_State *L) {
   struct reading *r = check(L, 1);
   lua_Integer pos = luaL_checkinteger(L, 2);
   if (pos < 1) return 0;
@@ -259,9 +260,9 @@ static int l_load(lua_State *L) {
   return start(L, 0, luaL_checkinteger(L, 1));
 }
 
-int luaopen_lulibre_reading(lua_State *L) {
+int luaopen_txt(lua_State *L) {
   static const luaL_Reg methods[] = {
-    {"line", m_line}, {"line_at", m_line_at}, {"largest", m_largest}, {"height", m_height}, {NULL, NULL},
+    {"line", m_line}, {"at", m_at}, {"largest", m_largest}, {"height", m_height}, {NULL, NULL},
   };
   static const luaL_Reg meta[] = {
     {"__index", m_index}, {"__len", m_len}, {"__close", m_close}, {"__gc", m_close}, {NULL, NULL},

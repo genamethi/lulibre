@@ -14,6 +14,7 @@ dependencies = {
   "lua >= 5.4, < 5.6",
   "luv",
   "dkjson",
+  "lpeg",
 }
 build = {
   type = "none",
