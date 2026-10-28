@@ -194,6 +194,23 @@ txt returns a string.
 | `expr.chain(step, ...)` | a function applying its steps in order: a function, or `{patt, repl}` for gsub |
 | `expr.fold(s)` `expr.lower(s)` `expr.upper(s)` | without case, accents or styled letters (as filters compare); case beyond ASCII |
 
+## Sequences: iter
+
+    local iter = require "iter"
+    iter(books):filter(function(b) return b.year end):map(function(b) return b.title end):totable()
+    for size, files in iter(files):group(function(f) return f.size end) do ... end
+
+As Neovim's `vim.iter`: over a list (its values), a table (its keys and
+values) or an iterator function, and itself a `for` loop's iterator.
+`filter`, `map` (an item made nil is dropped), `each`, `fold(acc, f)`,
+`totable`, `find`, `any`, `all`, `take(n)`, `skip(n)`, `enumerate`,
+`join(sep)`, `next`. And:
+
+| | |
+|---|---|
+| `it:group(key)` | key and the list of its items, the keys in the order first met |
+| `it:diff(other, key)` | the items whose key no item of `other` has |
+
 ## Grammars and proposals
 
     local expr = require "expr"

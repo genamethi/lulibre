@@ -135,6 +135,30 @@ say("upto", expr.match(t, expr.upto(expr.P "by") * expr.C(expr.line)))
 LUA
 ex=$("$bin" -L "$t/lib" run "$t/expr.lua" 2>&1)
 
+# iter: sequences, as vim.iter, with group and diff
+cat >"$t/iter.lua" <<'LUA'
+local iter = require "iter"
+local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
+local n = { 1, 2, 3, 4, 5, 6 }
+say("filter map", iter(n):filter(function(x) return x % 2 == 0 end):map(function(x) return x * 10 end):join(","))
+say("map drops nil", iter(n):map(function(x) if x > 4 then return x end end):join(","))
+say("fold", iter(n):fold(0, function(a, x) return a + x end))
+say("pairs", iter({ a = 1 }):map(function(k, v) return k .. "=" .. v end):join(","))
+say("take skip", iter(n):skip(1):take(2):join(","))
+say("enumerate", iter({ "x", "y" }):enumerate():map(function(i, v) return i .. v end):join(","))
+say("find any all", iter(n):find(function(x) return x > 3 end), iter(n):any(function(x) return x > 5 end),
+  iter(n):all(function(x) return x > 0 end))
+say("function", iter(("a b c"):gmatch("%a")):join(""))
+local files = { { size = 3, p = "a" }, { size = 5, p = "b" }, { size = 3, p = "c" } }
+local out = {}
+for size, fs in iter(files):group(function(f) return f.size end) do
+  out[#out + 1] = size .. ":" .. iter(fs):map(function(f) return f.p end):join("")
+end
+say("group", table.concat(out, ","))
+say("diff", iter(files):diff({ { p = "a" } }, function(f) return f.p end):map(function(f) return f.p end):join(","))
+LUA
+it=$("$bin" -L "$t/lib" run "$t/iter.lua" 2>&1)
+
 # lsqlite3, built in: a database of the script's own, with lulibre's SQL
 # functions on its connection
 cat >"$t/sql.lua" <<'LUA'
@@ -196,6 +220,16 @@ contains "expr.list: whole words, the longest first" "list|_ _ _ deal|3" "$ex"
 contains "expr.chain: fold, then the gsubs in order" "chain|elements de geometrie " "$ex"
 contains "expr.where tests the line at the position; a string has none" "where|Title|nil" "$ex"
 contains "expr.upto: whole lines up to a match" "upto|by Someone" "$ex"
+contains "iter: filter, then map" "filter map|20,40,60" "$it"
+contains "an item map makes nil of is dropped" "map drops nil|5,6" "$it"
+contains "fold" "fold|21" "$it"
+contains "a table's keys and values" "pairs|a=1" "$it"
+contains "skip and take" "take skip|2,3" "$it"
+contains "enumerate" "enumerate|1x,2y" "$it"
+contains "find, any, all" "find any all|4|true|true" "$it"
+contains "an iterator function" "function|abc" "$it"
+contains "group: by key, in the order first met" "group|3:ac,5:b" "$it"
+contains "diff: the items whose key the other has not" "diff|b,c" "$it"
 contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
