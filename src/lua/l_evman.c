@@ -2,6 +2,10 @@
  *
  *   evman.add(event, fn, ...)   a callback; returns its id
  *   evman.rm(id)
+ *   evman.post(event, payload)  a shared event, from packaged code that
+ *                               finds one out (an online answer arriving:
+ *                               "source_arrived" {book=, service=}); each
+ *                               loop's callbacks get it as they get C's
  *
  * event: "cursor" {book=}, "marks" {selection={...}}, "records_changed"
  * {ids=, fields=, files=}, "holder" {holder="none"|"server"|"program"},
@@ -233,8 +237,50 @@ static int l_rm(lua_State *L) {
   return 0;
 }
 
+static long long *ids_of(lua_State *L, int idx, const char *field, int *n) {
+  lua_getfield(L, idx, field);
+  *n = lua_istable(L, -1) ? (int)lua_rawlen(L, -1) : 0;
+  long long *ids = xcalloc((size_t)*n + 1, sizeof *ids);
+  for (int i = 0; i < *n; i++) {
+    lua_rawgeti(L, -1, i + 1);
+    ids[i] = lua_tointeger(L, -1);
+    lua_pop(L, 1);
+  }
+  lua_pop(L, 1);
+  return ids;
+}
+
+/* The services' names live as long as the program: the payload's service
+ * points at a copy kept here. */
+static const char *service_name(const char *s) {
+  static char *names[64];
+  static int n;
+  for (int i = 0; i < n; i++)
+    if (!strcmp(names[i], s)) return names[i];
+  if (n == (int)ARRAY_LEN(names)) return "service";
+  return names[n++] = xstrdup(s);
+}
+
+static int l_post(lua_State *L) {
+  int kind = kind_of(L, 1);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  if (!events_wanted(kind)) return 0;
+  struct event *ev = xcalloc(1, sizeof *ev);
+  ev->kind = kind;
+  lua_getfield(L, 2, "book");
+  ev->book = lua_tointeger(L, -1);
+  lua_getfield(L, 2, "service");
+  if (lua_isstring(L, -1)) ev->service = service_name(lua_tostring(L, -1));
+  lua_pop(L, 2);
+  ev->ids = ids_of(L, 2, "ids", &ev->nids);
+  ev->selection = ids_of(L, 2, "selection", &ev->nselection);
+  ev->files = ids_of(L, 2, "files", &ev->nfiles);
+  events_post(ev);
+  return 0;
+}
+
 int luaopen_evman(lua_State *L) {
-  static const luaL_Reg fns[] = {{"add", l_add}, {"rm", l_rm}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"add", l_add}, {"rm", l_rm}, {"post", l_post}, {NULL, NULL}};
   lua_newtable(L);
   lua_setfield(L, LUA_REGISTRYINDEX, CALLBACKS);
   lua_newtable(L);

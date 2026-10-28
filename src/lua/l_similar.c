@@ -7,6 +7,8 @@
  *                                 "near" | "differs", then both scores;
  *                                 "contains": a holds all of b
  *
+ *   similar.canonical(type, value)  an identifier's canonical form, or nil
+ *
  * kind: "text" (title, series, publisher), "people" (authors), "tags",
  * "date" ("1942", "1942-05", "1942-05-03"), "ident" ("type:value"). Words
  * are weighed by their rarity in the library, built again after calibre's
@@ -86,8 +88,16 @@ static int l_compare(lua_State *L) {
   return 3;
 }
 
+static int l_canonical(lua_State *L) {
+  sbuf out = SBUF_INIT;
+  if (ident_canonical(luaL_checkstring(L, 1), luaL_checkstring(L, 2), &out)) lua_pushnil(L);
+  else lua_pushstring(L, out.s ? out.s : "");
+  sb_free(&out);
+  return 1;
+}
+
 int luaopen_lulibre_similar(lua_State *L) {
-  static const luaL_Reg fns[] = {{"score", l_score}, {"compare", l_compare}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"score", l_score}, {"compare", l_compare}, {"canonical", l_canonical}, {NULL, NULL}};
   luaL_newlib(L, fns);
   return 1;
 }

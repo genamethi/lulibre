@@ -25,6 +25,28 @@ function M.review(args)
   review.open(lulibre.ids(args))
 end
 
+--- :enrich [filter]: ask the online services about the books, by their
+-- identifiers; each new answer posts "source_arrived", which proposes for
+-- the book again.
+function M.enrich(args)
+  local net = require "lulibre.net"
+  local books, answers = 0, 0
+  for _, id in ipairs(lulibre.ids(args)) do
+    local n = net.enrich(id)
+    if n > 0 then
+      books = books + 1
+      answers = answers + n
+    end
+  end
+  print(("%d new answers for %d books"):format(answers, books))
+end
+
+-- an answer arriving re-ranks the book (design 42)
+evman.add("source_arrived", function(ev)
+  proposals.propose(ev.book, proposals.settings())
+end)
+
+cmd.create("enrich", function(o) M.enrich(o.args) end, { desc = "[filter]  ask the online services about the books, by their identifiers" })
 cmd.create("propose", function(o) M.propose(o.args) end, { desc = "[filter]  propose metadata from the files, for :review" })
 cmd.create("review", function(o) M.review(o.args) end, { desc = "[filter]  the books' proposals: accept, edit, reject" })
 

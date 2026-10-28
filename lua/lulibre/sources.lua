@@ -21,7 +21,8 @@ local function record(b)
   return fields
 end
 
---- Returns the book's sources.
+--- Returns the book's sources: the record, the file's own metadata, and
+-- each online record kept for it (lulibre.net).
 -- @tparam integer book
 -- @param[opt] reading the book's reading, for the file's own metadata
 -- @treturn {table,...} each `{ name=, kind = "record"|"embedded"|"online",
@@ -33,6 +34,9 @@ function M.of(book, reading)
   local meta = reading and reading.meta
   if meta and (meta.title or meta.author) then
     out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = meta.title, authors = meta.author } }
+  end
+  for _, r in ipairs(require("lulibre.net").records(book)) do
+    out[#out + 1] = { name = r.service, kind = "online", fields = r.fields }
   end
   return out
 end

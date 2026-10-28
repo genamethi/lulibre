@@ -1,18 +1,81 @@
 --- Online lookups (design 39-43). Each service is a resource with a queue
 -- (lulibre.net.service): a caller asks about one work and waits; the
 -- service batches, paces and holds back by its own rules. Every answer is
--- kept, and an offline dataset answers first. An answer arriving posts
--- "source arrived" for the book.
+-- kept. Lookups run only on command (:enrich); contact_email is sent only
+-- when set. An answer arriving posts "source_arrived" for the book.
 --
--- @services lulibre.net
+-- @library lulibre.net
+local service = require "lulibre.net.service"
+local similar = require "lulibre.similar"
+
 local M = {}
 
---- Asks a service about a work, and waits for the answer.
--- @tparam string service "arxiv", "crossref", "zbmath", "openlibrary", "openalex"
--- @tparam string key the work's identifier, canonical
--- @treturn table|nil the record, or nil and the reason
-function M.ask(service, key)
-  error("not written yet", 2)
+M.services = service.services
+
+--- The User-Agent requests send; the contact address only when set.
+-- @tparam string mail the setting contact_email, taken by the caller
+function M.agent(mail)
+  return ("lulibre/%s (library metadata lookup%s)"):format(lulibre.version, mail ~= "" and "; mailto:" .. mail or "")
 end
+
+--- Fetches a URL with curl: the body, the HTTP status and Retry-After, or
+-- nil and why.
+function M.get(url, mail)
+  local r, err = lulibre.system({ "curl", "-sS", "-L", "--max-time", "25", "-A", M.agent(mail or ""), "-w",
+    "\n%{http_code} %header{retry-after}", url }, { timeout = 30000 })
+  if not r then return nil, err end
+  if r.code ~= 0 then return nil, (r.stderr ~= "" and r.stderr or ("curl exited with " .. r.code)) end
+  local body, status, retry = r.stdout:match("^(.*)\n(%d+) ?(%S*)$")
+  if not body then return nil, "no answer" end
+  return body, tonumber(status), retry ~= "" and retry or nil
+end
+
+--- Asks a service about a work; see lulibre.net.service.ask.
+function M.ask(name, key)
+  return service.ask(name, key)
+end
+
+--- The services that can be asked about a book, with the key each is
+-- asked by: `{ {service=, key=}, ... }`.
+function M.keys(book)
+  local out, b = {}, lulibre.book(book)
+  if not b then return out end
+  for name, s in pairs(service.services) do
+    local value = b.idents and b.idents[s.how.ident]
+    local key = value and similar.canonical(s.how.ident, value)
+    if key then out[#out + 1] = { service = name, key = key } end
+  end
+  table.sort(out, function(a, z) return a.service < z.service end)
+  return out
+end
+
+--- The online records kept for a book, as fields: `{ {service=, fields=}, ... }`.
+function M.records(book)
+  local out = {}
+  for _, k in ipairs(M.keys(book)) do
+    local answer = service.kept(k.service, k.key)
+    if answer then
+      local ok, fields = pcall(service.services[k.service].how.record, answer)
+      if ok and fields and next(fields) then out[#out + 1] = { service = k.service, fields = fields } end
+    end
+  end
+  return out
+end
+
+--- Asks every service a book can be asked about; posts "source_arrived"
+-- for each new answer. Returns how many services answered anew.
+function M.enrich(book)
+  local n = 0
+  for _, k in ipairs(M.keys(book)) do
+    local answer, fresh = M.ask(k.service, k.key)
+    if answer and fresh then
+      n = n + 1
+      evman.post("source_arrived", { book = book, service = k.service })
+    end
+  end
+  return n
+end
+
+require "lulibre.net.services"
 
 return M

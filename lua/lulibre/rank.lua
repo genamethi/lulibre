@@ -40,7 +40,7 @@ function M.agreement(parse, srcs, w)
     local wf = M.coverage_weight[field] or 0.05
     for _, src in ipairs(srcs) do
       local v = src.fields[field]
-      local own = src.from and src.from[field] == parse.grammar
+      local own = src.name == parse.grammar or (src.from and src.from[field] == parse.grammar)
       if v and v ~= "" and not own then
         local ws = sources.weight[src.kind] or 1
         local like, ab, ba = similar.compare(M.kind(field), f.value, v, w.near, w.same)

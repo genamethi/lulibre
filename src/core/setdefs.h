@@ -33,6 +33,7 @@ enum setting_id {
   S_SIMILAR_SAME,
   S_EMBED,
   S_WRITE_JOBS,
+  S_CONTACT_EMAIL,
   S_SERVER,
   S_USER,
   S_PASSWORD_FILE,

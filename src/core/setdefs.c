@@ -49,6 +49,8 @@ const struct setting_def setting_defs[S_COUNT] = {
                "once per batch, undoing too"},
   [S_WRITE_JOBS] = {"write_jobs", SETTING_INT, 0, "4", NULL,
                     "calibredb processes at once through the content server (one at a time straight to the folder)"},
+  [S_CONTACT_EMAIL] = {"contact_email", SETTING_STR, 0, "", NULL,
+                       "sent to the metadata services with each request, when set: some answer faster for it"},
   [S_SERVER] = {"server", SETTING_STR, 0, "", NULL,
                 "calibre content server URL; changes go through it (http://127.0.0.1:8080)"},
   [S_USER] = {"user", SETTING_STR, 0, "", NULL, "content server user"},

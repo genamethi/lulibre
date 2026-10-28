@@ -41,8 +41,9 @@ function M.normalize(field, value)
   return table.concat(names, " & ")
 end
 
+-- an online record's fields have no span: they take none
 local function overlaps(a, b)
-  return a.start <= b.stop and b.start <= a.stop
+  return a.start ~= nil and b.start ~= nil and a.start <= b.stop and b.start <= a.stop
 end
 
 --- The rows: per field, its values in order, the first-ranked first.
@@ -91,14 +92,23 @@ function M.rows(ranked, srcs, w)
 end
 
 --- Reads, parses, ranks and stores a book's proposals; returns how many
--- fields have one, or nil and the reason.
+-- fields have one. A book with no reading is proposed for from its online
+-- records alone.
 -- @tparam integer book
 -- @tparam table w M.settings()
 function M.propose(book, w)
-  local r <close>, err = reading.of(book)
-  if not r then return nil, err end
+  local r <close> = reading.of(book)
   local srcs = sources.of(book, r)
-  local ranked = rank.order(grammar.parse(r), srcs, w)
+  -- an online record is a parse too (design 39), ranked beside the grammars'
+  local parses = r and grammar.parse(r) or {}
+  for _, s in ipairs(srcs) do
+    if s.kind == "online" then
+      local fields = {}
+      for field, value in pairs(s.fields) do fields[field] = { value = value } end
+      parses[#parses + 1] = { grammar = s.name, fields = fields }
+    end
+  end
+  local ranked = rank.order(parses, srcs, w)
   local rows = M.rows(ranked, srcs, w)
   lulibre.store("DELETE FROM proposals WHERE book = ?", book)
   local n = 0
@@ -110,7 +120,7 @@ function M.propose(book, w)
                     book, field, a.value, a.parse, i, a.score,
                     a.agree and table.concat(a.agree, ",") or nil,
                     a.disagree and table.concat(a.disagree, ",") or nil,
-                    r.file, a.start, a.stop)
+                    r and r.file, a.start, a.stop)
     end
   end
   return n
