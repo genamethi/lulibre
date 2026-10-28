@@ -134,15 +134,12 @@ calibre's internals, which change without notice:
 
 The launcher was written against calibre 9.15. Its reference is calibre's
 source: `src/calibre/srv/standalone.py`, `srv/library_broker.py`,
-`db/backup.py`. After a calibre update, `make check-offline` runs the
-launcher against the installed calibre: a title changed through the server
-must reach the book's metadata.opf within 15 s. If the check fails, read
-those files in the new calibre and update the launcher to match.
+`db/backup.py`. After a calibre update, read those files in the new
+calibre and update the launcher to match.
 
 At run time the launcher fails soft: the server runs without the thread,
 and the reason goes to its log and its status file. With
-`LULIBRE_OPF_REQUIRED=1` it fails hard. `lua/lulibre/units.lua` only writes
-units and doesn't depend on calibre's internals.
+`LULIBRE_OPF_REQUIRED=1` it fails hard.
 
 ## The API reference
 
@@ -205,63 +202,57 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
 
     src/version.h   the version
     src/main.c      argument parsing, command dispatch
-    src/app.c       what every part shares: the index, the worker count
-    src/core/       strings, paths, options, md5, the log
+    src/app.c       what every part shares: the settings, the index, the library
+    src/core/       the settings store, the message queue, shared events, the registry, strings, the log
     src/db/         schema, calibre mirror, staged files, SQL functions, the filter language
-    src/doc/        text extraction and rendering: mupdf, djvulibre, plain text
-    src/index/      the parallel indexer
-    src/match/      text folding, fuzzy matching
-    src/tui/        the interface: windows, views, keymap, commands, pickers, console
-    src/setup/      lulibre-setup: the setup screen and its plan (setup/ holds install.sh)
-    src/lua/        Lua state, task scheduler, the bridge between threads, the API (one l_*.c per module)
+    src/doc/        text extraction and rendering (mupdf, djvulibre, plain text); a file's reading
+    src/index/      the parallel indexer, OCR, what reading a file came to
+    src/library/    calibre's library as a resource: its holder, operations, the journal, the write core's values
+    src/match/      text folding, fuzzy matching, the similarity measure
+    src/tui/        the interface: windows, views, keymap, commands, pickers, console, the edit form
+    src/setup/      lulibre-setup (still 0.2's; setup/ holds install.sh)
+    src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
-    lua/lulibre/    the runtime written in Lua; ui/ holds the screens built on panels
-    scripts/        bundled scripts
+    lua/lulibre/    the runtime written in Lua: grammars, proposals, ranking, lookups, review
     test/  tools/
 
 ## Threads
 
-- **The interface thread** owns the terminal, the windows, the list, the
-  options and its own libuv loop. It never opens a book file and never
-  touches the Lua state.
+- **The interface thread** (the main thread) owns the terminal, the
+  windows, the list, the settings store, calibre's library and its own
+  libuv loop.
 - **The Lua thread** (while the interface is up) owns the Lua state, the
   task scheduler, a second loop and its own database connection.
-- **The libuv pool** does extraction, rendering, hashing, copies of
-  databases (`lulibre.copy_db`) and the list's queries. A job touches only
-  what it was given and what it opens itself. Its result arrives on the loop
-  that queued it.
+- **The libuv pool** does extraction, OCR, rendering, readings, hashing,
+  and the list's queries. A job touches only what it was given and what it
+  opens itself. Its result arrives on the loop that queued it.
 
-`src/lua/bridge.c` connects the first two threads. Lua calls into the
-interface with `ui_call`, which runs a C function on the interface thread
-while the Lua thread waits, so the function may use the Lua state. The
-interface sends work to Lua with `bridge_lua`, which queues the work and
-returns. The interface never waits for Lua. Two rules follow:
-
-- A `lulibre.x` that touches the interface, the options, or the command and
-  key tables is a one-line wrapper around `x_ui` (see `ON_UI` in `l_ui.c`).
-- A function that waits calls `sched_begin_wait` on the Lua thread, then
-  sets up through `ui_pcall`, then yields.
+The threads talk by messages (`src/core/queue.h`): each loop has an inbox,
+a message is a function and the value it owns, and it runs on the inbox's
+loop, never in the sender's stack. Neither thread waits for the other. A
+`lulibre.x` that touches the interface is a one-line wrapper around `x_ui`:
+`SEND` copies the arguments into a message and returns; `ASK` yields the
+task until the answer comes back as a message (`src/lua/uicall.c`). The
+interface runs `x_ui` on a lua_State of its own that holds only the copied
+values. C never calls Lua and waits: where Lua may take a part's place
+(`src/core/registry.h`), C asks by message and goes on when the answer
+comes.
 
 ## Reentrancy
 
 Code here runs on several threads (see above) and, within the Lua thread,
-in tasks that can be interrupted at any point. All code is held strictly to
-the rules below: new code is checked against them, and old code is brought
-to them when it is touched.
+in tasks that can be interrupted at any point.
 
 **C**
 
 - No hidden shared state. A function that returns text writes into its
   caller's buffer. `key_hint(c)` and `ctx_hint(p, a)` are macros that give
   each call its own buffer (`key_hint_in(buf, n, c)` for a buffer you keep).
-  Use `errstr(err)` instead of `strerror`, which is not thread-safe. Use
-  `qsort_r` with the state as its argument, never a global for a
-  comparator. A message built for a caller is allocated and freed by that
-  caller (`lstate_tree_mismatch`).
-- These stay global on purpose: the command and key tables (owned by the
-  interface thread; Lua reaches them only through `ui_call`), the
-  clipboard's last copy, and the source tree a binary runs from. Anything
-  added to this list needs a reason.
+  Use `errstr(err)` instead of `strerror`, and `strtok_r`: workers run at
+  once. A message built for a caller is allocated and freed by that caller.
+- State belongs to one thread. Another thread reaches it by message, or
+  reads a copy: the lua_State keeps a copy of the settings in its registry,
+  which the store keeps current by message.
 - A worker job (`uv_queue_work`) touches only what it was given and what it
   opens itself, including its own SQLite connections. Its result is
   delivered in the after-callback, on the loop that queued it, and the
@@ -273,45 +264,33 @@ to them when it is touched.
   runs every 1000 instructions and yields once a 4 ms slice is used up. A
   read and a write of shared state are two steps, and another task can run
   between them.
-- Take a test followed by a set in one step with `lulibre.claim(t, key)`.
-  A C call is a single step, so no task can run in between. (net.lua's one
-  request at a time per service is a claim.)
-- Build a table that tasks share in a local, and put it in place with one
-  assignment. Never fill it in place where another task may read it half
-  built (the caches in junk, names, quality, subjects).
-- For counters and lists that tasks share, use `lulibre.each`,
-  `table.insert` and `table.remove` (one C call each), not `t[#t + 1] = v`
-  (two steps).
-- A C function that calls back into Lua while the interface thread works
-  (`ui_call`) does so under `lua_pcall` there. The error is raised again on
-  the Lua thread, with the garbage collector stopped in the meantime.
+- Code that may run again while it waits takes its values once, at its
+  start, in `<const>` locals (`setman.get`), and passes them down: the
+  functions it calls take them as arguments.
+- A resource lives on the stack of the task that opened it, in a `<close>`
+  variable.
 
 **Testing it**
 
-A test for a race must hold the window open longer than a slice (a loop of
-some 1.5 million iterations between the test and the set, in
-`test/units.lua`'s claim check). Otherwise the test passes whether or not
-the fix is in. `./configure --sanitize=thread` builds with ThreadSanitizer
-for the C side.
+A test for a race must hold the window open longer than a slice. Otherwise
+the test passes whether or not the fix is in. `./configure
+--sanitize=thread` builds with ThreadSanitizer for the C side.
 
 ## The index
 
 The index is one SQLite file per library (WAL). Most of it either mirrors
 calibre's `metadata.db`, and is replaced whole when that changes, or holds
-extracted text. A few tables are lulibre's own and are never dropped:
-`proposals`, `kv`, `hashes`, `staged`, `good` (records confirmed as right),
-`terms` (the phrases learned for each subject), `refs` (what each book
-cites) and `lookups` (what metadata services answered).
+what was read from the files: their outcomes and their lines (the only
+stored text), and a contentless full-text row per paragraph. A new version
+of its tables (`SCHEMA_VERSION`, `src/db/db.c`) drops all that and reads
+again; `lookups` (every online answer), `staged` and `kv` stay.
 
 Two files beside the index hold what must outlive it (`src/db/db.c`):
-`<index>.history.db` holds the journal of changes, the snapshots and the
-changes waiting for the server (`offline`); `<index>.custom.db` holds your
-own fields. Staged files get rows in the mirror tables under negative ids
-(`src/db/stage.c`), which lets the list, the filters and the API treat them
-as books.
+`<index>.journal.db` holds every operation on the library through its
+lifecycle, with where each value came from, and `<index>.custom.db` holds
+your own fields. Staged files get rows in the mirror tables under negative
+ids (`src/db/stage.c`), which lets the list, the filters and the API treat
+them as books.
 
 lulibre opens `metadata.db` read-only. Every change to a book goes through
-`calibredb`. The one exception is putting back one of lulibre's copies of
-the database (`:backup restore`, `lua/lulibre/backup.lua`). That happens
-only when nothing has the library open, after a copy of the current
-database is made, and through SQLite's backup.
+`calibredb`, or a store of Lua's in its place.
