@@ -121,8 +121,8 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
 | `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
-| `bookman` `store` `txt` `expr` `iter` `curl` `lsqlite3` | modules, by `require` |
-| `lulibre.sql` `lulibre.store` `lulibre.fuzzy` | until the modules that keep data take them |
+| `bookman` `store` `txt` `expr` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
+| `lulibre.sql` `lulibre.store` | until the modules that keep data take them |
 
 ## The library: bookman
 
@@ -244,8 +244,8 @@ grammar's parse of a text.
 | `proposals.of(book)` | `{ {field=, alts = { {id=, value=, parse=, score=, agree=, disagree=}, ... } }, ... }` |
 | `proposals.accept(id [, value])` | waits: the proposal, or the value edited from it, as an operation |
 | `proposals.reject(id)` | waits: kept in the journal; the field keeps its value |
-| `lulibre.rank`, `lulibre.track`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
-| `require("lulibre.similar").compare(kind, a, b)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
+| `lulibre.rank`, `trust`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
+| `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
 
 ## Online lookups
 

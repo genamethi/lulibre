@@ -1,6 +1,7 @@
 /* Matching helpers, the same ones the interface uses.
  *
- *   lulibre.fuzzy(query, candidate)  score (higher is better) or nil
+ *   mesr.fuzzy(query, candidate)  score (higher is better) or nil
+ *                                 (l_mesr_fuzzy, in mesr's table)
  *
  * and expr.core, for expr (lua/expr.lua):
  *
@@ -114,9 +115,8 @@ static int l_upper(lua_State *L) {
   return recase(L, to_upper);
 }
 
-void l_match_open(lua_State *L) {
-  static const luaL_Reg fns[] = {{"fuzzy", l_fuzzy}, {NULL, NULL}};
-  luaL_setfuncs(L, fns, 0);
+int l_mesr_fuzzy(lua_State *L) {
+  return l_fuzzy(L);
 }
 
 int luaopen_expr_core(lua_State *L) {

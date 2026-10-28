@@ -1,13 +1,13 @@
-/* lulibre.similar: one similarity for every field kind (design 22;
+/* mesr: one similarity for every field kind (design 22;
  * match/similar.h), a packaged module written in C.
  *
- *   similar.score(kind, a, b)     0 to 1: how much of a is found in b
- *   similar.compare(kind, a, b [, near, same])
+ *   mesr.score(kind, a, b)     0 to 1: how much of a is found in b
+ *   mesr.compare(kind, a, b [, near, same])
  *                                 "equal" | "contains" | "contained" |
  *                                 "near" | "differs", then both scores;
  *                                 "contains": a holds all of b
  *
- *   similar.canonical(type, value)  an identifier's canonical form, or nil
+ *   mesr.canonical(type, value)  an identifier's canonical form, or nil
  *
  * kind: "text" (title, series, publisher), "people" (authors), "tags",
  * "date" ("1942", "1942-05", "1942-05-03"), "ident" ("type:value"). Words
@@ -96,8 +96,10 @@ static int l_canonical(lua_State *L) {
   return 1;
 }
 
-int luaopen_lulibre_similar(lua_State *L) {
-  static const luaL_Reg fns[] = {{"score", l_score}, {"compare", l_compare}, {"canonical", l_canonical}, {NULL, NULL}};
+int luaopen_mesr(lua_State *L) {
+  static const luaL_Reg fns[] = {
+    {"score", l_score}, {"compare", l_compare}, {"canonical", l_canonical}, {"fuzzy", l_mesr_fuzzy}, {NULL, NULL},
+  };
   luaL_newlib(L, fns);
   return 1;
 }

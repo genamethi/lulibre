@@ -54,7 +54,7 @@ LUA
 
 cat > "$t/review.lua" <<'LUA'
 local proposals = require "lulibre.proposals"
-local track = require "lulibre.track"
+local trust = require "trust"
 local bookman = require "bookman"
 -- a parse of the scan, as the front grammar would give it, stored as proposals
 lulibre.store("INSERT INTO proposals(id, book, field, value, parse, alt) VALUES"
@@ -66,7 +66,7 @@ local b = bookman.book(1)
 print("decided|" .. b.title .. "|" .. b.author .. "|" .. #proposals.of(1))
 local r = lulibre.sql("SELECT store, field, proposal, source FROM history.journal WHERE batch = 2")[1]
 print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
-local rec = track.records(1, 0.7, 0.95)
+local rec = trust.records(1, 0.7, 0.95)
 print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
 LUA
 

@@ -3,17 +3,17 @@
 -- A parse is a grammar's, or an online record's. Its score is coverage,
 -- agreement and track record, weighed by the settings rank_coverage,
 -- rank_agreement and rank_track. Agreement compares a parse's fields with
--- the sources by lulibre.similar; a parse does not count agreement with
+-- the sources by mesr; a parse does not count agreement with
 -- itself, nor with a record value it wrote (circular agreement).
 --
 -- @library lulibre.rank
-local similar = require "lulibre.similar"
+local mesr = require "mesr"
 local sources = require "lulibre.sources"
-local track = require "lulibre.track"
+local trust = require "trust"
 
 local M = {}
 
---- Each field's kind, for lulibre.similar; any other field is an identifier.
+--- Each field's kind, for mesr; any other field is an identifier.
 M.kinds = { title = "text", authors = "people", publisher = "text", series = "text", year = "date", tags = "tags" }
 
 --- What filling a field is worth: title and authors the majority,
@@ -43,7 +43,7 @@ function M.agreement(parse, srcs, w)
       local own = src.name == parse.grammar or (src.from and src.from[field] == parse.grammar)
       if v and v ~= "" and not own then
         local ws = sources.weight[src.kind] or 1
-        local like, ab, ba = similar.compare(M.kind(field), f.value, v, w.near, w.same)
+        local like, ab, ba = mesr.compare(M.kind(field), f.value, v, w.near, w.same)
         num = num + wf * ws * (ab + ba) / 2
         den = den + wf * ws
         local into = like == "differs" and disagree or agree
@@ -58,7 +58,7 @@ end
 --- The parses, best first, each with `score=`, `agree=` and `disagree=`
 -- (per field, the names of the sources).
 -- @tparam table w `{ coverage=, agreement=, track=, records=, near=, same= }`; records:
--- lulibre.track.records()
+-- lulibre.trust.records()
 function M.order(parses, srcs, w)
   local total = w.coverage + w.agreement + w.track
   for _, p in ipairs(parses) do
@@ -66,10 +66,10 @@ function M.order(parses, srcs, w)
     agreement, p.agree, p.disagree = M.agreement(p, srcs, w)
     local record, n = 0, 0
     for field in pairs(p.fields) do
-      record = record + track.record(w.records, p.grammar, field)
+      record = record + trust.record(w.records, p.grammar, field)
       n = n + 1
     end
-    record = n > 0 and record / n or track.prior
+    record = n > 0 and record / n or trust.prior
     p.score = (w.coverage * M.coverage(p) + w.agreement * agreement + w.track * record) / total
   end
   table.sort(parses, function(a, b)

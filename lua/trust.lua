@@ -3,15 +3,15 @@
 --
 -- Each review decision (a journal row with a proposal) scores the field's
 -- value as the record stands now against the value as proposed, by
--- lulibre.similar: 1 as proposed, 0 rejected, between for an edit. So an
+-- mesr: 1 as proposed, 0 rejected, between for an edit. So an
 -- undone or later corrected decision counts as such. A record is held near
 -- the prior until its decisions accumulate, and every record is the prior
 -- until the journal holds the setting track_after's number of decisions
 -- across every parse.
 --
--- @library lulibre.track
+-- @library trust
 local bookman = require "bookman"
-local similar = require "lulibre.similar"
+local mesr = require "mesr"
 
 local M = {}
 
@@ -50,11 +50,11 @@ local function score(field, proposed, current, near, same)
   if current == "" then return 0 end
   if field == "identifiers" then
     for item in current:gmatch("[^,]+") do
-      if similar.score("ident", proposed, (item:gsub("^%s+", ""))) == 1 then return 1 end
+      if mesr.score("ident", proposed, (item:gsub("^%s+", ""))) == 1 then return 1 end
     end
     return 0
   end
-  local _, ab, ba = similar.compare(kinds[field] or "text", proposed, current, near, same)
+  local _, ab, ba = mesr.compare(kinds[field] or "text", proposed, current, near, same)
   return (ab + ba) / 2
 end
 

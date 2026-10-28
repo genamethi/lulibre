@@ -7,7 +7,7 @@
 -- @library lulibre.net
 local bookman = require "bookman"
 local service = require "lulibre.net.service"
-local similar = require "lulibre.similar"
+local mesr = require "mesr"
 local curl = require "curl"
 
 local M = {}
@@ -40,7 +40,7 @@ function M.keys(book)
   if not b then return out end
   for name, s in pairs(service.services) do
     local value = b.idents and b.idents[s.how.ident]
-    local key = value and similar.canonical(s.how.ident, value)
+    local key = value and mesr.canonical(s.how.ident, value)
     if key then out[#out + 1] = { service = name, key = key } end
   end
   table.sort(out, function(a, z) return a.service < z.service end)

@@ -198,8 +198,8 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "txt");
   lua_pushcfunction(L, luaopen_expr_core);
   lua_setfield(L, -2, "expr.core");
-  lua_pushcfunction(L, luaopen_lulibre_similar);
-  lua_setfield(L, -2, "lulibre.similar");
+  lua_pushcfunction(L, luaopen_mesr);
+  lua_setfield(L, -2, "mesr");
   lua_pushcfunction(L, luaopen_store);
   lua_setfield(L, -2, "store");
   lua_pushcfunction(L, luaopen_bookman);
@@ -260,7 +260,6 @@ lua_State *lstate_new(struct app *app) {
   lua_setglobal(L, "uiman");
   lua_newtable(L);
   l_db_open(L);
-  l_match_open(L);
   lua_setglobal(L, "lulibre");
   l_uv_open(L);
   l_uv_preload(L);

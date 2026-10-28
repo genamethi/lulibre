@@ -13,8 +13,8 @@ local txt = require "txt"
 local grammar = require "lulibre.grammar"
 local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
-local similar = require "lulibre.similar"
-local track = require "lulibre.track"
+local mesr = require "mesr"
+local trust = require "trust"
 local store = require "store"
 
 local M = {}
@@ -26,13 +26,13 @@ function M.settings()
   local coverage <const>, agreement <const>, weight <const>, after <const>, near <const>, same <const> =
     setman.get("rank_coverage", "rank_agreement", "rank_track", "track_after", "similar_near", "similar_same")
   return { coverage = coverage, agreement = agreement, track = weight, near = near, same = same,
-           records = track.records(after, near, same) }
+           records = trust.records(after, near, same) }
 end
 
 --- A value as the field holds it: authors as calibre writes them, "A & B";
 -- an identifier as "type:value".
 function M.normalize(field, value)
-  if not track.library_field[field] and not value:find("^[%w_%-]+:") then return field .. ":" .. value end
+  if not trust.library_field[field] and not value:find("^[%w_%-]+:") then return field .. ":" .. value end
   if field ~= "authors" then return value end
   local names = {}
   for name in (value:gsub("%s+and%s+", "&"):gsub("[,;]", "&") .. "&"):gmatch("%s*(.-)%s*&") do
@@ -68,7 +68,7 @@ function M.rows(ranked, srcs, w)
       else
         local same = false
         for _, a in ipairs(list) do
-          same = same or similar.compare(rank.kind(field), a.value, value, w.near, w.same) == "equal"
+          same = same or mesr.compare(rank.kind(field), a.value, value, w.near, w.same) == "equal"
         end
         if not same then list[#list + 1] = alt end
       end
@@ -86,7 +86,7 @@ function M.rows(ranked, srcs, w)
   local record = srcs[1] and srcs[1].kind == "record" and srcs[1].fields or {}
   for field, list in pairs(rows) do
     local now = record[field]
-    if now and similar.compare(rank.kind(field), list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
+    if now and mesr.compare(rank.kind(field), list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
   end
   return rows
 end
@@ -156,7 +156,7 @@ end
 -- the proposal's provenance (design 27). An identifier is added to the
 -- book's; tags are added to its own.
 local function change(p, value)
-  local field = track.field(p.field)
+  local field = trust.field(p.field)
   return { book = p.book, field = field, value = value, proposal = p.id, proposed = p.value, source = p.parse,
            op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
 end
