@@ -261,16 +261,12 @@ static int l_commands_ui(lua_State *L) {
 }
 ASK(l_commands, "commands")
 
-/* lulibre._place_map(place, key, action): the binding of a key to an action
- * of a place that has keys of its own ("panel", "line", "picker", "pager",
- * "console"); false when there is no such place, so lulibre.map can look
- * elsewhere. */
+/* keymap.set(place, key, action): a key of a place that has keys of its
+ * own ("panel", "line", "picker", "pager", "console", "select") bound to
+ * one of its actions; "" unbinds. */
 static int l_place_map_ui(lua_State *L) {
   const char *place = luaL_checkstring(L, 1);
-  if (ctx_named(place) < 0) {
-    lua_pushboolean(L, 0);
-    return 1;
-  }
+  if (ctx_named(place) < 0) return luaL_error(L, "no place is called %s", place);
   char *err = NULL;
   if (ctx_bind(place, luaL_checkstring(L, 2), luaL_optstring(L, 3, ""), &err)) {
     lua_pushstring(L, err);
@@ -280,7 +276,6 @@ static int l_place_map_ui(lua_State *L) {
   lua_pushboolean(L, 1);
   return 1;
 }
-ASK(l_place_map, "place_map")
 
 /* lulibre.place_keys(place): the keys of a place as lines of text, each
  * "keys   what they do"; nil for no such place. */
@@ -1051,7 +1046,10 @@ static void c_cancel(struct tui *t, const char *args) {
 
 /* ---- keymap and cmd: key bindings and commands, as Neovim's ----
  *
- *   keymap.set(mode, lhs, rhs [, opts])  mode "n", "v", "nv" or {"n", "v"};
+ *   keymap.set(mode, lhs, rhs [, opts])  mode "n", "v", "nv" or {"n", "v"}, or a
+ *                                        place ("panel", "line", "picker",
+ *                                        "pager", "console", "select") and rhs
+ *                                        one of its actions ("" unbinds);
  *                                        rhs a command line, or a function
  *                                        run as a task with {book=,
  *                                        selection=}; opts {desc=, hidden=}
@@ -1082,7 +1080,17 @@ static const char *modes_of(lua_State *L, int idx) {
   return m;
 }
 
+static int is_place(lua_State *L, int idx) {
+  return lua_type(L, idx) == LUA_TSTRING && strspn(lua_tostring(L, idx), "nv") != strlen(lua_tostring(L, idx));
+}
+
 static int keymap_set(lua_State *L) {
+  if (is_place(L, 1)) { /* a place's key: one of its actions */
+    luaL_checkstring(L, 2);
+    luaL_checkstring(L, 3);
+    lua_settop(L, 3);
+    return ui_send(L, l_place_map_ui, "keymap.set");
+  }
   modes_of(L, 1);
   luaL_checkstring(L, 2);
   uint32_t keys[KEYSEQ_MAX];
@@ -1113,6 +1121,12 @@ static int keymap_del_ui(lua_State *L) {
 }
 
 static int keymap_del(lua_State *L) {
+  if (is_place(L, 1)) {
+    luaL_checkstring(L, 2);
+    lua_settop(L, 2);
+    lua_pushliteral(L, "");
+    return ui_send(L, l_place_map_ui, "keymap.del");
+  }
   modes_of(L, 1);
   luaL_checkstring(L, 2);
   lua_settop(L, 2);
@@ -1166,7 +1180,7 @@ void l_ui_open(lua_State *L) {
     {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},
     {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
-    {"key", l_key},       {"maps", l_maps},       {"_place_map", l_place_map},
+    {"key", l_key},       {"maps", l_maps},       
     {"place_keys", l_place_keys}, {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
