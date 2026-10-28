@@ -11,6 +11,8 @@
 --
 -- @library lulibre.propose
 local txt = require "txt"
+local expr = require "expr"
+local lex = require "lex"
 local grammar = require "lulibre.grammar"
 local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
@@ -92,8 +94,30 @@ function M.rows(ranked, srcs, w)
   return rows
 end
 
+-- the identifiers in a text, as a parse named "lex": per type, the first
+-- found
+local function found(t)
+  local fields = {}
+  for _, kind in ipairs { "isbn", "doi", "arxiv", "issn" } do
+    local start, stop, id = expr.find(t, lex[kind])
+    if start then fields[kind] = { value = kind .. ":" .. id, start = start, stop = stop } end
+  end
+  if next(fields) then return { grammar = "lex", fields = fields } end
+end
+
 -- the books a propose is running for
 local proposing = {}
+
+-- the identifiers in a text, as a parse named "lex": per type, the first
+-- found
+local function found(t)
+  local fields = {}
+  for _, kind in ipairs { "isbn", "doi", "arxiv", "issn" } do
+    local start, stop, id = expr.find(t, lex[kind])
+    if start then fields[kind] = { value = kind .. ":" .. id, start = start, stop = stop } end
+  end
+  if next(fields) then return { grammar = "lex", fields = fields } end
+end
 
 -- the books a propose is running for
 local proposing = {}
@@ -112,6 +136,7 @@ function M.propose(book, w)
   local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
   local parses = t and grammar.parse(t) or {}
+  parses[#parses + 1] = t and found(t) or nil
   for _, s in ipairs(srcs) do
     if s.kind == "online" then
       local fields = {}

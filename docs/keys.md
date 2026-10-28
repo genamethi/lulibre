@@ -137,7 +137,7 @@ and paste it with `<C-v>`.
 | `index [force]` | extract text from new or changed files |
 | `sort [-]key` | `id title author year series added modified` |
 | `set name[=value]` | show or change a setting |
-| `propose [filter]` · `review [filter]` · `enrich [filter]` | proposals for the books, their review, and online lookups by their identifiers; without a filter, the selection |
+| `propose [filter]` · `review [filter]` · `enrich [filter]` | proposals for the books (from the grammars, the identifiers in their text and the online records), their review, and online lookups by the identifiers the records have or the text gave; without a filter, the selection |
 | `restart-scripts` | a new Lua state; init.lua runs first, as at start |
 | `move` `search` `prompt` `fold` `split` `only` `preview` `pick` `source` | the commands the keys above run, for binding your own keys (`:help` lists each command's arguments) |
 | `echo text` | show a message |

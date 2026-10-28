@@ -9,6 +9,7 @@ local bookman = require "bookman"
 local service = require "net.service"
 local mesr = require "mesr"
 local curl = require "curl"
+local wit = require "wit"
 
 local M = {}
 
@@ -34,16 +35,33 @@ function M.ask(name, key)
 end
 
 --- The services that can be asked about a book, with the key each is
--- asked by: `{ {service=, key=}, ... }`.
+-- asked by: `{ {service=, key=}, ... }`. A key is an identifier the
+-- record has, or one a wit proposes (found in the book's text).
 function M.keys(book)
   local out, b = {}, bookman.book(book)
   if not b then return out end
-  for name, s in pairs(service.services) do
-    local value = b.idents and b.idents[s.how.ident]
-    local key = value and mesr.canonical(s.how.ident, value)
-    if key then out[#out + 1] = { service = name, key = key } end
+  local idents = {}
+  for kind, value in pairs(b.idents or {}) do idents[kind] = { value } end
+  for _, f in ipairs(wit.get(book)) do
+    for _, a in ipairs(f.alts) do
+      local kind, value = (a.value or ""):match("^([%w_%-]+):(.+)$")
+      if kind == f.field then
+        idents[kind] = idents[kind] or {}
+        table.insert(idents[kind], value)
+      end
+    end
   end
-  table.sort(out, function(a, z) return a.service < z.service end)
+  for name, s in pairs(service.services) do
+    local seen = {}
+    for _, value in ipairs(idents[s.how.ident] or {}) do
+      local key = mesr.canonical(s.how.ident, value)
+      if key and not seen[key] then
+        seen[key] = true
+        out[#out + 1] = { service = name, key = key }
+      end
+    end
+  end
+  table.sort(out, function(a, z) return a.service < z.service or (a.service == z.service and a.key < z.key) end)
   return out
 end
 

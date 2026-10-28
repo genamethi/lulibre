@@ -32,6 +32,12 @@ local o = net.services.openlibrary.how.record('{"ISBN:1":{"title":"Topics","subt
 say("openlibrary", o.title, o.authors, o.publisher, o.year)
 -- one work asked for by two tasks at once: asked once, both answered; a
 -- request that fails answers with its error and the service goes on
+-- an identifier found in a book's text is a wit, and the book is asked
+-- about by it
+local propose = require "lulibre.propose"
+propose.propose(1, propose.settings())
+for _, f in ipairs(wit.get(1)) do if f.field == "arxiv" then say("found", f.alts[1].value, f.alts[1].source) end end
+for _, k in ipairs(net.keys(1)) do say("asked by", k.service, k.key) end
 local svc = require "net.service"
 local n = 0
 svc.define("twice", { pace = 0, request = function(keys) n = n + 1; taskman.sleep(50); return { [keys[1]] = "rec" } end })
@@ -42,6 +48,7 @@ say("twice", got[1], got[2], n)
 svc.define("broken", { pace = 0, request = function() error("down") end })
 say("broken", select(2, net.ask("broken", "k")) ~= nil, (net.ask("broken", "j")))
 LUA
+"$bin" -L "$t/lib" index >/dev/null 2>&1
 out=$("$bin" -L "$t/lib" run "$t/net.lua" 2>&1)
 
 fails=0
@@ -58,5 +65,7 @@ expect "arXiv's entry read" "arxiv|A Note on Sieve Methods|Ben Green & T. Tao|20
 expect "Open Library's record read" "openlibrary|Topics: In Combinatorics|T. Tao|CUP|2006"
 expect "one work asked for by two tasks at once is asked once, and both get it" "twice|rec|rec|1"
 expect "a request that fails answers, and the service still serves" "broken|true|nil"
+expect "an identifier in a book's text is a wit" "found|arxiv:1012.6008|lex"
+expect "and the book is asked about by it" "asked by|arxiv|1012.6008"
 case "$out" in *"proposal|authors"*) echo "FAIL  authors the record already has were proposed"; fails=$((fails + 1)) ;; *) echo "ok    authors the record already has are not proposed" ;; esac
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
