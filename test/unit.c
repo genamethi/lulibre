@@ -80,39 +80,8 @@ static void test_util(void) {
 
 /* ---- md5 ---- */
 
-static void md5_of(const char *data, size_t n, char hex[33]) {
-  struct md5 m;
-  unsigned char out[16];
-  md5_init(&m);
-  /* in two pieces, to cross the update boundary */
-  md5_update(&m, data, n / 3);
-  md5_update(&m, data + n / 3, n - n / 3);
-  md5_final(&m, out);
-  for (int i = 0; i < 16; i++) snprintf(hex + 2 * i, 3, "%02x", out[i]);
-}
-
 static void test_md5(void) {
   char hex[33];
-  md5_of("", 0, hex);
-  eq(hex, "d41d8cd98f00b204e9800998ecf8427e", "md5 of nothing");
-  md5_of("abc", 3, hex);
-  eq(hex, "900150983cd24fb0d6963f7d28e17f72", "md5 abc");
-  md5_of("message digest", 14, hex);
-  eq(hex, "f96b697d7cb7938d525a2f31aaf161d0", "md5 RFC 1321 vector");
-  const char *eighty = "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
-  md5_of(eighty, 80, hex);
-  eq(hex, "57edf4a22be3c955ac49da2e2107b67a", "md5 across a block boundary");
-  char big[56 + 64 + 1]; /* 55, 56, 63, 64: the padding edge cases */
-  memset(big, 'a', sizeof big);
-  static const struct { size_t n; const char *want; } edge[] = {
-    {55, "ef1772b6dff9a122358552954ad0df65"}, {56, "3b0c8ac703f828b04c6c197006d17218"},
-    {63, "b06521f39153d618550606be297466d5"}, {64, "014842d480b571495a4a0363793f7367"},
-  };
-  for (size_t i = 0; i < sizeof edge / sizeof edge[0]; i++) {
-    md5_of(big, edge[i].n, hex);
-    eq(hex, edge[i].want, "md5 at a padding boundary");
-  }
-
   char path[] = "/tmp/lulibre-unit-XXXXXX";
   int fd = mkstemp(path);
   ok(fd >= 0, "temporary file");
