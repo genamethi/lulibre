@@ -34,6 +34,17 @@ local a = net.services.arxiv.how.record([[<entry><id>http://arxiv.org/abs/1012.6
 say("arxiv", a.title, a.authors, a.year)
 local o = net.services.openlibrary.how.record('{"ISBN:1":{"title":"Topics","subtitle":"In Combinatorics","authors":[{"name":"T. Tao"}],"publishers":[{"name":"CUP"}],"publish_date":"2006"}}')
 say("openlibrary", o.title, o.authors, o.publisher, o.year)
+-- one work asked for by two tasks at once: asked once, both answered; a
+-- request that fails answers with its error and the service goes on
+local svc = require "lulibre.net.service"
+local n = 0
+svc.define("twice", { pace = 0, request = function(keys) n = n + 1; lulibre.sleep(50); return { [keys[1]] = "rec" } end })
+local got = {}
+for i = 1, 2 do lulibre.spawn(function() got[i] = net.ask("twice", "k") end) end
+for _ = 1, 50 do if got[1] and got[2] then break end lulibre.sleep(20) end
+say("twice", got[1], got[2], n)
+svc.define("broken", { pace = 0, request = function() error("down") end })
+say("broken", select(2, net.ask("broken", "k")) ~= nil, (net.ask("broken", "j")))
 LUA
 out=$("$bin" -L "$t/lib" run "$t/net.lua" 2>&1)
 
@@ -51,5 +62,7 @@ expect "and year" "proposal|year|1996|crossref"
 expect "and publisher" "proposal|publisher|Example Press|crossref"
 expect "arXiv's entry read" "arxiv|A Note on Sieve Methods|Ben Green & T. Tao|2010"
 expect "Open Library's record read" "openlibrary|Topics: In Combinatorics|T. Tao|CUP|2006"
+expect "one work asked for by two tasks at once is asked once, and both get it" "twice|rec|rec|1"
+expect "a request that fails answers, and the service still serves" "broken|true|nil"
 case "$out" in *"proposal|authors"*) echo "FAIL  authors the record already has were proposed"; fails=$((fails + 1)) ;; *) echo "ok    authors the record already has are not proposed" ;; esac
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

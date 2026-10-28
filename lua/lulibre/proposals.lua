@@ -91,12 +91,18 @@ function M.rows(ranked, srcs, w)
   return rows
 end
 
+-- the books a propose is running for
+local proposing = {}
+
 --- Reads, parses, ranks and stores a book's proposals; returns how many
 -- fields have one. A book with no reading is proposed for from its online
 -- records alone.
 -- @tparam integer book
 -- @tparam table w M.settings()
 function M.propose(book, w)
+  -- one at a time per book: its rows are deleted and written again
+  while not lulibre.claim(proposing, book) do lulibre.sleep(50) end
+  local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
   local r <close> = reading.of(book)
   local srcs = sources.of(book, r)
   -- an online record is a parse too (design 39), ranked beside the grammars'

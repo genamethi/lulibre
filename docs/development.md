@@ -263,7 +263,8 @@ in tasks that can be interrupted at any point.
 - Tasks can be interrupted between any two VM instructions: a count hook
   runs every 1000 instructions and yields once a 4 ms slice is used up. A
   read and a write of shared state are two steps, and another task can run
-  between them.
+  between them. `lulibre.claim(t, key)` tests and sets in one step: a task
+  that claims a key owns what it stands for until it sets it back to nil.
 - Code that may run again while it waits takes its values once, at its
   start, in `<const>` locals (`setman.get`), and passes them down: the
   functions it calls take them as arguments.

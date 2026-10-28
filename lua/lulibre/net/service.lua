@@ -26,7 +26,7 @@ M.FORGET = 30 * 86400
 -- asked for); record(answer), the fields of the record: `{ title=,
 -- authors=, year=, publisher=, series=, ... }`
 function M.define(name, how)
-  M.services[name] = { name = name, how = how, queue = {}, answers = {}, next_at = 0, held_until = 0 }
+  M.services[name] = { name = name, how = how, queue = {}, answers = {}, asking = {}, next_at = 0, held_until = 0 }
 end
 
 local function now()
@@ -50,9 +50,22 @@ local function keep(name, key, answer)
     answer or "", now())
 end
 
+local serve
+
+-- Starts the service's task unless it runs. lulibre.claim tests and sets
+-- in one step: a task may be interrupted between any two of its own.
+local function start(s)
+  if lulibre.claim(s, "busy") then lulibre.spawn(function() serve(s) end, "lookups: " .. s.name) end
+end
+
 -- The service's task: asks for what waits, at its pace, in batches. It
--- takes the contact address once, as it starts (design 3).
-local function serve(s)
+-- takes the contact address once, as it starts (design 3). However it
+-- ends, a work queued as it ended is not left without a task.
+function serve(s)
+  local _ <close> = setmetatable({}, { __close = function()
+    s.busy = nil
+    if #s.queue > 0 then start(s) end
+  end })
   local mail <const> = setman.get("contact_email")
   while #s.queue > 0 do
     if now() < s.held_until then
@@ -65,7 +78,8 @@ local function serve(s)
     local keys = {}
     while #s.queue > 0 and #keys < (s.how.batch or 1) do keys[#keys + 1] = table.remove(s.queue, 1) end
     local started = now()
-    local got, err, hold = s.how.request(keys, mail)
+    local ok, got, err, hold = pcall(s.how.request, keys, mail)
+    if not ok then got, err = nil, tostring(got) end
     -- a slow answer is followed by a pause as long as it took
     s.next_at = now() + math.max(s.how.pace or 1, now() - started)
     if got then
@@ -79,10 +93,10 @@ local function serve(s)
       for _, key in ipairs(keys) do s.answers[key] = { nil, err } end
     end
   end
-  s.busy = false
 end
 
 --- Asks a service about a work, and waits for the answer: kept, or asked.
+-- The same work asked for by several tasks at once is asked for once.
 -- @treturn string|false|nil the answer, false when the service has no
 -- record, or nil and the reason
 -- @treturn boolean true when the service was asked now, not answered from
@@ -92,15 +106,14 @@ function M.ask(name, key)
   if not s then return nil, "no service is called " .. name end
   local kept = M.kept(name, key)
   if kept ~= nil then return kept, false end
-  s.answers[key] = nil
-  table.insert(s.queue, key)
-  if not s.busy then
-    s.busy = true
-    lulibre.spawn(function() serve(s) end, "lookups: " .. name)
+  if lulibre.claim(s.asking, key) then
+    s.answers[key] = nil
+    table.insert(s.queue, key)
   end
+  start(s)
   while not s.answers[key] do lulibre.sleep(200) end
   local a = s.answers[key]
-  s.answers[key] = nil
+  s.asking[key] = nil
   if a[1] == nil then return nil, a[2] end
   return a[1], true
 end
