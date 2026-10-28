@@ -362,11 +362,6 @@ struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *sta
 void wm_undock(struct tui *t, void *state);
 /* Give the docked window showing this state that share of the screen. */
 void wm_set_size(struct tui *t, void *state, float size);
-/* Start an indexing run with these options and call done when it ends; if
- * one is already under way, done is called when that one ends instead.
- * Returns 0, or -1 with *err set. Interface thread. */
-int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
-              void *ud, char **err);
 /* Every window, left to right and top to bottom; returns how many. */
 int wm_leaves(struct tui *t, struct node **out, int max);
 /* The window showing this state, or NULL. */
@@ -625,10 +620,6 @@ struct tui {
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
   char *preview_note;   /* shown by the preview in place of any book (panel_set_preview) */
-  /* whoever asked to be told when the indexing run ends (tui_index) */
-  void (*ix_hook[8])(const struct index_stats *st, void *ud);
-  void *ix_hook_ud[8];
-  int nix_hook;
   int tab_x[4];         /* where the bar's tabs were drawn: columns of their edges */
   int tab_n;            /* how many tabs it has: library, [sync folder,] configuration */
   struct panel *screen_tab; /* the panel that is the bar's Configuration tab, while it is open */
@@ -646,7 +637,7 @@ struct tui {
   char *msg;
   int msg_error;
 
-  struct indexer *ix;
+  int indexing; /* a run is going, on the background thread (work.h) */
   int ix_done, ix_total, ix_failed;
   int mirroring; /* calibre's database is being read again (tui_mirror) */
 };
@@ -704,6 +695,10 @@ void tui_show_msg(struct tui *t, int error, const char *text);
 int console_key(struct tui *t, void *state, uint32_t key);
 void console_wheel(void *state, int delta);
 void tui_start_index(struct tui *t, int force);
+/* The background thread: where an index run is (phase -1 started, 0 going,
+ * 1 ended; st NULL when it has no numbers), for the status line. */
+struct index_stats;
+void tui_post_indexing(struct app *app, const struct index_stats *st, int phase);
 /* Read calibre's database again, on the Lua thread's connection so that the
  * interface draws on meanwhile; then refresh the list. told: say so when
  * done (the :reload command); otherwise a change starts the indexer. */

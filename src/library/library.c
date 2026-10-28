@@ -17,6 +17,7 @@
 #include "core/registry.h"
 #include "core/util.h"
 #include "library/fields.h"
+#include "work.h"
 
 /* How often the holder is looked at, in ms. */
 enum { PROBE_MS = 2000 };
@@ -182,7 +183,7 @@ static enum library_holder observe(struct library *lib) {
     lib->lock_pid = socket_owner(db_ino);
   }
   if (!lib->lock_pid) return HOLDER_SERVER;
-  char *dir = realpath(app_str(lib->app, S_LIBRARY), NULL);
+  char *dir = realpath(work_str(S_LIBRARY), NULL);
   int h = dir ? holds(lib->lock_pid, dir) : -1;
   free(dir);
   /* nothing tells: the server, and the library's name in the address
@@ -223,7 +224,7 @@ enum library_holder library_holder(const struct library *lib) {
 static void row_state(struct library *lib, long long row, enum op_state state, const char *err) {
   sqlite3_stmt *st;
   char *e = NULL;
-  if (db_prepare(&lib->app->db, "UPDATE history.journal SET state = ?, error = ? WHERE id = ?", &st, &e)) {
+  if (db_prepare(lib->app->wdb, "UPDATE history.journal SET state = ?, error = ? WHERE id = ?", &st, &e)) {
     log_warn("the journal: %s", e);
     free(e);
     return;
@@ -486,8 +487,8 @@ static void spawn(struct library *lib, struct batch *b, int book, char **args) {
   r->lib = lib;
   r->b = b;
   r->book = book;
-  uv_pipe_init(lib->app->loop, &r->out, 0);
-  uv_pipe_init(lib->app->loop, &r->err, 0);
+  uv_pipe_init(lib->app->wloop, &r->out, 0);
+  uv_pipe_init(lib->app->wloop, &r->err, 0);
   r->out.data = r->err.data = r->proc.data = r;
   uv_stdio_container_t io[3] = {
     {.flags = UV_IGNORE},
@@ -498,7 +499,7 @@ static void spawn(struct library *lib, struct batch *b, int book, char **args) {
     .exit_cb = on_exit_cb, .file = "calibredb", .args = (char **)argv, .stdio_count = 3, .stdio = io,
   };
   b->running++;
-  int rc = uv_spawn(lib->app->loop, &r->proc, &o);
+  int rc = uv_spawn(lib->app->wloop, &r->proc, &o);
   free(password);
   free(url);
   if (rc) {
@@ -589,7 +590,7 @@ static void start_embed(struct library *lib, struct batch *b) {
 static void embedded(struct library *lib, struct batch *b) {
   sqlite3_stmt *sel, *up;
   char *err = NULL;
-  struct db *db = &lib->app->db;
+  struct db *db = lib->app->wdb;
   if (db_prepare(db, "SELECT id, path FROM files WHERE book = ?", &sel, &err) ||
       db_prepare(db,
                  "UPDATE files SET size = ?, mtime = ?, emb_title = (SELECT title FROM books WHERE id = ?),"
@@ -742,13 +743,13 @@ static void reload_start(struct library *lib) {
   r->req.data = r;
   r->lib = lib;
   r->index = xstrdup(app->db.path);
-  char *real = realpath(app_str(app, S_LIBRARY), NULL);
-  r->library_dir = real ? real : xstrdup(app_str(app, S_LIBRARY));
+  char *real = realpath(work_str(S_LIBRARY), NULL);
+  r->library_dir = real ? real : xstrdup(work_str(S_LIBRARY));
   r->waits = lib->waiting;
   lib->waiting = NULL;
   for (struct reload_wait *w = r->waits; w; w = w->next) r->force |= w->force;
   lib->reloading = 1;
-  if (uv_queue_work(app->loop, &r->req, reload_work, reload_after)) {
+  if (uv_queue_work(app->wloop, &r->req, reload_work, reload_after)) {
     r->rc = -1;
     r->err = xstrdup("no worker to read calibre's records on");
     reload_after(&r->req, 0);
@@ -787,7 +788,7 @@ static void finish_batch(struct library *lib, struct batch *b) {
     /* the rows of the batch put back whose undoing applied are undone */
     sqlite3_stmt *st;
     char *err = NULL;
-    if (db_prepare(&lib->app->db,
+    if (db_prepare(lib->app->wdb,
                    "UPDATE history.journal SET state = ?1 WHERE batch = ?2 AND state = ?3 AND EXISTS(SELECT 1 FROM"
                    " history.journal u WHERE u.batch = ?4 AND u.state = ?3 AND u.book = journal.book"
                    " AND u.field = journal.field)",
@@ -857,17 +858,20 @@ static void pump(struct library *lib) {
   }
 }
 
-static struct batch *batch_new(struct library *lib, enum op_need need, library_done *done, void *ud) {
-  struct app *app = lib->app;
+static struct batch *batch_new(struct library *lib, enum op_need need, const struct op_settings *set,
+                               library_done *done, void *ud) {
+  struct op_settings own = {work_str(S_SERVER), work_str(S_USER), work_str(S_PASSWORD_FILE), work_bool(S_EMBED),
+                            (int)work_int(S_WRITE_JOBS)};
+  if (!set) set = &own;
   struct batch *b = xcalloc(1, sizeof *b);
   b->need = need;
-  b->server = xstrdup(app_str(app, S_SERVER));
-  b->user = xstrdup(app_str(app, S_USER));
-  b->password_file = xstrdup(app_str(app, S_PASSWORD_FILE));
-  char *real = realpath(app_str(app, S_LIBRARY), NULL);
-  b->library_dir = real ? real : xstrdup(app_str(app, S_LIBRARY));
-  b->embed = app_bool(app, S_EMBED);
-  b->jobs = (int)app_int(app, S_WRITE_JOBS);
+  b->server = xstrdup(set->server);
+  b->user = xstrdup(set->user);
+  b->password_file = xstrdup(set->password_file);
+  char *real = realpath(work_str(S_LIBRARY), NULL);
+  b->library_dir = real ? real : xstrdup(work_str(S_LIBRARY));
+  b->embed = set->embed;
+  b->jobs = set->jobs;
   if (b->jobs < 1) b->jobs = 1;
   b->done = done;
   b->ud = ud;
@@ -907,7 +911,7 @@ static void job_add(struct book_job *j, const char *field, const char *value, lo
  * journal holds anything of it. */
 static int take_changes(struct library *lib, struct batch *b, const char *label, const struct change *changes,
                         int n, long long undoes, char **err) {
-  struct db *db = &lib->app->db;
+  struct db *db = lib->app->wdb;
   char **olds = xcalloc((size_t)n + 1, sizeof *olds), **news = xcalloc((size_t)n + 1, sizeof *news);
   /* several changes to one field of one book ("+c, -a") apply one after
    * the other: each starts from the one before, which it replaces */
@@ -984,8 +988,8 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
 }
 
 int library_submit(struct library *lib, const struct operation *op, library_done *done, void *ud, char **err) {
-  struct batch *b = batch_new(lib, op->need, done, ud);
-  struct db *db = &lib->app->db;
+  struct batch *b = batch_new(lib, op->need, op->set, done, ud);
+  struct db *db = lib->app->wdb;
   if (op->argv) {
     int n = 0;
     while (op->argv[n]) n++;
@@ -1011,8 +1015,9 @@ int library_submit(struct library *lib, const struct operation *op, library_done
   return 0;
 }
 
-int library_undo(struct library *lib, long long batch, library_done *done, void *ud, char **err) {
-  struct db *db = &lib->app->db;
+int library_undo(struct library *lib, long long batch, const struct op_settings *set, library_done *done, void *ud,
+                 char **err) {
+  struct db *db = lib->app->wdb;
   sqlite3_stmt *st;
   if (db_prepare(db,
                  "SELECT book, field, old, label FROM history.journal WHERE batch = ? AND state = ? AND field IS NOT NULL"
@@ -1040,7 +1045,7 @@ int library_undo(struct library *lib, long long batch, library_done *done, void 
     *err = xasprintf("batch %lld has nothing applied to undo", batch);
     rc = -1;
   } else {
-    struct batch *b = batch_new(lib, NEED_ANY, done, ud);
+    struct batch *b = batch_new(lib, NEED_ANY, set, done, ud);
     b->undoes = batch;
     if (take_changes(lib, b, label ? label : "undo", changes, n, batch, err)) {
       batch_free(b);
@@ -1064,7 +1069,7 @@ int library_undo(struct library *lib, long long batch, library_done *done, void 
  * is the queue); what was running when lulibre stopped may or may not have
  * reached calibre, and is marked failed. */
 void library_resume(struct library *lib) {
-  struct db *db = &lib->app->db;
+  struct db *db = lib->app->wdb;
   char *err = NULL;
   sqlite3_stmt *st;
   if (db_prepare(db, "UPDATE history.journal SET state = ?, error = 'interrupted: lulibre stopped while it ran'"
@@ -1092,7 +1097,7 @@ void library_resume(struct library *lib) {
     long long id = sqlite3_column_int64(st, 0), batch = sqlite3_column_int64(st, 1);
     if (!b || b->id != batch) {
       if (b) enqueue(lib, b);
-      b = batch_new(lib, (enum op_need)sqlite3_column_int(st, 2), NULL, NULL);
+      b = batch_new(lib, (enum op_need)sqlite3_column_int(st, 2), NULL, NULL, NULL);
       b->id = batch;
       n++;
     }
@@ -1119,7 +1124,7 @@ struct library *library_open(struct app *app) {
   struct library *lib = xcalloc(1, sizeof *lib);
   lib->app = app;
   lib->holder = observe(lib);
-  uv_timer_init(app->loop, &lib->probe);
+  uv_timer_init(app->wloop, &lib->probe);
   lib->probe.data = lib;
   uv_timer_start(&lib->probe, probe_cb, PROBE_MS, PROBE_MS);
   uv_unref((uv_handle_t *)&lib->probe); /* looking does not keep the loop running */
@@ -1130,6 +1135,10 @@ static void probe_closed(uv_handle_t *h) {
   struct library *lib = h->data;
   lib->probe_closed = 1;
   if (!lib->reloading) free(lib); /* else when the reading ends */
+}
+
+int library_idle(const struct library *lib) {
+  return !lib->reloading && (!lib->head || !lib->head->running);
 }
 
 void library_close(struct library *lib) {

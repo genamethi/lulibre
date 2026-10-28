@@ -63,7 +63,7 @@ static void draw_status(struct tui *t, int y) {
   uint64_t unseen = log_errors() - t->errors_seen;
   if (unseen) sb_printf(&right, "%llu error%s (%s)   ", (unsigned long long)unseen, unseen == 1 ? "" : "s",
                         key_hint("console"));
-  if (t->ix) sb_printf(&right, "indexing %d/%d   ", t->ix_done, t->ix_total);
+  if (t->indexing) sb_printf(&right, "indexing %d/%d   ", t->ix_done, t->ix_total);
   if (r->search) sb_printf(&right, "/%s: %d   ", r->search, r->nhits);
   if (r->nmarks) sb_printf(&right, "%d marked   ", r->nmarks);
   if (r->n) sb_printf(&right, "%d/%d", r->cur + 1, r->n);

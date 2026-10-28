@@ -20,8 +20,10 @@ struct app {
   char *state_path;          /* the saved settings: fixed at start */
   struct db db;
   int db_ready;
-  struct library *library; /* calibre's library as a resource (library/library.h); with the index */
+  struct library *library; /* calibre's library as a resource (library/library.h); the background thread's */
   uv_loop_t *loop;      /* the interface's loop; the only loop when headless */
+  uv_loop_t *wloop;     /* the background thread's loop (work.h); the main loop when headless */
+  struct db *wdb;       /* the background thread's connection to the index */
   uv_loop_t *lloop;     /* the loop Lua's timers, processes and luv use (lua/bridge.h) */
   struct db *ldb;       /* the Lua thread's own connection, while it has one */
   struct lua_State *L;  /* the main Lua state; lives on the Lua thread */

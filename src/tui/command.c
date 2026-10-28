@@ -332,7 +332,7 @@ static void c_index(struct tui *t, const char *args) {
 }
 
 static void c_reload(struct tui *t, const char *args) {
-  if (t->ix) {
+  if (t->indexing) {
     tui_msg(t, 1, "indexing is running; try again when it finishes");
     return;
   }

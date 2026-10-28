@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "core/queue.h"
 #include "core/util.h"
 #include "library/fields.h"
 #include "library/library.h"
@@ -78,11 +79,76 @@ static int changes_of(const char *field, const char *text, long long book, struc
   return n;
 }
 
-static void written(long long batch, enum op_state state, const char *err, void *ud) {
-  struct tui *t = ud;
-  if (state == OP_FAILED) tui_msg(t, 1, "the change failed: %s", err ? err : "?");
-  else if (!batch) tui_msg(t, 0, "nothing to change");
-  else tui_msg(t, 0, "changed (batch %lld; :undo puts it back)", batch);
+/* ---- to the library, on the background thread (work.h), and back ---- */
+
+struct job {
+  struct op_settings set; /* the settings in effect as it was made */
+  struct change *ch; /* its own copies */
+  int n;
+  long long undo; /* a batch to put back, in place of ch */
+  /* the answer */
+  long long batch;
+  int failed;
+  char *err;
+};
+
+static void job_free(struct job *j) {
+  for (int i = 0; i < j->n; i++) free((char *)j->ch[i].value);
+  free(j->ch);
+  free(j->err);
+  free((char *)j->set.server);
+  free((char *)j->set.user);
+  free((char *)j->set.password_file);
+  free(j);
+}
+
+static void told(struct app *app, void *arg) { /* the interface */
+  struct job *j = arg;
+  struct tui *t = app->tui;
+  if (t && j->undo) {
+    if (j->failed) tui_msg(t, 1, "undo failed: %s", j->err ? j->err : "?");
+    else tui_msg(t, 0, "put back (batch %lld)", j->batch);
+  } else if (t) {
+    if (j->failed) tui_msg(t, 1, "the change failed: %s", j->err ? j->err : "?");
+    else if (!j->batch) tui_msg(t, 0, "nothing to change");
+    else tui_msg(t, 0, "changed (batch %lld; :undo puts it back)", j->batch);
+  }
+  job_free(j);
+}
+
+static void written(long long batch, enum op_state state, const char *err, void *ud) { /* the background thread */
+  struct job *j = ud;
+  j->batch = batch;
+  j->failed = state == OP_FAILED;
+  j->err = err ? xstrdup(err) : NULL;
+  queue_post(LOOP_UI, told, j);
+}
+
+static struct job *job_new(struct app *app) { /* the interface */
+  struct job *j = xcalloc(1, sizeof *j);
+  j->set = (struct op_settings){xstrdup(app_str(app, S_SERVER)), xstrdup(app_str(app, S_USER)),
+                                xstrdup(app_str(app, S_PASSWORD_FILE)), app_bool(app, S_EMBED),
+                                (int)app_int(app, S_WRITE_JOBS)};
+  return j;
+}
+
+static void to_library(struct app *app, void *arg) { /* the background thread */
+  struct job *j = arg;
+  char *err = NULL;
+  int rc;
+  if (!app->library) {
+    rc = -1;
+    err = xstrdup("the library is closed");
+  } else if (j->undo) {
+    rc = library_undo(app->library, j->undo, &j->set, written, j, &err);
+  } else {
+    struct operation op = {.set = &j->set, .label = "edit", .need = NEED_ANY, .changes = j->ch, .nchanges = j->n};
+    rc = library_submit(app->library, &op, written, j, &err);
+  }
+  if (rc) {
+    written(0, OP_FAILED, err, j);
+    free(err);
+  }
 }
 
 static void write_form(struct form *f) {
@@ -99,18 +165,13 @@ static void write_form(struct form *f) {
     free(ch);
     return;
   }
-  struct operation op = {.label = "edit", .need = NEED_ANY, .changes = ch, .nchanges = n};
-  char *err = NULL;
-  int rc = library_submit(f->t->app->library, &op, written, f->t, &err);
-  /* the values an add or remove made are the form's own copies */
+  /* the job owns its values: an add's or remove's are copies already */
   for (int i = 0; i < n; i++)
-    if (ch[i].op != CHANGE_SET) free((char *)ch[i].value);
-  free(ch);
-  if (rc) {
-    tui_msg(f->t, 1, "%s", err);
-    free(err);
-    return;
-  }
+    if (ch[i].op == CHANGE_SET) ch[i].value = xstrdup(ch[i].value);
+  struct job *j = job_new(f->t->app);
+  j->ch = ch;
+  j->n = n;
+  queue_post(LOOP_WORK, to_library, j);
   panel_close(f->p);
 }
 
@@ -184,12 +245,6 @@ static void c_edit(struct tui *t, const char *args) {
   show(f);
 }
 
-static void undone(long long batch, enum op_state state, const char *err, void *ud) {
-  struct tui *t = ud;
-  if (state == OP_FAILED) tui_msg(t, 1, "undo failed: %s", err ? err : "?");
-  else tui_msg(t, 0, "put back (batch %lld)", batch);
-}
-
 /* The last change lulibre made that is not undone, nor itself an undo, nor
  * a review decision that changed nothing. */
 static void c_undo(struct tui *t, const char *args) {
@@ -209,10 +264,9 @@ static void c_undo(struct tui *t, const char *args) {
     tui_msg(t, 0, "nothing to undo");
     return;
   }
-  if (library_undo(t->app->library, batch, undone, t, &err)) {
-    tui_msg(t, 1, "%s", err);
-    free(err);
-  }
+  struct job *j = job_new(t->app);
+  j->undo = batch;
+  queue_post(LOOP_WORK, to_library, j);
 }
 
 void edit_commands(void) {

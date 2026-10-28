@@ -374,7 +374,7 @@ static void reload_answered(struct app *app, void *arg) { /* the Lua thread */
   free(m);
 }
 
-static void reloaded(int rc, const char *err, void *ud) { /* the main thread */
+static void reloaded(int rc, const char *err, void *ud) { /* the background thread */
   struct reload_msg *m = ud;
   m->rc = rc;
   m->err = err ? xstrdup(err) : NULL;
@@ -382,14 +382,15 @@ static void reloaded(int rc, const char *err, void *ud) { /* the main thread */
 }
 
 static void reload_main(struct app *app, void *arg) {
-  app_open_db(app);
-  library_reload(app->library, 0, reloaded, arg);
+  if (app->library) library_reload(app->library, 0, reloaded, arg);
+  else reloaded(-1, "the library is closed", arg);
 }
 
 static int l_reload(lua_State *L) {
+  lapi_db(L); /* the index open, and the library with it */
   struct reload_msg *m = xcalloc(1, sizeof *m);
   m->task = sched_begin_wait(L);
-  queue_post(LOOP_UI, reload_main, m);
+  queue_post(LOOP_WORK, reload_main, m);
   return lua_yield(L, 0);
 }
 

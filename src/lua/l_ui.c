@@ -362,7 +362,7 @@ static void pick_done(struct app *app, void *arg) { /* Lua thread */
       sched_wake(w->task, 1);
     }
   }
-  if (w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->items_ref);
+  if (app->L && w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->items_ref);
   free(w);
   free(d);
 }
@@ -477,7 +477,7 @@ static void input_event(struct app *app, void *arg) { /* Lua thread */
       else lua_pushnil(L);
       sched_wake(w->task, 1);
     }
-    if (w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->change_ref);
+    if (app->L && w->gen == atomic_load(&generation)) luaL_unref(app->L, LUA_REGISTRYINDEX, w->change_ref);
     free(w);
   } else if (w->change_ref != LUA_NOREF && w->gen == atomic_load(&generation)) {
     /* on_change runs on the main state, between keystrokes: it cannot wait */

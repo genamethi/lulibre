@@ -16,7 +16,7 @@
 
 struct app;
 
-enum loop_id { LOOP_UI, LOOP_LUA, LOOPS };
+enum loop_id { LOOP_UI, LOOP_LUA, LOOP_WORK, LOOPS };
 
 typedef void queue_fn(struct app *app, void *arg);
 

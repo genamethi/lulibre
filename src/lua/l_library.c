@@ -11,8 +11,8 @@
  *   library.undo(batch)                puts a batch's old values back
  *   library.holder()                   "none" | "server" | "program" | "other"
  *
- * Each runs on the main thread, which owns the library; the task waits for
- * the answer and the interface does not. */
+ * Each runs on the background thread, which owns the library (work.h);
+ * the task waits for the answer and the interface does not. */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +37,7 @@ struct msg {
   char **argv;
   char *label;
   long long undo; /* a batch to put back */
+  struct op_settings set; /* from the lua_State's copy, as the call was made */
   /* the answer */
   long long batch;
   int failed;
@@ -56,6 +57,9 @@ static void msg_free(struct msg *m) {
   free(m->argv);
   free(m->label);
   free(m->err);
+  free((char *)m->set.server);
+  free((char *)m->set.user);
+  free((char *)m->set.password_file);
   free(m);
 }
 
@@ -88,15 +92,18 @@ static void done(long long batch, enum op_state state, const char *err, void *ud
   queue_post(LOOP_LUA, answered, m);
 }
 
-static void submit(struct app *app, void *arg) {
+static void submit(struct app *app, void *arg) { /* the background thread */
   struct msg *m = arg;
   char *err = NULL;
-  app_open_db(app);
   int rc;
-  if (m->undo) {
-    rc = library_undo(app->library, m->undo, done, m, &err);
+  if (!app->library) {
+    rc = -1;
+    err = xstrdup("the library is closed");
+  } else if (m->undo) {
+    rc = library_undo(app->library, m->undo, &m->set, done, m, &err);
   } else {
     struct operation op = {
+      .set = &m->set,
       .label = m->label,
       .need = m->argv ? NEED_CLOSED : NEED_ANY,
       .changes = m->changes,
@@ -112,9 +119,13 @@ static void submit(struct app *app, void *arg) {
   }
 }
 
-static int to_main(lua_State *L, struct msg *m) {
+static int to_library(lua_State *L, struct msg *m) {
+  lapi_db(L); /* the index open, and the library with it */
+  m->set = (struct op_settings){lapi_setting_str(L, S_SERVER), lapi_setting_str(L, S_USER),
+                                lapi_setting_str(L, S_PASSWORD_FILE), (int)lapi_setting_int(L, S_EMBED),
+                                (int)lapi_setting_int(L, S_WRITE_JOBS)};
   m->task = sched_begin_wait(L);
-  queue_post(LOOP_UI, submit, m);
+  queue_post(LOOP_WORK, submit, m);
   return lua_yield(L, 0);
 }
 
@@ -160,7 +171,7 @@ static int l_apply(lua_State *L) {
     }
     c->op = (enum change_op)k;
   }
-  return to_main(L, m);
+  return to_library(L, m);
 }
 
 static int l_command(lua_State *L) {
@@ -175,7 +186,7 @@ static int l_command(lua_State *L) {
     lua_pop(L, 2);
   }
   m->label = luaL_optstring(L, 2, NULL) ? xstrdup(lua_tostring(L, 2)) : NULL;
-  return to_main(L, m);
+  return to_library(L, m);
 }
 
 static int l_undo(lua_State *L) {
@@ -183,7 +194,7 @@ static int l_undo(lua_State *L) {
   sched_require_task(L);
   struct msg *m = xcalloc(1, sizeof *m);
   m->undo = batch;
-  return to_main(L, m);
+  return to_library(L, m);
 }
 
 static int l_holder(lua_State *L) {
@@ -204,7 +215,7 @@ struct store_answer {
   char *err;
 };
 
-static void store_answered(struct app *app, void *arg) { /* the main thread */
+static void store_answered(struct app *app, void *arg) { /* the background thread */
   struct store_answer *a = arg;
   a->q->answer(a->q, a->err);
   free(a->err);
@@ -215,7 +226,7 @@ static void store_fail(void *req, const char *why) {
   struct store_answer *a = xcalloc(1, sizeof *a);
   a->q = req;
   a->err = xstrdup(why);
-  queue_post(LOOP_UI, store_answered, a);
+  queue_post(LOOP_WORK, store_answered, a);
 }
 
 static void store_start(struct app *app, void *arg) { /* the Lua thread */
@@ -254,7 +265,7 @@ static int l_store_answer(lua_State *L) {
   struct store_answer *a = xcalloc(1, sizeof *a);
   a->q = q;
   a->err = lua_isstring(L, 2) ? xstrdup(lua_tostring(L, 2)) : NULL;
-  queue_post(LOOP_UI, store_answered, a);
+  queue_post(LOOP_WORK, store_answered, a);
   return 0;
 }
 

@@ -18,7 +18,7 @@
 #include "lua/lapi.h"
 #include "lua/sched.h"
 
-static void answer_main(struct app *app, void *arg) { /* the indexer's loop */
+static void answer_main(struct app *app, void *arg) { /* the indexer's: the background thread */
   struct ocr_req *r = arg;
   r->done(r);
 }
@@ -27,7 +27,7 @@ static void fail(void *req, const char *why) {
   struct ocr_req *r = req;
   free(r->err);
   r->err = xstrdup(why);
-  queue_post(LOOP_UI, answer_main, r);
+  queue_post(LOOP_WORK, answer_main, r);
 }
 
 /* The Lua thread: lulibre.ocr._run(handle, path, pages, lang) as a task. */
@@ -115,7 +115,7 @@ static int l_answer(lua_State *L) {
       lua_pop(L, 1);
     }
   if (lua_isstring(L, 3)) r->err = xstrdup(lua_tostring(L, 3));
-  queue_post(LOOP_UI, answer_main, r);
+  queue_post(LOOP_WORK, answer_main, r);
   return 0;
 }
 

@@ -13,6 +13,7 @@
 #include "library/library.h"
 #include "core/util.h"
 #include "lua/bridge.h"
+#include "work.h"
 
 static const struct {
   const char *name;
@@ -60,7 +61,7 @@ static int finish(struct app *app, int rc) {
   queue_drain(LOOP_LUA); /* what was on its way to the copy, before the lua_State goes */
   lstate_close(app);
   ui_state_close();
-  library_close(app->library);
+  work_stop(app); /* the library closes */
   if (app->db_ready) db_close(&app->db);
   tui_teardown();
   settings_free(app->settings);
@@ -109,8 +110,10 @@ int main(int argc, char **argv) {
   /* with the interface, Lua gets a loop and (once it is up) a thread of its own */
   int interface = i >= argc && !want_optlist;
   bridge_init(&app, interface);
+  work_init(&app, interface);
   queue_open(&app, LOOP_UI, app.loop);
   queue_open(&app, LOOP_LUA, app.lloop);
+  queue_open(&app, LOOP_WORK, app.wloop);
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
   /* known before init.lua, so that what it and the prelude do at start can

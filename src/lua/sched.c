@@ -420,6 +420,7 @@ static void cancel(struct sched *s, struct task *t) {
 
 int sched_cancel(struct app *app, int id) {
   struct sched *s = app->sched;
+  if (!s) return 0;
   for (struct task *t = s->all; t; t = t->next)
     if (t->id == id) {
       cancel(s, t);

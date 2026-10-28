@@ -12,6 +12,7 @@
 #include "core/queue.h"
 #include "library/library.h"
 #include "lua/bridge.h"
+#include "work.h"
 #include "tui/tui.h"
 
 void tui_dirty(struct tui *t) {
@@ -55,90 +56,119 @@ void tui_reload(struct tui *t) {
   rows_reload(t);
 }
 
-/* --------------------------------------------------------- background work */
+/* --------------------------------------------------------- background work
+ *
+ * The indexer and the library are the background thread's (work.h). What
+ * they have to say arrives by message; a message finds the interface
+ * through app->tui, which is gone once the interface has ended. */
 
-static void ix_progress(struct indexer *ix, const struct index_stats *st, void *ud) {
-  struct tui *t = ud;
-  t->ix_done = st->done;
-  t->ix_total = st->queued;
-  t->ix_failed = st->failed;
-  tui_dirty(t);
+struct indexing {
+  int phase; /* -1 started, 0 going, 1 ended */
+  int has;   /* stats holds numbers */
+  struct index_stats stats;
+};
+
+static void indexing_arrived(struct app *app, void *arg) {
+  struct indexing *m = arg;
+  struct tui *t = app->tui;
+  if (t && !t->quit) {
+    if (m->phase < 0) {
+      t->indexing = 1;
+      t->ix_done = t->ix_total = t->ix_failed = 0;
+    } else if (m->phase == 0 && m->has) {
+      t->ix_done = m->stats.done;
+      t->ix_total = m->stats.queued;
+      t->ix_failed = m->stats.failed;
+    } else if (m->phase > 0) {
+      t->indexing = 0;
+      if (m->has && m->stats.queued)
+        tui_msg(t, 0, "indexed %d files in %.1fs (%d could not be read)", m->stats.ok, m->stats.elapsed,
+                m->stats.failed);
+      else if (m->has)
+        tui_msg(t, 0, "index is up to date");
+      rows_reload(t); /* text-based filters may now match more */
+    }
+    tui_dirty(t);
+  }
+  free(m);
 }
 
-static void ix_done(struct indexer *ix, const struct index_stats *st, void *ud) {
-  struct tui *t = ud;
-  struct index_stats s = *st; /* st lives inside the indexer being freed */
-  indexer_free(t->ix);
-  t->ix = NULL;
-  /* tell whoever was waiting, even when leaving: their memory is theirs to free */
-  int nhook = t->nix_hook;
-  t->nix_hook = 0;
-  for (int i = 0; i < nhook; i++) t->ix_hook[i](&s, t->ix_hook_ud[i]);
-  if (t->quit) return;
-  if (s.queued)
-    tui_msg(t, 0, "indexed %d files in %.1fs (%d could not be read)", s.ok, s.elapsed, s.failed);
-  else
-    tui_msg(t, 0, "index is up to date");
-  rows_reload(t); /* text-based filters may now match more */
+void tui_post_indexing(struct app *app, const struct index_stats *st, int phase) {
+  struct indexing *m = xcalloc(1, sizeof *m);
+  m->phase = phase;
+  if (st) {
+    m->stats = *st;
+    m->stats.last_path = m->stats.last_error = NULL;
+    m->has = 1;
+  }
+  queue_post(LOOP_UI, indexing_arrived, m);
+}
+
+static void index_failed(struct app *app, void *arg) {
+  if (app->tui) tui_msg(app->tui, 1, "%s", (char *)arg);
+  free(arg);
+}
+
+static void index_done(const struct index_stats *st, const char *err, void *ud) { /* the background thread */
+  if (err) queue_post(LOOP_UI, index_failed, xstrdup(err));
 }
 
 void tui_start_index(struct tui *t, int force) {
-  if (t->ix) {
+  if (t->indexing) {
     tui_msg(t, 1, "indexing is already running");
     return;
   }
-  struct index_opts o = {0};
   char *err = NULL;
-  app_index_opts(t->app, &o);
-  o.force = force;
-  t->ix_done = t->ix_total = t->ix_failed = 0;
-  t->ix = indexer_start(t->app->loop, &t->app->db, &o, ix_progress, ix_done, t, &err);
-  if (!t->ix) {
+  t->indexing = 1; /* until the background thread says otherwise */
+  if (work_index(t->app, 0, force, 0, NULL, index_done, NULL, &err)) {
+    t->indexing = 0;
     tui_msg(t, 1, "%s", err);
     free(err);
   }
   tui_dirty(t);
 }
 
-int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
-              void *ud, char **err) {
-  if (t->nix_hook == 8) {
-    *err = xstrdup("too many scripts are waiting for the indexer");
-    return -1;
-  }
-  if (!t->ix) {
-    t->ix_done = t->ix_total = t->ix_failed = 0;
-    t->ix = indexer_start(t->app->loop, &t->app->db, o, ix_progress, ix_done, t, err);
-    if (!t->ix) return -1;
-    tui_dirty(t);
-  }
-  t->ix_hook[t->nix_hook] = done;
-  t->ix_hook_ud[t->nix_hook++] = ud;
-  return 0;
-}
-
 /* Calibre changed underneath us (the content server, calibredb, another
  * lulibre): pick it up without being asked. */
 static void tick_cb(uv_timer_t *h) {
   struct tui *t = h->data;
-  if (t->ix || t->quit) return; /* the indexer would change it under the mirror */
+  if (t->indexing || t->quit) return; /* the indexer would change it under the mirror */
   tui_mirror(t, 0, 0);
 }
 
 struct remirror {
-  struct tui *t;
-  int told;
+  int told, rc;
+  char *err;
 };
 
-static void remirrored(int rc, const char *err, void *ud) {
-  struct remirror *m = ud;
-  struct tui *t = m->t;
-  t->mirroring = 0;
-  if (!t->quit && m->told) {
-    if (rc < 0) tui_msg(t, 1, "%s", err);
-    else tui_msg(t, 0, "reloaded from calibre");
+static void remirror_told(struct app *app, void *arg) {
+  struct remirror *m = arg;
+  struct tui *t = app->tui;
+  if (t) {
+    t->mirroring = 0;
+    if (!t->quit && m->told) {
+      if (m->rc < 0) tui_msg(t, 1, "%s", m->err);
+      else tui_msg(t, 0, "reloaded from calibre");
+    }
   }
+  free(m->err);
   free(m);
+}
+
+static void remirrored(int rc, const char *err, void *ud) { /* the background thread */
+  struct remirror *m = ud;
+  m->rc = rc;
+  m->err = err ? xstrdup(err) : NULL;
+  queue_post(LOOP_UI, remirror_told, m);
+}
+
+static void remirror_work(struct app *app, void *arg) {
+  if (!app->library) {
+    remirrored(-1, "the library is closed", arg);
+    return;
+  }
+  struct remirror *m = arg;
+  library_reload(app->library, m->rc, remirrored, m); /* rc carries force on the way there */
 }
 
 /* calibre's records are read on a worker (library_reload); the list
@@ -147,9 +177,9 @@ void tui_mirror(struct tui *t, int force, int told) {
   if (t->mirroring || !t->app->library) return;
   t->mirroring = 1;
   struct remirror *m = xcalloc(1, sizeof *m);
-  m->t = t;
   m->told = told;
-  library_reload(t->app->library, force, remirrored, m);
+  m->rc = force;
+  queue_post(LOOP_WORK, remirror_work, m);
 }
 
 /* The records changed: the list shows them; a change made in calibre may
@@ -158,7 +188,7 @@ static void records_changed(const struct event *ev, void *ud) {
   struct tui *t = ud;
   if (t->quit) return;
   rows_reload(t);
-  if (!ev->nfields && !t->ix) tui_start_index(t, 0);
+  if (!ev->nfields && !t->indexing) tui_start_index(t, 0);
 }
 
 /* -------------------------------------------------------------------- run */
@@ -288,7 +318,7 @@ int tui_run(struct app *app) {
     return 2;
   }
   app_open_db(app);
-  library_resume(app->library);
+  library_resume(app->library); /* before the background thread starts, which owns it then */
 
   struct tui tui, *t = &tui;
   memset(t, 0, sizeof *t);
@@ -338,7 +368,8 @@ int tui_run(struct app *app) {
   log_to_stderr(0); /* the terminal is ours; the console shows the log */
   log_on_entry(log_arrived, app);
   log_debug("interface up: %d books listed from %s", t->rows.n, app_str(app, S_LIBRARY));
-  bridge_start(app); /* from here on Lua runs on its own thread */
+  work_start(app);   /* from here on the library and the indexer are the background thread's */
+  bridge_start(app); /* and Lua runs on its own thread */
   uv_run(loop, UV_RUN_DEFAULT);
 
   /* Give the terminal back first, then let work in flight finish. */
@@ -346,11 +377,12 @@ int tui_run(struct app *app) {
   if (t->picker) picker_close(t);
   tui_input_cancel(t);
   bridge_stop(app); /* scripts stop with the interface; their thread ends */
+  lstate_close(app); /* what waited on Lua's answers is told it will not come */
+  work_stop(app);    /* what is running ends; changes still queued stay in the journal */
   log_on_entry(NULL, NULL);
   wm_free(t);
   terminal_release(t);
   log_to_stderr(1);
-  if (t->ix) indexer_cancel(t->ix);
   input_unwatch(t);
   uv_close((uv_handle_t *)&t->prepare, closed);
   uv_close((uv_handle_t *)&t->tick, closed);

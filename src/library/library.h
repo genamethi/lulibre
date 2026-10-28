@@ -41,7 +41,15 @@ struct change {
   const char *source;   /* the grammar or service that supplied it */
 };
 
+/* The settings an operation runs by, taken by whoever made it, as it was
+ * made (design 4): a change made after setman.set("embed", true) embeds. */
+struct op_settings {
+  const char *server, *user, *password_file;
+  int embed, jobs;
+};
+
 struct operation {
+  const struct op_settings *set; /* NULL: the background thread's copy (work.h) */
   const char *label;
   enum op_need need;
   const struct change *changes;
@@ -55,8 +63,12 @@ struct library;
  * OP_APPLIED, OP_FAILED (err says why, for the first book that failed). */
 typedef void library_done(long long batch, enum op_state state, const char *err, void *ud);
 
+/* The library lives on the background thread (work.h): every call here
+ * but library_holder is that thread's, and every callback runs there. */
 struct library *library_open(struct app *app);
 void library_close(struct library *lib);
+/* Nothing running: no calibredb run, no reading of the records. */
+int library_idle(const struct library *lib);
 /* Queues again what the journal holds queued; by those that run the loop
  * (the interface, lulibre run), not by a command that only reads. */
 void library_resume(struct library *lib);
@@ -80,7 +92,8 @@ typedef void library_reloaded(int rc, const char *err, void *ud);
 void library_reload(struct library *lib, int force, library_reloaded *done, void *ud);
 
 /* Puts a batch's old values back, as an operation of its own. */
-int library_undo(struct library *lib, long long batch, library_done *done, void *ud, char **err);
+int library_undo(struct library *lib, long long batch, const struct op_settings *set, library_done *done, void *ud,
+                 char **err);
 
 /* One book's changes for the calibre store Lua has put in calibredb's place
  * (core/registry.h): fields[i] gets values[i], in the form library/fields.h

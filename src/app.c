@@ -9,6 +9,7 @@
 #include "library/library.h"
 #include "core/util.h"
 #include "lua/lapi.h"
+#include "work.h"
 
 /* the real ones are in build/buildno.c, written when the binary is linked;
  * these stand in where that is not linked (the unit tests) */
@@ -19,6 +20,7 @@ __attribute__((weak)) const char lulibre_build_commit[] = "";
 static void watch(struct settings *st, int def, void *ud) {
   struct app *app = ud;
   if (app->L) queue_post(LOOP_LUA, l_setman_changed, setman_change_new(st, def));
+  work_setting_changed(app, def);
 }
 
 static char *xdg(const char *var, const char *fallback) {
@@ -128,5 +130,5 @@ void app_open_db(struct app *app) {
   }
   free(real);
   app->db_ready = 1;
-  app->library = library_open(app);
+  work_open(app);
 }

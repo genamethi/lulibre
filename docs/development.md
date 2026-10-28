@@ -203,6 +203,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/version.h   the version
     src/main.c      argument parsing, command dispatch
     src/app.c       what every part shares: the settings, the index, the library
+    src/work.c      the background thread: the library and the indexer
     src/core/       the settings store, the message queue, shared events, the registry, strings, the log
     src/db/         schema, calibre mirror, staged files, SQL functions, the filter language
     src/doc/        text extraction and rendering (mupdf, djvulibre, plain text); a file's reading
@@ -219,8 +220,14 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
 ## Threads
 
 - **The interface thread** (the main thread) owns the terminal, the
-  windows, the list, the settings store, calibre's library and its own
-  libuv loop.
+  windows, the list, the settings store and its own libuv loop.
+- **The background thread** (`src/work.c`, while the interface is up) owns
+  calibre's library (its holder, the calibredb runs, the journal, reading
+  the records again) and the indexer, with a loop and a connection to the
+  index of its own, and a copy of the settings. It runs no Lua: a reader or
+  a store of Lua's is asked on the Lua thread by message. An operation
+  carries the settings it was made with, so a change made after
+  `setman.set("embed", true)` embeds.
 - **The Lua thread** (while the interface is up) owns the Lua state, the
   task scheduler, a second loop and its own database connection.
 - **The libuv pool** does extraction, OCR, rendering, readings, hashing,
