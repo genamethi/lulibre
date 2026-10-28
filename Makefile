@@ -107,11 +107,14 @@ unit: $(BIN) $(UNIT) $(CORE)
 	$(UNIT)
 	$(CORE)
 
-check: unit $(SETUP)
-	sh test/setup.sh $(BIN) $(SETUP)
+# test/setup.sh comes back with lulibre-setup's rework for 0.3
+check: unit
+	sh test/runtime.sh $(BIN)
+	sh test/net.sh $(BIN)
 
-e2e: $(BIN) $(SETUP)
-	sh test/setup.sh $(BIN) $(SETUP)
+e2e: $(BIN)
+	sh test/runtime.sh $(BIN)
+	sh test/net.sh $(BIN)
 	sh test/write.sh $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----

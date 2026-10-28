@@ -160,6 +160,7 @@ static int l_set(lua_State *L) {
     }
     m->text = xstrdup(text);
     put(L, def, &v);
+    if (def == S_MOD_TREE) lstate_paths(L); /* the next require already searches it */
     if (is_text(d)) free(v.s);
   }
   queue_post(LOOP_UI, store_change, m);
