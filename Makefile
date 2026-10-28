@@ -116,6 +116,7 @@ e2e: $(BIN)
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
 	sh test/write.sh $(BIN)
+	python3 -I test/tasks.py $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----
 
