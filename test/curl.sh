@@ -51,37 +51,37 @@ cat >"$t/requests.lua" <<'LUA'
 local curl = require "curl"
 local base = "http://127.0.0.1:8098"
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
-local r = curl.request(base .. "/hello")
+local r = curl.req(base .. "/hello")
 say("get", r.status, r.body, r.headers["x-thing"], r.headers["content-length"])
-r = curl.request(base .. "/agent", { headers = { ["User-Agent"] = "test agent" } })
+r = curl.req(base .. "/agent", { headers = { ["User-Agent"] = "test agent" } })
 say("header sent", r.body)
-r = curl.request(base .. "/moved")
+r = curl.req(base .. "/moved")
 say("redirect", r.status, r.body, r.url)
-r = curl.request(base .. "/nowhere")
+r = curl.req(base .. "/nowhere")
 say("status", r.status, r.body)
-r = curl.request(base .. "/busy")
+r = curl.req(base .. "/busy")
 say("retry", r.status, r.headers["retry-after"])
-r = curl.request(base .. "/echo", { body = "a body" })
+r = curl.req(base .. "/echo", { body = "a body" })
 say("post", r.body)
-r = curl.request(base .. "/echo", { method = "PUT", body = "put" })
+r = curl.req(base .. "/echo", { method = "PUT", body = "put" })
 say("put", r.body)
-local none, err = curl.request(base .. "/slow", { timeout = 200 })
+local none, err = curl.req(base .. "/slow", { timeout = 200 })
 say("timeout", none, err ~= nil)
-none, err = curl.request("http://127.0.0.1:8097/")
+none, err = curl.req("http://127.0.0.1:8097/")
 say("refused", none, err ~= nil)
 local started, ended = os.time(), 0
 local clock = require("luv").now
 local t0 = clock()
 for i = 1, 3 do
   lulibre.spawn(function()
-    curl.request(base .. "/slow")
+    curl.req(base .. "/slow")
     ended = ended + 1
     if ended == 3 then say("at once", clock() - t0 < 1900) end
   end)
 end
 local id = lulibre.spawn(function()
   local _ <close> = setmetatable({}, { __close = function() say("cancelled ends", clock() - t0 < 600) end })
-  curl.request(base .. "/slow")
+  curl.req(base .. "/slow")
   say("cancelled", "answered anyway")
 end)
 lulibre.sleep(100)

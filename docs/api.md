@@ -227,7 +227,7 @@ holds the other tasks up.
 ## Requests: curl
 
     local curl = require "curl"
-    local r, err = curl.request(url, { method = "PUT", headers = { ["User-Agent"] = "me" },
+    local r, err = curl.req(url, { method = "PUT", headers = { ["User-Agent"] = "me" },
                                       body = "...", timeout = 5000 })
     -- waits: { status=, headers=, body=, url= }, or nil and why
 

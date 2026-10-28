@@ -22,7 +22,7 @@ end
 --- Fetches a URL: the body, the HTTP status and Retry-After, or nil and
 -- why.
 function M.get(url, mail)
-  local r, err = curl.request(url, { headers = { ["User-Agent"] = M.agent(mail or "") }, timeout = 25000 })
+  local r, err = curl.req(url, { headers = { ["User-Agent"] = M.agent(mail or "") }, timeout = 25000 })
   if not r then return nil, err end
   return r.body, r.status, r.headers["retry-after"]
 end

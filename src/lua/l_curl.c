@@ -2,7 +2,7 @@
  * module written in C, preloaded.
  *
  *   local curl = require "curl"
- *   local r, err = curl.request(url [, { method=, headers = { [name] = value },
+ *   local r, err = curl.req(url [, { method=, headers = { [name] = value },
  *                                        body=, timeout = ms }])
  *
  * waits, inside a task, for the answer: `{ status=, headers=, body=, url= }`
@@ -89,7 +89,7 @@ static void cancel_cb(void *ud) {
   curl_uv_cancel(w->x);
 }
 
-static int l_request(lua_State *L) {
+static int l_req(lua_State *L) {
   struct curl_uv *c = *(struct curl_uv **)luaL_checkudata(L, lua_upvalueindex(1), CURL_MT);
   struct curl_uv_req req = {.url = luaL_checkstring(L, 1)};
   if (!lua_isnoneornil(L, 2)) luaL_checktype(L, 2, LUA_TTABLE);
@@ -142,7 +142,7 @@ int luaopen_curl(lua_State *L) {
   lua_setmetatable(L, -2);
   lua_newtable(L);
   lua_pushvalue(L, -2);
-  lua_pushcclosure(L, l_request, 1);
-  lua_setfield(L, -2, "request");
+  lua_pushcclosure(L, l_req, 1);
+  lua_setfield(L, -2, "req");
   return 1;
 }
