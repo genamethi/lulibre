@@ -9,7 +9,7 @@
  *   lulibre.tags()          { {name=, books=}, ... }
  *   lulibre.sql(sql, ...)   rows of a read-only query against the index
  *   lulibre.store(sql, ...) the same, but may also write lulibre's own tables
- *                           (proposals, journal, kv); returns rows, rows
+ *                           (proposals, lookups, kv ...); returns rows, rows
  *                           changed, last insert id
  *   lulibre.reload()        pick up changes calibre has made since the last look
  *   lulibre.source([name])  what the list shows, "library" or "sync"; sets it
@@ -230,11 +230,10 @@ static int store_authorizer(void *ud, int action, const char *a, const char *b, 
     case SQLITE_INSERT:
     case SQLITE_UPDATE:
     case SQLITE_DELETE:
-      return a && (!strcmp(a, "proposals") || !strcmp(a, "journal") || !strcmp(a, "kv") ||
-                   !strcmp(a, "staged") || !strcmp(a, "lookups") ||
+      /* not the journal: the library alone writes it (library/library.h) */
+      return a && (!strcmp(a, "proposals") || !strcmp(a, "kv") || !strcmp(a, "staged") || !strcmp(a, "lookups") ||
                    /* (the custom fields' tables, in their own database only) */
-                   ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")) || !strcmp(a, "snapshots") ||
-                   !strcmp(a, "snapshot_values") || !strcmp(a, "offline") ||
+                   ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")) ||
                    !strcmp(a, "mirror_prev"))
                ? SQLITE_OK : SQLITE_DENY;
     case SQLITE_SELECT:
@@ -257,7 +256,7 @@ static int run_sql(lua_State *L, int writable) {
   if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
   if (prc) {
     lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write lulibre's own tables: proposals, journal, snapshots, snapshot_values, offline, kv, staged, lookups, mirror_prev, custom.fields, custom.data"
+                        ? "lulibre.store may only write lulibre's own tables: proposals, kv, staged, lookups, mirror_prev, custom.fields, custom.data"
                         : err);
     free(err);
     return lua_error(L);
