@@ -111,10 +111,12 @@ unit: $(BIN) $(UNIT) $(CORE)
 check: unit
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
+	sh test/curl.sh $(BIN)
 
 e2e: $(BIN)
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
+	sh test/curl.sh $(BIN)
 	sh test/write.sh $(BIN)
 	python3 -I test/tasks.py $(BIN)
 

@@ -80,8 +80,8 @@ and `lulibre.build.commit`, and a crash log names both.
 | | |
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/core.c` (the 0.3 runtime: settings, events, the registry) |
-| `make check` | the unit tests, `test/runtime.sh` (settings, init.lua, where modules are found) and `test/net.sh` (online lookups with canned answers, no network) |
-| `make e2e` | every end-to-end test: those two, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) and `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) |
+| `make check` | the unit tests, `test/runtime.sh` (settings, init.lua, where modules are found), `test/net.sh` (online lookups with canned answers, no network) and `test/curl.sh` (the curl module against a server of its own in a private network namespace) |
+| `make e2e` | every end-to-end test: those three, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) and `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) |
 
 `test/setup.sh` tests lulibre-setup, which still writes 0.2's init.lua; it
 comes back into the targets with lulibre-setup's rework.

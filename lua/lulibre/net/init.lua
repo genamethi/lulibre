@@ -7,6 +7,7 @@
 -- @library lulibre.net
 local service = require "lulibre.net.service"
 local similar = require "lulibre.similar"
+local curl = require "curl"
 
 local M = {}
 
@@ -18,16 +19,12 @@ function M.agent(mail)
   return ("lulibre/%s (library metadata lookup%s)"):format(lulibre.version, mail ~= "" and "; mailto:" .. mail or "")
 end
 
---- Fetches a URL with curl: the body, the HTTP status and Retry-After, or
--- nil and why.
+--- Fetches a URL: the body, the HTTP status and Retry-After, or nil and
+-- why.
 function M.get(url, mail)
-  local r, err = lulibre.system({ "curl", "-sS", "-L", "--max-time", "25", "-A", M.agent(mail or ""), "-w",
-    "\n%{http_code} %header{retry-after}", url }, { timeout = 30000 })
+  local r, err = curl.request(url, { headers = { ["User-Agent"] = M.agent(mail or "") }, timeout = 25000 })
   if not r then return nil, err end
-  if r.code ~= 0 then return nil, (r.stderr ~= "" and r.stderr or ("curl exited with " .. r.code)) end
-  local body, status, retry = r.stdout:match("^(.*)\n(%d+) ?(%S*)$")
-  if not body then return nil, "no answer" end
-  return body, tonumber(status), retry ~= "" and retry or nil
+  return r.body, r.status, r.headers["retry-after"]
 end
 
 --- Asks a service about a work; see lulibre.net.service.ask.

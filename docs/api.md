@@ -211,6 +211,21 @@ Library and arXiv come with lulibre. Every answer is kept in the index's
 sooner than its pace, as many works at once as its batch, and is left
 alone for its hold when it says it is asked too much.
 
+## Requests: curl
+
+    local curl = require "curl"
+    local r, err = curl.request(url, { method = "PUT", headers = { ["User-Agent"] = "me" },
+                                      body = "...", timeout = 5000 })
+    -- waits: { status=, headers=, body=, url= }, or nil and why
+
+libcurl on lulibre's own loop: a task waits for its answer while the
+others run, any number of requests run at once, and a cancelled task's
+request is cancelled with it. Every status is an answer; an error is a
+request that got none (refused, timed out, cancelled). Redirects are
+followed, and `url` is where the answer came from. `headers` are by
+lower-case name, repeated ones joined by ", ". The method is GET, or POST
+with a body; `timeout` is in milliseconds.
+
 ## The interface
 
 | | |

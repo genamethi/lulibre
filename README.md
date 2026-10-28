@@ -11,8 +11,8 @@ removals included. [Changelog](CHANGELOG.md).
 ## Build
 
 Needs a C compiler, pkgconf and the development files of **libuv**,
-**sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto)
-and **Lua 5.4 or 5.5**.
+**sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto),
+**libcurl** and **Lua 5.4 or 5.5**.
 
     ./configure
     make                # build/lulibre, and build/lulibre-setup
@@ -24,7 +24,7 @@ At run time:
 |---|---|
 | changing the library | calibre's `calibredb` |
 | OCR | `tesseract` |
-| looking books up (`:enrich`) | `curl`, the `dkjson` rock |
+| looking books up (`:enrich`) | the `dkjson` rock |
 | grammars | the `lpeg` rock |
 
 `pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).

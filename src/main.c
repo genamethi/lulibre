@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,6 +66,7 @@ static int finish(struct app *app, int rc) {
   if (app->db_ready) db_close(&app->db);
   tui_teardown();
   settings_free(app->settings);
+  curl_global_cleanup();
   free(app->config_dir);
   free(app->state_path);
   return rc;
@@ -74,6 +76,7 @@ int main(int argc, char **argv) {
   struct app app;
   memset(&app, 0, sizeof app);
   crash_install();
+  curl_global_init(CURL_GLOBAL_DEFAULT); /* before any thread: curl.h */
   signal(SIGPIPE, SIG_IGN); /* a helper process that exits early is an error to report, not a death */
 
   /* global options come before the command */
