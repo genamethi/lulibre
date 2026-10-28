@@ -1,12 +1,12 @@
 --- Online lookups (design 39-43). Each service is a resource with a queue
--- (lulibre.net.service): a caller asks about one work and waits; the
+-- (net.service): a caller asks about one work and waits; the
 -- service batches, paces and holds back by its own rules. Every answer is
 -- kept. Lookups run only on command (:enrich); contact_email is sent only
 -- when set. An answer arriving posts "source_arrived" for the book.
 --
--- @library lulibre.net
+-- @library net
 local bookman = require "bookman"
-local service = require "lulibre.net.service"
+local service = require "net.service"
 local mesr = require "mesr"
 local curl = require "curl"
 
@@ -28,7 +28,7 @@ function M.get(url, mail)
   return r.body, r.status, r.headers["retry-after"]
 end
 
---- Asks a service about a work; see lulibre.net.service.ask.
+--- Asks a service about a work; see net.service.ask.
 function M.ask(name, key)
   return service.ask(name, key)
 end
@@ -74,6 +74,6 @@ function M.enrich(book)
   return n
 end
 
-require "lulibre.net.services"
+require "net.services"
 
 return M

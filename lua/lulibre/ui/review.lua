@@ -1,6 +1,6 @@
 --- The review view (design 16, 18, 33, 34).
 --
--- One proposal per row; space cycles a row through its alternatives. The
+-- One field's wits per row; space cycles a row through its alternatives. The
 -- task that opens the view owns the view and pulls its keys: the row shown
 -- and the alternative in view live in the task's locals. "Records changed"
 -- for a book in view proposes for the book again, so its rows are ranked
@@ -11,7 +11,8 @@
 --
 -- @library lulibre.ui.review
 local bookman = require "bookman"
-local proposals = require "lulibre.proposals"
+local propose = require "lulibre.propose"
+local wit = require "wit"
 
 local M = {}
 
@@ -23,7 +24,7 @@ function M.cells(entry, current)
   local alt = entry.alts[entry.i]
   local which = #entry.alts > 1 and (" (%d/%d)"):format(entry.i, #entry.alts) or ""
   local agree = alt.agree and ("agrees: " .. alt.agree) or (alt.disagree and ("differs: " .. alt.disagree) or "")
-  return { entry.field, current or "", alt.value .. which, alt.parse, agree }
+  return { entry.field, current or "", alt.value .. which, alt.source, agree }
 end
 
 local function current(book, field)
@@ -40,7 +41,7 @@ end
 local function entries(books)
   local out = {}
   for _, book in ipairs(books) do
-    local fields = proposals.of(book)
+    local fields = wit.get(book)
     if #fields > 0 then
       local b = bookman.book(book)
       out[#out + 1] = { book = book, head = (b and b.title or ("book " .. book)) }
@@ -67,10 +68,10 @@ local function rows_of(list)
   return rows
 end
 
---- Opens the view on the books' proposals, and returns when it closes.
+--- Opens the view on the books' wits, and returns when it closes.
 -- @tparam {integer,...} books
 function M.open(books)
-  local w <const> = proposals.settings()
+  local w <const> = propose.settings()
   local list = entries(books)
   local p <close> = uiman.panel {
     title = "review", help = M.help, follow = true, keys = { "a", "e", "r", "<Space>" },
@@ -83,7 +84,7 @@ function M.open(books)
   local id = evman.add("records_changed", function(ev)
     for _, book in ipairs(ev.ids) do
       if in_view[book] then
-        proposals.propose(book, w)
+        propose.propose(book, w)
         p:send("<Changed>")
       end
     end
@@ -102,12 +103,12 @@ function M.open(books)
         e.i = e.i % #e.alts + 1
         p:rows(rows_of(list))
       elseif key == "a" then
-        acted, err = true, select(2, proposals.accept(alt.id))
+        acted, err = true, select(2, wit.accept(alt.id))
       elseif key == "e" then
         local value = uiman.input { prompt = e.field .. ": ", default = alt.value }
-        if value then acted, err = true, select(2, proposals.accept(alt.id, value)) end
+        if value then acted, err = true, select(2, wit.accept(alt.id, value)) end
       elseif key == "r" then
-        acted, err = true, select(2, proposals.reject(alt.id))
+        acted, err = true, select(2, wit.reject(alt.id))
       end
       if err then uiman.notify(err, "error") end
       if acted then

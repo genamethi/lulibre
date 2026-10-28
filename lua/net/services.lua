@@ -7,11 +7,11 @@
 -- - Crossref: public pool, "Back off if the response times start to increase"
 -- - Open Library: "1 request per second" unidentified
 --
--- @submodule lulibre.net
-local service = require "lulibre.net.service"
+-- @submodule net
+local service = require "net.service"
 local json = require "dkjson"
 
-local function net() return require "lulibre.net" end
+local function net() return require "net" end
 
 local function encode(s)
   return (s:gsub("[^%w%-%._~/]", function(c) return ("%%%02X"):format(c:byte()) end))

@@ -67,7 +67,7 @@ static const struct { const char *name, *sql; } is_tests[] = {
   {"indexed", ANY_FILE(OUTCOME_HAS_TEXT("f."))},
   {"multiformat", "(SELECT count(*) FROM files f WHERE f.book = b.id) > 1"},
   {"marked", "b.id IN (SELECT id FROM marks)"},
-  {"proposed", "b.id IN (SELECT book FROM proposals)"},
+  {"proposed", "b.id IN (SELECT book FROM wit.wits)"},
   /* byte-identical to another book's file; known once :dupes has hashed them */
   {"dupe", "b.id IN (SELECT f.book FROM files f JOIN hashes h ON h.path = f.path"
            " WHERE f.book > 0 AND h.md5 IN (SELECT h2.md5 FROM hashes h2 JOIN files f2"

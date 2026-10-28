@@ -2,9 +2,13 @@
 -- size, and its hold when the service says it is asked too much. A caller
 -- asks about one work and waits; one task per service asks the service,
 -- for as many waiting works as a request takes, no sooner than the pace
--- allows. Every answer is kept in the index's lookups (design 43).
+-- allows. Every answer is kept (design 43), for every library, in
+-- `net.db` in lulibre's data folder ($XDG_DATA_HOME/lulibre).
 --
--- @submodule lulibre.net
+-- @submodule net
+local sqlite3 = require "lsqlite3"
+local luv = require "luv"
+
 local M = {}
 
 --- The services, by name.
@@ -33,10 +37,42 @@ local function now()
   return os.time()
 end
 
+local db
+
+-- the connection, opened (and the file made) on first use
+local function conn()
+  if db then return db end
+  local data = os.getenv("XDG_DATA_HOME")
+  if not data or data == "" then data = os.getenv("HOME") .. "/.local/share" end
+  luv.fs_mkdir(data, 448)
+  luv.fs_mkdir(data .. "/lulibre", 448)
+  local path = data .. "/lulibre/net.db"
+  local err
+  db, err = sqlite3.open(path)
+  if not db then error("net: cannot open " .. path .. ": " .. tostring(err), 3) end
+  db:busy_timeout(5000)
+  db:exec("PRAGMA journal_mode=WAL;"
+          .. "CREATE TABLE IF NOT EXISTS answers(service TEXT NOT NULL, key TEXT NOT NULL, answer TEXT,"
+          .. " ts INTEGER, PRIMARY KEY(service, key)) WITHOUT ROWID;")
+  return db
+end
+
+-- runs a statement with its values; the rows it gives
+local function run(sql, ...)
+  local d = conn()
+  local st = d:prepare(sql)
+  if not st then error("net: " .. d:errmsg(), 3) end
+  st:bind_values(...)
+  local rows = {}
+  for r in st:nrows() do rows[#rows + 1] = r end
+  if st:finalize() ~= sqlite3.OK then error("net: " .. d:errmsg(), 3) end
+  return rows
+end
+
 --- The answer kept for a key: the answer, or false for "no record" still
 -- trusted; nil when none is kept.
 function M.kept(name, key)
-  local row = lulibre.sql("SELECT answer, ts FROM lookups WHERE service = ? AND key = ?", name, key)[1]
+  local row = run("SELECT answer, ts FROM answers WHERE service = ? AND key = ?", name, key)[1]
   if not row then return nil end
   if row.answer == "" then
     if now() - (row.ts or 0) > M.FORGET then return nil end
@@ -46,8 +82,7 @@ function M.kept(name, key)
 end
 
 local function keep(name, key, answer)
-  lulibre.store("INSERT OR REPLACE INTO lookups(service, key, answer, ts) VALUES (?, ?, ?, ?)", name, key,
-    answer or "", now())
+  run("INSERT OR REPLACE INTO answers(service, key, answer, ts) VALUES (?, ?, ?, ?)", name, key, answer or "", now())
 end
 
 local serve
@@ -56,7 +91,7 @@ local serve
 local function start(s)
   if s.busy then return end
   s.busy = true
-  taskman.spawn(function() serve(s) end, "lookups: " .. s.name)
+  taskman.spawn(serve, s)
 end
 
 -- The service's task: asks for what waits, at its pace, in batches. It

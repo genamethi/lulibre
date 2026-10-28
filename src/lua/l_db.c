@@ -1,23 +1,16 @@
-/* The library, as the index sees it. Filters are the same language the
- * interface and `lulibre query` use.
+/* bookman: the library, as the index sees it. Filters are the same
+ * language the interface and `lulibre query` use.
  *
- *   lulibre.ids(filter)     { id, ... }
- *   lulibre.books(filter)   { book, ... }
- *   lulibre.book(id)        book or nil
- *   lulibre.count(filter)   number
- *   lulibre.authors()       { {name=, books=}, ... } most books first
- *   lulibre.tags()          { {name=, books=}, ... }
- *   lulibre.sql(sql, ...)   rows of a read-only query against the index
- *   lulibre.store(sql, ...) the same, but may also write lulibre's own tables
- *                           (proposals, lookups, kv ...); returns rows, rows
- *                           changed, last insert id
- *   lulibre.reload()        pick up changes calibre has made since the last
- *                           look; waits
- *   lulibre.source([name])  what the list shows, "library" or "sync"; sets it
- *                           when given. A filter that does not say in: applies
- *                           to that.
- *   lulibre.stage_refresh() after changing the `staged` table: rebuild the
- *                           books (negative ids) that stand for its files
+ *   bookman.ids(filter)     { id, ... }
+ *   bookman.books(filter)   { book, ... }
+ *   bookman.book(id)        book or nil
+ *   bookman.count(filter)   number
+ *   bookman.authors()       { {name=, books=}, ... } most books first
+ *   bookman.tags()          { {name=, books=}, ... }
+ *   bookman.files(book)     l_doc.c
+ *
+ * and store.reload(): pick up changes calibre has made since the last
+ * look; waits.
  *
  * A book is { id, title, authors = {...}, author = "A & B", tags = {...},
  * year, pubdate, publisher, series, series_index, lang, idents = {doi=..., isbn=...},
@@ -227,97 +220,6 @@ static int l_tags(lua_State *L) {
   return counted(L, "SELECT name, n_books FROM tags WHERE id > 0 ORDER BY n_books DESC, name");
 }
 
-/* Lets a statement read anything but write only lulibre's own tables. */
-static int store_authorizer(void *ud, int action, const char *a, const char *b, const char *c,
-                            const char *d) {
-  switch (action) {
-    case SQLITE_INSERT:
-    case SQLITE_UPDATE:
-    case SQLITE_DELETE:
-      /* not the journal: the library alone writes it (library/library.h) */
-      return a && (!strcmp(a, "proposals") || !strcmp(a, "kv") || !strcmp(a, "staged") || !strcmp(a, "lookups") ||
-                   /* (the custom fields' tables, in their own database only) */
-                   ((!strcmp(a, "fields") || !strcmp(a, "data")) && c && !strcmp(c, "custom")))
-               ? SQLITE_OK : SQLITE_DENY;
-    case SQLITE_SELECT:
-    case SQLITE_READ:
-    case SQLITE_FUNCTION:
-    case SQLITE_RECURSIVE:
-      return SQLITE_OK;
-    default:
-      return SQLITE_DENY; /* schema changes, ATTACH, PRAGMA, ... */
-  }
-}
-
-static int run_sql(lua_State *L, int writable) {
-  const char *sql = luaL_checkstring(L, 1);
-  struct db *db = db_of(L);
-  sqlite3_stmt *st;
-  char *err = NULL;
-  if (writable) sqlite3_set_authorizer(db->h, store_authorizer, NULL);
-  int prc = db_prepare(db, sql, &st, &err);
-  if (writable) sqlite3_set_authorizer(db->h, NULL, NULL);
-  if (prc) {
-    lua_pushstring(L, writable && strstr(err, "not authorized")
-                        ? "lulibre.store may only write lulibre's own tables: proposals, kv, staged, lookups, custom.fields, custom.data"
-                        : err);
-    free(err);
-    return lua_error(L);
-  }
-  if (!writable && !sqlite3_stmt_readonly(st)) {
-    sqlite3_finalize(st);
-    return luaL_error(L, "lulibre.sql is read-only; changes to the library go through calibre");
-  }
-  int top = lua_gettop(L);
-  for (int i = 2; i <= top; i++) {
-    switch (lua_type(L, i)) {
-      case LUA_TNUMBER:
-        if (lua_isinteger(L, i)) sqlite3_bind_int64(st, i - 1, lua_tointeger(L, i));
-        else sqlite3_bind_double(st, i - 1, lua_tonumber(L, i));
-        break;
-      case LUA_TBOOLEAN: sqlite3_bind_int(st, i - 1, lua_toboolean(L, i)); break;
-      case LUA_TNIL: sqlite3_bind_null(st, i - 1); break;
-      default: {
-        size_t n;
-        const char *s = luaL_tolstring(L, i, &n);
-        sqlite3_bind_text(st, i - 1, s, (int)n, SQLITE_TRANSIENT);
-        lua_pop(L, 1);
-      }
-    }
-  }
-  lua_newtable(L);
-  int row = 0, rc, ncol = sqlite3_column_count(st);
-  while ((rc = sqlite3_step(st)) == SQLITE_ROW) {
-    lua_createtable(L, 0, ncol);
-    for (int c = 0; c < ncol; c++) {
-      switch (sqlite3_column_type(st, c)) {
-        case SQLITE_INTEGER: lua_pushinteger(L, sqlite3_column_int64(st, c)); break;
-        case SQLITE_FLOAT: lua_pushnumber(L, sqlite3_column_double(st, c)); break;
-        case SQLITE_NULL: continue;
-        default:
-          lua_pushlstring(L, (const char *)sqlite3_column_text(st, c),
-                          (size_t)sqlite3_column_bytes(st, c));
-      }
-      lua_setfield(L, -2, sqlite3_column_name(st, c));
-    }
-    lua_rawseti(L, -2, ++row);
-  }
-  step_error(L, st, rc);
-  sqlite3_finalize(st);
-  if (!writable) return 1;
-  lua_pushinteger(L, sqlite3_changes(db->h));
-  lua_pushinteger(L, sqlite3_last_insert_rowid(db->h));
-  return 3;
-}
-
-static int l_sql(lua_State *L) {
-  return run_sql(L, 0);
-}
-
-static int l_store(lua_State *L) {
-  return run_sql(L, 1);
-}
-
 /* store.reload(): calibre's records read again by the library, on a
  * worker; the task waits for it (the list follows EV_RECORDS_CHANGED) */
 struct reload_msg {
@@ -359,13 +261,6 @@ int l_db_reload(lua_State *L) {
   m->task = sched_begin_wait(L);
   queue_post(LOOP_WORK, reload_main, m);
   return lua_yield(L, 0);
-}
-
-/* sql and store, in the lulibre table until the modules that keep data
- * (wit, net) own it */
-void l_db_open(lua_State *L) {
-  static const luaL_Reg fns[] = {{"sql", l_sql}, {"store", l_store}, {NULL, NULL}};
-  luaL_setfuncs(L, fns, 0);
 }
 
 int luaopen_bookman(lua_State *L) {

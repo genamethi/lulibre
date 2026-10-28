@@ -55,7 +55,7 @@ int db_meta_set(struct db *db, const char *key, const char *val) {
 
 /* A schema change drops what the index derived (from the library, the
  * files, the readings) instead of migrating it; what nothing can derive
- * again stays: the online answers, the sync folder's files, kv. */
+ * again stays: the sync folder's files, kv. */
 static int reset_if_stale(struct db *db, char **err) {
   char *v = NULL;
   sqlite3_stmt *st;
@@ -72,7 +72,7 @@ static int reset_if_stale(struct db *db, char **err) {
   sbuf sql = SBUF_INIT;
   if (sqlite3_prepare_v2(db->h,
                          "SELECT type, name FROM main.sqlite_master WHERE type IN ('table', 'view')"
-                         " AND name NOT LIKE 'sqlite_%' AND name NOT IN ('lookups', 'staged', 'kv')"
+                         " AND name NOT LIKE 'sqlite_%' AND name NOT IN ('staged', 'kv')"
                          " ORDER BY type = 'view' DESC, sql LIKE 'CREATE VIRTUAL%' DESC",
                          -1, &st, NULL) == SQLITE_OK) {
     while (sqlite3_step(st) == SQLITE_ROW)
@@ -122,6 +122,21 @@ static const char custom_schema[] =
   " source TEXT, ts INTEGER, PRIMARY KEY(book, field, ord)) WITHOUT ROWID;"
   "CREATE INDEX IF NOT EXISTS custom.data_field ON data(field, value);";
 
+/* ---- wits: a value for a book's field, with the source that gave it,
+ * waiting for review (lua/wit.lua). In a file of their own beside the
+ * index ("<index>.wit.db"), attached as `wit` for the filter is:proposed;
+ * wit writes it through a connection of its own. Per book and field, alt 1
+ * is the first-ranked; agree and disagree name the sources that agree and
+ * differ, comma-separated; start and stop, where in the file's text (its
+ * txt) the value was found. ---- */
+static const char wit_schema[] =
+  "PRAGMA wit.journal_mode=WAL;"
+  "CREATE TABLE IF NOT EXISTS wit.wits("
+  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
+  " source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
+  " UNIQUE(book, field, alt));";
+
 static char *beside(const char *index, const char *what) {
   size_t n = strlen(index);
   if (n > 3 && !strcmp(index + n - 3, ".db")) return xasprintf("%.*s.%s.db", (int)(n - 3), index, what);
@@ -133,10 +148,6 @@ static char *db_history_path(const char *index) {
   return beside(index, "journal");
 }
 
-/* Where the custom fields (#partof ...) of the index at `index` are kept. */
-static char *db_custom_path(const char *index) {
-  return beside(index, "custom");
-}
 
 /* mode: "rwc" (made if it is not there), "rw", "ro" */
 static int attach(struct db *db, const char *path, const char *as, const char *mode, char **err);
@@ -149,10 +160,11 @@ static int attach_history(struct db *db, int create, char **err) {
   return rc;
 }
 
-static int attach_custom(struct db *db, const char *mode, char **err) {
+/* A file beside the index (custom, wit), attached under its name. */
+static int attach_beside(struct db *db, const char *what, const char *mode, char **err) {
   if (!strncmp(db->path, "file:", 5) || !strcmp(db->path, ":memory:")) return 0;
-  char *path = db_custom_path(db->path);
-  int rc = attach(db, path, "custom", mode, err);
+  char *path = beside(db->path, what);
+  int rc = attach(db, path, what, mode, err);
   free(path);
   return rc;
 }
@@ -208,8 +220,8 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
       reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
-      db_exec(db, history_schema, err) || attach_custom(db, "rwc", err) ||
-      db_exec(db, custom_schema, err)) {
+      db_exec(db, history_schema, err) || attach_beside(db, "custom", "rwc", err) ||
+      db_exec(db, custom_schema, err) || attach_beside(db, "wit", "rwc", err) || db_exec(db, wit_schema, err)) {
     db_close(db);
     return -1;
   }
@@ -227,8 +239,9 @@ int db_open_reader(struct db *db, const char *path, char **err) {
   }
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
-  /* the custom fields, for filters on them (the file is made by db_open) */
-  if (attach_custom(db, "ro", err)) {
+  /* the custom fields and the wits, for filters on them (the files are
+   * made by db_open) */
+  if (attach_beside(db, "custom", "ro", err) || attach_beside(db, "wit", "ro", err)) {
     db_close(db);
     return -1;
   }
@@ -246,7 +259,8 @@ int db_open_writer(struct db *db, const char *path, char **err) {
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   if (db_exec(db, "PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA temp_store=MEMORY;", err) ||
-      attach_history(db, 0, err) || attach_custom(db, "rw", err)) {
+      attach_history(db, 0, err) || attach_beside(db, "custom", "rw", err) ||
+      attach_beside(db, "wit", "ro", err)) {
     db_close(db);
     return -1;
   }

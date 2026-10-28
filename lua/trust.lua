@@ -12,6 +12,7 @@
 -- @library trust
 local bookman = require "bookman"
 local mesr = require "mesr"
+local sqlite3 = require "lsqlite3"
 
 local M = {}
 
@@ -58,6 +59,22 @@ local function score(field, proposed, current, near, same)
   return (ab + ba) / 2
 end
 
+-- the journal's review decisions: `{ {book=, field=, proposed=, source=}, ... }`,
+-- each a library field as the wit's value was written to it, done or
+-- undone. The journal is the file `<index>.journal.db`.
+local function decisions()
+  local path = setman.get("index"):gsub("%.db$", "") .. ".journal.db"
+  local db = sqlite3.open(path, sqlite3.OPEN_READONLY)
+  if not db then return {} end
+  local rows = {}
+  for r in db:nrows("SELECT book, field, proposed, source FROM journal"
+                    .. " WHERE proposal IS NOT NULL AND source IS NOT NULL AND state IN (2, 4)") do
+    rows[#rows + 1] = r
+  end
+  db:close()
+  return rows
+end
+
 --- Every parse's record per field, from the journal as it stands: a table
 -- keyed by parse and library field (`records[parse][field]`), empty while
 -- the journal holds fewer than `after` decisions. Taken once by the code
@@ -66,8 +83,7 @@ end
 -- @tparam number near
 -- @tparam number same
 function M.records(after, near, same)
-  local rows = lulibre.sql("SELECT book, field, proposed, source FROM history.journal"
-                           .. " WHERE proposal IS NOT NULL AND source IS NOT NULL AND state IN (2, 4)")
+  local rows = decisions()
   local out = {}
   if #rows < after then return out end
   local sums = {}

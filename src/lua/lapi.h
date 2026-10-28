@@ -11,7 +11,6 @@
  *               uiman     l_ui.c, l_panel.c panel, l_theme.c theme
  *               setman    l_setman.c        evman  l_evman.c
  *               keymap, cmd                 (l_ui.c's callers)
- *               lulibre   l_db.c sql store: until wit and net take them
  *   preloaded   bookman   l_db.c, l_doc.c files
  *               store     l_library.c, l_db.c reload
  *               txt       l_txt.c           curl    l_curl.c
@@ -127,7 +126,6 @@ long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);
 
 void l_job_open(struct lua_State *L);
-void l_db_open(struct lua_State *L);
 void l_proc_open(struct lua_State *L);
 void l_hash_open(struct lua_State *L);
 void l_index_open(struct lua_State *L);

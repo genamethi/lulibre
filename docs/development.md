@@ -214,7 +214,8 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/setup/      lulibre-setup (still 0.2's; setup/ holds install.sh)
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
-    lua/lulibre/    the runtime written in Lua: grammars, proposals, ranking, lookups, review
+    lua/            the modules written in Lua: expr, iter, wit, net, trust
+    lua/lulibre/    lulibre's own: grammars, propose, ranking, review, commands
     vendor/         libraries carried as their authors wrote them, built in (lsqlite3)
     test/  tools/
 
@@ -314,12 +315,14 @@ library moves, when calibre's custom columns change, or on `:reload`. From
 the files, the index holds their outcomes and their lines (the only
 stored text), and a contentless full-text row per paragraph. A new version
 of its tables (`SCHEMA_VERSION`, `src/db/db.c`) drops all that and reads
-again; `lookups` (every online answer), `staged` and `kv` stay.
+again; `staged` and `kv` stay.
 
-Two files beside the index hold what must outlive it (`src/db/db.c`):
+Three files beside the index hold what must outlive it (`src/db/db.c`):
 `<index>.journal.db` holds every operation on the library through its
-lifecycle, with where each value came from, and `<index>.custom.db` holds
-your own fields. Staged files get rows in the mirror tables under negative
+lifecycle, with where each value came from, `<index>.custom.db` holds
+your own fields, and `<index>.wit.db` the wits waiting for review, which
+`lua/wit.lua` writes through lsqlite3. Online answers are kept for every
+library in `net.db` (`lua/net/service.lua`). Staged files get rows in the mirror tables under negative
 ids (`src/db/stage.c`), which lets the list, the filters and the API treat
 them as books.
 

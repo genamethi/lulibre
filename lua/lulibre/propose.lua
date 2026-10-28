@@ -1,5 +1,6 @@
---- Proposals: one per book and field, from one parse or collective, with
--- its alternatives (design 16, 18, 19).
+--- What :propose does: a book's text parsed by the grammars, the parses
+-- and the online records ranked, and per field the values kept as wits,
+-- the first-ranked first, the others its alternatives (design 16, 18, 19).
 --
 -- A collective proposal takes no span of text for two fields: a field's
 -- first value comes from the best-ranked parse whose span for it no other
@@ -8,14 +9,14 @@
 -- different fields, the alternatives show the conflict. A field whose
 -- first value equals the record's is not proposed.
 --
--- @library lulibre.proposals
+-- @library lulibre.propose
 local txt = require "txt"
 local grammar = require "lulibre.grammar"
 local sources = require "lulibre.sources"
 local rank = require "lulibre.rank"
 local mesr = require "mesr"
 local trust = require "trust"
-local store = require "store"
+local wit = require "wit"
 
 local M = {}
 
@@ -47,13 +48,13 @@ local function overlaps(a, b)
 end
 
 --- The rows: per field, its values in order, the first-ranked first.
--- @treturn table `{ [field] = { {value=, parse=, score=, agree=, disagree=, start=, stop=}, ... } }`
+-- @treturn table `{ [field] = { {value=, source=, score=, agree=, disagree=, start=, stop=}, ... } }`
 function M.rows(ranked, srcs, w)
   local rows, taken = {}, {}
   for _, p in ipairs(ranked) do
     for field, f in pairs(p.fields) do
       local value = M.normalize(field, f.value)
-      local alt = { value = value, parse = p.grammar, score = p.score, start = f.start, stop = f.stop,
+      local alt = { value = value, source = p.grammar, score = p.score, start = f.start, stop = f.stop,
                     agree = (p.agree or {})[field], disagree = (p.disagree or {})[field] }
       local list = rows[field]
       local free = true
@@ -78,7 +79,7 @@ function M.rows(ranked, srcs, w)
   for _, p in ipairs(ranked) do
     for field, f in pairs(p.fields) do
       if not rows[field] then
-        rows[field] = { { value = M.normalize(field, f.value), parse = p.grammar, score = p.score,
+        rows[field] = { { value = M.normalize(field, f.value), source = p.grammar, score = p.score,
                           start = f.start, stop = f.stop } }
       end
     end
@@ -94,20 +95,23 @@ end
 -- the books a propose is running for
 local proposing = {}
 
---- Reads, parses, ranks and stores a book's proposals; returns how many
--- fields have one. A book with no text is proposed for from its online
--- records alone.
+-- the books a propose is running for
+local proposing = {}
+
+--- Reads, parses and ranks a book's values, and keeps them as its wits;
+-- returns how many fields have one. A book with no text is proposed for
+-- from its online records alone.
 -- @tparam integer book
 -- @tparam table w M.settings()
 function M.propose(book, w)
-  -- one at a time per book: its rows are deleted and written again
+  -- one at a time per book: its wits are replaced
   while proposing[book] do taskman.sleep(50) end
   proposing[book] = true
   local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
-  local r <close> = txt.of(book)
-  local srcs = sources.of(book, r)
+  local t <close> = txt.of(book)
+  local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
-  local parses = r and grammar.parse(r) or {}
+  local parses = t and grammar.parse(t) or {}
   for _, s in ipairs(srcs) do
     if s.kind == "online" then
       local fields = {}
@@ -115,83 +119,17 @@ function M.propose(book, w)
       parses[#parses + 1] = { grammar = s.name, fields = fields }
     end
   end
-  local ranked = rank.order(parses, srcs, w)
-  local rows = M.rows(ranked, srcs, w)
-  lulibre.store("DELETE FROM proposals WHERE book = ?", book)
-  local n = 0
+  local rows = M.rows(rank.order(parses, srcs, w), srcs, w)
+  local wits, n = {}, 0
   for field, list in pairs(rows) do
     n = n + 1
-    for i, a in ipairs(list) do
-      lulibre.store("INSERT INTO proposals(book, field, value, parse, alt, score, agree, disagree, file,"
-                    .. " span_start, span_end, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))",
-                    book, field, a.value, a.parse, i, a.score,
-                    a.agree and table.concat(a.agree, ",") or nil,
-                    a.disagree and table.concat(a.disagree, ",") or nil,
-                    r and r.file, a.start, a.stop)
+    for _, a in ipairs(list) do
+      a.field, a.file = field, t and t.file
+      wits[#wits + 1] = a
     end
   end
+  wit.set(book, wits)
   return n
-end
-
---- Returns a book's proposals for review: per field, the first-ranked and
--- its alternatives.
--- @tparam integer book
--- @treturn {table,...} `{ {field=, alts = { {id=, value=, parse=, score=, agree=, disagree=}, ... } }, ... }`
-function M.of(book)
-  local out, by = {}, {}
-  for _, row in ipairs(lulibre.sql("SELECT id, field, value, parse, score, agree, disagree FROM proposals"
-                                   .. " WHERE book = ? ORDER BY field, alt", book)) do
-    local f = by[row.field]
-    if not f then
-      f = { field = row.field, alts = {} }
-      by[row.field] = f
-      out[#out + 1] = f
-    end
-    table.insert(f.alts, row)
-  end
-  return out
-end
-
---- The change a decision on a proposal makes: the library's field, with
--- the proposal's provenance (design 27). An identifier is added to the
--- book's; tags are added to its own.
-local function change(p, value)
-  local field = trust.field(p.field)
-  return { book = p.book, field = field, value = value, proposal = p.id, proposed = p.value, source = p.parse,
-           op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
-end
-
-local function row(id)
-  return lulibre.sql("SELECT id, book, field, value, parse FROM proposals WHERE id = ?", id)[1]
-end
-
-local function decided(p)
-  lulibre.store("DELETE FROM proposals WHERE book = ? AND field = ?", p.book, p.field)
-end
-
---- Accepts a proposal, as proposed or edited, as an operation of the
--- library; waits for it. Returns the batch, or nil and why.
--- @tparam integer id the proposal
--- @tparam[opt] string value the edited value
-function M.accept(id, value)
-  local p = row(id)
-  if not p then return nil, "no proposal " .. id end
-  local batch, err = store.apply({ change(p, value or p.value) }, "review: " .. p.field)
-  if err then return nil, err end
-  decided(p)
-  return batch
-end
-
---- Rejects a proposal: the field keeps its value, and the journal keeps
--- the decision, for the parse's track record.
--- @tparam integer id
-function M.reject(id)
-  local p = row(id)
-  if not p then return nil, "no proposal " .. id end
-  local batch, err = store.apply({ change(p, nil) }, "review: " .. p.field .. " rejected")
-  if err then return nil, err end
-  decided(p)
-  return batch
 end
 
 return M

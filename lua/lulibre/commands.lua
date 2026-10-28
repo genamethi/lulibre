@@ -2,7 +2,7 @@
 -- task, called through the module's table, so a redefinition in init.lua
 -- takes effect (design 6).
 local bookman = require "bookman"
-local proposals = require "lulibre.proposals"
+local propose = require "lulibre.propose"
 local review = require "lulibre.ui.review"
 
 local M = {}
@@ -18,10 +18,10 @@ end
 
 --- :propose [filter]: proposals for the books, for :review.
 function M.propose(ids)
-  local w <const> = proposals.settings()
+  local w <const> = propose.settings()
   local books, fields = 0, 0
   for _, id in ipairs(ids) do
-    local n = proposals.propose(id, w)
+    local n = propose.propose(id, w)
     if n then
       books = books + 1
       fields = fields + n
@@ -39,7 +39,7 @@ end
 -- identifiers; each new answer posts "source_arrived", which proposes for
 -- the book again.
 function M.enrich(ids)
-  local net = require "lulibre.net"
+  local net = require "net"
   local books, answers = 0, 0
   for _, id in ipairs(ids) do
     local n = net.enrich(id)
@@ -53,7 +53,7 @@ end
 
 -- an answer arriving re-ranks the book (design 42)
 evman.add("source_arrived", function(ev)
-  proposals.propose(ev.book, proposals.settings())
+  propose.propose(ev.book, propose.settings())
 end)
 
 cmd.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers" })

@@ -1,6 +1,7 @@
 /* setman: the settings (design 2, 3, 44, 45).
  *
- *   setman.get(name, ...)     the values in effect, in order
+ *   setman.get(name, ...)     the values in effect, in order; index, when
+ *                             not set, is the index file in use
  *   setman.set(name, value)   a change; nil empties the API's value, and
  *                             the one below shows through
  *   setman.save()             write the saved state now (only while the
@@ -145,6 +146,10 @@ static int l_get(lua_State *L) {
   for (int i = 1; i <= n; i++) {
     const char *name = luaL_checkstring(L, i);
     if (lua_getfield(L, n + 1, name) == LUA_TNIL) return luaL_error(L, "no setting is called %s", name);
+    if (!strcmp(name, "index") && !*lua_tostring(L, -1)) {
+      lua_pop(L, 1);
+      lua_pushstring(L, lapi_db(L)->path); /* worked out from the library */
+    }
   }
   return n;
 }

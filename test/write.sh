@@ -16,7 +16,26 @@ unshare -rn true 2>/dev/null || { echo "write: no private namespace (unshare -rn
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 
+cat > "$t/sql.lua" <<'LUA'
+local sqlite3 = require "lsqlite3"
+-- rows of a query of one of the index's files: "" the index, "journal" its journal
+local function q(file, sql, ...)
+  local path = setman.get("index")
+  if file ~= "" then path = path:gsub("%.db$", "") .. "." .. file .. ".db" end
+  local db = sqlite3.open(path, sqlite3.OPEN_READONLY)
+  local st = assert(db:prepare(sql), db:errmsg())
+  st:bind_values(...)
+  local rows = {}
+  for r in st:nrows() do rows[#rows + 1] = r end
+  st:finalize()
+  db:close()
+  return rows
+end
+return q
+LUA
+
 cat > "$t/apply.lua" <<'LUA'
+local q = dofile(os.getenv("T") .. "/sql.lua")
 local store = require "store"
 local bookman = require "bookman"
 local function say(...) print(table.concat({ ... }, "|")) end
@@ -33,38 +52,42 @@ local b = bookman.book(1)
 say("record", b.title, b.author, table.concat(b.tags, ","), b.pubdate)
 say("same", tostring(store.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
 say("bad", select(2, store.apply({ { book = 1, field = "pubdate", value = "soon" } })))
-local r = lulibre.sql("SELECT proposal, source FROM history.journal WHERE field = 'title'")[1]
+local r = q("journal", "SELECT proposal, source FROM journal WHERE field = 'title'")[1]
 say("provenance", r.proposal, r.source)
 say("undo", tostring(store.undo(batch)))
 b = bookman.book(1)
 say("after undo", b.title, b.author)
-say("undone", lulibre.sql("SELECT count(*) AS n FROM history.journal WHERE batch = ? AND state = 4", batch)[1].n)
+say("undone", q("journal", "SELECT count(*) AS n FROM journal WHERE batch = ? AND state = 4", batch)[1].n)
 store.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
 say("in order", table.concat(bookman.book(1).tags, ","))
 LUA
 
 cat > "$t/embed.lua" <<'LUA'
+local q = dofile(os.getenv("T") .. "/sql.lua")
 local store = require "store"
 setman.set("embed", true)
 print("holder|" .. store.holder())
 print("apply|" .. tostring(store.apply({ { book = 1, field = "title", value = "Embedded Title" } })))
-local f = lulibre.sql("SELECT emb_title FROM files WHERE book = 1")[1]
+local f = q("", "SELECT emb_title FROM files WHERE book = 1")[1]
 print("emb|" .. tostring(f and f.emb_title))
 LUA
 
 cat > "$t/review.lua" <<'LUA'
-local proposals = require "lulibre.proposals"
+local q = dofile(os.getenv("T") .. "/sql.lua")
+local wit = require "wit"
 local trust = require "trust"
 local bookman = require "bookman"
--- a parse of the scan, as the front grammar would give it, stored as proposals
-lulibre.store("INSERT INTO proposals(id, book, field, value, parse, alt) VALUES"
-  .. " (1, 1, 'title', 'Topics in Additive Combinatorics', 'front', 1),"
-  .. " (2, 1, 'authors', 'Terence Tao & Van Vu', 'front', 1)")
-print("accept|" .. tostring(proposals.accept(1)))
-print("reject|" .. tostring(proposals.reject(2)))
+-- a parse of the scan, as the front grammar would give it, kept as wits
+wit.set(1, { { field = "title", value = "Topics in Additive Combinatorics", source = "front" },
+             { field = "authors", value = "Terence Tao & Van Vu", source = "front" } })
+local id = {}
+for _, f in ipairs(wit.get(1)) do id[f.field] = f.alts[1].id end
+print("filter|" .. #bookman.ids("is:proposed"))
+print("accept|" .. tostring(wit.accept(id.title)))
+print("reject|" .. tostring(wit.reject(id.authors)))
 local b = bookman.book(1)
-print("decided|" .. b.title .. "|" .. b.author .. "|" .. #proposals.of(1))
-local r = lulibre.sql("SELECT store, field, proposal, source FROM history.journal WHERE batch = 2")[1]
+print("decided|" .. b.title .. "|" .. b.author .. "|" .. #wit.get(1) .. "|" .. #bookman.ids("is:proposed"))
+local r = q("journal", "SELECT store, field, proposal, source FROM journal WHERE batch = 2")[1]
 print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
 local rec = trust.records(1, 0.7, 0.95)
 print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
@@ -74,7 +97,7 @@ cat > "$t/inside.sh" <<'IN'
 #!/bin/sh
 # inside the namespace: $1 the folder, $2 the binary, $3 a PDF
 t=$1; bin=$2; pdf=$3
-export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state HOME=$t
+export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state HOME=$t T=$t
 mkdir -p "$t/lib"
 calibredb --with-library "$t/lib" add --empty --title paper --authors Unknown >/dev/null 2>&1
 "$bin" -L "$t/lib" run "$t/apply.lua" 2>&1
@@ -89,7 +112,7 @@ rm -rf "$t/lib" "$t/data" "$t/state"
   for n in one two three; do calibredb --with-library "$r" add --empty --title $n --authors "A Author" >/dev/null 2>&1; done
   calibredb --with-library "$r" add_custom_column genre Genre text --is-multiple >/dev/null 2>&1
   "$bin" -L "$r" query -c >/dev/null 2>&1
-  idx=$(ls "$t"/rr/lulibre/*.db | grep -v 'journal\|custom')
+  idx=$(ls "$t"/rr/lulibre/*-*.db | grep -v '\.[a-z]*\.db$')
   sqlite3 "$idx" "UPDATE books SET sort = 'untouched' WHERE id = 3"
   calibredb --with-library "$r" set_metadata 1 -f title:Uno -f authors:"B Author & A Author" -f tags:x >/dev/null 2>&1
   calibredb --with-library "$r" set_custom genre 1 "poetry,history" >/dev/null 2>&1
@@ -147,9 +170,10 @@ expect "undo is a batch of its own" "undo|2"
 expect "and puts the old values back" "after undo|paper|Unknown"
 expect "the batch put back is undone, all five rows" "undone|5"
 expect "two changes to one field apply one after the other" "in order|y"
-expect "a proposal accepted is a change with its provenance" "accept|1"
-expect "a proposal rejected is a decision in the journal" "reject|2"
-expect "the record has the one, not the other" "decided|Topics in Additive Combinatorics|Unknown|0"
+expect "a book with wits is proposed" "filter|1"
+expect "a wit accepted is a change with its provenance" "accept|1"
+expect "a wit rejected is a decision in the journal" "reject|2"
+expect "the record has the one, not the other, and the wits are gone" "decided|Topics in Additive Combinatorics|Unknown|0|0"
 expect "a rejection changes nothing but is kept" "rejection|review|authors|2|front"
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
 expect "the content server is seen to hold the library" "holder|server"

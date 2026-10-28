@@ -37,23 +37,10 @@ const char db_schema[] =
 
   /* ---- lulibre's own records. Unlike everything else here these are not
    * derived from the library, so they are never dropped on a schema change.
-   * Lua reads and writes them through lulibre.store(). ---- */
-  /* one proposal per book and field from one parse, or collective, with
-   * its alternatives (design 16, 18, 19): alt 1 is the first-ranked; agree
-   * and disagree name the sources, as JSON; the span is where in the
-   * file's reading the value was found */
-  "CREATE TABLE IF NOT EXISTS proposals("
-  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
-  " parse TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
-  " file INTEGER, span_start INTEGER, span_end INTEGER, ts INTEGER,"
-  " UNIQUE(book, field, alt));"
+   * Lua's own data (wits, online answers) is in files of its own. ---- */
   /* the journal of changes lives in the history file beside the index
    * (db.c, history_schema), so that nothing done to the index loses it */
   "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);"
-  /* every online answer, kept (design 43) */
-  "CREATE TABLE IF NOT EXISTS lookups("
-  " service TEXT NOT NULL, key TEXT NOT NULL, answer TEXT, ts INTEGER,"
-  " PRIMARY KEY(service, key)) WITHOUT ROWID;"
   /* content hashes, filled on demand by lulibre.md5(); a row is good while
    * the file's size and mtime still match */
   "CREATE TABLE IF NOT EXISTS hashes("

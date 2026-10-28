@@ -258,9 +258,6 @@ lua_State *lstate_new(struct app *app) {
   l_panel_open(L);
   l_theme_open(L);
   lua_setglobal(L, "uiman");
-  lua_newtable(L);
-  l_db_open(L);
-  lua_setglobal(L, "lulibre");
   l_uv_open(L);
   l_uv_preload(L);
 

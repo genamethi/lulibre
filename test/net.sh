@@ -14,8 +14,8 @@ sh "$src/mklib.sh" "$t/lib" >/dev/null 2>&1
 export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state
 
 cat > "$t/net.lua" <<'LUA'
-local net = require "lulibre.net"
-local proposals = require "lulibre.proposals"
+local net = require "net"
+local wit = require "wit"
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
 local canned = [=[{"message":{"title":["Notes on Additive Number Theory"],"author":[{"given":"Paul","family":"Erdős"}],"publisher":"Example Press","issued":{"date-parts":[[1996,5]]}}}]=]
 local asked = 0
@@ -24,7 +24,7 @@ say("keys", net.keys(2)[1].service, net.keys(2)[1].key)
 say("enrich", net.enrich(2))
 say("kept", net.enrich(2), asked)
 taskman.sleep(300)
-for _, f in ipairs(proposals.of(2)) do say("proposal", f.field, f.alts[1].value, f.alts[1].parse) end
+for _, f in ipairs(wit.get(2)) do say("proposal", f.field, f.alts[1].value, f.alts[1].source) end
 local a = net.services.arxiv.how.record([[<entry><id>http://arxiv.org/abs/1012.6008v1</id><published>2010-12-30T00:00:00Z</published><title>A Note on
  Sieve Methods</title><author><name>Ben Green</name></author><author><name>T. Tao</name></author></entry>]])
 say("arxiv", a.title, a.authors, a.year)
@@ -32,7 +32,7 @@ local o = net.services.openlibrary.how.record('{"ISBN:1":{"title":"Topics","subt
 say("openlibrary", o.title, o.authors, o.publisher, o.year)
 -- one work asked for by two tasks at once: asked once, both answered; a
 -- request that fails answers with its error and the service goes on
-local svc = require "lulibre.net.service"
+local svc = require "net.service"
 local n = 0
 svc.define("twice", { pace = 0, request = function(keys) n = n + 1; taskman.sleep(50); return { [keys[1]] = "rec" } end })
 local got = {}

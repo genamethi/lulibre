@@ -42,9 +42,9 @@ Redefine the function, from init.lua or a module of yours. lulibre calls
 every function meant to be overridden through its module's table, at the
 time of the call, so the redefinition takes effect from the next call.
 
-    local proposals = require "lulibre.proposals"
-    local normalize = proposals.normalize
-    function proposals.normalize(field, value)
+    local propose = require "lulibre.propose"
+    local normalize = propose.normalize
+    function propose.normalize(field, value)
       if field == "publisher" then value = value:gsub("^The ", "") end
       return normalize(field, value)
     end
@@ -121,8 +121,7 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
 | `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
-| `bookman` `store` `txt` `expr` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
-| `lulibre.sql` `lulibre.store` | until the modules that keep data take them |
+| `bookman` `store` `wit` `net` `txt` `expr` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
 
 ## The library: bookman
 
@@ -136,13 +135,14 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 | `bookman.count(filter)` | number |
 | `bookman.authors()` `bookman.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `bookman.files(id)` | what the index holds of the book's files: `{ {path=, format=, outcome=, pages=, ...}, ... }` |
-| `lulibre.sql(sql, ...)` | rows of a read-only query against the index; the journal is `history.journal` |
-| `lulibre.store(sql, ...)` | the same, but may write lulibre's own tables: proposals, lookups, kv, staged, custom fields |
 
 A **book** is `{ id, title, authors = {...}, author = "A & B", tags =
 {...}, year, pubdate, publisher, series, series_index, lang, idents =
 {doi=, isbn=, ...}, formats = {...}, dir }`. Filters are [the filter
 language](filters.md).
+
+The index itself is `setman.get("index")`, a SQLite file a script reads
+with lsqlite3 (below); `<index>.journal.db` beside it is the journal.
 
 ### Changing it: store
 
@@ -223,7 +223,7 @@ values) or an iterator function, and itself a `for` loop's iterator.
 | `it:group(key)` | key and the list of its items, the keys in the order first met |
 | `it:diff(other, key)` | the items whose key no item of `other` has |
 
-## Grammars and proposals
+## Grammars and wits
 
     local expr = require "expr"
     local grammar = require "lulibre.grammar"
@@ -240,24 +240,34 @@ grammar's parse of a text.
 
 | | |
 |---|---|
-| `proposals.propose(book, w)` | waits: read, parse, rank and keep the book's proposals; `w` is `proposals.settings()` |
-| `proposals.of(book)` | `{ {field=, alts = { {id=, value=, parse=, score=, agree=, disagree=}, ... } }, ... }` |
-| `proposals.accept(id [, value])` | waits: the proposal, or the value edited from it, as an operation |
-| `proposals.reject(id)` | waits: kept in the journal; the field keeps its value |
+A **wit** is a value for a book's field, with the source that gave it,
+kept until a review accepts or rejects it. `:propose` makes them from the
+grammars' parses and the online records, and `:review` shows them.
+
+    local wit = require "wit"
+
+| | |
+|---|---|
+| `wit.set(book, wits)` | replaces the book's wits: each `{field=, value=, source=, score=, agree=, disagree=, file=, start=, stop=}`, a field's in rank order |
+| `wit.get(book)` | `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=}, ... } }, ... }` |
+| `wit.accept(id [, value])` | waits: the wit, or the value edited from it, as an operation |
+| `wit.reject(id)` | waits: kept in the journal; the field keeps its value |
+| `lulibre.propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulibre.propose.settings()` |
 | `lulibre.rank`, `trust`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
 | `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
 
 ## Online lookups
 
-    local net = require "lulibre.net"
+    local net = require "net"
     net.ask("crossref", "10.1000/xyz")   -- waits: the answer, false when there is no record, or nil and why
     net.enrich(book)                     -- waits: asks every service the book's identifiers allow
     net.records(book)                    -- the kept answers, as fields
 
-A service is defined with `require("lulibre.net.service").define(name,
+A service is defined with `require("net.service").define(name,
 {ident=, pace=, hold=, batch=, request=, record=})`; Crossref, Open
-Library and arXiv come with lulibre. Every answer is kept in the index's
-`lookups`, and a kept one is not asked for again. A service is asked no
+Library and arXiv come with lulibre. Every answer is kept, for every
+library, in `net.db` in lulibre's data folder, and a kept one is not
+asked for again. A service is asked no
 sooner than its pace, as many works at once as its batch, and is left
 alone for its hold when it says it is asked too much.
 

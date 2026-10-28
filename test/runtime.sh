@@ -53,7 +53,7 @@ local ocr = require "lulibre.ocr"
 function ocr.read(path, page, lang) return "Read By Lua\npage " .. page .. " " .. lang end
 LUA
 "$bin" -L "$t/lib" -o ocr=auto index >/dev/null 2>&1
-db=$(ls "$t"/data/lulibre/lib-*.db | grep -v 'journal\|custom')
+db=$(ls "$t"/data/lulibre/lib-*.db | grep -v '\.[a-z]*\.db$')
 ocr=$(sqlite3 "$db" "SELECT group_concat(text, '|') FROM lines WHERE file = 1" 2>/dev/null || true)
 printf '' >"$cfg/init.lua"
 
@@ -65,7 +65,14 @@ local seen, changed = {}, nil
 evman.add("records_changed", function(ev) changed = table.concat(ev.ids, ",") .. "|" .. table.concat(ev.fields, ",") end)
 function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
 local batch = store.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
-local row = lulibre.sql("SELECT store, state FROM history.journal WHERE batch = ?", batch)[1]
+local sqlite3 = require "lsqlite3"
+local jdb = sqlite3.open(setman.get("index"):gsub("%.db$", "") .. ".journal.db", sqlite3.OPEN_READONLY)
+local st = jdb:prepare("SELECT store, state FROM journal WHERE batch = ?")
+st:bind_values(batch)
+local row
+for r in st:nrows() do row = r end
+st:finalize()
+jdb:close()
 print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
 for _ = 1, 50 do if changed then break end taskman.sleep(20) end
 print("changed|" .. tostring(changed))
