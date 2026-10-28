@@ -31,6 +31,10 @@ void bridge_stop(struct app *app);
  * waiting for it: once it is gone, then(app) runs on the interface loop,
  * with the old Lua state still there for it to close (:restart-scripts). */
 void bridge_restart(struct app *app, void (*then)(struct app *app));
+/* Interface thread: stop task id if it is the one running (a task that
+ * runs never reads a message; lua/sched.h). */
+void bridge_interrupt(struct app *app, int id);
+
 /* Ask the interface to redraw; from either thread. */
 void bridge_redraw(struct app *app);
 

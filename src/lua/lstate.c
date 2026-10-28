@@ -262,7 +262,7 @@ lua_State *lstate_new(struct app *app) {
   return L;
 }
 
-/* init.lua runs as the first task (design 46), its first slice at once:
+/* init.lua runs as the first task (design 46), up to its first wait at once:
  * the settings it sets before it first waits are sent to the store before
  * this returns. */
 int lstate_run_init(struct app *app) {

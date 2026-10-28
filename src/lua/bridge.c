@@ -1,6 +1,8 @@
 #include "core/log.h"
 #include "lua/bridge.h"
 
+#include <pthread.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +27,7 @@ static struct bridge {
   uv_thread_t ui_thread, lua_thread;
   uv_async_t to_ui;
   uv_async_t alive; /* keeps the Lua loop running while it has nothing else */
+  uv_timer_t watchdog;
   atomic_int redraw, exited;
   uv_timer_t winddown;
   double stop_at;
@@ -71,6 +74,40 @@ void bridge_redraw(struct app *app) {
   uv_async_send(&B.to_ui);
 }
 
+/* ---- a task that runs too long ----
+ *
+ * Tasks give way only where they wait (lua/sched.h). While one runs, the
+ * Lua loop does not turn and no message reaches it. The interface's loop
+ * looks every half second; a task that has run 2 s without waiting gets a
+ * hook, installed by a signal to the Lua thread, as lua.c does for
+ * Ctrl-C. The hook says so, and stops the task when it is cancelled. */
+
+#define WATCH_MS 500
+#define TOO_LONG_MS 2000
+
+static int watch_signal(void) {
+  return SIGRTMIN + 1;
+}
+
+static void on_watch_signal(int sig) {
+  (void)sig;
+  sched_signalled();
+}
+
+static void signal_lua(void) {
+  pthread_kill(B.lua_thread, watch_signal());
+}
+
+static void watchdog_cb(uv_timer_t *h) {
+  if (atomic_load(&B.running) && sched_running_ms() > TOO_LONG_MS) signal_lua();
+}
+
+void bridge_interrupt(struct app *app, int id) {
+  if (!atomic_load(&B.running) || !id || sched_running_id() != id) return;
+  sched_stop_running(id);
+  signal_lua();
+}
+
 /* ---- the Lua thread ---- */
 
 static void lua_main(void *arg) {
@@ -88,6 +125,12 @@ void bridge_start(struct app *app) {
     B.handles = 1;
     uv_async_init(app->loop, &B.to_ui, to_ui_cb);
     uv_async_init(&B.lloop, &B.alive, NULL);
+    struct sigaction sa = {.sa_handler = on_watch_signal, .sa_flags = SA_RESTART};
+    sigemptyset(&sa.sa_mask);
+    sigaction(watch_signal(), &sa, NULL);
+    uv_timer_init(app->loop, &B.watchdog);
+    uv_timer_start(&B.watchdog, watchdog_cb, WATCH_MS, WATCH_MS);
+    uv_unref((uv_handle_t *)&B.watchdog);
   }
   B.ui_thread = uv_thread_self();
   atomic_store(&B.exited, 0);
@@ -147,11 +190,13 @@ void bridge_restart(struct app *app, void (*then)(struct app *app)) {
   if (!atomic_load(&B.running) || B.then) return;
   B.then = then;
   B.said_jobs = 0;
+  bridge_interrupt(app, sched_running_id()); /* else the message waits for it */
   queue_post(LOOP_LUA, stop_on_lua, NULL);
 }
 
 void bridge_stop(struct app *app) {
   if (!atomic_load(&B.running)) return;
+  bridge_interrupt(app, sched_running_id());
   queue_post(LOOP_LUA, stop_on_lua, NULL);
   /* Tasks being cancelled may still call in (to close a panel, to report);
    * keep answering until the thread is gone. */
@@ -162,4 +207,5 @@ void bridge_stop(struct app *app) {
   after_thread(app);
   to_ui_cb(&B.to_ui);
   uv_close((uv_handle_t *)&B.to_ui, closed);
+  uv_close((uv_handle_t *)&B.watchdog, closed);
 }

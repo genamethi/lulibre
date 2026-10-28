@@ -1,16 +1,15 @@
 #ifndef LULIBRE_SCHED_H
 #define LULIBRE_SCHED_H
 
-/* Lua tasks: coroutines the loop runs a few milliseconds at a time.
+/* Lua tasks: coroutines that take turns where they wait.
  *
  * Tasks share one Lua state and one thread (the Lua thread when the
- * interface is up; see lua/bridge.h), and take turns. Functions that wait (a
- * subprocess, a timer, text extraction, a picker) park the task and hand
- * control back to the loop until their result arrives. And a task that just
- * computes is interrupted by an instruction-count hook once its time slice
- * is spent, then continued on a later loop iteration, so one busy script
- * does not starve the others. Everything here belongs to the Lua thread,
- * except sched_live and sched_failed, which any thread may call. */
+ * interface is up; see lua/bridge.h). A task runs until it waits (a
+ * subprocess, a timer, text extraction, a picker) or calls lulibre.yield():
+ * between two of those, nothing else runs on its thread, so its steps there
+ * are one step for the others. A task that computes for long holds the
+ * others up, not the interface. Everything here belongs to the Lua thread,
+ * except where a function says otherwise. */
 
 struct lua_State;
 struct app;
@@ -65,6 +64,19 @@ int sched_failed(const struct app *app); /* tasks that ended in an error */
 /* An error outside any task (a luv callback's) counts as a failure too:
  * `lulibre run` then exits 1. */
 void sched_note_failure(struct app *app);
+
+/* The task that is running, for another thread: how long it has run
+ * without waiting (0: none runs), and its id. Any thread. */
+long long sched_running_ms(void);
+int sched_running_id(void);
+/* Any thread: task id is to stop if it is running when the hook next
+ * looks (sched_signalled). */
+void sched_stop_running(int id);
+/* From a signal handler on the Lua thread: a hook on the running task,
+ * which says it runs too long (once a run) and stops it when it is
+ * cancelled or named by sched_stop_running (lua/bridge.c sends the
+ * signal). */
+void sched_signalled(void);
 
 /* Push an array of {id=, name=, state=} onto L. */
 void sched_push_tasks(struct lua_State *L);

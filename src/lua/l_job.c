@@ -2,18 +2,17 @@
  *
  *   lulibre.spawn(fn, ...)   run fn as a background task; returns its id
  *   lulibre.sleep(ms)        wait without blocking anything
- *   lulibre.yield()          give the interface a turn now (seldom needed:
- *                            long computations are interrupted automatically)
+ *   lulibre.yield()          give the other tasks a turn now: a task that
+ *                            computes for long, between steps
  *   lulibre.tasks()          { {id=, name=, state=}, ... }
  *   lulibre.cancel(id)       ask a task to stop
  *   lulibre.task_id()        id of the running task, or nil outside one
  *   lulibre.claim(t, key [, value])
  *                            t[key] = value (default true) if it is nil:
  *                            true if this call set it, false if it was set.
- *                            A test and a set as one step, which Lua code
- *                            cannot be (a task may be interrupted between
- *                            any two of its operations); give it back with
- *                            t[key] = nil.
+ *                            Give it back with t[key] = nil. (From when
+ *                            tasks were interrupted anywhere; between two
+ *                            waits, a test and a set are one step now.)
  */
 #include <stdio.h>
 #include <stdlib.h>

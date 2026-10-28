@@ -1051,6 +1051,8 @@ static void cancel_tasks(struct app *app, void *arg) {
 }
 
 static void c_cancel(struct tui *t, const char *args) {
+  /* the running task, if it is the one, at once: it reads no message */
+  bridge_interrupt(t->app, !strcmp(args, "all") ? sched_running_id() : atoi(args));
   queue_post(LOOP_LUA, cancel_tasks, xstrdup(args));
 }
 

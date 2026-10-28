@@ -19,9 +19,12 @@ returns at once, and a call that answers (marked *waits* below) pauses its
 task until the answer comes.
 
 Scripts run as **tasks** that take turns: a script, a command's function,
-a key's function, a callback, init.lua. A task that only computes is
-paused every few milliseconds so the others get a turn. A function that
-waits must be called from a task.
+a key's function, a callback, init.lua. A task gives the others their turn
+where it waits, and only there (or at `lulibre.yield()`): what it does
+between two waits, no other task sees half done. A task that computes for
+long holds the other tasks up, not the interface; after 2 s without
+waiting it is reported, and `:cancel` stops it. A function that waits
+must be called from a task.
 
 A resource lives on the stack of the task that opened it: hold it in a
 `<close>` variable, and it is released at the end of its scope, or when

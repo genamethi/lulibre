@@ -12,8 +12,7 @@
 #include "core/util.h"
 #include "lua/lapi.h"
 
-#define SLICE 0.004   /* seconds one task may run before it is interrupted */
-#define BUDGET 0.008  /* seconds of task time per loop iteration */
+#define BUDGET 0.008 /* seconds of task time per loop iteration, between tasks */
 #define HOOK_COUNT 1000
 
 enum { T_READY, T_WAITING, T_DONE };
@@ -27,7 +26,7 @@ struct task {
   int state, queued, cancelled;
   int nargs;   /* values on the coroutine's stack for the next resume */
   int pending; /* waits begun and not yet ended */
-  double slice_start;
+  int warned;  /* said, in this run, that it runs too long */
   sched_cancel_fn *cancel_fn;
   void *cancel_ud;
   struct task *qnext, *next;
@@ -57,6 +56,20 @@ struct sched {
 
 static struct task *task_of(lua_State *L) {
   return (*(struct lctx **)lua_getextraspace(L))->task;
+}
+
+/* ---- the task that is running, for other threads (sched.h) ----
+ *
+ * Tasks give way only where they wait. While one runs, the Lua thread's
+ * loop does not turn, so a message cannot reach it: another thread reads
+ * these, and stops or reports it through a hook installed by a signal. */
+static _Atomic(lua_State *) running_co;
+static atomic_int running_id;
+static atomic_llong running_since; /* ms, uv_hrtime's clock */
+static atomic_int stop_id;         /* a task to stop as it runs */
+
+static long long now_ms(void) {
+  return (long long)(uv_hrtime() / 1000000);
 }
 
 static void idle_cb(uv_idle_t *h);
@@ -110,12 +123,53 @@ static void finish(struct sched *s, struct task *t, int ok, const char *err) {
   }
 }
 
-static void slice_hook(lua_State *L, lua_Debug *ar) {
-  struct task *t = task_of(L);
+/* Installed only while a task has run too long (sched_signalled): says so
+ * once, and stops the task when it is cancelled. It stops it by yielding,
+ * which no pcall catches: run_one then finishes the task, closing what it
+ * holds. Where a yield cannot cross (a C function's callback), it raises an
+ * error, and stays to raise again. */
+static void watch_hook(lua_State *L, lua_Debug *ar) {
   (void)ar;
-  if (!t) return;
-  if (t->cancelled) luaL_error(L, "cancelled");
-  if (now_s() - t->slice_start > SLICE && lua_isyieldable(L)) lua_yield(L, 0);
+  struct task *t = task_of(L);
+  if (!t) {
+    lua_sethook(L, NULL, 0, 0);
+    return;
+  }
+  if (atomic_load(&stop_id) == t->id) t->cancelled = 1;
+  if (!t->warned) {
+    t->warned = 1;
+    char *msg = xasprintf("task %d (%s) has run %.1f s without waiting%s", t->id, t->name,
+                          (now_ms() - atomic_load(&running_since)) / 1000.0, t->cancelled ? "" : "; :cancel stops it");
+    lapi_report(t->ctx.app, 1, msg);
+    free(msg);
+  }
+  if (!t->cancelled) {
+    lua_sethook(L, NULL, 0, 0);
+    return;
+  }
+  if (lua_isyieldable(L)) {
+    lua_yield(L, 0); /* from a hook, it returns; the yield happens as the hook ends */
+    return;
+  }
+  luaL_error(L, "cancelled");
+}
+
+void sched_signalled(void) {
+  lua_State *co = atomic_load(&running_co);
+  if (co) lua_sethook(co, watch_hook, LUA_MASKCOUNT, HOOK_COUNT);
+}
+
+long long sched_running_ms(void) {
+  long long since = atomic_load(&running_since);
+  return since ? now_ms() - since : 0;
+}
+
+int sched_running_id(void) {
+  return atomic_load(&running_id);
+}
+
+void sched_stop_running(int id) {
+  atomic_store(&stop_id, id);
 }
 
 static void run_one(struct sched *s, struct task *t) {
@@ -124,13 +178,21 @@ static void run_one(struct sched *s, struct task *t) {
     return;
   }
   int nres = 0;
-  t->slice_start = now_s();
-  lua_sethook(t->co, slice_hook, LUA_MASKCOUNT, HOOK_COUNT);
+  t->warned = 0;
+  atomic_store(&running_id, t->id);
+  atomic_store(&running_since, now_ms());
+  atomic_store(&running_co, t->co);
   int st = lua_resume(t->co, s->L, t->nargs, &nres);
+  atomic_store(&running_co, NULL);
+  atomic_store(&running_since, 0);
+  atomic_store(&running_id, 0);
+  int stop = t->id;
+  atomic_compare_exchange_strong(&stop_id, &stop, 0);
+  lua_sethook(t->co, NULL, 0, 0);
   t->nargs = 0;
   if (st == LUA_YIELD) {
     lua_pop(t->co, nres);
-    if (t->state == T_READY) enqueue(s, t); /* interrupted, or lulibre.yield() */
+    if (t->state == T_READY) enqueue(s, t); /* lulibre.yield() */
   } else if (st == LUA_OK) {
     finish(s, t, 1, NULL);
   } else {
@@ -263,6 +325,8 @@ void sched_require_task(lua_State *L) {
 struct task *sched_begin_wait(lua_State *L) {
   sched_require_task(L);
   struct task *t = task_of(L);
+  /* cancelled while it ran: it stops at its next wait */
+  if (t->cancelled) luaL_error(L, "cancelled");
   t->state = T_WAITING;
   t->pending++;
   waits_add(t->s, 1);

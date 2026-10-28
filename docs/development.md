@@ -241,7 +241,7 @@ comes.
 ## Reentrancy
 
 Code here runs on several threads (see above) and, within the Lua thread,
-in tasks that can be interrupted at any point.
+in tasks that take turns where they wait.
 
 **C**
 
@@ -260,11 +260,17 @@ in tasks that can be interrupted at any point.
 
 **Lua**
 
-- Tasks can be interrupted between any two VM instructions: a count hook
-  runs every 1000 instructions and yields once a 4 ms slice is used up. A
-  read and a write of shared state are two steps, and another task can run
-  between them. `lulibre.claim(t, key)` tests and sets in one step: a task
-  that claims a key owns what it stands for until it sets it back to nil.
+- Tasks give way only where they wait (`src/lua/sched.h`): between two
+  waits, a task's reads and writes of shared state are one step for the
+  others. A task that waits in the middle of an update (a test, then a
+  wait, then a write) owns what it updates across the wait, by a flag it
+  sets before waiting.
+- A task that runs 2 s without waiting gets a hook, installed by a signal
+  from the interface thread (`src/lua/bridge.c`): it reports the task, and
+  stops it once cancelled, by yielding, which no pcall catches. No hook
+  runs otherwise: a count hook makes every Lua instruction about twice as
+  slow. `:cancel` reaches a running task the same way, since a task that
+  runs reads no message.
 - Code that may run again while it waits takes its values once, at its
   start, in `<const>` locals (`setman.get`), and passes them down: the
   functions it calls take them as arguments.
@@ -275,9 +281,11 @@ in tasks that can be interrupted at any point.
 
 **Testing it**
 
-A test for a race must hold the window open longer than a slice. Otherwise
+A test for a race between threads must hold the window open: otherwise
 the test passes whether or not the fix is in. `./configure
---sanitize=thread` builds with ThreadSanitizer for the C side.
+--sanitize=thread` builds with ThreadSanitizer for the C side. TSan holds
+a signal back until the thread calls into the C library, so under TSan a
+task that only computes is neither reported nor stopped.
 
 ## The index
 

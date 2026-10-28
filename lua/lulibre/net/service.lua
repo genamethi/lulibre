@@ -52,10 +52,11 @@ end
 
 local serve
 
--- Starts the service's task unless it runs. lulibre.claim tests and sets
--- in one step: a task may be interrupted between any two of its own.
+-- Starts the service's task unless it runs.
 local function start(s)
-  if lulibre.claim(s, "busy") then lulibre.spawn(function() serve(s) end, "lookups: " .. s.name) end
+  if s.busy then return end
+  s.busy = true
+  lulibre.spawn(function() serve(s) end, "lookups: " .. s.name)
 end
 
 -- The service's task: asks for what waits, at its pace, in batches. It
@@ -106,7 +107,8 @@ function M.ask(name, key)
   if not s then return nil, "no service is called " .. name end
   local kept = M.kept(name, key)
   if kept ~= nil then return kept, false end
-  if lulibre.claim(s.asking, key) then
+  if not s.asking[key] then
+    s.asking[key] = true
     s.answers[key] = nil
     table.insert(s.queue, key)
   end

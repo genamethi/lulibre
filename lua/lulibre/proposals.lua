@@ -101,7 +101,8 @@ local proposing = {}
 -- @tparam table w M.settings()
 function M.propose(book, w)
   -- one at a time per book: its rows are deleted and written again
-  while not lulibre.claim(proposing, book) do lulibre.sleep(50) end
+  while proposing[book] do lulibre.sleep(50) end
+  proposing[book] = true
   local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
   local r <close> = reading.of(book)
   local srcs = sources.of(book, r)
