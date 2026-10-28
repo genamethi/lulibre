@@ -9,7 +9,7 @@
 --
 -- @submodule lulibre.net
 local service = require "lulibre.net.service"
-local json = require "lulibre.net.json"
+local json = require "dkjson"
 
 local function net() return require "lulibre.net" end
 

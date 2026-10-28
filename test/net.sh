@@ -15,12 +15,8 @@ export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state
 
 cat > "$t/net.lua" <<'LUA'
 local net = require "lulibre.net"
-local json = require "lulibre.net.json"
 local proposals = require "lulibre.proposals"
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
-local v = json.decode('{"a":[1,2,{"b":null,"c":"x\\u00e9"}],"d":true}')
-say("json", v.a[2], v.a[3].c, v.d, v.a[3].b)
-say("json bad", (json.decode("{nope")))
 local canned = [=[{"message":{"title":["Notes on Additive Number Theory"],"author":[{"given":"Paul","family":"Erdős"}],"publisher":"Example Press","issued":{"date-parts":[[1996,5]]}}}]=]
 local asked = 0
 net.services.crossref.how.request = function(keys) asked = asked + 1; return { [keys[1]] = canned } end
@@ -52,8 +48,6 @@ fails=0
 expect() {
   case "$out" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$out" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
 }
-expect "JSON: arrays, objects, escapes, null" "json|2|xé|true|nil"
-expect "JSON that is not, refused" "json bad|nil"
 expect "a book is asked about by its canonical identifiers" "keys|crossref|10.1000/xyz"
 expect "a new answer is counted" "enrich|1"
 expect "a kept answer is not asked for again" "kept|0|1"
