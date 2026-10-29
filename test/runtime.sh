@@ -29,6 +29,7 @@ local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostr
 say("pages", setman.get("pages"))
 say("ocr", setman.get("ocr"))
 say("packaged", type(require("exprman")))
+say("prelude", type(uiman.list), type(uiman.form))
 say("user", require("mine"))
 local ok, m = pcall(require, "modprobe")
 say("mod_tree", ok and m or "not found")
@@ -249,6 +250,7 @@ lacks() { # description, needle, haystack
 contains "init.lua's value over the command line's" "pages|9" "$out"
 contains "the command line's where init.lua is silent" "ocr|never" "$out"
 contains "lulibre's own module before the user's of the same name" "packaged|table" "$out"
+contains "the prelude loaded: uiman.list and uiman.form are there" "prelude|function|function" "$out"
 contains "the user's own module is found" "user|the user's own" "$out"
 contains "mod_tree, set in init.lua, is searched" "mod_tree|from mod_tree" "$out"
 contains "in a pixi environment, mod_tree is not" "mod_tree|not found" "$pixi"

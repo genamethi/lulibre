@@ -126,6 +126,7 @@ e2e: $(BIN)
 	sh test/curl.sh $(BIN)
 	sh test/write.sh $(BIN)
 	python3 -I test/tasks.py $(BIN)
+	python3 -I test/screens.py $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----
 

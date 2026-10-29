@@ -362,6 +362,36 @@ with a body; `timeout` is in milliseconds.
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
 | `uiman.theme.<name> = colour` | the interface's colours |
 
+`uiman.list` shows a sequence, one item to a row, and `uiman.form` a
+record, one field to a row. Each waits until it is closed, and reads its
+items again after each key it handles and each event it refreshes on.
+Both take `uiman.panel`'s `title`, `help`, `columns`, `follow`, `preview`,
+`height`, `side`, `focus`, `dialog` and `pass`.
+
+    uiman.list {
+      title = "books", columns = { "Title", "Authors" }, follow = true,
+      items = function() return bookman.books("tag:none") end,   -- a list, an iter, or a function giving one
+      row = function(b) return { b.title, b.author, id = b.id } end,
+      keys = { t = function(b) return store.apply({ { book = b.id, field = "tags", value = "todo", op = "add" } }) end },
+      refresh = { "records_changed" },     -- or { records_changed = function(ev) ... end }, run first
+    }
+
+    uiman.form {
+      title = "pages", record = function() return { pages = setman.get("pages") } end,
+      fields = { { "pages", "Pages read" } },                  -- names, or { name, label }
+      edit = function(field, value) setman.set(field, value) end,
+    }
+
+| | |
+|---|---|
+| `items` | a list, an iter, or a function giving one |
+| `row(item)` | the item's cells, with `id=` (a book) and `style=` as a panel's rows; by default the item as text |
+| `keys` | `{ [key] = function(item, i) }`: the key's action on the item under the cursor; its error, raised or nil and why, is shown |
+| `refresh` | event kinds that read the items again |
+| `record` | a form's record: a table, or a function giving it |
+| `fields` | the fields a form shows, in order; by default every one, by name |
+| `edit(field, value, record)` | takes a field edited with e or Enter; nil and why refuses it |
+
 ## Tasks, processes, indexing: taskman, utils
 
 | | |

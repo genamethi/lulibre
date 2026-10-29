@@ -1,0 +1,130 @@
+"""uiman.list and uiman.form, in the interface: a key's action on the item
+under the cursor, the items read again after it, an action's error shown,
+a refresh on an event, a field edited through the form, and review.
+
+  python3 -I test/screens.py BIN
+
+Starts BIN on a pseudo-terminal with a library of its own (test/mklib.sh)
+and an init.lua of its own that makes the commands :demolist and
+:demoform, types keys, and reads what the actions wrote to a file."""
+import fcntl, os, pty, select, shutil, struct, subprocess, sys, tempfile, termios, time
+
+bin_ = os.path.abspath(sys.argv[1])
+here = os.path.dirname(os.path.abspath(__file__))
+t = tempfile.mkdtemp()
+log, out = os.path.join(t, "log"), os.path.join(t, "out")
+subprocess.run(["sh", os.path.join(here, "mklib.sh"), os.path.join(t, "lib")], capture_output=True, check=True)
+os.makedirs(os.path.join(t, "config", "lulibre"))
+with open(os.path.join(t, "config", "lulibre", "init.lua"), "w") as f:
+    f.write(r'''
+local function note(s) local f = io.open(os.getenv("SCREENS_OUT"), "a") f:write(s, "\n") f:close() end
+local items = { "a", "b", "c" }
+cmdman.create("demolist", function()
+  uiman.list {
+    title = "demo", items = function() return items end,
+    keys = {
+      x = function(item, i) note("x|" .. item .. "|" .. i) table.remove(items, i) end,
+      y = function() return nil, "not this one" end,
+    },
+    refresh = { records_changed = function() note("refreshed") end },
+  }
+  note("list closed|" .. table.concat(items, ","))
+end)
+local rec = { pages = "6", ocr = "never" }
+cmdman.create("demoform", function()
+  uiman.form {
+    title = "form", record = function() return rec end, fields = { "pages", { "ocr", "OCR" } },
+    edit = function(field, value) note("edit|" .. field .. "|" .. value) rec[field] = value end,
+  }
+  note("form closed|" .. rec.pages .. "|" .. rec.ocr)
+end)
+-- two wits for book 1's title, and a store in calibredb's place: review
+-- writes nothing to the library
+cmdman.create("demowits", function()
+  require("store").calibre = function(book, fields) note("stored|" .. book .. "|" .. fields.title) return true end
+  require("wit").set(1, { { field = "title", value = "First Title", source = "front" },
+                          { field = "title", value = "Second Title", source = "crossref" } })
+  note("wits")
+end)
+''')
+env = dict(os.environ, TERM="xterm-256color", LULIBRE_LOG=log, XDG_CONFIG_HOME=t + "/config",
+           XDG_DATA_HOME=t + "/data", XDG_STATE_HOME=t + "/state", SCREENS_OUT=out)
+pid, fd = pty.fork()
+if pid == 0:
+    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
+    os.execve(bin_, [bin_, "-L", os.path.join(t, "lib")], env)
+
+
+def pump(secs):
+    end = time.time() + secs
+    while time.time() < end:
+        r, _, _ = select.select([fd], [], [], 0.05)
+        if not r:
+            continue
+        try:
+            data = os.read(fd, 65536)
+        except OSError:
+            return
+        if b"\x1b[c" in data:  # notcurses asks what the terminal is; the answer ends its questions
+            os.write(fd, b"\x1b[?62;22c")
+
+
+def keys(s, then=0.4):
+    os.write(fd, s.encode())
+    pump(then)
+
+
+pump(3)
+keys(":demolist\r", 1)
+keys("j")            # b
+keys("x")            # b goes; c is under the cursor
+keys("y")            # refused: shown as an error
+keys(":lua evman.post('records_changed', { ids = {}, fields = {} })\r", 1)
+keys("x")            # c goes
+keys("q", 0.6)
+keys(":demoform\r", 1)
+keys("e", 0.6)       # pages, its value 6 to edit
+keys("\x7f9\r", 0.6)
+keys("q", 0.6)
+keys(":demowits\r", 1)
+keys(":review\r", 1.5)
+keys("j")            # the title's row, under the book's heading
+keys(" ")            # its second alternative
+keys("a", 1.5)       # accepted: written through store.calibre
+keys("q", 0.6)
+keys(":q\r", 0)
+end = time.time() + 5
+while time.time() < end:
+    pump(0.1)
+    done, _ = os.waitpid(pid, os.WNOHANG)
+    if done:
+        break
+else:
+    os.kill(pid, 9)
+    os.waitpid(pid, 0)
+
+got = open(out).read() if os.path.exists(out) else ""
+text = open(log, errors="replace").read() if os.path.exists(log) else ""
+shutil.rmtree(t)
+fails = 0
+
+
+def check(what, ok):
+    global fails
+    print(("ok    " if ok else "FAIL  ") + what)
+    fails += not ok
+
+
+check("a key acts on the item under the cursor", "x|b|2" in got)
+check("and the items are read again after it", "x|c|2" in got)
+check("an action's refusal is shown as an error", "not this one" in text)
+check("an event in refresh runs its function, and the list reads its items again", "refreshed" in got)
+check("the list returns when it closes", "list closed|a" in got)
+check("e edits a form's field, through edit", "edit|pages|9" in got)
+check("and the form returns when it closes", "form closed|9|never" in got)
+check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+if fails:
+    print(got)
+    print(text[-3000:])
+    sys.exit(1)
+print("all passed")

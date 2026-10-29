@@ -24,6 +24,7 @@ file = {
   "lua/lulib/_rank.lua",
   "lua/lulib/_sources.lua",
   "lua/lulib/_review.lua",
+  "lua/lulib/_uiman.lua",
   "lua/lulib/_eval.lua",
   "lua/lulib/_prelude.lua",
 }
