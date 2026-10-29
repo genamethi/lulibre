@@ -2,7 +2,7 @@
  * match/similar.h), a packaged module written in C.
  *
  *   mesr.score(kind, a, b)     0 to 1: how much of a is found in b
- *   mesr.compare(kind, a, b [, near, same])
+ *   mesr.cmp(kind, a, b [, near, same])
  *                                 "equal" | "contains" | "contained" |
  *                                 "near" | "differs", then both scores;
  *                                 "contains": a holds all of b
@@ -76,7 +76,7 @@ static int l_score(lua_State *L) {
   return 1;
 }
 
-static int l_compare(lua_State *L) {
+static int l_cmp(lua_State *L) {
   enum field_kind kind = check_kind(L, 1);
   const char *a = luaL_checkstring(L, 2), *b = luaL_checkstring(L, 3);
   const struct rarity *w = weights(L);
@@ -114,7 +114,7 @@ static int l_canonical(lua_State *L) {
 
 int luaopen_mesr(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"score", l_score}, {"compare", l_compare}, {"canonical", l_canonical}, {"fuzzy", l_mesr_fuzzy}, {NULL, NULL},
+    {"score", l_score}, {"cmp", l_cmp}, {"canonical", l_canonical}, {"fuzzy", l_mesr_fuzzy}, {NULL, NULL},
   };
   luaL_newlib(L, fns);
   return 1;

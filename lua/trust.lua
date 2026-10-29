@@ -37,7 +37,7 @@ local function score(field, proposed, current, near, same)
     end
     return 0
   end
-  local _, ab, ba = mesr.compare(field, proposed, current, near, same)
+  local _, ab, ba = mesr.cmp(field, proposed, current, near, same)
   return (ab + ba) / 2
 end
 

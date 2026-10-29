@@ -72,7 +72,7 @@ function M.rows(ranked, srcs, w)
       else
         local same = false
         for _, a in ipairs(list) do
-          same = same or mesr.compare(field, a.value, value, w.near, w.same) == "equal"
+          same = same or mesr.cmp(field, a.value, value, w.near, w.same) == "equal"
         end
         if not same then list[#list + 1] = alt end
       end
@@ -90,7 +90,7 @@ function M.rows(ranked, srcs, w)
   local record = srcs[1] and srcs[1].kind == "record" and srcs[1].fields or {}
   for field, list in pairs(rows) do
     local now = record[field]
-    if now and mesr.compare(field, list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
+    if now and mesr.cmp(field, list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
   end
   return rows
 end

@@ -38,7 +38,7 @@ function M.agreement(parse, srcs, w)
       local own = src.name == parse.grammar or (src.from and src.from[field] == parse.grammar)
       if v and v ~= "" and not own then
         local ws = sources.weight[src.kind] or 1
-        local like, ab, ba = mesr.compare(field, f.value, v, w.near, w.same)
+        local like, ab, ba = mesr.cmp(field, f.value, v, w.near, w.same)
         num = num + wf * ws * (ab + ba) / 2
         den = den + wf * ws
         local into = like == "differs" and disagree or agree

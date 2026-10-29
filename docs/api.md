@@ -295,7 +295,7 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `wit.reject(id)` | waits: kept in the journal; the field keeps its value |
 | `lulib._propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulib._propose.settings()` |
 | `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
-| `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
+| `mesr.cmp(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
 
 ## Online lookups
 
