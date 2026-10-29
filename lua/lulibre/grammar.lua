@@ -14,6 +14,7 @@
 --
 -- @library lulibre.grammar
 local lpeg = require "lpeg"
+local stringx = require "pl.stringx"
 local expr = require "expr"
 
 local M = {}
@@ -65,7 +66,7 @@ end
 
 --- A captured value as a field's value: its lines joined by spaces.
 function M.clean(value)
-  return (value:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""))
+  return stringx.strip((value:gsub("%s+", " ")))
 end
 
 --- Returns the parse of each grammar that matches the text.

@@ -342,8 +342,7 @@ int config_int(const struct config *c, const struct opt_def *o) {
 
 char *config_dir_path(const struct config *c) {
   if (c->config_dir && c->config_dir[0]) return xstrdup(c->config_dir);
-  const char *xdg = getenv("XDG_CONFIG_HOME");
-  return xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.config/lulibre");
+  return path_xdg("XDG_CONFIG_HOME", "~/.config/lulibre");
 }
 
 char *config_index_path(const struct config *c) {
@@ -352,8 +351,7 @@ char *config_index_path(const struct config *c) {
   const char *lib = real ? real : c->library;
   const char *base = strrchr(lib, '/');
   base = base && base[1] ? base + 1 : "library";
-  const char *xdg = getenv("XDG_DATA_HOME");
-  char *dir = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.local/share/lulibre");
+  char *dir = path_xdg("XDG_DATA_HOME", "~/.local/share/lulibre");
   char *out = xasprintf("%s/%s-%08llx.db", dir, base, hash_fnv1a(lib) & 0xffffffffULL);
   free(dir);
   free(real);

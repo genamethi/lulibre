@@ -23,18 +23,13 @@ static void watch(struct settings *st, int def, void *ud) {
   work_setting_changed(app, def);
 }
 
-static char *xdg(const char *var, const char *fallback) {
-  const char *v = getenv(var);
-  return v && v[0] ? xasprintf("%s/lulibre", v) : path_expand(fallback);
-}
-
 void app_settings(struct app *app, const char *confdir, const char *library, const char **sets, int nsets) {
   char *err = NULL;
   app->settings = settings_new(setting_defs, S_COUNT);
   if (confdir && confdir[0] && settings_set(app->settings, "config_dir", confdir, FROM_CLI, &err)) die("%s", err);
   const char *dir = app_str(app, S_CONFIG_DIR);
-  app->config_dir = dir[0] ? xstrdup(dir) : xdg("XDG_CONFIG_HOME", "~/.config/lulibre");
-  char *state = xdg("XDG_STATE_HOME", "~/.local/state/lulibre");
+  app->config_dir = dir[0] ? xstrdup(dir) : path_xdg("XDG_CONFIG_HOME", "~/.config/lulibre");
+  char *state = path_xdg("XDG_STATE_HOME", "~/.local/state/lulibre");
   app->state_path = xasprintf("%s/settings", state);
   free(state);
   if (settings_load_state(app->settings, app->state_path, &err)) {
@@ -95,7 +90,7 @@ char *app_index_path(const struct app *app) {
   const char *lib = real ? real : library;
   const char *base = strrchr(lib, '/');
   base = base && base[1] ? base + 1 : "library";
-  char *dir = xdg("XDG_DATA_HOME", "~/.local/share/lulibre");
+  char *dir = path_xdg("XDG_DATA_HOME", "~/.local/share/lulibre");
   char *out = xasprintf("%s/%s-%08llx.db", dir, base, hash_fnv1a(lib) & 0xffffffffULL);
   free(dir);
   free(real);

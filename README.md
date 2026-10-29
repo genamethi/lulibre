@@ -26,6 +26,7 @@ At run time:
 | OCR | `tesseract` |
 | looking books up (`:enrich`) | the `dkjson` rock |
 | scripts (`expr`, grammars) | the `lpeg` rock |
+| `:propose`, `:enrich`, `:lua` | the `penlight` rock |
 
 `pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).
 

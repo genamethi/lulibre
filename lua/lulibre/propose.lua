@@ -105,33 +105,9 @@ local function found(t)
   if next(fields) then return { grammar = "lex", fields = fields } end
 end
 
--- the books a propose is running for
-local proposing = {}
-
--- the identifiers in a text, as a parse named "lex": per type, the first
--- found
-local function found(t)
-  local fields = {}
-  for _, kind in ipairs { "isbn", "doi", "arxiv", "issn" } do
-    local start, stop, id = expr.find(t, lex[kind])
-    if start then fields[kind] = { value = kind .. ":" .. id, start = start, stop = stop } end
-  end
-  if next(fields) then return { grammar = "lex", fields = fields } end
-end
-
--- the books a propose is running for
-local proposing = {}
-
---- Reads, parses and ranks a book's values, and keeps them as its wits;
--- returns how many fields have one. A book with no text is proposed for
--- from its online records alone.
--- @tparam integer book
--- @tparam table w M.settings()
-function M.propose(book, w)
-  -- one at a time per book: its wits are replaced
-  while proposing[book] do taskman.sleep(50) end
-  proposing[book] = true
-  local _ <close> = setmetatable({}, { __close = function() proposing[book] = nil end })
+-- reads, parses and ranks the book's values once, and keeps them as its
+-- wits
+local function once(book, w)
   local t <close> = txt.of(book)
   local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
@@ -156,5 +132,35 @@ function M.propose(book, w)
   wit.set(book, wits)
   return n
 end
+
+-- per book, the propose running for it: true, or "again" when it was asked
+-- for while it ran
+local running = {}
+
+--- Reads, parses and ranks a book's values, and keeps them as its wits;
+-- returns how many fields have one. A book with no text is proposed for
+-- from its online records alone. Asked for while one runs for the book,
+-- it returns at once, and the one running goes again as it ends, with the
+-- sources as they then are.
+-- @tparam integer book
+-- @tparam table w M.settings()
+function M.propose(book, w)
+  if running[book] then
+    running[book] = "again"
+    return
+  end
+  local _ <close> = setmetatable({}, { __close = function() running[book] = nil end })
+  local n
+  repeat
+    running[book] = true
+    n = once(book, w)
+  until running[book] ~= "again"
+  return n
+end
+
+-- an answer arriving re-ranks the book (design 42)
+evman.add("source_arrived", function(ev)
+  M.propose(ev.book, M.settings())
+end)
 
 return M

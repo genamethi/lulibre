@@ -10,6 +10,7 @@
 -- @submodule net
 local service = require "net.service"
 local json = require "dkjson"
+local stringx = require "pl.stringx"
 
 local function net() return require "net" end
 
@@ -28,7 +29,7 @@ end
 local function people(list, given, family)
   local names = {}
   for _, p in ipairs(list or {}) do
-    local name = ((p[given] or "") .. " " .. (p[family] or "")):gsub("^%s+", ""):gsub("%s+$", "")
+    local name = stringx.strip((p[given] or "") .. " " .. (p[family] or ""))
     if name ~= "" then names[#names + 1] = name end
   end
   return #names > 0 and table.concat(names, " & ") or nil
@@ -84,8 +85,8 @@ service.define("openlibrary", {
 })
 
 local function xml_text(s)
-  return (s:gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&quot;", '"'):gsub("&apos;", "'"):gsub("&amp;", "&")
-    :gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""))
+  return stringx.strip((s:gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&quot;", '"'):gsub("&apos;", "'"):gsub("&amp;", "&")
+    :gsub("%s+", " ")))
 end
 
 service.define("arxiv", {

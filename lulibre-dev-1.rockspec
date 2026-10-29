@@ -15,6 +15,7 @@ dependencies = {
   "luv",
   "dkjson",
   "lpeg",
+  "penlight",
 }
 build = {
   type = "none",

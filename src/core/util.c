@@ -162,6 +162,11 @@ char *path_expand(const char *p) {
   return xstrdup(p);
 }
 
+char *path_xdg(const char *var, const char *fallback) {
+  const char *v = getenv(var);
+  return v && v[0] ? xasprintf("%s/lulibre", v) : path_expand(fallback);
+}
+
 const char *path_ext(const char *p) {
   const char *slash = strrchr(p, '/');
   const char *dot = strrchr(slash ? slash : p, '.');

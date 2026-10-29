@@ -13,6 +13,7 @@
 local bookman = require "bookman"
 local mesr = require "mesr"
 local sqlite3 = require "lsqlite3"
+local stringx = require "pl.stringx"
 
 local M = {}
 
@@ -51,7 +52,7 @@ local function score(field, proposed, current, near, same)
   if current == "" then return 0 end
   if field == "identifiers" then
     for item in current:gmatch("[^,]+") do
-      if mesr.score("ident", proposed, (item:gsub("^%s+", ""))) == 1 then return 1 end
+      if mesr.score("ident", proposed, stringx.strip(item)) == 1 then return 1 end
     end
     return 0
   end

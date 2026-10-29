@@ -2,6 +2,7 @@
 -- task, called through the module's table, so a redefinition in init.lua
 -- takes effect (design 6).
 local bookman = require "bookman"
+local iter = require "iter"
 local propose = require "lulibre.propose"
 local review = require "lulibre.ui.review"
 
@@ -16,17 +17,17 @@ function M.books(o, otherwise)
   return otherwise and bookman.ids(otherwise) or {}
 end
 
+-- fn(book) for each book: how many books it gave a count above 0 for,
+-- and the sum of the counts
+local function tally(ids, fn)
+  local counts = iter(ids):map(fn):filter(function(n) return n > 0 end):totable()
+  return #counts, iter(counts):fold(0, function(sum, n) return sum + n end)
+end
+
 --- :propose [filter]: proposals for the books, for :review.
 function M.propose(ids)
   local w <const> = propose.settings()
-  local books, fields = 0, 0
-  for _, id in ipairs(ids) do
-    local n = propose.propose(id, w)
-    if n then
-      books = books + 1
-      fields = fields + n
-    end
-  end
+  local books, fields = tally(ids, function(id) return propose.propose(id, w) end)
   print(("proposals for %d fields of %d books"):format(fields, books))
 end
 
@@ -40,21 +41,9 @@ end
 -- the book again.
 function M.enrich(ids)
   local net = require "net"
-  local books, answers = 0, 0
-  for _, id in ipairs(ids) do
-    local n = net.enrich(id)
-    if n > 0 then
-      books = books + 1
-      answers = answers + n
-    end
-  end
+  local books, answers = tally(ids, net.enrich)
   print(("%d new answers for %d books"):format(answers, books))
 end
-
--- an answer arriving re-ranks the book (design 42)
-evman.add("source_arrived", function(ev)
-  propose.propose(ev.book, propose.settings())
-end)
 
 cmd.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers" })
 cmd.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review" })

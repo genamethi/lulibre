@@ -39,6 +39,9 @@ void warnf(const char *fmt, ...) PRINTF(1, 2);
 double now_s(void);                 /* monotonic seconds */
 int mkdir_p(const char *path);      /* 0 on success */
 char *path_expand(const char *p);   /* leading ~ -> $HOME; malloc'd */
+/* lulibre's folder under an XDG base: $var/lulibre, else fallback with ~
+ * expanded ("~/.local/share/lulibre"); malloc'd */
+char *path_xdg(const char *var, const char *fallback);
 const char *path_ext(const char *p); /* extension without the dot, or "" */
 unsigned long long hash_fnv1a(const char *s);
 

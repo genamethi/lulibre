@@ -30,14 +30,26 @@ local a = net.services.arxiv.how.record([[<entry><id>http://arxiv.org/abs/1012.6
 say("arxiv", a.title, a.authors, a.year)
 local o = net.services.openlibrary.how.record('{"ISBN:1":{"title":"Topics","subtitle":"In Combinatorics","authors":[{"name":"T. Tao"}],"publishers":[{"name":"CUP"}],"publish_date":"2006"}}')
 say("openlibrary", o.title, o.authors, o.publisher, o.year)
--- one work asked for by two tasks at once: asked once, both answered; a
--- request that fails answers with its error and the service goes on
 -- an identifier found in a book's text is a wit, and the book is asked
 -- about by it
 local propose = require "lulibre.propose"
 propose.propose(1, propose.settings())
 for _, f in ipairs(wit.get(1)) do if f.field == "arxiv" then say("found", f.alts[1].value, f.alts[1].source) end end
 for _, k in ipairs(net.keys(1)) do say("asked by", k.service, k.key) end
+-- a propose asked for twice while one runs for the book: both return at
+-- once, and the one running goes once more
+local txt, runs = require "txt", 0
+local of = txt.of
+txt.of = function(...) runs = runs + 1 return of(...) end
+local done
+taskman.spawn(function() done = propose.propose(1, propose.settings()) end)
+taskman.yield()
+say("while running", (propose.propose(1, propose.settings())), (propose.propose(1, propose.settings())))
+while not done do taskman.sleep(20) end
+txt.of = of
+say("runs", runs)
+-- one work asked for by two tasks at once: asked once, both answered; a
+-- request that fails answers with its error and the service goes on
 local svc = require "net.service"
 local n = 0
 svc.define("twice", { pace = 0, request = function(keys) n = n + 1; taskman.sleep(50); return { [keys[1]] = "rec" } end })
@@ -67,5 +79,7 @@ expect "one work asked for by two tasks at once is asked once, and both get it" 
 expect "a request that fails answers, and the service still serves" "broken|true|nil"
 expect "an identifier in a book's text is a wit" "found|arxiv:1012.6008|lex"
 expect "and the book is asked about by it" "asked by|arxiv|1012.6008"
+expect "a propose asked for while one runs returns at once" "while running|nil|nil"
+expect "and the one running goes once more" "runs|2"
 case "$out" in *"proposal|authors"*) echo "FAIL  authors the record already has were proposed"; fails=$((fails + 1)) ;; *) echo "ok    authors the record already has are not proposed" ;; esac
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
