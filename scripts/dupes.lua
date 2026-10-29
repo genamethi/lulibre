@@ -1,6 +1,7 @@
 -- Books whose files hold the same bytes. Files of the same size are hashed
 -- (MD5; the index keeps each hash while the file is unchanged), and those
--- with the same hash are a group. Nothing is changed.
+-- with the same hash are a group, shown in a list (printed by lulibre
+-- run). Nothing is changed.
 --   :run dupes        lulibre run dupes
 local bookman = require "bookman"
 local iter = require "iter"
@@ -26,13 +27,15 @@ end
 -- the most space taken by copies first
 table.sort(groups, function(a, b) return a.size * (#a.files - 1) > b.size * (#b.files - 1) end)
 
-local spare = 0
+local rows, spare = {}, 0
 for _, g in ipairs(groups) do
   spare = spare + g.size * (#g.files - 1)
-  print(("%s  %d bytes  %d copies"):format(g.md5, g.size, #g.files))
+  rows[#rows + 1] = { ("%s  %d bytes  %d copies"):format(g.md5, g.size, #g.files), style = "head" }
   for _, f in ipairs(g.files) do
     local b = bookman.get(f.book)
-    print(("  %5d  %s  —  %s"):format(f.book, b.title or "", b.author or ""))
+    rows[#rows + 1] = { ("  %5d  %s  —  %s"):format(f.book, b.title or "", b.author or ""), id = f.book }
   end
 end
-print(("%d files, %d groups of the same bytes, %d bytes in the copies past the first"):format(#files, #groups, spare))
+local total = ("%d files, %d groups of the same bytes, %d bytes in the copies past the first"):format(#files, #groups, spare)
+rows[#rows + 1] = { total, style = "note" }
+uiman.list { title = "dupes", help = total, follow = true, items = rows }

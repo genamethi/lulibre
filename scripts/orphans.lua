@@ -1,6 +1,7 @@
 -- The records against the library's folders: files a record names that
 -- are not on disk, files in the books' folders that no record names, and
--- empty folders. Nothing is changed.
+-- empty folders, shown in a list (printed by lulibre run). Nothing is
+-- changed.
 --   :run orphans      lulibre run orphans
 local bookman = require "bookman"
 local iter = require "iter"
@@ -41,12 +42,16 @@ local function rel(path) return path:sub(#root + 2) end
 local function path(f) return f.path end
 
 local gone = iter(named):diff(on_disk, path):totable()
-print(("files a record names that are not on disk: %d"):format(#gone))
-for _, f in ipairs(gone) do print(("  %5d  %s"):format(f.book, rel(f.path))) end
+local rows = {}
+local function head(text) rows[#rows + 1] = { text, style = "head" } end
+head(("files a record names that are not on disk: %d"):format(#gone))
+for _, f in ipairs(gone) do rows[#rows + 1] = { ("  %5d  %s"):format(f.book, rel(f.path)), id = f.book } end
 
 local strays = iter(on_disk):diff(named, path):totable()
-print(("files no record names: %d"):format(#strays))
-for _, f in ipairs(strays) do print("         " .. rel(f.path)) end
+head(("files no record names: %d"):format(#strays))
+for _, f in ipairs(strays) do rows[#rows + 1] = { "         " .. rel(f.path) } end
 
-print(("empty folders: %d"):format(#empty))
-for _, dir in ipairs(empty) do print("         " .. rel(dir)) end
+head(("empty folders: %d"):format(#empty))
+for _, dir in ipairs(empty) do rows[#rows + 1] = { "         " .. rel(dir) } end
+
+uiman.list { title = "orphans", follow = true, items = rows }

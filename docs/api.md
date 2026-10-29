@@ -9,7 +9,7 @@ below is there without it.
     :restart-scripts            a new Lua state; init.lua runs first, as at start
     :tasks   :cancel ID|all
 
-lulibre comes with these scripts, which change nothing:
+lulibre comes with these scripts, which change nothing and show what they find in a list (`lulibre run` prints it):
 
 | | |
 |---|---|
@@ -365,6 +365,7 @@ with a body; `timeout` is in milliseconds.
 `uiman.list` shows a sequence, one item to a row, and `uiman.form` a
 record, one field to a row. Each waits until it is closed, and reads its
 items again after each key it handles and each event it refreshes on.
+Without the interface (`lulibre run`) a list prints its rows.
 Both take `uiman.panel`'s `title`, `help`, `columns`, `follow`, `preview`,
 `height`, `side`, `focus`, `dialog` and `pass`.
 
@@ -385,7 +386,7 @@ Both take `uiman.panel`'s `title`, `help`, `columns`, `follow`, `preview`,
 | | |
 |---|---|
 | `items` | a list, an iter, or a function giving one |
-| `row(item)` | the item's cells, with `id=` (a book) and `style=` as a panel's rows; by default the item as text |
+| `row(item)` | the item's cells, with `id=` (a book) and `style=` as a panel's rows; by default the item itself when it is a table, else the item as text |
 | `keys` | `{ [key] = function(item, i) }`: the key's action on the item under the cursor; its error, raised or nil and why, is shown |
 | `refresh` | event kinds that read the items again |
 | `record` | a form's record: a table, or a function giving it |

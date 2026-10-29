@@ -43,17 +43,25 @@ end
 -- title, help, columns, follow, preview, height, side, focus, dialog and
 -- pass. items: a list, an iter, or a function giving one, read again after
 -- each key and each refresh; row(item): its cells, with `id=` (the book)
--- and `style=` as a panel's rows have them (by default the item as text);
+-- and `style=` as a panel's rows have them (by default the item, a row
+-- already, or the item as text);
 -- keys: `{ [key] = function(item, i) }`, the action of a key on the item
 -- under the cursor, whose error (raised, or nil and why) is shown;
 -- refresh: event kinds that read the items again, as a list, or
--- `{ [kind] = function(ev) }` to run first.
+-- `{ [kind] = function(ev) }` to run first. Without the interface
+-- (lulibre run), the rows are printed, their cells two spaces apart.
 function M.list(o)
   local items = read(o.items)
   local function rows()
     local out = {}
-    for i, item in ipairs(items) do out[i] = o.row and o.row(item) or { tostring(item) } end
+    for i, item in ipairs(items) do
+      out[i] = o.row and o.row(item) or type(item) == "table" and item or { tostring(item) }
+    end
     return out
+  end
+  if lulib.headless then
+    for _, r in ipairs(rows()) do print(table.concat(r, "  ")) end
+    return
   end
   local spec = { rows = rows(), keys = {} }
   for _, k in ipairs(passed) do spec[k] = o[k] end
