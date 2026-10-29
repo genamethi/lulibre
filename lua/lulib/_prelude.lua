@@ -1,7 +1,7 @@
 --- Loaded once per lua_State, before init.lua (design 12, 46).
 -- Registers the packaged grammar and commands, and uiman.list and
 -- uiman.form. init.lua then runs as the first task; a set call there is a
--- live change like any other.
+-- live change like any other, under the command line's value.
 --
 -- @library lulib._prelude
 require "exprman._front"

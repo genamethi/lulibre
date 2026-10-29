@@ -20,13 +20,21 @@ echo 'return "from mod_tree"' >"$t/mods/share/lua/$lv/modprobe.lua"
 echo 'return "the user'"'"'s copy"' >"$cfg/lua/exprman.lua"
 echo 'return "the user'"'"'s own"' >"$cfg/lua/mine.lua"
 
-cat >"$cfg/init.lua" <<LUA
-setman.set("pages", 9)
-setman.set("path.modtree", "$t/mods")
+mkdir -p "$cfg/lua/config"
+cat >"$cfg/init.lua" <<'LUA'
+require "config.options"
+LUA
+cat >"$cfg/lua/config/options.lua" <<LUA
+local _ENV = setman.settings
+pages = 9
+jobs = 3
+path.modtree = "$t/mods"
 LUA
 cat >"$t/probe.lua" <<'LUA'
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
 say("pages", setman.get("pages"))
+say("jobs", setman.get("jobs"))
+say("settings typo", select(2, pcall(function() setman.settings.path.librar = "x" end)))
 say("ocr", setman.get("ocr"))
 say("packaged", type(require("exprman")))
 say("prelude", type(uiman.list), type(uiman.form))
@@ -342,8 +350,10 @@ contains() { # description, needle, haystack
 lacks() { # description, needle, haystack
   case "$3" in *"$2"*) echo "FAIL  $1: '$2' in:"; echo "$3" | sed 's/^/      /'; fails=$((fails + 1)) ;; *) echo "ok    $1" ;; esac
 }
-contains "init.lua's value over the command line's" "pages|9" "$out"
+contains "the command line's value over init.lua's" "pages|4" "$out"
 contains "the command line's where init.lua is silent" "ocr|never" "$out"
+contains "lua/config/options.lua, required by init.lua, sets through setman.settings" "jobs|3" "$out"
+contains "a name setman.settings does not know is an error" "no setting is called path.librar" "$out"
 contains "lulibre's own module before the user's of the same name" "packaged|table" "$out"
 contains "the prelude loaded: uiman.list and uiman.form are there" "prelude|function|function" "$out"
 contains "the user's own module is found" "user|the user's own" "$out"

@@ -89,7 +89,7 @@ static int persistent(const struct settings *st) {
 /* The layer that is in effect for setting i. */
 static enum setting_origin top(const struct settings *st, int i) {
   const struct entry *e = &st->e[i];
-  for (int o = FROM_API; o > FROM_DEFAULT; o--) {
+  for (int o = ORIGINS - 1; o > FROM_DEFAULT; o--) {
     if (o == FROM_STATE && !persistent(st)) continue;
     if (e->layer[o]) return o;
   }
@@ -227,6 +227,23 @@ int settings_unset(struct settings *st, const char *name, enum setting_origin fr
   if (i < 0) return -1;
   free(st->e[i].layer[from]);
   st->e[i].layer[from] = NULL;
+  settle_all(st);
+  return 0;
+}
+
+int settings_change(struct settings *st, const char *name, const char *text, char **err) {
+  int i = layer_for(st, name, FROM_API, err);
+  if (i < 0) return -1;
+  if (text) {
+    union setting_value v;
+    if (settings_parse(&st->defs[i], text, &v, err)) return -1;
+    if (is_text(st->defs[i].type)) free(v.s);
+  }
+  for (enum setting_origin o = FROM_API; o <= FROM_CLI; o++) {
+    free(st->e[i].layer[o]);
+    st->e[i].layer[o] = NULL;
+  }
+  if (text) st->e[i].layer[FROM_API] = xstrdup(text);
   settle_all(st);
   return 0;
 }

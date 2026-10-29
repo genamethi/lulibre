@@ -75,6 +75,8 @@ int luaopen_cmdman(struct lua_State *L);
  * message the store's watcher posts with setman_change_new. */
 int luaopen_setman(struct lua_State *L);
 void l_setman_fill(struct lua_State *L, const struct settings *st);
+/* While on, a set lies under the command line: init.lua's start. */
+void l_setman_starting(int on);
 struct setman_change *setman_change_new(const struct settings *st, int def);
 void l_setman_changed(struct app *app, void *arg);
 /* evman (l_evman.c); l_evman_close drops Lua's callbacks before the

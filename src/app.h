@@ -46,7 +46,8 @@ void app_settings(struct app *app, const char *confdir, const char *library, con
 const char *app_str(const struct app *app, enum setting_id id);
 long long app_int(const struct app *app, enum setting_id id);
 int app_bool(const struct app *app, enum setting_id id);
-/* A change from the main thread (:set): the Lua API's layer. */
+/* A change from the main thread (:set), made while lulibre runs: it
+ * replaces the command line's value too (settings_change). */
 int app_set(struct app *app, const char *name, const char *text, char **err);
 /* An indexer run's options from the settings in effect (index/indexer.h),
  * on the main thread; the indexer copies what it keeps. */

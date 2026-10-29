@@ -67,18 +67,18 @@ the configuration directory's
 .SH OPTIONS
 .TP
 .BI \-L " dir"
-The calibre library. Otherwise
-.BR LULIBRE_LIBRARY ,
-the setting
-.B library
+The calibre library. Otherwise the setting
+.B path.library
 (in
 .IR init.lua ,
-or the saved state), or the current directory.
+or the saved state), else
+.BR LULIBRE_LIBRARY ,
+else the current directory.
 .TP
 .BI \-o " name=value"
-A setting for this run; what
+A setting for this run. It lies over what
 .I init.lua
-sets lies over it.
+sets as lulibre starts; a change made later replaces it.
 .B "lulibre \-o help"
 lists them all.
 .TP
@@ -110,8 +110,8 @@ negates.
 .SH FILES
 .TP
 .I ~/.config/lulibre/init.lua
-Plain Lua, run at startup as the first task; lulibre ships it empty and
-never writes into it. Scripts of your own go in
+Plain Lua, run at startup as the first task; lulibre never writes into
+it, and lulibre-setup writes one only where there is none. Scripts of your own go in
 .I scripts/
 beside it, modules in
 .IR lua/ .

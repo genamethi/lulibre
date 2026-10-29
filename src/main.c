@@ -33,7 +33,7 @@ static void usage(FILE *f) {
              "With no command, lulibre opens the interactive interface (? for help).\n\n");
   for (size_t i = 0; i < ARRAY_LEN(commands); i++)
     fprintf(f, "  %-8s %s\n", commands[i].name, commands[i].summary);
-  fprintf(f, "\n  -L DIR          calibre library (else $LULIBRE_LIBRARY, init.lua, or .)\n"
+  fprintf(f, "\n  -L DIR          calibre library (else path.library, $LULIBRE_LIBRARY, or .)\n"
              "  -o name=value   a setting; `lulibre -o help` lists them\n"
              "  -C DIR          configuration directory: init.lua, lua/\n"
              "                  (else $LULIBRE_CONFIG_DIR, else ~/.config/lulibre)\n"
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
     else break;
   }
 
-  /* the command line's values lie under what init.lua sets (design 44) */
+  /* the command line's values lie over what init.lua sets (design 44) */
   app_settings(&app, confdir, library, sets, nsets);
   app.loop = uv_default_loop();
   /* with the interface, Lua gets a loop and (once it is up) a thread of its own */

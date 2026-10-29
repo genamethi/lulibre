@@ -76,14 +76,18 @@ so it can wait.
 
     local pages <const>, ocr <const> = setman.get("pages", "ocr")
     setman.set("ocr", "auto")
-    setman.set("ocr", nil)       -- back to what the command line, the saved state or the default says
+    setman.set("ocr", nil)       -- back to what the saved state or the default says
     setman.save()                -- write the saved state now (with persistent = true)
+    setman.settings.ocr = "auto" -- the same set, through the settings as a table
+    setman.settings.path.library -- the same get
 
 `get` returns the values in effect, in order. Code that may run again
 while it waits (a callback, a command) takes its values once, at its
 start, in `<const>` locals: they do not change under it. A `get` later in
-the code returns the value at that moment. [Configuration](configuration.md)
-lists the settings and their precedence.
+the code returns the value at that moment. A set in init.lua, as lulibre
+starts, lies under the command line; a set after that replaces the command
+line's value. [Configuration](configuration.md) lists the settings and
+their precedence.
 
 ## Events: evman
 

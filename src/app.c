@@ -70,7 +70,7 @@ int app_bool(const struct app *app, enum setting_id id) {
 }
 
 int app_set(struct app *app, const char *name, const char *text, char **err) {
-  return settings_set(app->settings, name, text, FROM_API, err);
+  return settings_change(app->settings, name, text, err);
 }
 
 int app_jobs(const struct app *app) {

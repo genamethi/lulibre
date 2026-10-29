@@ -3,10 +3,18 @@
  *   setman.get(name, ...)     the values in effect, in order; a path.*
  *                             setting left empty is the path C works out
  *                             (path.indexdb: the index file in use)
- *   setman.set(name, value)   a change; nil empties the API's value, and
- *                             the one below shows through
+ *   setman.set(name, value)   a change; nil empties the value set, and
+ *                             the saved state's or the default shows
+ *                             through. What init.lua sets before it first
+ *                             waits lies under the command line (design
+ *                             44); a set after that replaces the command
+ *                             line's value
  *   setman.save()             write the saved state now (only while the
  *                             setting persistent is true)
+ *   setman.settings           the settings as a table: a name read is get,
+ *                             a name assigned is set, path.library and
+ *                             the like as written; for a file of settings,
+ *                             `local _ENV = setman.settings`
  *
  * The store belongs to the main thread (core/settings.h). The lua_State
  * holds a copy, a table in its registry: get reads it and never waits, so
@@ -41,8 +49,10 @@ struct setman_change {
 };
 
 /* The Lua thread's: the number of the last set, and per setting the
- * number of its last set. */
+ * number of its last set; while init.lua starts, and per setting whether
+ * the command line holds it (so a set there does not show in the copy). */
 static unsigned long seq, pending[S_COUNT];
+static int starting, held[S_COUNT];
 /* The main thread's: the number of the last set the store took. */
 static unsigned long taken;
 
@@ -85,8 +95,15 @@ static int find(const char *name) {
 void l_setman_fill(lua_State *L, const struct settings *st) {
   lua_createtable(L, 0, S_COUNT);
   lua_setfield(L, LUA_REGISTRYINDEX, COPY);
-  for (int i = 0; i < S_COUNT; i++) put(L, i, settings_value(st, i));
+  for (int i = 0; i < S_COUNT; i++) {
+    put(L, i, settings_value(st, i));
+    held[i] = settings_origin(st, i) == FROM_CLI;
+  }
   memset(pending, 0, sizeof pending);
+}
+
+void l_setman_starting(int on) {
+  starting = on;
 }
 
 struct setman_change *setman_change_new(const struct settings *st, int def) {
@@ -113,7 +130,8 @@ void l_setman_changed(struct app *app, void *arg) {
 struct to_store {
   int def;
   unsigned long seq;
-  char *text; /* NULL: empty the API's value */
+  char *text;   /* NULL: empty the value set */
+  int starting; /* set by init.lua at start: under the command line */
 };
 
 static void store_change(struct app *app, void *arg) {
@@ -121,8 +139,9 @@ static void store_change(struct app *app, void *arg) {
   taken = m->seq;
   const char *name = setting_defs[m->def].name;
   char *err = NULL;
-  int rc = m->text ? settings_set(app->settings, name, m->text, FROM_API, &err)
-                   : settings_unset(app->settings, name, FROM_API, &err);
+  int rc = !m->starting ? settings_change(app->settings, name, m->text, &err)
+           : m->text    ? settings_set(app->settings, name, m->text, FROM_API, &err)
+                        : settings_unset(app->settings, name, FROM_API, &err);
   if (rc) {
     log_warn("setman.set: %s", err);
     free(err);
@@ -200,13 +219,69 @@ static int l_set(lua_State *L) {
       return lua_error(L);
     }
     m->text = xstrdup(text);
-    put(L, def, &v);
+    if (!(starting && held[def])) put(L, def, &v);
     if (def == S_MOD_TREE) lstate_paths(L); /* the next require already searches it */
     if (is_text(d)) free(v.s);
   }
+  m->starting = starting;
   m->seq = pending[def] = ++seq;
   queue_post(LOOP_UI, store_change, m);
   return 0;
+}
+
+/* setman.settings, and a part of it: the settings whose names begin with
+ * the prefix, its upvalue. A name read is setman.get, or the part of the
+ * settings it begins (path); at the top, any other name is the global of
+ * that name. A name assigned is setman.set. */
+static void push_part(lua_State *L, const char *prefix);
+
+/* f(name, value) from a metamethod: an error says where the assignment or
+ * the read is */
+static int call_at(lua_State *L, lua_CFunction f, int nargs, int nres) {
+  lua_pushcfunction(L, f);
+  lua_insert(L, -nargs - 1);
+  if (lua_pcall(L, nargs, nres, 0) != LUA_OK) {
+    luaL_where(L, 1);
+    lua_insert(L, -2);
+    lua_concat(L, 2);
+    return lua_error(L);
+  }
+  return nres;
+}
+
+static int part_index(lua_State *L) {
+  const char *prefix = lua_tostring(L, lua_upvalueindex(1));
+  const char *k = luaL_checkstring(L, 2);
+  const char *name = lua_pushfstring(L, "%s%s", prefix, k);
+  if (find(name) >= 0) return call_at(L, l_get, 1, 1);
+  size_t n = strlen(name);
+  for (int i = 0; i < S_COUNT; i++)
+    if (!strncmp(setting_defs[i].name, name, n) && setting_defs[i].name[n] == '.') {
+      lua_pushfstring(L, "%s.", name);
+      push_part(L, lua_tostring(L, -1));
+      return 1;
+    }
+  if (!*prefix && lua_getglobal(L, k) != LUA_TNIL) return 1;
+  return luaL_error(L, "no setting%s is called %s", *prefix ? "" : " or global", name);
+}
+
+static int part_newindex(lua_State *L) {
+  const char *prefix = lua_tostring(L, lua_upvalueindex(1));
+  lua_pushfstring(L, "%s%s", prefix, luaL_checkstring(L, 2));
+  lua_pushvalue(L, 3);
+  return call_at(L, l_set, 2, 0);
+}
+
+static void push_part(lua_State *L, const char *prefix) {
+  lua_newtable(L);
+  lua_createtable(L, 0, 2);
+  lua_pushstring(L, prefix);
+  lua_pushcclosure(L, part_index, 1);
+  lua_setfield(L, -2, "__index");
+  lua_pushstring(L, prefix);
+  lua_pushcclosure(L, part_newindex, 1);
+  lua_setfield(L, -2, "__newindex");
+  lua_setmetatable(L, -2);
 }
 
 static int l_save(lua_State *L) {
@@ -217,6 +292,8 @@ static int l_save(lua_State *L) {
 int luaopen_setman(lua_State *L) {
   static const luaL_Reg fns[] = {{"get", l_get}, {"set", l_set}, {"save", l_save}, {NULL, NULL}};
   luaL_newlib(L, fns);
+  push_part(L, "");
+  lua_setfield(L, -2, "settings");
   return 1;
 }
 

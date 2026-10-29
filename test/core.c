@@ -146,6 +146,7 @@ static void watch(struct settings *st, int def, void *ud) {
 }
 
 static void test_settings_layers(void) {
+  char *err = NULL;
   struct settings *st = settings_new(defs, NDEFS);
   int count = settings_find(st, "count");
   settings_watch(st, watch, NULL);
@@ -156,16 +157,19 @@ static void test_settings_layers(void) {
   set(st, "count", "5", FROM_CLI);
   ok(get_i(st, "count") == 5, "the command line over the state");
   set(st, "count", "7", FROM_API);
-  ok(get_i(st, "count") == 7 && settings_origin(st, count) == FROM_API, "the Lua API over the command line");
+  ok(get_i(st, "count") == 5 && settings_origin(st, count) == FROM_CLI, "the command line over the Lua API");
+  unset(st, "count", FROM_CLI);
+  ok(get_i(st, "count") == 7, "unset, the layer below shows through");
   set(st, "count", "8", FROM_CLI);
-  ok(get_i(st, "count") == 7, "the command line under the Lua API changes nothing in effect");
-  unset(st, "count", FROM_API);
-  ok(get_i(st, "count") == 8, "unset, the layer below shows through");
   int before = watched[count];
   set(st, "count", "8", FROM_API);
   ok(watched[count] == before, "a value equal to the one in effect is no change");
-  unset(st, "count", FROM_API);
-  unset(st, "count", FROM_CLI);
+  ok(settings_change(st, "count", "9", &err) == 0 && get_i(st, "count") == 9 && settings_origin(st, count) == FROM_API,
+     "a change while running replaces the command line's value");
+  ok(settings_change(st, "count", NULL, &err) == 0 && get_i(st, "count") == 4,
+     "and emptied, the saved state shows through, the command line's gone");
+  ok(settings_change(st, "dir", "/x", &err) != 0, "a command line setting is not changed");
+  free(err);
   set(st, "persistent", "false", FROM_API);
   ok(get_i(st, "count") == 3, "persistence off again: down to the default");
   ok(set(st, "persistent", "true", FROM_STATE) != 0, "persistence is not taken from the state");

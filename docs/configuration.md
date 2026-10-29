@@ -3,12 +3,16 @@
 lulibre needs no configuration beyond where the library is. Settings come
 from four places, each laid over the one below where it sets a value:
 
-1. what Lua sets: `setman.set` in init.lua or a script, and `:set` in the
+1. the command line: `-o name=value`, `-L DIR`;
+2. what Lua sets: `setman.set` in init.lua or a script, and `:set` in the
    interface;
-2. the command line: `-o name=value`, `-L DIR`;
 3. the saved state, `~/.local/state/lulibre/settings`, read only while the
    setting `persistent` is true;
 4. the default.
+
+What init.lua sets as lulibre starts (up to its first wait) lies under the
+command line. A change made after that, by `:set`, a command, a key or a
+script, replaces the command line's value.
 
     lulibre -o help           the settings, their values and what they do
     lulibre -o name=value     a setting for this run
@@ -16,13 +20,31 @@ from four places, each laid over the one below where it sets a value:
     lulibre --clean           start without init.lua
     lulibre -C DIR            another configuration folder (or $LULIBRE_CONFIG_DIR)
 
-`~/.config/lulibre/init.lua` is plain Lua, and lulibre ships it empty.
-lulibre never writes into it.
+`~/.config/lulibre/init.lua` is plain Lua. lulibre never writes into it;
+lulibre-setup writes one only where there is none.
 
 ```lua
 setman.set("path.library", "~/calibre-library")
 setman.set("ocr", "auto")
 ```
+
+`setman.settings` is the settings as a table: a name read is `setman.get`,
+a name assigned is `setman.set`. Made the environment of a file, it gives
+a file of settings:
+
+```lua
+-- lua/config/options.lua, loaded by `require "config.options"` in init.lua
+local _ENV = setman.settings
+path.library = "~/calibre-library"
+ocr = "auto"
+path.log = os.getenv("HOME") .. "/lulibre.log"
+```
+
+Assigning a name that is no setting is an error. A name read that is no
+setting is the global of that name, so Lua's functions stay in reach.
+lulibre-setup writes the values chosen in it to `lua/config/options.lua`.
+With `persistent` true, what this file sets is set again at each start,
+over the saved state.
 
 Every setting Lua can set takes effect at once, except the files the
 index opens with (`path.indexdb` and the files beside it), which are read

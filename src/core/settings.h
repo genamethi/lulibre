@@ -5,9 +5,11 @@
  *
  * One store, owned by the main thread. The definitions are fixed at build
  * time. Each setting holds a value per layer: the default, the saved state,
- * the command line, the Lua API. The value in effect is the top layer that
- * has one: API over command line over state over default. The state layer
- * counts only while the persistence setting is true.
+ * the Lua API, the command line. The value in effect is the top layer that
+ * has one: command line over API over state over default. The state layer
+ * counts only while the persistence setting is true. What init.lua sets at
+ * start lies under the command line; a change made later (settings_change)
+ * replaces the command line's value.
  *
  * Every setting the API may set is live: a change in effect is reported to
  * the store's watcher, which passes it on (to the lua_State's copy, to the
@@ -16,7 +18,7 @@
 
 enum setting_type { SETTING_STR, SETTING_INT, SETTING_BOOL, SETTING_NUM, SETTING_PATH };
 
-enum setting_origin { FROM_DEFAULT, FROM_STATE, FROM_CLI, FROM_API, ORIGINS };
+enum setting_origin { FROM_DEFAULT, FROM_STATE, FROM_API, FROM_CLI, ORIGINS };
 
 enum setting_flags {
   SETTING_CLI_ONLY = 1 << 0, /* locates init.lua or the state: command line only, never saved */
@@ -64,6 +66,10 @@ const union setting_value *settings_value(const struct settings *st, int def);
 int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from, char **err);
 /* Empties layer `from`: the layer below shows through. */
 int settings_unset(struct settings *st, const char *name, enum setting_origin from, char **err);
+/* A change made while lulibre runs: text in the API's layer, the command
+ * line's emptied, so it takes effect; NULL empties both, and the state or
+ * the default shows through. */
+int settings_change(struct settings *st, const char *name, const char *text, char **err);
 
 /* Checks text against a definition, from any thread; fills *out (the
  * caller frees out->s for a text). */

@@ -272,7 +272,7 @@ lua_State *lstate_new(struct app *app) {
 
 /* init.lua runs as the first task (design 46), up to its first wait at once:
  * the settings it sets before it first waits are sent to the store before
- * this returns. */
+ * this returns, and lie under the command line's (design 44). */
 int lstate_run_init(struct app *app) {
   char *init = xasprintf("%s/init.lua", app->config_dir);
   int rc = 0;
@@ -282,7 +282,9 @@ int lstate_run_init(struct app *app) {
       lua_pop(app->L, 1);
       rc = -1;
     } else {
+      l_setman_starting(1);
       sched_spawn_now(app->L, 0, "init.lua");
+      l_setman_starting(0);
     }
   }
   free(init);
