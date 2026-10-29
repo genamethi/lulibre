@@ -153,6 +153,8 @@ long long lapi_setting_int(struct lua_State *L, enum setting_id id);
 char *lapi_setting_str(struct lua_State *L, enum setting_id id);
 
 void l_job_open(struct lua_State *L);
+/* Ends the sleeps no timer ends, as the lua_State goes. */
+void l_job_close(void);
 void l_proc_open(struct lua_State *L);
 void l_hash_open(struct lua_State *L);
 void l_index_open(struct lua_State *L);

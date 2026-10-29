@@ -293,6 +293,7 @@ void lstate_close(struct app *app) {
   l_evman_close(app);
   registry_clear_lua(); /* every part goes back to C's own */
   sched_free(app);
+  l_job_close(); /* after: a sleep until woken ends with its task orphaned */
   if (app->L) lua_close(app->L);
   app->L = NULL;
   free(app->lmain);

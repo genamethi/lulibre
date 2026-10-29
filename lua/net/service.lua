@@ -77,21 +77,32 @@ end
 -- The service's task: asks for what waits, at its pace, in batches. It
 -- takes the contact address once, as it starts (design 3). However it
 -- ends, a work queued as it ended is not left without a task.
+-- The answer for a key, and the tasks waiting for it woken.
+local function answer(s, key, a)
+  s.answers[key] = a
+  for _, id in ipairs(s.asking[key] or {}) do taskman.wake(id) end
+end
+
 function serve(s)
-  local _ <close> = setmetatable({}, { __close = function()
+  local keys = {}
+  local _ <close> = setmetatable({}, { __close = function(_, err)
     s.busy = nil
+    -- a request that ended in an error outside the service's own still answers
+    for _, key in ipairs(keys) do
+      if not s.answers[key] then answer(s, key, { nil, "the service's task ended: " .. tostring(err) }) end
+    end
     if #s.queue > 0 then start(s) end
   end })
   local mail <const> = setman.get("contact_email")
   while #s.queue > 0 do
     if now() < s.held_until then
-      for _, key in ipairs(s.queue) do s.answers[key] = { nil, "held back: the service asked to be left alone" } end
+      for _, key in ipairs(s.queue) do answer(s, key, { nil, "held back: the service asked to be left alone" }) end
       s.queue = {}
       break
     end
     local wait = s.next_at - now()
     if wait > 0 then taskman.sleep(wait * 1000) end
-    local keys = {}
+    keys = {}
     while #s.queue > 0 and #keys < (s.how.batch or 1) do keys[#keys + 1] = table.remove(s.queue, 1) end
     local started = now()
     local ok, got, err, hold = pcall(s.how.request, keys, mail)
@@ -100,13 +111,13 @@ function serve(s)
     s.next_at = now() + math.max(s.how.pace or 1, now() - started)
     if got then
       for _, key in ipairs(keys) do
-        local answer = got[key] or false
-        keep(s.name, key, answer)
-        s.answers[key] = { answer }
+        local a = got[key] or false
+        keep(s.name, key, a)
+        answer(s, key, { a })
       end
     else
       if hold then s.held_until = now() + math.max(s.how.hold or 300, tonumber(hold) or 0) end
-      for _, key in ipairs(keys) do s.answers[key] = { nil, err } end
+      for _, key in ipairs(keys) do answer(s, key, { nil, err }) end
     end
   end
 end
@@ -122,13 +133,16 @@ function M.ask(name, key)
   if not s then return nil, "no service is called " .. name end
   local kept = M.kept(name, key)
   if kept ~= nil then return kept, false end
-  if not s.asking[key] then
-    s.asking[key] = true
+  local waiting = s.asking[key]
+  if not waiting then
+    waiting = {}
+    s.asking[key] = waiting
     s.answers[key] = nil
     table.insert(s.queue, key)
   end
+  waiting[#waiting + 1] = taskman.self()
   start(s)
-  while not s.answers[key] do taskman.sleep(200) end
+  while not s.answers[key] do taskman.sleep() end
   local a = s.answers[key]
   s.asking[key] = nil
   if a[1] == nil then return nil, a[2] end

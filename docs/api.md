@@ -367,7 +367,10 @@ with a body; `timeout` is in milliseconds.
 | | |
 |---|---|
 | `taskman.spawn(fn, ...)` | a task running `fn(...)`; its id |
-| `taskman.sleep(ms)` `taskman.yield()` | waits |
+| `taskman.sleep([ms])` | waits: ms milliseconds, or with none until `taskman.wake` |
+| `taskman.wake(id)` | ends task id's sleep now, timed or not: true if it slept |
+| `taskman.self()` | the running task's id; nil outside a task |
+| `taskman.yield()` | waits: the other tasks take a turn |
 | `taskman.tasks()` `taskman.cancel(id)` | |
 | `utils.exec(argv [, {stdin=, cwd=, timeout=}])` | waits: `{code=, stdout=, stderr=, ...}` |
 | `utils.index{pages=, force=, filter=}` | waits: index the files |

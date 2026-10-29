@@ -93,6 +93,22 @@ print("cancelled|" .. tostring(select(2, store.apply({ { book = 1, field = "titl
 LUA
 store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
 
+# taskman.self, a sleep until woken, and wake (which ends a timed sleep too)
+cat >"$t/wake.lua" <<'LUA'
+local woke = {}
+local a = taskman.spawn(function() taskman.sleep() woke[#woke + 1] = "a" end)
+local b = taskman.spawn(function() taskman.sleep(60000) woke[#woke + 1] = "b" end)
+local c = taskman.spawn(function() taskman.sleep() woke[#woke + 1] = "c" end)
+taskman.sleep(20)
+local mine
+taskman.spawn(function() mine = taskman.self() end)
+print("wake|" .. tostring(taskman.wake(a)) .. "|" .. tostring(taskman.wake(a)) .. "|" .. tostring(taskman.wake(b)))
+taskman.cancel(c)
+taskman.sleep(20)
+print("woke|" .. table.concat(woke, ",") .. "|" .. #taskman.tasks() .. "|" .. type(taskman.self()) .. "|" .. tostring(mine ~= taskman.self()))
+LUA
+wake=$("$bin" -L "$t/lib" run "$t/wake.lua" 2>&1)
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -248,6 +264,8 @@ contains "and written" "ocr=auto" "$saved"
 if command -v sqlite3 >/dev/null; then
   contains "OCR reads with the reader Lua put in tesseract's place" "Read By Lua|page 1 eng" "$ocr"
 fi
+contains "wake ends a sleep until woken, once, and a timed one" "wake|true|false|true" "$wake"
+contains "the woken run on; a cancelled sleeper ends; self is each task's own" "woke|a,b|1|number|true" "$wake"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
