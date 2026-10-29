@@ -112,7 +112,7 @@ local function once(book, w)
   local t <close> = txt.of(book)
   local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
-  local parses = t and exprman.parse(t) or {}
+  local parses = t and exprman.parse(t, book) or {}
   parses[#parses + 1] = t and found(t) or nil
   for _, s in ipairs(srcs) do
     if s.kind == "online" then

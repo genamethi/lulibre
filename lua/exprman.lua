@@ -20,14 +20,17 @@ local M = {}
 
 local C, Cg, Ct, Cp = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.Cp
 
---- A field: patt's match is the value, `{ value=, start=, stop= }` under
--- the field's name in the parse; start and stop as string.sub takes them.
+--- A field: `{ value=, start=, stop= }` under the field's name in the
+-- parse, its value what patt captures, or what it matches when it captures
+-- nothing (`P"KEITH CONRAD" / "Keith Conrad"` gives the value its own
+-- spelling); start and stop as string.sub takes them, around the match.
 -- @tparam string name a field as calibre names it: title, authors,
--- publisher, series, pubdate, tags, or identifier:TYPE (identifier:isbn)
+-- publisher, series, pubdate, tags, identifier:TYPE (identifier:isbn), or
+-- one of lulibre's own (#partof)
 -- @param patt an LPeg pattern
 function M.field(name, patt)
-  local value = Ct(Cg(Cp(), "start") * Cg(C(patt), "value") * Cg(Cp() / function(p) return p - 1 end, "stop"))
-  return Cg(value, name)
+  local value = C(patt) / function(whole, captured) return captured or whole end
+  return Cg(Ct(Cg(Cp(), "start") * Cg(value, "value") * Cg(Cp() / function(p) return p - 1 end, "stop")), name)
 end
 
 --- The grammars, by name: `{ pattern=, group= }`.
@@ -52,17 +55,22 @@ function M.clean(value)
   return stringx.strip((value:gsub("%s+", " ")))
 end
 
---- Returns the parse of each grammar that matches the text.
+--- Returns the parse of each grammar that matches the text. A grammar's
+-- pattern gets the text and the book as LPeg's extra arguments
+-- (`expr.Carg(1)`, `expr.Carg(2)`), so one can read what is not in the text
+-- (the book's record) in a match-time capture; a field it makes so takes
+-- `{ value= }` and no positions.
 -- @param t a text (txt), held by the caller
+-- @tparam[opt] integer book the book the text is of
 -- @treturn {table,...} each `{ grammar=, fields = { [field] = {value=,
 -- start=, stop=} } }`, by grammar name
-function M.parse(t)
+function M.parse(t, book)
   local parses, text = {}, t.text
   local names = {}
   for name in pairs(M.grammars) do names[#names + 1] = name end
   table.sort(names)
   for _, name in ipairs(names) do
-    local fields = lpeg.match(M.grammars[name].pattern, text, 1, t)
+    local fields = lpeg.match(M.grammars[name].pattern, text, 1, t, book)
     if type(fields) == "table" and next(fields) then
       for _, f in pairs(fields) do f.value = M.clean(f.value) end
       parses[#parses + 1] = { grammar = name, fields = fields }

@@ -272,7 +272,13 @@ A grammar is a pattern matched from the start of a book's text, kept by
 name in `exprman`: `exprman.add(name, pattern [, group])`,
 `exprman.remove(name)`, and `exprman.parse(t)`, every grammar's parse of a
 text. `exprman.field(name, patt)` captures a field's value with its
-positions. expr's line predicates test the line at the current position:
+positions: what `patt` captures, or what it matches when it captures
+nothing (`expr.P "KEITH CONRAD" / "Keith Conrad"`). A grammar's pattern
+gets the text and the book as LPeg's extra arguments (`expr.Carg(1)`,
+`expr.Carg(2)`), so a match-time capture can read what the text does not
+hold, the book's record; a field made so is `{ value= }`. A field of
+lulibre's own is `"#name"`. `examples/grammars/` has three grammars
+written for groups of books. expr's line predicates test the line at the current position:
 `expr.largest`, `expr.bold`, `expr.block` (a paragraph's first line),
 `expr.page(n)`, `expr.near_top(share)`, and `expr.where(test)` for one of
 yours. The packaged grammar is `front` (`exprman._front`).

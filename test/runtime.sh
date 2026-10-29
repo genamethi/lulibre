@@ -110,6 +110,54 @@ print("woke|" .. table.concat(woke, ",") .. "|" .. #taskman.tasks() .. "|" .. ty
 LUA
 wake=$("$bin" -L "$t/lib" run "$t/wake.lua" 2>&1)
 
+# the example grammars (examples/grammars), each over a first page made
+# for it: a PDF of lines, each "size|text", from the top
+pdf() {
+  out=$1; shift
+  s="" y=740
+  for l in "$@"; do
+    s="${s}BT /F1 ${l%%|*} Tf 72 $y Td (${l#*|}) Tj ET
+"
+    y=$((y - 40))
+  done
+  {
+    printf '%s\n' '%PDF-1.4' '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj' '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj' \
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj'
+    printf '4 0 obj<</Length %d>>stream\n%s' "$(printf '%s' "$s" | wc -c)" "$s"
+    printf '%s\n' 'endstream' 'endobj' '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj' \
+      'trailer<</Root 1 0 R/Size 6>>' '%%EOF'
+  } >"$out"
+}
+cp "$src"/../examples/grammars/*.lua "$cfg/lua/"
+cat >"$t/grammar.lua" <<'LUA'
+local exprman, txt = require "exprman", require "txt"
+require(...)
+local t <close> = txt.of(1)
+for _, p in ipairs(exprman.parse(t, 1)) do
+  if p.grammar == ... then
+    local f = {}
+    for _, k in ipairs { "title", "authors", "publisher", "pubdate", "#partof", "#part" } do
+      f[#f + 1] = p.fields[k] and p.fields[k].value or "-"
+    end
+    print(p.grammar .. "|" .. table.concat(f, "|"))
+  end
+end
+LUA
+grammar() { # name, then the first page's lines
+  name=$1; shift
+  rm -rf "$t/g"
+  sh "$src/mklib.sh" "$t/g" >/dev/null 2>&1
+  pdf "$t/g/Unknown/paper (1)/paper - Unknown.pdf" "$@"
+  printf 'Chapters in reading order\n| 1 | introduction | 10 | x |\n| 29 | morphisms | 100 | x |\n' \
+    >"$t/g/Paul Erdos/Notes (2)/Notes - Paul Erdos.txt"
+  "$bin" -L "$t/g" -o path.indexdb="$t/g.db" index >/dev/null 2>&1
+  "$bin" -L "$t/g" -o path.indexdb="$t/g.db" run "$t/grammar.lua" "$name" 2>&1
+  rm -f "$t"/g.db*
+}
+kc=$(grammar keith-conrad "24|GALOIS GROUPS OF CUBICS" "12|KEITH CONRAD" "10|1. Introduction")
+hb=$(grammar handbook-of-algebra "24|Quantum Groups" "12|A. Author" "10|HANDBOOK OF ALGEBRA, VOL. 3" "10|2003 Elsevier Science B.V.")
+sp=$(grammar stacks-project "24|MORPHISMS OF SCHEMES" "12|01QZ" "10|Contents")
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -268,6 +316,9 @@ if command -v sqlite3 >/dev/null; then
 fi
 contains "wake ends a sleep until woken, once, and a timed one" "wake|true|false|true" "$wake"
 contains "the woken run on; a cancelled sleeper ends; self is each task's own" "woke|a,b|1|number|true" "$wake"
+contains "the Keith Conrad grammar: the title in title case, the author as spelled" "keith-conrad|Galois Groups of Cubics|Keith Conrad|-|-|-|-" "$kc"
+contains "the Handbook of Algebra grammar: the volume from the page's foot, the year, the title" "handbook-of-algebra|Quantum Groups|-|Elsevier|2003|Handbook of Algebra, Volume 3|-" "$hb"
+contains "the Stacks project grammar: the chapter, and its number from the reading order" "stacks-project|Morphisms of Schemes|The Stacks Project|-|-|The Stacks Project|29" "$sp"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
