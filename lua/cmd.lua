@@ -1,6 +1,8 @@
 --- The packaged commands (design 12): each a module function run as a
 -- task, called through the module's table, so a redefinition in init.lua
 -- takes effect (design 6).
+--
+-- @library cmd
 local bookman = require "bookman"
 local iter = require "iter"
 local propose = require "lulib._propose"

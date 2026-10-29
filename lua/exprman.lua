@@ -24,6 +24,7 @@ local C, Cg, Ct, Cp = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.Cp
 -- the field's name in the parse; start and stop as string.sub takes them.
 -- @tparam string name a field as calibre names it: title, authors,
 -- publisher, series, pubdate, tags, or identifier:TYPE (identifier:isbn)
+-- @param patt an LPeg pattern
 function M.field(name, patt)
   local value = Ct(Cg(Cp(), "start") * Cg(C(patt), "value") * Cg(Cp() / function(p) return p - 1 end, "stop"))
   return Cg(value, name)

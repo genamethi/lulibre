@@ -26,6 +26,8 @@ end
 
 --- A parse's agreement with the sources, 0 to 1 (0.5 when no source holds
 -- any of its fields), and per field the sources that agree and disagree.
+-- @tparam table parse `{ grammar=, fields= }`
+-- @tparam {table,...} srcs lulib._sources.of's
 -- @tparam table w `{ near=, same= }`
 function M.agreement(parse, srcs, w)
   local num, den, agree, disagree = 0, 0, {}, {}
@@ -50,8 +52,10 @@ end
 
 --- The parses, best first, each with `score=`, `agree=` and `disagree=`
 -- (per field, the names of the sources).
+-- @tparam {table,...} parses
+-- @tparam {table,...} srcs lulib._sources.of's
 -- @tparam table w `{ coverage=, agreement=, track=, records=, near=, same= }`; records:
--- lulibre.trust.records()
+-- trust.records()
 function M.order(parses, srcs, w)
   local total = w.coverage + w.agreement + w.track
   for _, p in ipairs(parses) do

@@ -132,6 +132,7 @@ e2e: $(BIN)
 LDOC ?= ldoc
 api:
 	@command -v $(firstword $(LDOC)) >/dev/null || { echo "LDoc not found: luarocks --local install ldoc, or make api LDOC='lua path/to/ldoc.lua'"; exit 1; }
+	rm -rf build/api
 	$(LDOC) .
 	@echo "the API reference is in build/api/index.html"
 
