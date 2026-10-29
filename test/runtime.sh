@@ -93,6 +93,16 @@ print("cancelled|" .. tostring(select(2, store.apply({ { book = 1, field = "titl
 LUA
 store=$("$bin" -L "$t/lib" run "$t/store.lua" 2>&1)
 
+# cmdman: every command, lulibre's and one made in Lua, and one by name
+cat >"$t/cmd.lua" <<'LUA'
+cmdman.create("hello", function() end, { desc = "say hello" })
+local n = 0
+for _, c in ipairs(cmdman.ls()) do if c.name == "propose" or c.name == "hello" then n = n + 1 end end
+local h = cmdman.get("hello")
+print("cmdman|" .. n .. "|" .. tostring(h and h.help) .. "|" .. tostring(cmdman.get("nope")))
+LUA
+cmds=$("$bin" -L "$t/lib" run "$t/cmd.lua" 2>&1)
+
 # coroutine.resume and coroutine.wrap are lulibre's, and behave as Lua's
 cat >"$t/co.lua" <<'LUA'
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
@@ -238,6 +248,7 @@ contains "and written" "ocr=auto" "$saved"
 if command -v sqlite3 >/dev/null; then
   contains "OCR reads with the reader Lua put in tesseract's place" "Read By Lua|page 1 eng" "$ocr"
 fi
+contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 contains "a store that raises after it waits fails the write, with the error" "raised|" "$store"

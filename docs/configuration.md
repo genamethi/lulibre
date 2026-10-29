@@ -87,7 +87,7 @@ with their values. The defaults assume a dark terminal.
 ```lua
 keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
 keymap.set({"n", "v"}, "gx", function(o) uiman.notify(#o.selection .. " selected") end)
-cmd.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
+cmdman.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
            { desc = "[filter]  books with neither an author nor a subject" })
 ```
 

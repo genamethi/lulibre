@@ -11,7 +11,7 @@
  *               taskman   l_job.c: spawn sleep yield tasks cancel
  *               uiman     l_ui.c, l_panel.c panel, l_theme.c theme
  *               setman    l_setman.c        evman  l_evman.c
- *               keymap, cmd                 (l_ui.c's callers)
+ *               keymap, cmdman              (l_ui.c's callers)
  *   preloaded   bookman   l_db.c, l_doc.c files
  *               store     l_library.c (calibre: a handler), l_db.c reload
  *               txt       l_txt.c           curl    l_curl.c
@@ -68,7 +68,7 @@ void lapi_unref(int ref);
  * one, still on their way in messages, are dropped where they land. */
 void lapi_new_generation(void);
 int luaopen_keymap(struct lua_State *L);
-int luaopen_cmd(struct lua_State *L);
+int luaopen_cmdman(struct lua_State *L);
 
 /* setman (l_setman.c). The copy of the settings in the registry: filled
  * when the lua_State is made, and kept current by l_setman_changed, a

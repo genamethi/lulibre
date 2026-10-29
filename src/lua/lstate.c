@@ -190,7 +190,7 @@ lua_State *lstate_new(struct app *app) {
   luaL_requiref(L, "setman", luaopen_setman, 1);
   luaL_requiref(L, "evman", luaopen_evman, 1);
   luaL_requiref(L, "keymap", luaopen_keymap, 1);
-  luaL_requiref(L, "cmd", luaopen_cmd, 1);
+  luaL_requiref(L, "cmdman", luaopen_cmdman, 1);
   lua_pop(L, 4);
   /* packaged modules written in C, found by require like the others */
   luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);

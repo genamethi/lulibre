@@ -207,7 +207,7 @@ undoes") name the keys as they are bound now.
 ```lua
 keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
 keymap.set({"n", "v"}, "gx", function(o) uiman.notify(#o.selection .. " selected") end)
-cmd.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
+cmdman.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
            { desc = "[filter]  books with neither an author nor a subject" })
 ```
 

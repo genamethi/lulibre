@@ -31,7 +31,7 @@
  *   uiman.log(text [, level])         write to the log the console (`) shows:
  *                                     "info", "warn", "error", or "debug"
  *                                     (kept only by a debug build)
- *   uiman.edit_file(path), uiman.in_terminal(argv), uiman.commands(),
+ *   uiman.edit_file(path), uiman.in_terminal(argv),
  *   uiman.key(command [, mode]), uiman.maps()   (below)
  *
  * This file also holds the ':' commands that exist because of Lua:
@@ -243,24 +243,45 @@ static int l_maps_ui(lua_State *L) {
 }
 ASK(l_maps, "maps")
 
-/* lulibre.commands(): every command there is, { {name = "group", help = "..."}, ... } */
-static int add_command(const char *name, const char *help, void *ud) {
-  lua_State *L = ud;
+/* cmdman.ls(): every command there is, lulibre's and those made in Lua,
+ * { {name = "group", help = "..."}, ... }; cmdman.get(name): one, or nil */
+static void push_command(lua_State *L, const char *name, const char *help) {
   lua_createtable(L, 0, 2);
   lua_pushstring(L, name);
   lua_setfield(L, -2, "name");
   lua_pushstring(L, help);
   lua_setfield(L, -2, "help");
+}
+
+static int add_command(const char *name, const char *help, void *ud) {
+  lua_State *L = ud;
+  push_command(L, name, help);
   lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
   return 0;
 }
 
-static int l_commands_ui(lua_State *L) {
+static int l_cmd_ls_ui(lua_State *L) {
   lua_newtable(L);
   command_each(add_command, L);
   return 1;
 }
-ASK(l_commands, "commands")
+ASK(l_cmd_ls, "cmdman.ls")
+
+static int find_command(const char *name, const char *help, void *ud) {
+  lua_State *L = ud;
+  if (strcmp(name, lua_tostring(L, 1))) return 0;
+  push_command(L, name, help);
+  return 1;
+}
+
+static int l_cmd_get_ui(lua_State *L) {
+  luaL_checkstring(L, 1);
+  lua_settop(L, 1);
+  command_each(find_command, L);
+  if (lua_gettop(L) == 1) lua_pushnil(L);
+  return 1;
+}
+ASK(l_cmd_get, "cmdman.get")
 
 /* keymap.set(place, key, action): a key of a place that has keys of its
  * own ("panel", "line", "picker", "pager", "console", "select") bound to
@@ -1015,10 +1036,11 @@ static void c_cancel(struct tui *t, const char *args) {
  *                                        run as a task with {book=,
  *                                        selection=}; opts {desc=, hidden=}
  *   keymap.del(mode, lhs)
- *   cmd.create(name, fn [, opts])        :name runs fn{name=, args=, book=,
+ *   cmdman.create(name, fn [, opts])     :name runs fn{name=, args=, book=,
  *                                        selection=} as a task; opts {desc=};
  *                                        a command of that name is replaced
- *   cmd.del(name)
+ *   cmdman.del(name)
+ *   cmdman.ls()  cmdman.get(name)        waits: every command, or one
  *
  * Each is a message to the interface (design 34): an error there (a key
  * sequence it cannot read) is reported, not raised. */
@@ -1106,7 +1128,7 @@ static int cmd_create(lua_State *L) {
   }
   lua_settop(L, 2);
   lua_pushstring(L, desc ? desc : "(defined in Lua)");
-  return ui_send(L, l_command_ui, "cmd.create");
+  return ui_send(L, l_command_ui, "cmdman.create");
 }
 
 static int cmd_del_ui(lua_State *L) {
@@ -1117,7 +1139,7 @@ static int cmd_del_ui(lua_State *L) {
 static int cmd_del(lua_State *L) {
   luaL_checkstring(L, 1);
   lua_settop(L, 1);
-  return ui_send(L, cmd_del_ui, "cmd.del");
+  return ui_send(L, cmd_del_ui, "cmdman.del");
 }
 
 int luaopen_keymap(lua_State *L) {
@@ -1126,8 +1148,10 @@ int luaopen_keymap(lua_State *L) {
   return 1;
 }
 
-int luaopen_cmd(lua_State *L) {
-  static const luaL_Reg fns[] = {{"create", cmd_create}, {"del", cmd_del}, {NULL, NULL}};
+int luaopen_cmdman(lua_State *L) {
+  static const luaL_Reg fns[] = {
+    {"create", cmd_create}, {"del", cmd_del}, {"ls", l_cmd_ls}, {"get", l_cmd_get}, {NULL, NULL},
+  };
   luaL_newlib(L, fns);
   return 1;
 }
@@ -1139,7 +1163,6 @@ void l_ui_open(lua_State *L) {
     {"mark", l_mark},     {"filter", l_filter},   {"pick", l_pick},
     {"input", l_input},   {"progress", l_progress},
     {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},
-    {"commands", l_commands},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
     {"key", l_key},       {"maps", l_maps},       {NULL, NULL},
   };

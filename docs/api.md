@@ -112,14 +112,16 @@ written:
 `evman.post("source_arrived", {book=, service=})` posts an event as lulibre
 does.
 
-## Keys and commands: keymap, cmd
+## Keys and commands: keymap, cmdman
 
     keymap.set("n", "<Leader>t", "filter tag:none", { desc = "books with no tags" })
     keymap.set({"n", "v"}, "gx", function(o) print(#o.selection) end)
     keymap.del("n", "<Leader>t")
 
-    cmd.create("hello", function(o) print(o.args, o.book, #o.selection) end, { desc = "say hello" })
-    cmd.del("hello")
+    cmdman.create("hello", function(o) print(o.args, o.book, #o.selection) end, { desc = "say hello" })
+    cmdman.del("hello")
+    cmdman.ls()                 -- waits: every command, { {name=, help=}, ... }, lulibre's and yours
+    cmdman.get("hello")         -- waits: one, {name=, help=}, or nil
 
 Modes are `n` (normal) and `v` (selecting). A key's right side is a
 command line or a function. A function runs as a task with what the
@@ -130,7 +132,7 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 
 | | |
 |---|---|
-| `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
+| `taskman` `uiman` `setman` `evman` `keymap` `cmdman` | globals: tasks, the interface, settings, events, keys, commands |
 | `lulib` | a global: `version`, `build`, `headless` |
 | `utils` | a global: `exec`, `md5`, `index` (below), and the handler `ocr` (above) |
 | `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `sql` `lsqlite3` | modules, by `require` |
@@ -352,7 +354,7 @@ with a body; `timeout` is in milliseconds.
 | `uiman.filter([text])` | waits: the filter, or set it |
 | `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
-| `uiman.key(command [, mode])` `uiman.maps()` `uiman.commands()` | waits |
+| `uiman.key(command [, mode])` `uiman.maps()` | waits |
 | `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
