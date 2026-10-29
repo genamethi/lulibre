@@ -17,17 +17,11 @@ t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 
 cat > "$t/sql.lua" <<'LUA'
-local sqlite3 = require "lsqlite3"
--- rows of a query of one of the index's files: "" the index, "journal" its journal
-local function q(file, sql, ...)
-  local path = setman.get("index")
-  if file ~= "" then path = path:gsub("%.db$", "") .. "." .. file .. ".db" end
-  local db = sqlite3.open(path, sqlite3.OPEN_READONLY)
-  local st = assert(db:prepare(sql), db:errmsg())
-  st:bind_values(...)
-  local rows = {}
-  for r in st:nrows() do rows[#rows + 1] = r end
-  st:finalize()
+local sql, sqlite3 = require "sql", require "lsqlite3"
+-- rows of a query of the file a path setting names: "indexdb", "journaldb"
+local function q(file, query, ...)
+  local db = sql.open(setman.get("path." .. file), sqlite3.OPEN_READONLY)
+  local rows = sql.run(db, query, ...)
   db:close()
   return rows
 end
@@ -52,12 +46,12 @@ local b = bookman.book(1)
 say("record", b.title, b.author, table.concat(b.tags, ","), b.pubdate)
 say("same", tostring(store.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
 say("bad", select(2, store.apply({ { book = 1, field = "pubdate", value = "soon" } })))
-local r = q("journal", "SELECT proposal, source FROM journal WHERE field = 'title'")[1]
+local r = q("journaldb", "SELECT proposal, source FROM journal WHERE field = 'title'")[1]
 say("provenance", r.proposal, r.source)
 say("undo", tostring(store.undo(batch)))
 b = bookman.book(1)
 say("after undo", b.title, b.author)
-say("undone", q("journal", "SELECT count(*) AS n FROM journal WHERE batch = ? AND state = 4", batch)[1].n)
+say("undone", q("journaldb", "SELECT count(*) AS n FROM journal WHERE batch = ? AND state = 4", batch)[1].n)
 store.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
 say("in order", table.concat(bookman.book(1).tags, ","))
 LUA
@@ -68,7 +62,7 @@ local store = require "store"
 setman.set("embed", true)
 print("holder|" .. store.holder())
 print("apply|" .. tostring(store.apply({ { book = 1, field = "title", value = "Embedded Title" } })))
-local f = q("", "SELECT emb_title FROM files WHERE book = 1")[1]
+local f = q("indexdb", "SELECT emb_title FROM files WHERE book = 1")[1]
 print("emb|" .. tostring(f and f.emb_title))
 LUA
 
@@ -87,7 +81,7 @@ print("accept|" .. tostring(wit.accept(id.title)))
 print("reject|" .. tostring(wit.reject(id.authors)))
 local b = bookman.book(1)
 print("decided|" .. b.title .. "|" .. b.author .. "|" .. #wit.get(1) .. "|" .. #bookman.ids("is:proposed"))
-local r = q("journal", "SELECT store, field, proposal, source FROM journal WHERE batch = 2")[1]
+local r = q("journaldb", "SELECT store, field, proposal, source FROM journal WHERE batch = 2")[1]
 print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
 local rec = trust.records(1, 0.7, 0.95)
 print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))

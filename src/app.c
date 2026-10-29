@@ -21,23 +21,15 @@ static void watch(struct settings *st, int def, void *ud) {
   struct app *app = ud;
   if (app->L) queue_post(LOOP_LUA, l_setman_changed, setman_change_new(st, def));
   work_setting_changed(app, def);
+  if (def == S_CRASH) crash_at(app_str(app, S_CRASH));
 }
 
 void app_settings(struct app *app, const char *confdir, const char *library, const char **sets, int nsets) {
   char *err = NULL;
   app->settings = settings_new(setting_defs, S_COUNT);
-  if (confdir && confdir[0] && settings_set(app->settings, "config_dir", confdir, FROM_CLI, &err)) die("%s", err);
-  const char *dir = app_str(app, S_CONFIG_DIR);
-  app->config_dir = dir[0] ? xstrdup(dir) : path_xdg("XDG_CONFIG_HOME", "~/.config/lulibre");
-  char *state = path_xdg("XDG_STATE_HOME", "~/.local/state/lulibre");
-  app->state_path = xasprintf("%s/settings", state);
-  free(state);
-  if (settings_load_state(app->settings, app->state_path, &err)) {
-    warnf("%s", err);
-    free(err);
-    err = NULL;
-  }
-  if (library && settings_set(app->settings, "library", library, FROM_CLI, &err)) die("%s", err);
+  /* the command line first: it says where the saved state is */
+  if (confdir && confdir[0] && settings_set(app->settings, "path.config", confdir, FROM_CLI, &err)) die("%s", err);
+  if (library && settings_set(app->settings, "path.library", library, FROM_CLI, &err)) die("%s", err);
   for (int k = 0; k < nsets; k++) {
     const char *eq = strchr(sets[k], '=');
     if (!eq) die("-o wants name=value, got '%s'", sets[k]);
@@ -46,6 +38,22 @@ void app_settings(struct app *app, const char *confdir, const char *library, con
     free(name);
     if (rc) die("%s", err);
   }
+  const char *dir = app_str(app, S_CONFIG_DIR);
+  app->config_dir = dir[0] ? xstrdup(dir) : path_xdg("XDG_CONFIG_HOME", "~/.config/lulibre");
+  const char *saved = app_str(app, S_STATE);
+  if (saved[0]) {
+    app->state_path = xstrdup(saved);
+  } else {
+    char *state = path_xdg("XDG_STATE_HOME", "~/.local/state/lulibre");
+    app->state_path = xasprintf("%s/settings", state);
+    free(state);
+  }
+  if (settings_load_state(app->settings, app->state_path, &err)) {
+    warnf("%s", err);
+    free(err);
+    err = NULL;
+  }
+  crash_at(app_str(app, S_CRASH));
   settings_watch(app->settings, watch, app);
 }
 
@@ -102,15 +110,16 @@ void app_open_db(struct app *app) {
   char *err = NULL;
   if (!app_str(app, S_LIBRARY)[0]) {
     const char *env = getenv("LULIBRE_LIBRARY");
-    if (env && env[0]) settings_set(app->settings, "library", env, FROM_CLI, &err);
-    else if (access("metadata.db", R_OK) == 0) settings_set(app->settings, "library", ".", FROM_CLI, &err);
-    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or setman.set(\"library\", DIR) in init.lua");
+    if (env && env[0]) settings_set(app->settings, "path.library", env, FROM_CLI, &err);
+    else if (access("metadata.db", R_OK) == 0) settings_set(app->settings, "path.library", ".", FROM_CLI, &err);
+    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or setman.set(\"path.library\", DIR) in init.lua");
   }
   const char *library = app_str(app, S_LIBRARY);
   char *real = realpath(library, NULL);
   if (!real) die("library %s: no such directory", library);
 
   char *path = app_index_path(app);
+  db_side_set(app_str(app, S_JOURNAL_DB), app_str(app, S_CUSTOM_DB), app_str(app, S_WIT_DB));
   if (db_open(&app->db, path, &err)) die("%s", err);
   free(path);
   if (db_mirror(&app->db, real, 0, &err) < 0) {

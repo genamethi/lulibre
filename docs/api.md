@@ -58,7 +58,7 @@ time of the call, so the redefinition takes effect from the next call.
 
 No file of yours replaces a packaged module: lulibre's own modules are
 found first, then `lua/` in the configuration folder, then the module
-prefix `mod_tree` names.
+prefix `path.modtree` names.
 
 Two parts are C's unless a function of yours takes their place:
 
@@ -128,7 +128,7 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
 | `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
-| `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `lsqlite3` | modules, by `require` |
+| `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `sql` `lsqlite3` | modules, by `require` |
 
 ## The library: bookman
 
@@ -148,8 +148,9 @@ A **book** is `{ id, title, authors = {...}, author = "A & B", tags =
 {doi=, isbn=, ...}, formats = {...}, dir }`. Filters are [the filter
 language](filters.md).
 
-The index itself is `setman.get("index")`, a SQLite file a script reads
-with lsqlite3 (below); `<index>.journal.db` beside it is the journal.
+The index itself is the file `setman.get("path.indexdb")`, and the journal
+`setman.get("path.journaldb")`: SQLite files a script reads with `sql`
+(below).
 
 ### Changing it: store
 
@@ -290,19 +291,25 @@ grammars' parses and the online records, and `:review` shows them.
 A service is defined with `require("net.service").define(name,
 {ident=, pace=, hold=, batch=, request=, record=})`; Crossref, Open
 Library and arXiv come with lulibre. Every answer is kept, for every
-library, in `net.db` in lulibre's data folder, and a kept one is not
+library, in the file `path.netdb`, and a kept one is not
 asked for again. A service is asked no
 sooner than its pace, as many works at once as its batch, and is left
 alone for its hold when it says it is asked too much.
 
-## Databases: lsqlite3
+## Databases: sql
 
-    local sqlite = require "lsqlite3"
-    local db = sqlite.open(path)
-    for row in db:nrows("SELECT name FROM t WHERE instr(fold(name), ?) > 0") do ... end
+    local sql = require "sql"
+    local db = sql.open(path)                 -- raises when it cannot
+    for _, row in ipairs(sql.run(db, "SELECT name FROM t WHERE instr(fold(name), ?) > 0", "erdos")) do ... end
 
-[lsqlite3](https://lua.sqlite.org/home/doc/tip/doc/lsqlite3.wiki), built
-into lulibre. Every connection it opens has lulibre's two SQL functions:
+| Call | Does |
+|---|---|
+| `sql.open(path [, flags])` | an lsqlite3 connection, waiting up to 5 seconds for a write another holds; by default read and write, the file and its folders made when not there; `flags` as lsqlite3's (`sqlite3.OPEN_READONLY`) |
+| `sql.run(db, query, ...)` | the rows, each a table by column name, with the values bound to the `?`s; raises the error |
+
+The connection is
+[lsqlite3](https://lua.sqlite.org/home/doc/tip/doc/lsqlite3.wiki)'s, built
+into lulibre, with everything else it does. Every connection it opens has lulibre's two SQL functions:
 `fold(s)`, s without case, accents or styled letters, the key filters
 compare by; and `find(s, pattern)`, a Lua pattern match. Queries
 run on the Lua thread and do not wait like the calls above: a long one

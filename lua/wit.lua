@@ -2,8 +2,8 @@
 -- until a review accepts or rejects it.
 --
 -- Per book and field the wits are in order, the first-ranked first; the
--- others are its alternatives. They are kept in a file beside the index
--- (`<index>.wit.db`, table `wits`), which the filter `is:proposed` reads.
+-- others are its alternatives. They are kept in the file path.witdb
+-- (table `wits`), which the filter `is:proposed` reads.
 --
 --     local wit = require "wit"
 --     wit.set(12, { { field = "title", value = "Knot Theory", source = "front", start = 41, stop = 52 } })
@@ -11,6 +11,7 @@
 --     wit.accept(f.alts[1].id)
 --
 -- @library wit
+local sql = require "sql"
 local sqlite3 = require "lsqlite3"
 local store = require "store"
 local trust = require "trust"
@@ -19,28 +20,11 @@ local M = {}
 
 local db
 
--- the connection, opened on first use; the file and its table are made
--- with the index
-local function conn()
-  if db then return db end
-  local path = setman.get("index"):gsub("%.db$", "") .. ".wit.db"
-  local err
-  db, err = sqlite3.open(path, sqlite3.OPEN_READWRITE)
-  if not db then error("wit: cannot open " .. path .. ": " .. tostring(err), 3) end
-  db:busy_timeout(5000)
-  return db
-end
-
--- runs a statement with its values; the rows it gives
-local function run(sql, ...)
-  local d = conn()
-  local st = d:prepare(sql)
-  if not st then error("wit: " .. d:errmsg(), 3) end
-  if select("#", ...) > 0 then st:bind_values(...) end
-  local rows = {}
-  for r in st:nrows() do rows[#rows + 1] = r end
-  if st:finalize() ~= sqlite3.OK then error("wit: " .. d:errmsg(), 3) end
-  return rows
+-- a statement on the file, opened on first use; the file and its table
+-- are made with the index
+local function run(query, ...)
+  db = db or sql.open(setman.get("path.witdb"), sqlite3.OPEN_READWRITE)
+  return sql.run(db, query, ...)
 end
 
 local function joined(list)

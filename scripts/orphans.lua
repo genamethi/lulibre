@@ -9,7 +9,7 @@ local luv = require "luv"
 -- what calibre keeps in a book's folder beside its formats
 local calibre_own = { ["cover.jpg"] = true, ["metadata.opf"] = true }
 
-local root = assert(luv.fs_realpath(setman.get("library")))
+local root = assert(luv.fs_realpath(setman.get("path.library")))
 
 -- the files in the books' folders (author/title (id)/file), and the folders
 -- with nothing in them

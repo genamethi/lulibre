@@ -48,5 +48,9 @@ unsigned long long hash_fnv1a(const char *s);
 /* crash.c: on a fatal signal, append a backtrace to the crash log. Install
  * after anything else that handles those signals, so it runs first. */
 void crash_install(void);
+/* The crash log: where it is; a file to use instead (path.crash), "" for
+ * the default. */
+const char *crash_file(void);
+void crash_at(const char *file);
 
 #endif

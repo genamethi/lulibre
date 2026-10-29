@@ -20,12 +20,14 @@ from four places, each laid over the one below where it sets a value:
 lulibre never writes into it.
 
 ```lua
-setman.set("library", "~/calibre-library")
+setman.set("path.library", "~/calibre-library")
 setman.set("ocr", "auto")
 ```
 
-Every setting Lua can set takes effect at once. `config_dir` comes from
-the command line only: it says where init.lua is.
+Every setting Lua can set takes effect at once, except the files the
+index opens with (`path.indexdb` and the files beside it), which are read
+when it opens. `path.config` and `path.state` come from the command line
+only: they say where init.lua and the saved state are.
 
 With `persistent` true, lulibre writes the settings changed during a run
 to the saved state when it exits (and on `setman.save()`), and starts from
@@ -33,15 +35,22 @@ them the next time; what init.lua or the command line sets still lies over
 them. A value saved there stays until it is changed or the file is
 removed.
 
+`setman.get` gives a `path.*` setting left empty as the path in use:
+`setman.get("path.indexdb")` is the index file lulibre opened.
+
 ## Settings
 
 | Setting | Default | |
 |---|---|---|
-| `library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, or else the current directory |
-| `index` | | the index database; by default under `~/.local/share/lulibre/`, and `setman.get("index")` gives the file in use |
-| `config_dir` | | where init.lua and `lua/` are; command line only |
+| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, or else the current directory |
+| `path.indexdb` | | the index database; by default `<library's name>-<hash>.db` under `~/.local/share/lulibre/` |
+| `path.journaldb` `path.customdb` `path.witdb` | | the journal of changes, your own `#fields`, the wits waiting for review; by default beside the index, `<index>.journal.db` and so on |
+| `path.netdb` | | the online answers, for every library; by default `~/.local/share/lulibre/net.db` |
+| `path.config` | | where init.lua and `lua/` are; by default `~/.config/lulibre`; command line only |
+| `path.state` | | the saved settings; by default `~/.local/state/lulibre/settings`; command line only |
 | `persistent` | `false` | keep the settings changed during a run, and start from them next time |
-| `log_file` | | also append the log to this file |
+| `path.log` | | also append the log to this file |
+| `path.crash` | | where a crash's report goes; by default `~/.local/state/lulibre/crash.log` |
 | `jobs` | `0` | worker threads; 0 is one per core |
 | `pages` | `6` | the first pages of each file read into the index |
 | `ocr` | `never` | `auto`: OCR the files whose text is not usable; `always`: every file |
@@ -51,15 +60,15 @@ removed.
 | `leader` | `\` | the key `<Leader>` stands for |
 | `blitter` | `auto` | how page images are drawn: `auto` · `pixel` · `sextant` · `quadrant` · `half` |
 | `preview` | `text` | what the preview shows first: `text` · `image` |
-| `sync_dir` | | a folder of files waiting to be added to the library |
-| `mod_tree` | | a module prefix searched after lulibre's own modules and yours; not in a pixi environment |
+| `path.sync` | | a folder of files waiting to be added to the library |
+| `path.modtree` | | a module prefix searched after lulibre's own modules and yours; not in a pixi environment |
 | `rank_coverage` `rank_agreement` `rank_track` | `45` `35` `20` | what ranking a parse weighs: the fields it fills, its agreement with the sources, its record of review decisions |
 | `track_after` | `100` | review decisions the journal holds before a record of decisions counts |
 | `similar_near` `similar_same` | `0.7` `0.95` | how much of one value found in another makes them near, and the same |
 | `embed` | `false` | every change to a record is also written into the book's files, once per batch |
 | `write_jobs` | `4` | calibredb processes at once through the content server; straight to the folder, one |
 | `contact_email` | | sent to the metadata services with each request, when set |
-| `server` `user` `password_file` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |
+| `server` `user` `path.password` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |
 
 ## Colours
 
@@ -87,7 +96,7 @@ cmd.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o
 first. See [the Lua API](api.md).
 
 lulibre finds its own modules first, then those in `~/.config/lulibre/lua/`,
-then those under the prefix `mod_tree` names, then Lua's own places as Lua
+then those under the prefix `path.modtree` names, then Lua's own places as Lua
 and the environment (`LUA_PATH_5_5`, `LUA_CPATH_5_5`) set them. Nothing is
 looked for in the current directory. To change what one of lulibre's
 modules does, redefine its function: no file of yours replaces one.
@@ -104,7 +113,8 @@ modules does, redefine its function: no file of yours replaces one.
 | `~/.local/share/lulibre/NAME-HASH.wit.db` | the wits waiting for review |
 | `~/.local/share/lulibre/net.db` | every online answer, for every library |
 
-lulibre honours `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME`.
+lulibre honours `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME`,
+and each file has a `path.*` setting (above) that puts it elsewhere.
 
 ## Terminals
 

@@ -22,7 +22,7 @@ echo 'return "the user'"'"'s own"' >"$cfg/lua/mine.lua"
 
 cat >"$cfg/init.lua" <<LUA
 setman.set("pages", 9)
-setman.set("mod_tree", "$t/mods")
+setman.set("path.modtree", "$t/mods")
 LUA
 cat >"$t/probe.lua" <<'LUA'
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
@@ -32,8 +32,12 @@ say("packaged", type(require("lulibre.grammar")))
 say("user", require("mine"))
 local ok, m = pcall(require, "modprobe")
 say("mod_tree", ok and m or "not found")
-say("cli only", (pcall(setman.set, "config_dir", "/x")))
+say("cli only", (pcall(setman.set, "path.config", "/x")))
 say("bad value", select(2, pcall(setman.set, "ocr", "sometimes")))
+local index = setman.get("path.indexdb")
+say("witdb", setman.get("path.witdb") == index:sub(1, -4) .. ".wit.db")
+say("netdb", setman.get("path.netdb"))
+say("state", setman.get("path.state"))
 setman.set("persistent", true)
 setman.set("ocr", "auto")
 LUA
@@ -46,6 +50,9 @@ rm -f "$t/state/lulibre/settings"
 "$bin" -L "$t/lib" run "$t/probe.lua" >/dev/null 2>&1 || true
 printf '' >"$cfg/init.lua"
 again=$("$bin" -L "$t/lib" -o persistent=true run "$t/probe.lua" 2>&1)
+# the saved state somewhere else, from the command line
+elsewhere=$("$bin" -L "$t/lib" -o path.state="$t/st/saved" -o persistent=true run "$t/probe.lua" 2>&1)
+saved=$(cat "$t/st/saved" 2>/dev/null || true)
 
 # a reader of Lua's in tesseract's place (lulibre.ocr.read), and back
 cat >"$cfg/init.lua" <<'LUA'
@@ -65,13 +72,9 @@ local seen, changed = {}, nil
 evman.add("records_changed", function(ev) changed = table.concat(ev.ids, ",") .. "|" .. table.concat(ev.fields, ",") end)
 function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
 local batch = store.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
-local sqlite3 = require "lsqlite3"
-local jdb = sqlite3.open(setman.get("index"):gsub("%.db$", "") .. ".journal.db", sqlite3.OPEN_READONLY)
-local st = jdb:prepare("SELECT store, state FROM journal WHERE batch = ?")
-st:bind_values(batch)
-local row
-for r in st:nrows() do row = r end
-st:finalize()
+local sql, sqlite3 = require "sql", require "lsqlite3"
+local jdb = sql.open(setman.get("path.journaldb"), sqlite3.OPEN_READONLY)
+local row = sql.run(jdb, "SELECT store, state FROM journal WHERE batch = ?", batch)[1]
 jdb:close()
 print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
 for _ = 1, 50 do if changed then break end taskman.sleep(20) end
@@ -225,6 +228,11 @@ contains "a command-line-only setting is refused from Lua" "cli only|false" "$ou
 contains "a bad value is refused, saying which are allowed" "never|auto|always" "$out"
 contains "persistence on: the state is written at exit, the API's values in it" "ocr=auto" "$state"
 contains "and read back at the next start" "ocr|auto" "$again"
+contains "an empty path setting is the path in use: beside the index" "witdb|true" "$out"
+contains "and under the data folder" "netdb|$t/data/lulibre/net.db" "$out"
+contains "and the saved state's" "state|$t/state/lulibre/settings" "$out"
+contains "path.state from the command line is where the state is read" "state|$t/st/saved" "$elsewhere"
+contains "and written" "ocr=auto" "$saved"
 if command -v sqlite3 >/dev/null; then
   contains "OCR reads with the reader Lua put in tesseract's place" "Read By Lua|page 1 eng" "$ocr"
 fi

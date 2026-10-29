@@ -23,6 +23,12 @@ struct db {
 
 #define DB_BOOK_FILE_ORDER(p) "(" p "outcome IN (1, 2)) DESC, (" p "format = 'PDF') DESC, " p "id"
 
+/* The files kept beside the index, by name ("journal", "custom", "wit"):
+ * the path set for each (path.journaldb, ...), "" for <index>.<name>.db.
+ * Set before the first connection opens. */
+void db_side_set(const char *journal, const char *custom, const char *wit);
+/* Where the file `what` of the index at `index` is. malloc'd. */
+char *db_side_path(const char *index, const char *what);
 int db_open(struct db *db, const char *path, char **err);
 /* A second, read-only connection for queries run off the loop thread. */
 int db_open_reader(struct db *db, const char *path, char **err);

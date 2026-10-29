@@ -137,15 +137,23 @@ static const char wit_schema[] =
   " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
   " UNIQUE(book, field, alt));";
 
-static char *beside(const char *index, const char *what) {
+static char *side[3]; /* journal, custom, wit */
+static const char *const side_names[] = {"journal", "custom", "wit"};
+
+void db_side_set(const char *journal, const char *custom, const char *wit) {
+  const char *paths[] = {journal, custom, wit};
+  for (int i = 0; i < 3; i++) {
+    free(side[i]);
+    side[i] = paths[i] && paths[i][0] ? xstrdup(paths[i]) : NULL;
+  }
+}
+
+char *db_side_path(const char *index, const char *what) {
+  for (int i = 0; i < 3; i++)
+    if (side[i] && !strcmp(what, side_names[i])) return xstrdup(side[i]);
   size_t n = strlen(index);
   if (n > 3 && !strcmp(index + n - 3, ".db")) return xasprintf("%.*s.%s.db", (int)(n - 3), index, what);
   return xasprintf("%s.%s.db", index, what);
-}
-
-/* Where the journal of the index at `index` is kept. malloc'd. */
-static char *db_history_path(const char *index) {
-  return beside(index, "journal");
 }
 
 
@@ -154,7 +162,7 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
 
 static int attach_history(struct db *db, int create, char **err) {
   if (!strncmp(db->path, "file:", 5) || !strcmp(db->path, ":memory:")) return 0;
-  char *path = db_history_path(db->path);
+  char *path = db_side_path(db->path, "journal");
   int rc = attach(db, path, "history", create ? "rwc" : "rw", err);
   free(path);
   return rc;
@@ -163,7 +171,7 @@ static int attach_history(struct db *db, int create, char **err) {
 /* A file beside the index (custom, wit), attached under its name. */
 static int attach_beside(struct db *db, const char *what, const char *mode, char **err) {
   if (!strncmp(db->path, "file:", 5) || !strcmp(db->path, ":memory:")) return 0;
-  char *path = beside(db->path, what);
+  char *path = db_side_path(db->path, what);
   int rc = attach(db, path, what, mode, err);
   free(path);
   return rc;

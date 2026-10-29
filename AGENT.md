@@ -172,7 +172,7 @@ it as they are touched:
 ## Verifying
 
 - Anything that writes lulibre's own tables in bulk (`:learn`, confirming
-  records) is tried on a copy of the index, run with `-o index=COPY`. Take
+  records) is tried on a copy of the index, run with `-o path.indexdb=COPY`. Take
   the copy with `sqlite3 'file:NAME.db?mode=ro' ".backup COPY"` (a plain
   `cp` of an index in use can be torn), after removing any `COPY-wal` /
   `-shm` left from an earlier copy of that name.

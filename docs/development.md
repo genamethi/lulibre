@@ -317,11 +317,12 @@ stored text), and a contentless full-text row per paragraph. A new version
 of its tables (`SCHEMA_VERSION`, `src/db/db.c`) drops all that and reads
 again; `staged` and `kv` stay.
 
-Three files beside the index hold what must outlive it (`src/db/db.c`):
+Three files beside the index hold what must outlive it (`src/db/db.c`;
+each can be put elsewhere with its `path.*` setting):
 `<index>.journal.db` holds every operation on the library through its
 lifecycle, with where each value came from, `<index>.custom.db` holds
 your own fields, and `<index>.wit.db` the wits waiting for review, which
-`lua/wit.lua` writes through lsqlite3. Online answers are kept for every
+`lua/wit.lua` writes through `sql`. Online answers are kept for every
 library in `net.db` (`lua/net/service.lua`). Staged files get rows in the mirror tables under negative
 ids (`src/db/stage.c`), which lets the list, the filters and the API treat
 them as books.

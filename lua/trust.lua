@@ -12,6 +12,7 @@
 -- @library trust
 local bookman = require "bookman"
 local mesr = require "mesr"
+local sql = require "sql"
 local sqlite3 = require "lsqlite3"
 local stringx = require "pl.stringx"
 
@@ -62,16 +63,11 @@ end
 
 -- the journal's review decisions: `{ {book=, field=, proposed=, source=}, ... }`,
 -- each a library field as the wit's value was written to it, done or
--- undone. The journal is the file `<index>.journal.db`.
+-- undone. The journal is the file path.journaldb.
 local function decisions()
-  local path = setman.get("index"):gsub("%.db$", "") .. ".journal.db"
-  local db = sqlite3.open(path, sqlite3.OPEN_READONLY)
-  if not db then return {} end
-  local rows = {}
-  for r in db:nrows("SELECT book, field, proposed, source FROM journal"
-                    .. " WHERE proposal IS NOT NULL AND source IS NOT NULL AND state IN (2, 4)") do
-    rows[#rows + 1] = r
-  end
+  local db = sql.open(setman.get("path.journaldb"), sqlite3.OPEN_READONLY)
+  local rows = sql.run(db, "SELECT book, field, proposed, source FROM journal"
+                           .. " WHERE proposal IS NOT NULL AND source IS NOT NULL AND state IN (2, 4)")
   db:close()
   return rows
 end

@@ -1,7 +1,8 @@
 /* setman: the settings (design 2, 3, 44, 45).
  *
- *   setman.get(name, ...)     the values in effect, in order; index, when
- *                             not set, is the index file in use
+ *   setman.get(name, ...)     the values in effect, in order; a path.*
+ *                             setting left empty is the path C works out
+ *                             (path.indexdb: the index file in use)
  *   setman.set(name, value)   a change; nil empties the API's value, and
  *                             the one below shows through
  *   setman.save()             write the saved state now (only while the
@@ -28,6 +29,7 @@
 #include "core/log.h"
 #include "core/queue.h"
 #include "core/util.h"
+#include "db/db.h"
 #include "lua/lapi.h"
 
 static const char COPY[] = "lulibre.settings";
@@ -139,17 +141,37 @@ static void store_save(struct app *app, void *arg) {
 
 /* ---- the library ---- */
 
+/* An empty path.* setting as the path C works out; 0 for one with no
+ * default (path.log: no log file). */
+static int push_worked_out(lua_State *L, const char *name) {
+  struct app *app = lapi_app(L);
+  static const char *const side[][2] = {{"path.journaldb", "journal"}, {"path.customdb", "custom"}, {"path.witdb", "wit"}};
+  char *p = NULL;
+  if (!strcmp(name, "path.indexdb")) p = xstrdup(lapi_db(L)->path);
+  else if (!strcmp(name, "path.config")) p = xstrdup(app->config_dir);
+  else if (!strcmp(name, "path.state")) p = xstrdup(app->state_path);
+  else if (!strcmp(name, "path.crash")) p = xstrdup(crash_file());
+  else if (!strcmp(name, "path.netdb")) {
+    char *dir = path_xdg("XDG_DATA_HOME", "~/.local/share/lulibre");
+    p = xasprintf("%s/net.db", dir);
+    free(dir);
+  }
+  for (size_t i = 0; !p && i < sizeof side / sizeof side[0]; i++)
+    if (!strcmp(name, side[i][0])) p = db_side_path(lapi_db(L)->path, side[i][1]);
+  if (!p) return 0;
+  lua_pushstring(L, p);
+  free(p);
+  return 1;
+}
+
 static int l_get(lua_State *L) {
   int n = lua_gettop(L);
-  luaL_checkstack(L, n, NULL);
+  luaL_checkstack(L, n + 2, NULL);
   lua_getfield(L, LUA_REGISTRYINDEX, COPY);
   for (int i = 1; i <= n; i++) {
     const char *name = luaL_checkstring(L, i);
     if (lua_getfield(L, n + 1, name) == LUA_TNIL) return luaL_error(L, "no setting is called %s", name);
-    if (!strcmp(name, "index") && !*lua_tostring(L, -1)) {
-      lua_pop(L, 1);
-      lua_pushstring(L, lapi_db(L)->path); /* worked out from the library */
-    }
+    if (!strncmp(name, "path.", 5) && !*lua_tostring(L, -1) && push_worked_out(L, name)) lua_remove(L, -2);
   }
   return n;
 }

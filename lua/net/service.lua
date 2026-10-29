@@ -2,12 +2,11 @@
 -- size, and its hold when the service says it is asked too much. A caller
 -- asks about one work and waits; one task per service asks the service,
 -- for as many waiting works as a request takes, no sooner than the pace
--- allows. Every answer is kept (design 43), for every library, in
--- `net.db` in lulibre's data folder ($XDG_DATA_HOME/lulibre).
+-- allows. Every answer is kept (design 43), for every library, in the
+-- file path.netdb.
 --
 -- @submodule net
-local sqlite3 = require "lsqlite3"
-local luv = require "luv"
+local sql = require "sql"
 
 local M = {}
 
@@ -39,34 +38,15 @@ end
 
 local db
 
--- the connection, opened (and the file made) on first use
-local function conn()
-  if db then return db end
-  local data = os.getenv("XDG_DATA_HOME")
-  if not data or data == "" then data = os.getenv("HOME") .. "/.local/share" end
-  luv.fs_mkdir(data, 448)
-  luv.fs_mkdir(data .. "/lulibre", 448)
-  local path = data .. "/lulibre/net.db"
-  local err
-  db, err = sqlite3.open(path)
-  if not db then error("net: cannot open " .. path .. ": " .. tostring(err), 3) end
-  db:busy_timeout(5000)
-  db:exec("PRAGMA journal_mode=WAL;"
-          .. "CREATE TABLE IF NOT EXISTS answers(service TEXT NOT NULL, key TEXT NOT NULL, answer TEXT,"
-          .. " ts INTEGER, PRIMARY KEY(service, key)) WITHOUT ROWID;")
-  return db
-end
-
--- runs a statement with its values; the rows it gives
-local function run(sql, ...)
-  local d = conn()
-  local st = d:prepare(sql)
-  if not st then error("net: " .. d:errmsg(), 3) end
-  st:bind_values(...)
-  local rows = {}
-  for r in st:nrows() do rows[#rows + 1] = r end
-  if st:finalize() ~= sqlite3.OK then error("net: " .. d:errmsg(), 3) end
-  return rows
+-- a statement on the file, opened (and the file made) on first use
+local function run(query, ...)
+  if not db then
+    db = sql.open(setman.get("path.netdb"))
+    db:exec("PRAGMA journal_mode=WAL;"
+            .. "CREATE TABLE IF NOT EXISTS answers(service TEXT NOT NULL, key TEXT NOT NULL, answer TEXT,"
+            .. " ts INTEGER, PRIMARY KEY(service, key)) WITHOUT ROWID;")
+  end
+  return sql.run(db, query, ...)
 end
 
 --- The answer kept for a key: the answer, or false for "no record" still

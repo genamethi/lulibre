@@ -44,7 +44,7 @@ idx="$out/index.db"
 if [ -n "$index_from" ] && [ ! -e "$idx" ]; then
   sqlite3 "file:$(realpath "$index_from")?mode=ro" ".backup '$idx'"
 fi
-lu() { "$bin" --clean -L "$lib" -o index="$idx" "$@"; }
+lu() { "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@"; }
 
 args() {
   case $1 in
@@ -67,11 +67,11 @@ for step in $steps; do
   echo "==> $step ($prof)"
   case $prof in
     time)
-      python3 -I "$here/rusage.py" "$out/$step.time" "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+      python3 -I "$here/rusage.py" "$out/$step.time" "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@" >"$out/$step.out" 2>&1
       cat "$out/$step.time" ;;
     perf)
       perf record -q --debuginfod -F 999 --call-graph fp -o "$out/$step.perf.data" -- \
-        "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+        "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@" >"$out/$step.out" 2>&1
       perf report -q -i "$out/$step.perf.data" --stdio --no-children --percent-limit 0.5 -g none \
         >"$out/$step.self.txt" 2>/dev/null
       perf report -q -i "$out/$step.perf.data" --stdio --children --percent-limit 2 -g caller,0.5,callee \
@@ -79,19 +79,19 @@ for step in $steps; do
       head -n 25 "$out/$step.self.txt" ;;
     callgrind)
       valgrind -q --tool=callgrind --callgrind-out-file="$out/$step.callgrind" \
-        "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+        "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@" >"$out/$step.out" 2>&1
       callgrind_annotate "$out/$step.callgrind" >"$out/$step.callgrind.txt"
       head -n 40 "$out/$step.callgrind.txt" ;;
     massif)
       valgrind -q --tool=massif --massif-out-file="$out/$step.massif" \
-        "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+        "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@" >"$out/$step.out" 2>&1
       ms_print "$out/$step.massif" >"$out/$step.massif.txt"
       head -n 45 "$out/$step.massif.txt" ;;
     count)
       [ -e "$cache/luacount.so" ] || cc -O2 -g -fPIC -shared -I "$here/../../build/lua-inc" \
         -o "$cache/luacount.so" "$here/luacount.c" -ldl
       python3 -I "$here/rusage.py" "$out/$step.time" \
-        env LUACOUNT_OUT="$out/$step.count" LD_PRELOAD="$cache/luacount.so" "$bin" --clean -L "$lib" -o index="$idx" "$@" >"$out/$step.out" 2>&1
+        env LUACOUNT_OUT="$out/$step.count" LD_PRELOAD="$cache/luacount.so" "$bin" --clean -L "$lib" -o path.indexdb="$idx" "$@" >"$out/$step.out" 2>&1
       cat "$out/$step.time" ;;
     *) echo "unknown profiler: $prof" >&2; exit 2 ;;
   esac

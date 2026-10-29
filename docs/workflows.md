@@ -174,7 +174,7 @@ request; some services answer faster for it.
 
 calibre lets one program at a time have a library open. lulibre watches
 for it: when calibre's content server has the library, changes go through
-the server (the settings `server`, `user`, `password_file`); when nothing
+the server (the settings `server`, `user`, `path.password`); when nothing
 has it, straight to the folder; while calibre's own program has it,
 changes wait, and run once it closes. calibre's lock is one for all of a
 user's libraries: while a calibre program has another library open (a

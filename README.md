@@ -40,10 +40,10 @@ lulibre needs only to know where the library is: `-L DIR`,
 `$LULIBRE_LIBRARY`, or in `~/.config/lulibre/init.lua`:
 
 ```lua
-setman.set("library", "~/calibre-library")
+setman.set("path.library", "~/calibre-library")
 setman.set("server", "http://127.0.0.1:8080")          -- optional: calibre's content server
 setman.set("user", "me")
-setman.set("password_file", "~/.config/calibre/password-file")
+setman.set("path.password", "~/.config/calibre/password-file")
 ```
 
 When calibre's content server has the library open, changes go through it;

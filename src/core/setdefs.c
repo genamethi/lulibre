@@ -3,16 +3,27 @@
 #include <stddef.h>
 
 const struct setting_def setting_defs[S_COUNT] = {
-  [S_LIBRARY] = {"library", SETTING_PATH, 0, "", NULL, "calibre library directory"},
-  [S_INDEX] = {"index", SETTING_PATH, 0, "", NULL, "index database file (default: under the XDG data dir)"},
-  [S_CONFIG_DIR] = {"config_dir", SETTING_PATH, SETTING_CLI_ONLY, "", NULL,
+  [S_LIBRARY] = {"path.library", SETTING_PATH, 0, "", NULL, "calibre library directory"},
+  [S_INDEX] = {"path.indexdb", SETTING_PATH, 0, "", NULL,
+               "the index database (default: <library's name>-<hash>.db under ~/.local/share/lulibre)"},
+  [S_JOURNAL_DB] = {"path.journaldb", SETTING_PATH, 0, "", NULL,
+                    "the journal of changes (default: beside the index, <index>.journal.db)"},
+  [S_CUSTOM_DB] = {"path.customdb", SETTING_PATH, 0, "", NULL,
+                   "your own #fields (default: beside the index, <index>.custom.db)"},
+  [S_WIT_DB] = {"path.witdb", SETTING_PATH, 0, "", NULL, "wits waiting for review (default: beside the index, <index>.wit.db)"},
+  [S_NET_DB] = {"path.netdb", SETTING_PATH, 0, "", NULL,
+                "online answers, for every library (default: ~/.local/share/lulibre/net.db)"},
+  [S_CONFIG_DIR] = {"path.config", SETTING_PATH, SETTING_CLI_ONLY, "", NULL,
                     "where init.lua and lua/ are looked for (default: ~/.config/lulibre); also -C DIR or "
                     "$LULIBRE_CONFIG_DIR"},
+  [S_STATE] = {"path.state", SETTING_PATH, SETTING_CLI_ONLY, "", NULL,
+               "the saved settings (default: ~/.local/state/lulibre/settings)"},
   [S_PERSISTENT] = {"persistent", SETTING_BOOL, SETTING_PERSIST, "false", NULL,
-                    "keep the settings changed during a run, in ~/.local/state/lulibre/settings, and start "
-                    "from them next time"},
-  [S_LOG_FILE] = {"log_file", SETTING_PATH, 0, "", NULL,
+                    "keep the settings changed during a run, in path.state, and start from them next time"},
+  [S_LOG_FILE] = {"path.log", SETTING_PATH, 0, "", NULL,
                   "also append the log to this file (the console, `, shows it either way)"},
+  [S_CRASH] = {"path.crash", SETTING_PATH, 0, "", NULL,
+               "where a crash's report is written (default: ~/.local/state/lulibre/crash.log)"},
   [S_JOBS] = {"jobs", SETTING_INT, 0, "0", NULL, "worker threads (0 = one per core)"},
   [S_PAGES] = {"pages", SETTING_INT, 0, "6", NULL, "first N pages of each file to index as text"},
   [S_OCR] = {"ocr", SETTING_STR, 0, "never", "never|auto|always",
@@ -27,9 +38,9 @@ const struct setting_def setting_defs[S_COUNT] = {
                 "the key <Leader> stands for in key bindings, in key-map notation: \\, <Space>, ,"},
   [S_BLITTER] = {"blitter", SETTING_STR, 0, "auto", "auto|pixel|sextant|quadrant|half", "how page images are drawn"},
   [S_PREVIEW] = {"preview", SETTING_STR, 0, "text", "text|image", "what the preview shows first; P switches"},
-  [S_SYNC_DIR] = {"sync_dir", SETTING_PATH, 0, "", NULL,
+  [S_SYNC_DIR] = {"path.sync", SETTING_PATH, 0, "", NULL,
                   "a folder of files waiting to be added to the library; gS shows it"},
-  [S_MOD_TREE] = {"mod_tree", SETTING_PATH, 0, "", NULL,
+  [S_MOD_TREE] = {"path.modtree", SETTING_PATH, 0, "", NULL,
                   "a prefix of Lua modules: its share/lua/<version> and lib/lua/<version> are searched after "
                   "lulibre's own. Ignored in a pixi environment, where pixi's environment holds the modules"},
   [S_RANK_COVERAGE] = {"rank_coverage", SETTING_NUM, 0, "45", NULL,
@@ -54,5 +65,5 @@ const struct setting_def setting_defs[S_COUNT] = {
   [S_SERVER] = {"server", SETTING_STR, 0, "", NULL,
                 "calibre content server URL; changes go through it (http://127.0.0.1:8080)"},
   [S_USER] = {"user", SETTING_STR, 0, "", NULL, "content server user"},
-  [S_PASSWORD_FILE] = {"password_file", SETTING_PATH, 0, "", NULL, "file holding the content server password"},
+  [S_PASSWORD_FILE] = {"path.password", SETTING_PATH, 0, "", NULL, "file holding the content server password"},
 };

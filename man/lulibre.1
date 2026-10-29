@@ -143,12 +143,12 @@ Where the data, configuration and state folders are looked for.
 .TP
 .BR LUA_PATH_5_5 ", " LUA_CPATH_5_5
 Lua's own search path, after lulibre's own modules, yours, and the setting
-.BR mod_tree ;
+.BR path.modtree ;
 pixi's environment sets them (with Lua 5.4, the _5_4 names).
 .TP
 .B PIXI_ENVIRONMENT_NAME
 Set in a pixi environment, where
-.B mod_tree
+.B path.modtree
 is ignored.
 .SH EXIT STATUS
 0 on success, 1 when a command or a script fails.
