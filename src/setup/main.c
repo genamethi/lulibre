@@ -19,7 +19,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "core/config.h"
+#include "core/setdefs.h"
 #include "core/util.h"
 #include "setup/setup.h"
 #include "tui/tui.h"
@@ -114,7 +114,8 @@ static void notes(void) {
     set_note(pre, 0, NULL);
 }
 
-static const char *opt_skip[] = {"library", "server", "user", "password_file", "config_dir", NULL};
+/* the settings the basic items set */
+static const char *opt_skip[] = {"path.library", "server", "user", "path.password", NULL};
 
 static void build_items(void) {
   int basic = add((struct item){.kind = K_HEAD, .label = "Basic", .head = -1, .open = 1});
@@ -161,23 +162,19 @@ static void build_items(void) {
   add((struct item){.kind = K_CHECK, .key = "LUV_CHECK", .label = "Check luv", .depth = 1, .head = adv,
                     .help = "Enter runs require \"luv\" under lulibre's own Lua (build/lulibre, in pixi's "
                             "environment when pixi is chosen) and says whether it loads."});
-  size_t n;
-  const struct opt_def *defs = config_opts(&n);
-  const char *group = NULL;
-  int head = adv;
-  for (size_t i = 0; i < n; i++) {
-    const struct opt_def *o = &defs[i];
-    if (o->group) group = o->group;
-    int skip = 0;
+  /* lulibre's settings, but those set on the command line alone (where
+   * the saved state is) and persistent, which the saved state never holds */
+  int head = add((struct item){.kind = K_HEAD, .label = "Settings", .depth = 1, .head = adv,
+                               .help = "lulibre's settings, kept in its saved state: each at lulibre's default "
+                                       "until it is set here."});
+  for (int i = 0; i < S_COUNT; i++) {
+    const struct setting_def *o = &setting_defs[i];
+    int skip = (o->flags & (SETTING_CLI_ONLY | SETTING_PERSIST)) != 0;
     for (int k = 0; opt_skip[k]; k++) skip |= !strcmp(o->name, opt_skip[k]);
     if (skip) continue;
-    if (o->group || head == adv) {
-      head = add((struct item){.kind = K_HEAD, .label = group ? group : "Options", .depth = 1, .head = adv,
-                               .help = "lulibre's options: each at lulibre's default until it is set here."});
-    }
-    enum kind kind = o->choices || o->type == OPT_BOOL ? K_CHOICE : K_TEXT;
+    enum kind kind = o->choices || o->type == SETTING_BOOL ? K_CHOICE : K_TEXT;
     add((struct item){.kind = kind, .key = o->name, .label = o->name, .help = o->help, .opt = o, .depth = 2,
-                      .head = head, .choices = o->type == OPT_BOOL ? "true|false" : o->choices});
+                      .head = head, .choices = o->type == SETTING_BOOL ? "true|false" : o->choices});
   }
   add((struct item){.kind = K_ACTION, .key = "install", .label = "Install now", .head = -1,
                     .help = "steps back to the shell and runs setup/install.sh on these choices, in view; "
@@ -241,14 +238,14 @@ static void draw_value(struct ncplane *n, int y, int x, int w, const struct item
     /* nothing but the note */
   } else if (it->value) {
     dr_style(n, theme.accent, bg, 0);
-    int path = it->kind == K_DIR || it->kind == K_FILE || (it->opt && it->opt->type == OPT_PATH);
+    int path = it->kind == K_DIR || it->kind == K_FILE || (it->opt && it->opt->type == SETTING_PATH);
     char *s = path ? shown_path(it->value) : xstrdup(it->value);
     /* room kept for the note */
     used = dr_text(n, y, x, it->note && w > 40 ? w * 3 / 5 : w, s);
     free(s);
   } else if (it->opt) {
     dr_style(n, theme.dim, bg, 0);
-    char *d = xasprintf("default: %s", it->opt->def[0] ? it->opt->def : "(empty)");
+    char *d = xasprintf("default: %s", it->opt->dflt[0] ? it->opt->dflt : "(empty)");
     used = dr_text(n, y, x, w, d);
     free(d);
   } else if (!it->note) {
@@ -492,29 +489,21 @@ static void next_value(struct item *it) {
 
 static void type_value(struct item *it) {
   char *prompt = xasprintf("%s: ", it->label);
-  int paths = it->kind == K_DIR || it->kind == K_FILE || (it->opt && it->opt->type == OPT_PATH);
+  int paths = it->kind == K_DIR || it->kind == K_FILE || (it->opt && it->opt->type == SETTING_PATH);
   char *v = line_edit(nc, prompt, it->value, paths);
   free(prompt);
   if (!v) return;
-  if (it->opt && it->opt->type == OPT_INT && v[0]) {
-    char *end;
-    strtol(v, &end, 10);
-    if (*end) {
-      say(theme.error, "%s takes a whole number", it->label);
+  if (it->opt && v[0]) {
+    /* the value as lulibre will read it from the saved state */
+    union setting_value parsed;
+    char *err = NULL;
+    if (settings_parse(it->opt, v, &parsed, &err)) {
+      say(theme.error, "%s", err);
+      free(err);
       free(v);
       return;
     }
-  }
-  if (it->opt && it->opt->choices && v[0]) {
-    char *bars = xasprintf("|%s|", it->opt->choices), *want = xasprintf("|%s|", v);
-    int ok = strstr(bars, want) != NULL;
-    free(bars);
-    free(want);
-    if (!ok) {
-      say(theme.error, "%s takes one of %s", it->label, it->opt->choices);
-      free(v);
-      return;
-    }
+    if (it->opt->type == SETTING_STR || it->opt->type == SETTING_PATH) free(parsed.s);
   }
   if (paths && v[0]) {
     char *p = path_expand(v);

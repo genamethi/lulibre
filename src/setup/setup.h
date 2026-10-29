@@ -12,7 +12,7 @@
 
 #include <notcurses/notcurses.h>
 
-#include "core/config.h"
+#include "core/setdefs.h"
 
 enum kind {
   K_HEAD,   /* a heading: the items under it open and close */
@@ -26,11 +26,11 @@ enum kind {
 
 struct item {
   enum kind kind;
-  const char *key;           /* its name in the plan; for lulibre's options, the option's */
+  const char *key;           /* its name in the plan; for lulibre's settings, the setting's */
   const char *label;
   const char *help;
   const char *choices;       /* "a|b|c" */
-  const struct opt_def *opt; /* one of lulibre's options: `opt 'NAME' 'VALUE'` in the plan */
+  const struct setting_def *opt; /* one of lulibre's settings: `opt 'NAME' 'VALUE'` in the plan */
   int depth;
   int head;                  /* the heading it is under, -1 for none */
   int open;                  /* a heading's: are the items under it shown */

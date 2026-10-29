@@ -8,8 +8,7 @@ endif
 -include config.mk
 
 BIN  := build/lulibre
-# core/config.c: the 0.2 options, which only lulibre-setup still lists
-SRC  := $(filter-out src/setup/% src/core/config.c,$(wildcard src/*.c src/*/*.c))
+SRC  := $(filter-out src/setup/%,$(wildcard src/*.c src/*/*.c))
 # libraries carried as their authors wrote them (vendor/*/README.md)
 VENDOR := vendor/lsqlite3/lsqlite3.c
 OBJ  := $(SRC:%.c=build/%.o) $(VENDOR:%.c=build/%.o)
@@ -21,10 +20,11 @@ LIBOBJ := $(filter-out build/src/main.o,$(OBJ))
 UNIT := build/test/unit
 CORE := build/test/core
 # lulibre-setup: its own sources, and the parts of lulibre's it shares (the
-# drawing, the options)
+# drawing, the settings' definitions)
 SETUP := build/lulibre-setup
 SETUP_OBJ := $(patsubst %.c,build/%.o,$(wildcard src/setup/*.c)) \
-  build/src/tui/draw.o build/src/match/fold.o build/src/core/util.o build/src/core/log.o build/src/core/config.o
+  build/src/tui/draw.o build/src/match/fold.o build/src/core/util.o build/src/core/log.o \
+  build/src/core/settings.o build/src/core/setdefs.o
 
 WARN     := -Wall -Wextra -Wno-unused-parameter
 CPPFLAGS += -D_GNU_SOURCE -I. -Isrc
