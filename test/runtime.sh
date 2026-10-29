@@ -13,11 +13,11 @@ trap 'rm -rf "$t"' EXIT
 sh "$src/mklib.sh" "$t/lib" >/dev/null 2>&1
 export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state
 cfg=$t/config/lulibre
-mkdir -p "$cfg/lua/lulibre" "$t/mods/share/lua"
+mkdir -p "$cfg/lua" "$t/mods/share/lua"
 lv=$("$bin" -V | sed -n 's/.*Lua \([0-9.]*\)).*/\1/p')
 mkdir -p "$t/mods/share/lua/$lv"
 echo 'return "from mod_tree"' >"$t/mods/share/lua/$lv/modprobe.lua"
-echo 'return "the user'"'"'s copy"' >"$cfg/lua/lulibre/grammar.lua"
+echo 'return "the user'"'"'s copy"' >"$cfg/lua/exprman.lua"
 echo 'return "the user'"'"'s own"' >"$cfg/lua/mine.lua"
 
 cat >"$cfg/init.lua" <<LUA
@@ -28,7 +28,7 @@ cat >"$t/probe.lua" <<'LUA'
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
 say("pages", setman.get("pages"))
 say("ocr", setman.get("ocr"))
-say("packaged", type(require("lulibre.grammar")))
+say("packaged", type(require("exprman")))
 say("user", require("mine"))
 local ok, m = pcall(require, "modprobe")
 say("mod_tree", ok and m or "not found")

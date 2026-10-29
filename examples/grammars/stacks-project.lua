@@ -7,7 +7,7 @@
 --
 -- To use it, copy this file to ~/.config/lulibre/lua/grammars/ and add
 -- require "grammars.stacks-project" to init.lua.
-local G = require "lulibre.grammars"
+local G = require "exprman._front"
 
 -- The Stacks project: each chapter opens with its name in capitals and then
 -- its tag (four characters, 01H8) or its contents. The reading order is in

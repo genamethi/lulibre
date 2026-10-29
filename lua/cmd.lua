@@ -3,8 +3,8 @@
 -- takes effect (design 6).
 local bookman = require "bookman"
 local iter = require "iter"
-local propose = require "lulibre.propose"
-local review = require "lulibre.ui.review"
+local propose = require "lulib._propose"
+local review = require "lulib._review"
 
 local M = {}
 

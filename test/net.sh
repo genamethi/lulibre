@@ -32,7 +32,7 @@ local o = net.services.openlibrary.how.record('{"ISBN:1":{"title":"Topics","subt
 say("openlibrary", o.title, o.authors, o.publisher, o.pubdate)
 -- an identifier found in a book's text is a wit, and the book is asked
 -- about by it
-local propose = require "lulibre.propose"
+local propose = require "lulib._propose"
 propose.propose(1, propose.settings())
 for _, f in ipairs(wit.get(1)) do if f.field == "identifier:arxiv" then say("found", f.alts[1].value, f.alts[1].source) end end
 for _, k in ipairs(net.keys(1)) do say("asked by", k.service, k.key) end

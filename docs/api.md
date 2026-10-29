@@ -49,7 +49,7 @@ Redefine the function, from init.lua or a module of yours. lulibre calls
 every function meant to be overridden through its module's table, at the
 time of the call, so the redefinition takes effect from the next call.
 
-    local propose = require "lulibre.propose"
+    local propose = require "lulib._propose"
     local normalize = propose.normalize
     function propose.normalize(field, value)
       if field == "publisher" then value = value:gsub("^The ", "") end
@@ -220,6 +220,7 @@ txt returns a string.
 | | |
 |---|---|
 | `expr.where(test)` | matches, consuming nothing, where the line at the position passes `test(line, t)`; never over a string |
+| `expr.largest` `expr.bold` `expr.block` `expr.page(n)` `expr.near_top(share)` | the same, where the line is the largest on its page, bold, a paragraph's first, on page n, in the top share of its page |
 | `expr.line` `expr.eol` | a line's text up to its line or page break; the breaks after it |
 | `expr.upto(p)` | whole lines up to the first where `p` matches |
 | `expr.list(words)` | any of the words or phrases, as whole words, the longest first |
@@ -260,20 +261,21 @@ values) or an iterator function, and itself a `for` loop's iterator.
 | `it:group(key)` | key and the list of its items, the keys in the order first met |
 | `it:diff(other, key)` | the items whose key no item of `other` has |
 
-## Grammars and wits
+## Grammars and wits: exprman, wit
 
-    local expr = require "expr"
-    local grammar = require "lulibre.grammar"
-    local here = grammar.page(1) * grammar.bold
-    grammar.add("my-series", expr.Ct(expr.upto(here) * grammar.field("title", expr.line) * expr.eol
-                                    * grammar.field("authors", expr.line)), "My Series")
+    local expr, exprman = require "expr", require "exprman"
+    local here = expr.page(1) * expr.bold
+    exprman.add("my-series", expr.Ct(expr.upto(here) * exprman.field("title", expr.line) * expr.eol
+                                    * exprman.field("authors", expr.line)), "My Series")
 
-A grammar is a pattern matched from the start of a book's text.
-`field(name, patt)` captures a field's value with its positions. The
-predicates test the line at the current position: `largest`, `bold`,
-`block` (a paragraph's first line), `page(n)`, `near_top(share)`, and
-`expr.where` for one of yours. `grammar.parse(t)` returns every
-grammar's parse of a text.
+A grammar is a pattern matched from the start of a book's text, kept by
+name in `exprman`: `exprman.add(name, pattern [, group])`,
+`exprman.remove(name)`, and `exprman.parse(t)`, every grammar's parse of a
+text. `exprman.field(name, patt)` captures a field's value with its
+positions. expr's line predicates test the line at the current position:
+`expr.largest`, `expr.bold`, `expr.block` (a paragraph's first line),
+`expr.page(n)`, `expr.near_top(share)`, and `expr.where(test)` for one of
+yours. The packaged grammar is `front` (`exprman._front`).
 
 A **wit** is a value for a book's field, with the source that gave it,
 kept until a review accepts or rejects it. `:propose` makes them from the
@@ -291,8 +293,8 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `wit.get(book)` | `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=}, ... } }, ... }` |
 | `wit.accept(id [, value])` | waits: the wit, or the value edited from it, as an operation |
 | `wit.reject(id)` | waits: kept in the journal; the field keeps its value |
-| `lulibre.propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulibre.propose.settings()` |
-| `lulibre.rank`, `trust`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
+| `lulib._propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulib._propose.settings()` |
+| `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
 | `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
 
 ## Online lookups

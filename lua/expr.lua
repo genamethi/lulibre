@@ -153,6 +153,24 @@ function M.where(test)
   end)
 end
 
+local where = M.where
+
+--- Succeeds where the line at the position is the largest on its page.
+M.largest = where(function(line, t) return line.size == t:largest(line.page) end)
+--- Succeeds where the line at the position is bold.
+M.bold = where(function(line) return line.bold end)
+--- Succeeds where the line at the position starts a paragraph.
+M.block = where(function(line) return line.block end)
+--- Succeeds where the line at the position is on the page given.
+function M.page(n)
+  return where(function(line) return line.page == n end)
+end
+--- Succeeds where the line at the position lies in the top share of its page.
+-- @tparam number share 0 to 1
+function M.near_top(share)
+  return where(function(line, t) return line.y0 <= share * t:height(line.page) end)
+end
+
 --- A line's text: up to its line or page break.
 M.line = (1 - S "\n\f") ^ 1
 --- The breaks after a line: one, or two before a paragraph.

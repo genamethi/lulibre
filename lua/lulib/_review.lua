@@ -9,9 +9,9 @@
 -- Keys: a accepts the alternative in view, e edits it first, r rejects the
 -- row, space shows the next alternative, q closes.
 --
--- @library lulibre.ui.review
+-- @library lulib._review
 local bookman = require "bookman"
-local propose = require "lulibre.propose"
+local propose = require "lulib._propose"
 local wit = require "wit"
 
 local M = {}

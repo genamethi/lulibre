@@ -2,12 +2,12 @@
 -- own metadata, and the online records kept for the book. A grammar's
 -- parse is not a source.
 --
--- @library lulibre.sources
+-- @library lulib._sources
 local bookman = require "bookman"
 
 local M = {}
 
---- How much each kind of source weighs in agreement (lulibre.rank).
+--- How much each kind of source weighs in agreement (lulib._rank).
 M.weight = { record = 1, embedded = 0.5, online = 1 }
 
 -- the record's fields that have a value, as bookman.get gives them

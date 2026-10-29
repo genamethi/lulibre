@@ -9,13 +9,13 @@
 -- different fields, the alternatives show the conflict. A field whose
 -- first value equals the record's is not proposed.
 --
--- @library lulibre.propose
+-- @library lulib._propose
 local txt = require "txt"
 local expr = require "expr"
 local lex = require "lex"
-local grammar = require "lulibre.grammar"
-local sources = require "lulibre.sources"
-local rank = require "lulibre.rank"
+local exprman = require "exprman"
+local sources = require "lulib._sources"
+local rank = require "lulib._rank"
 local mesr = require "mesr"
 local trust = require "trust"
 local wit = require "wit"
@@ -112,7 +112,7 @@ local function once(book, w)
   local t <close> = txt.of(book)
   local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
-  local parses = t and grammar.parse(t) or {}
+  local parses = t and exprman.parse(t) or {}
   parses[#parses + 1] = t and found(t) or nil
   for _, s in ipairs(srcs) do
     if s.kind == "online" then

@@ -214,8 +214,9 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/setup/      lulibre-setup (still 0.2's; setup/ holds install.sh)
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
-    lua/            the modules written in Lua: expr, lex, iter, wit, net, trust
-    lua/lulibre/    lulibre's own: grammars, propose, ranking, review, commands
+    lua/            the modules written in Lua: expr, lex, iter, sql, wit, net, trust, exprman, cmd
+    lua/lulib/      lulibre's internal modules (lulib._name): propose, ranking, sources, review, :lua, the prelude
+    scripts/        the scripts lulibre comes with (dupes, orphans)
     vendor/         libraries carried as their authors wrote them, built in (lsqlite3)
     test/  tools/
 

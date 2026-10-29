@@ -6,9 +6,9 @@
 -- the sources by mesr; a parse does not count agreement with
 -- itself, nor with a record value it wrote (circular agreement).
 --
--- @library lulibre.rank
+-- @library lulib._rank
 local mesr = require "mesr"
-local sources = require "lulibre.sources"
+local sources = require "lulib._sources"
 local trust = require "trust"
 
 local M = {}

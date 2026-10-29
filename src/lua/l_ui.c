@@ -921,7 +921,7 @@ static void c_run(struct tui *t, const char *args) {
   picker_open(t, p);
 }
 
-/* :lua CODE: lulibre.eval.run(CODE) as a task */
+/* :lua CODE: lulib._eval.run(CODE) as a task */
 static void eval_line(struct app *app, void *arg) {
   lua_State *L = app->L;
   if (!L) {
@@ -929,7 +929,7 @@ static void eval_line(struct app *app, void *arg) {
     return;
   }
   lua_getglobal(L, "require");
-  lua_pushliteral(L, "lulibre.eval");
+  lua_pushliteral(L, "lulib._eval");
   if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
     lapi_report(app, 1, lua_tostring(L, -1));
     lua_pop(L, 1);

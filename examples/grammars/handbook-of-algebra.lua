@@ -4,7 +4,7 @@
 --
 -- To use it, copy this file to ~/.config/lulibre/lua/grammars/ and add
 -- require "grammars.handbook-of-algebra" to init.lua.
-local G = require "lulibre.grammars"
+local G = require "exprman._front"
 
 -- Elsevier's Handbook of Algebra (ISSN 1570-7954): its chapters' DOIs say the
 -- volume by year ((96) is volume 1) and the chapter's place in it (80014: 14).

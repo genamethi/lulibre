@@ -1,6 +1,6 @@
 --- :lua CODE runs a line of Lua as a task and shows what it returns, a
 -- table written out as Lua.
--- @library lulibre.eval
+-- @library lulib._eval
 local pretty = require "pl.pretty"
 
 local M = {}

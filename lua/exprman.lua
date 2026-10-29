@@ -3,16 +3,15 @@
 -- A grammar's pattern matches the text from its start and captures a
 -- table of fields, each made by `field`: the value with its start and end
 -- position, so the lines follow. A grammar gives no confidence: ranking
--- does (lulibre.rank). The predicates below test the line at the current
--- position (expr.where).
+-- does (lulib._rank). expr's line predicates (expr.bold, expr.page, ...)
+-- say where a field is.
 --
---     local expr = require "expr"
---     local grammar = require "lulibre.grammar"
---     grammar.add("my-publisher", expr.Ct(
---       expr.upto(grammar.bold) * grammar.field("title", expr.line) * expr.eol
---       * grammar.field("authors", expr.line)), "My Publisher")
+--     local expr, exprman = require "expr", require "exprman"
+--     exprman.add("my-publisher", expr.Ct(
+--       expr.upto(expr.bold) * exprman.field("title", expr.line) * expr.eol
+--       * exprman.field("authors", expr.line)), "My Publisher")
 --
--- @library lulibre.grammar
+-- @library exprman
 local lpeg = require "lpeg"
 local stringx = require "pl.stringx"
 local expr = require "expr"
@@ -20,23 +19,6 @@ local expr = require "expr"
 local M = {}
 
 local C, Cg, Ct, Cp = lpeg.C, lpeg.Cg, lpeg.Ct, lpeg.Cp
-local where = expr.where
-
---- Succeeds where the line at the position is the largest on its page.
-M.largest = where(function(line, t) return line.size == t:largest(line.page) end)
---- Succeeds where the line at the position is bold.
-M.bold = where(function(line) return line.bold end)
---- Succeeds where the line at the position starts a paragraph.
-M.block = where(function(line) return line.block end)
---- Succeeds where the line at the position is on the page given.
-function M.page(n)
-  return where(function(line) return line.page == n end)
-end
---- Succeeds where the line at the position lies in the top share of its page.
--- @tparam number share 0 to 1
-function M.near_top(share)
-  return where(function(line, t) return line.y0 <= share * t:height(line.page) end)
-end
 
 --- A field: patt's match is the value, `{ value=, start=, stop= }` under
 -- the field's name in the parse; start and stop as string.sub takes them.

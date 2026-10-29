@@ -262,7 +262,7 @@ lua_State *lstate_new(struct app *app) {
 
   /* the part of the API written in Lua */
   lua_getglobal(L, "require");
-  lua_pushliteral(L, "lulibre.prelude");
+  lua_pushliteral(L, "lulib._prelude");
   if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
     warnf("Lua runtime files not found; scripts will be limited (%s)", lua_tostring(L, -1));
     lua_pop(L, 1);

@@ -5,7 +5,7 @@
 --
 -- To use it, copy this file to ~/.config/lulibre/lua/grammars/ and add
 -- require "grammars.keith-conrad" to init.lua.
-local G = require "lulibre.grammars"
+local G = require "exprman._front"
 
 G.add {
   name = "keith-conrad",
