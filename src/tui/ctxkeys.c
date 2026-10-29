@@ -5,7 +5,7 @@
  * for that place asks which action a key means. So these can be rebound
  * like any other:
  *
- *   lulibre.map("panel", "n", "down")       lulibre.map("line", "<C-g>", "cancel")
+ *   keymap.set("panel", "n", "down")       keymap.set("line", "<C-g>", "cancel")
  *
  * A binding is one key, or two in a row ("gg"). An empty action unbinds. */
 #include <stdlib.h>
@@ -241,9 +241,9 @@ const char *ctx_hint_in(char *buf, size_t size, int ctx, int action) {
 }
 
 /* One place's actions with the keys they are on, for the help overlay; with
- * names set, the action names too, which is what lulibre.map wants. */
+ * names set, the action names too, which is what keymap.set wants. */
 void ctx_describe(int ctx, sbuf *out, int names) {
-  sb_printf(out, "%s%s%s%s\n", ctxs[ctx].title, names ? "   lulibre.map(\"" : "", names ? ctxs[ctx].name : "",
+  sb_printf(out, "%s%s%s%s\n", ctxs[ctx].title, names ? "   keymap.set(\"" : "", names ? ctxs[ctx].name : "",
             names ? "\", key, action)" : "");
   for (int a = 0; a < ctxs[ctx].n; a++) {
     sbuf keys = SBUF_INIT;

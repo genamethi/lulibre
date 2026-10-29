@@ -5,7 +5,7 @@
  *
  * Tasks share one Lua state and one thread (the Lua thread when the
  * interface is up; see lua/bridge.h). A task runs until it waits (a
- * subprocess, a timer, text extraction, a picker) or calls lulibre.yield():
+ * subprocess, a timer, text extraction, a picker) or calls taskman.yield():
  * between two of those, nothing else runs on its thread, so its steps there
  * are one step for the others. A task that computes for long holds the
  * others up, not the interface. Everything here belongs to the Lua thread,

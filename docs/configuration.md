@@ -42,7 +42,8 @@ path.log = os.getenv("HOME") .. "/lulibre.log"
 
 Assigning a name that is no setting is an error. A name read that is no
 setting is the global of that name, so Lua's functions stay in reach.
-lulibre-setup writes the values chosen in it to `lua/config/options.lua`.
+lulibre-setup writes the values chosen on its screen to
+`lua/config/options.lua`.
 With `persistent` true, what this file sets is set again at each start,
 over the saved state.
 
@@ -122,6 +123,54 @@ then those under the prefix `path.modtree` names, then Lua's own places as Lua
 and the environment (`LUA_PATH_5_5`, `LUA_CPATH_5_5`) set them. Nothing is
 looked for in the current directory. To change what one of lulibre's
 modules does, redefine its function: no file of yours replaces one.
+
+## One way to lay out a configuration
+
+init.lua can stay a list of `require`s, one module of `lua/config/` for
+each kind of thing:
+
+```
+~/.config/lulibre/
+  init.lua
+  lua/config/
+    options.lua     settings
+    keymaps.lua     keys
+    cmds.lua        commands
+    events.lua      what runs when something happens
+```
+
+```lua
+-- init.lua
+require "config.options"
+require "config.keymaps"
+require "config.cmds"
+require "config.events"
+```
+
+```lua
+-- lua/config/options.lua
+local _ENV = setman.settings
+path.library = "~/calibre-library"
+ocr = "auto"
+```
+
+```lua
+-- lua/config/keymaps.lua
+keymap.set("n", "<Leader>u", "filter author:unknown", { desc = "books by nobody" })
+```
+
+```lua
+-- lua/config/cmds.lua
+cmdman.create("untagged", function(o) uiman.filter("subject:none " .. o.args) end,
+              { desc = "[filter]  books with no subject" })
+```
+
+```lua
+-- lua/config/events.lua
+evman.add("records_changed", function(ev)
+  if #ev.fields == 0 then uiman.notify(#ev.ids .. " books changed in calibre") end
+end)
+```
 
 ## Where things are kept
 

@@ -385,7 +385,7 @@ static void c_source(struct tui *t, const char *args) {
   }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
   if (to && !app_str(t->app, S_SYNC_DIR)[0]) {
-    tui_msg(t, 1, "no sync folder is set: lulibre.o.sync_dir = \"~/some/folder\" in init.lua, or :set sync_dir=DIR");
+    tui_msg(t, 1, "no sync folder is set: setman.set(\"path.sync\", \"~/some/folder\") in init.lua, or :set path.sync=DIR");
     return;
   }
   rows_set_source(t, to);
@@ -636,7 +636,7 @@ static void command_help(struct tui *t) {
           "  -term negates;  or  starts an alternative;  sort:-added orders\n"
           "\nA command acts on the range being selected, else on the marked books in\n"
           "the list, else on the book under the cursor.\n"
-          "\nEvery key on this page can be changed in init.lua with lulibre.map: a command line for\n"
+          "\nEvery key on this page can be changed in init.lua with keymap.set: a command line for\n"
           "the keys at the top, an action name for the places listed after them.\n");
   tui_pager(t, "help", h.s);
   sb_free(&h);

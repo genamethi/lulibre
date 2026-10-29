@@ -168,7 +168,7 @@ static int l_command_ui(lua_State *L) {
   return 0;
 }
 
-/* lulibre.map(modes, keys, target [, about])
+/* keymap.set on the UI thread: (modes, keys, target [, about])
  * target: a command line, or a function (which runs as a task).
  * about: what the help overlay (?) is to say the key does; without it the
  * overlay shows the command line, or for a function "a Lua function".
@@ -595,7 +595,7 @@ static int l_input(lua_State *L) {
   return lua_yield(L, 0);
 }
 
-/* uiman.clipboard(text) copies; lulibre.clipboard() gives back what was
+/* uiman.clipboard(text) copies; uiman.clipboard() gives back what was
  * copied last (tui/clip.c says where from). */
 static int l_clipboard_ui(lua_State *L) {
   if (lua_isnoneornil(L, 1)) {
