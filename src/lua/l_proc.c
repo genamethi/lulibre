@@ -1,6 +1,6 @@
 /* Subprocesses, without blocking.
  *
- *   local r = lulib.exec({"calibredb", "--version"} [, opts])
+ *   local r = utils.exec({"calibredb", "--version"} [, opts])
  *     opts.stdin    string fed to the process
  *     opts.cwd      working directory
  *     opts.timeout  milliseconds before the process is killed

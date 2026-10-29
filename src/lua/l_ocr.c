@@ -1,7 +1,13 @@
-/* lulibre.ocr's C side (core/registry.h, index/ocr.h): whether Lua has put
- * a reader in tesseract's place, and the way a request goes to it and its
- * answer comes back. lua/lulibre/ocr.lua is the module a user redefines
- * read in. */
+/* utils.ocr (core/registry.h, index/ocr.h, lua/handler.c): a reader of
+ * Lua's in tesseract's place, called as a task for each page the indexer
+ * is to read:
+ *
+ *   utils.ocr = function(path, page, lang) ... end
+ *
+ * It returns the page's text (lines; a blank line before a paragraph), or
+ * a list of lines {text=, size=, x0=, y0=, x1=, y1=, block=}, or nil when
+ * it could not read the page. utils.ocr = nil gives the pages back to
+ * tesseract. */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +22,6 @@
 #include "doc/doc.h"
 #include "index/ocr.h"
 #include "lua/lapi.h"
-#include "lua/sched.h"
 
 static void answer_main(struct app *app, void *arg) { /* the indexer's: the background thread */
   struct ocr_req *r = arg;
@@ -28,38 +33,6 @@ static void fail(void *req, const char *why) {
   free(r->err);
   r->err = xstrdup(why);
   queue_post(LOOP_WORK, answer_main, r);
-}
-
-/* The Lua thread: lulibre.ocr._run(handle, path, pages, lang) as a task. */
-static void start(struct app *app, void *arg) {
-  struct ocr_req *r = arg;
-  lua_State *L = app->L;
-  if (!L) {
-    fail(r, "no lua_State: the scripts are restarting");
-    return;
-  }
-  lua_getglobal(L, "require");
-  lua_pushliteral(L, "lulibre.ocr");
-  if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-    fail(r, lua_tostring(L, -1));
-    lua_pop(L, 1);
-    return;
-  }
-  lua_getfield(L, -1, "_run");
-  lua_remove(L, -2);
-  lapi_push_reply(L, r, fail);
-  lua_pushstring(L, r->path);
-  lua_createtable(L, r->n, 0);
-  for (int i = 0; i < r->n; i++) {
-    lua_pushinteger(L, r->pages[i] + 1);
-    lua_rawseti(L, -2, i + 1);
-  }
-  lua_pushstring(L, r->lang);
-  sched_spawn(L, 4, "OCR (lulibre.ocr.read)");
-}
-
-void lapi_ocr_read(struct ocr_req *r) {
-  queue_post(LOOP_LUA, start, r);
 }
 
 static float num(lua_State *L, int idx, const char *key, float dflt) {
@@ -102,30 +75,47 @@ static void page_of(lua_State *L, int idx, struct doc_page *pg) {
   }
 }
 
-/* answer(handle, results [, err]): results[i], page i's answer or false */
-static int l_answer(lua_State *L) {
-  struct ocr_req *r = lapi_take_reply(L, 1);
-  if (lua_istable(L, 2))
-    for (int i = 0; i < r->n; i++) {
-      lua_rawgeti(L, 2, i + 1);
+/* a call per page: (path, page, lang), pages counted from 1 */
+static void calls(lua_State *L, void *req) {
+  struct ocr_req *r = req;
+  lua_createtable(L, r->n, 0);
+  for (int i = 0; i < r->n; i++) {
+    lua_createtable(L, 3, 0);
+    lua_pushstring(L, r->path);
+    lua_rawseti(L, -2, 1);
+    lua_pushinteger(L, r->pages[i] + 1);
+    lua_rawseti(L, -2, 2);
+    lua_pushstring(L, r->lang);
+    lua_rawseti(L, -2, 3);
+    lua_rawseti(L, -2, i + 1);
+  }
+}
+
+static void answer(lua_State *L, void *req, int results, const char *why) {
+  struct ocr_req *r = req;
+  for (int i = 0; i < r->n; i++) {
+    lua_rawgeti(L, results, i + 1);
+    if (lua_istable(L, -1)) {
+      lua_rawgeti(L, -1, 1);
       if (lua_isstring(L, -1) || lua_istable(L, -1)) {
         page_of(L, lua_gettop(L), &r->out[i]);
         r->ok[i] = 1;
       }
       lua_pop(L, 1);
     }
-  if (lua_isstring(L, 3)) r->err = xstrdup(lua_tostring(L, 3));
+    lua_pop(L, 1);
+  }
+  if (why) r->err = xstrdup(why);
   queue_post(LOOP_WORK, answer_main, r);
-  return 0;
 }
 
-static int l_filled(lua_State *L) {
-  registry_set_lua(REG_READER, lua_toboolean(L, 1));
-  return 0;
+static const struct lapi_part part = {REG_READER, "OCR (utils.ocr)", calls, answer, fail};
+
+void lapi_ocr_read(struct ocr_req *r) {
+  lapi_handle(&part, r);
 }
 
-int luaopen_lulibre_ocr_core(lua_State *L) {
-  static const luaL_Reg fns[] = {{"answer", l_answer}, {"filled", l_filled}, {NULL, NULL}};
-  luaL_newlib(L, fns);
-  return 1;
+void l_ocr_open(lua_State *L) {
+  static const struct lapi_handler fields[] = {{"ocr", &part}, {NULL, NULL}};
+  lapi_handlers(L, -1, fields);
 }

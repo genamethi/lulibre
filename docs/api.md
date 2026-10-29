@@ -60,12 +60,16 @@ No file of yours replaces a packaged module: lulibre's own modules are
 found first, then `lua/` in the configuration folder, then the module
 prefix `path.modtree` names.
 
-Two parts are C's unless a function of yours takes their place:
+Two parts are C's unless a handler of yours takes their place, set as a
+field; setting it to nil gives the part back. A handler runs as a task,
+so it can wait.
+
+    utils.ocr = function(path, page, lang) return utils.exec({ "my-ocr", path, tostring(page) }).stdout end
 
 | | |
 |---|---|
-| `lulibre.ocr.read(path, page, lang)` | reads a page for OCR in tesseract's place: the page's text, or a list of lines `{text=, size=, x0=, y0=, x1=, y1=, block=}`; `ocr.read = nil` gives it back |
-| `lulibre.stores.calibre(book, fields)` | writes a book's changes in calibredb's place: true, or nil and why; it takes its own route to calibre |
+| `utils.ocr = function(path, page, lang)` | reads a page for OCR in tesseract's place, for each page the indexer reads: the page's text, or a list of lines `{text=, size=, x0=, y0=, x1=, y1=, block=}`, or nil when it cannot |
+| `store.calibre = function(book, fields)` | writes a book's changes in calibredb's place, for each book of a write; `fields` as `{title=, authors = "A & B", tags = "a, b", ...}`: true, or nil and why; it takes its own route to calibre |
 
 ## Settings: setman
 
@@ -127,7 +131,8 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 | | |
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmd` | globals: tasks, the interface, settings, events, keys, commands |
-| `lulib` | a global: `version`, `build`, `headless`, and `exec`, `md5`, `index` (below) |
+| `lulib` | a global: `version`, `build`, `headless` |
+| `utils` | a global: `exec`, `md5`, `index` (below), and the handler `ocr` (above) |
 | `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `sql` `lsqlite3` | modules, by `require` |
 
 ## The library: bookman
@@ -165,9 +170,13 @@ The index itself is the file `setman.get("path.indexdb")`, and the journal
     store.holder()                     -- "none" | "server" | "program" | "other"
     store.reload()                     -- waits: calibre's records read again, when calibre has changed them
 
-One call is one operation, one batch of the journal. It runs through
-calibre's content server when the server holds the library, straight to
-the folder when nothing does, and waits while calibre's program has it
+One call is one operation, one batch of the journal. Each change goes to
+the store that holds its field, named in the journal: `calibre` for
+calibre's records, written by calibredb (or `store.calibre`, above);
+`custom` for a field of lulibre's own (`"#name"`); `stage` for a file in
+the sync folder (a book id below 0). calibredb runs through calibre's
+content server when the server holds the library, on the library's
+folder itself when nothing does, and waits while calibre's program has it
 open, or a calibre program has another library open. `op` is `set` (the default), `add` or `remove`; add and remove apply
 to lists (authors, tags, identifiers, languages) and keep the other items.
 Several changes to one field apply in order. A field of lulibre's own is
@@ -349,15 +358,15 @@ with a body; `timeout` is in milliseconds.
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
 | `uiman.theme.<name> = colour` | the interface's colours |
 
-## Tasks, processes, indexing: taskman, lulib
+## Tasks, processes, indexing: taskman, utils
 
 | | |
 |---|---|
 | `taskman.spawn(fn, ...)` | a task running `fn(...)`; its id |
 | `taskman.sleep(ms)` `taskman.yield()` | waits |
 | `taskman.tasks()` `taskman.cancel(id)` | |
-| `lulib.exec(argv [, {stdin=, cwd=, timeout=}])` | waits: `{code=, stdout=, stderr=, ...}` |
-| `lulib.index{pages=, force=, filter=}` | waits: index the files |
-| `lulib.md5(path)` | waits: the file's MD5, kept in the index |
+| `utils.exec(argv [, {stdin=, cwd=, timeout=}])` | waits: `{code=, stdout=, stderr=, ...}` |
+| `utils.index{pages=, force=, filter=}` | waits: index the files |
+| `utils.md5(path)` | waits: the file's MD5, kept in the index |
 
 Each C module documents itself at the top of its `src/lua/l_*.c`.

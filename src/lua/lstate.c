@@ -204,10 +204,6 @@ lua_State *lstate_new(struct app *app) {
   lua_setfield(L, -2, "store");
   lua_pushcfunction(L, luaopen_bookman);
   lua_setfield(L, -2, "bookman");
-  lua_pushcfunction(L, luaopen_lulibre_ocr_core);
-  lua_setfield(L, -2, "lulibre.ocr.core");
-  lua_pushcfunction(L, luaopen_lulibre_stores_core);
-  lua_setfield(L, -2, "lulibre.stores.core");
   lua_pushcfunction(L, luaopen_curl);
   lua_setfield(L, -2, "curl");
   lua_pushcfunction(L, luaopen_lsqlite3);
@@ -246,10 +242,13 @@ lua_State *lstate_new(struct app *app) {
   lua_pushstring(L, lulibre_build_commit);
   lua_setfield(L, -2, "commit");
   lua_setfield(L, -2, "build");
+  lua_setglobal(L, "lulib");
+  lua_newtable(L);
   l_proc_open(L);
   l_hash_open(L);
   l_index_open(L);
-  lua_setglobal(L, "lulib");
+  l_ocr_open(L);
+  lua_setglobal(L, "utils");
   lua_newtable(L);
   l_job_open(L);
   lua_setglobal(L, "taskman");

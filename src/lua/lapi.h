@@ -5,18 +5,18 @@
  *
  * What scripts reach, and from where (lstate.c builds it):
  *
- *   globals     lulib     (version, build, headless) l_proc.c exec,
- *                         l_hash.c md5, l_index.c index
+ *   globals     lulib     version, build, headless (lstate.c, main.c)
+ *               utils     l_proc.c exec, l_hash.c md5, l_index.c index,
+ *                         l_ocr.c ocr (a handler, lua/handler.c)
  *               taskman   l_job.c: spawn sleep yield tasks cancel
  *               uiman     l_ui.c, l_panel.c panel, l_theme.c theme
  *               setman    l_setman.c        evman  l_evman.c
  *               keymap, cmd                 (l_ui.c's callers)
  *   preloaded   bookman   l_db.c, l_doc.c files
- *               store     l_library.c, l_db.c reload
+ *               store     l_library.c (calibre: a handler), l_db.c reload
  *               txt       l_txt.c           curl    l_curl.c
  *               expr.core l_match.c         lsqlite3 (vendor/)
  *               mesr      l_mesr.c, l_match.c fuzzy
- *               lulibre.ocr.core, lulibre.stores.core
  *   luv         l_uv.c: luv on the Lua loop
  *
  * Each l_<name>_open(L) adds its functions to the table on top of the
@@ -96,15 +96,42 @@ int luaopen_store(struct lua_State *L);
 int luaopen_bookman(struct lua_State *L);
 int l_db_reload(struct lua_State *L);  /* store.reload */
 int l_doc_files(struct lua_State *L);  /* bookman.files */
-int luaopen_lulibre_ocr_core(struct lua_State *L);
-int luaopen_lulibre_stores_core(struct lua_State *L);
 /* curl (l_curl.c): requests through libcurl on the Lua loop, preloaded. */
 int luaopen_curl(struct lua_State *L);
 /* lsqlite3 (vendor/lsqlite3), preloaded. */
 int luaopen_lsqlite3(struct lua_State *L);
-/* Hands an OCR request to lulibre.ocr.read (l_ocr.c); any thread. */
+/* Hands an OCR request to utils.ocr (l_ocr.c); any thread. */
 struct ocr_req;
 void lapi_ocr_read(struct ocr_req *req);
+/* utils.ocr's field, for the table utils is built in (l_ocr.c). */
+void l_ocr_open(struct lua_State *L);
+
+/* Handlers (lua/handler.c): a function of Lua's in the place of a part of
+ * C's (core/registry.h). A part says how a request for it becomes calls
+ * of the handler, and how their results answer it: calls pushes a list
+ * of calls, each the list of a call's arguments; answer gets the results
+ * at index `results`, results[i] call i's results packed, false where it
+ * raised, and why, the first error or NULL. fail answers a request no
+ * handler can (the handler taken away, the lua_State gone, the task
+ * cancelled). */
+struct lapi_part {
+  int kind; /* enum registry_kind */
+  const char *name; /* the task's, for :tasks */
+  void (*calls)(struct lua_State *L, void *req);
+  void (*answer)(struct lua_State *L, void *req, int results, const char *why);
+  void (*fail)(void *req, const char *why);
+};
+struct lapi_handler {
+  const char *key;
+  const struct lapi_part *part;
+};
+/* Gives the table at idx the handler fields h lists, up to a NULL key:
+ * setting one to a function puts it in the part's place, nil gives the
+ * part back to C. */
+void lapi_handlers(struct lua_State *L, int idx, const struct lapi_handler *h);
+/* A request for the part's handler, which a task on the Lua thread
+ * answers; any thread. */
+void lapi_handle(const struct lapi_part *p, void *req);
 
 /* lua/reply.c: a handle on a request a task answers once; fail runs with
  * the request when the handle is closed or collected unanswered. take

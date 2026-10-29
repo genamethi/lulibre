@@ -106,7 +106,7 @@ struct store_req {
   void (*answer)(struct store_req *req, const char *err);
   void *ud;
 };
-/* Hands a request to lulibre.stores.calibre (lua/l_library.c); any thread. */
+/* Hands a request to store.calibre (lua/l_library.c); any thread. */
 void lapi_store_write(struct store_req *req);
 
 /* What went wrong with a calibredb run, in words: the one place its error

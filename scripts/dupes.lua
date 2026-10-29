@@ -19,7 +19,7 @@ end
 
 local groups = {}
 for _, same_size in iter(files):group(function(f) return f.size end):filter(several) do
-  for md5, same in iter(same_size):group(function(f) return lulib.md5(f.path) end):filter(several) do
+  for md5, same in iter(same_size):group(function(f) return utils.md5(f.path) end):filter(several) do
     groups[#groups + 1] = { md5 = md5, size = same[1].size, files = same }
   end
 end

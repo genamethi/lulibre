@@ -4,16 +4,14 @@
 /* Replaceable parts (design 48).
  *
  * An entry is a part C does with its own code unless Lua has put a
- * function in its place. Lua does so the way it overrides anything
- * (design 6): by redefining the function in the packaged module that
- * stands for the entry (lulibre.ocr.read for the OCR reader). C then calls
- * the entry by the queue: the module's function runs as a task on the Lua
- * thread, through the module's table at the time of the call, and the
- * answer comes back as a message. C never calls Lua and waits. */
+ * function in its place: a handler, set as a field of a library table
+ * (utils.ocr for the OCR reader; lua/handler.c). C then calls the handler
+ * by the queue: it runs as a task on the Lua thread, and the answer comes
+ * back as a message. C never calls Lua and waits. */
 
 enum registry_kind {
-  REG_READER, /* how a file's page images become text (design 37): lulibre.ocr.read */
-  REG_STORE,  /* how a book's changes reach calibre (design 28): lulibre.stores.calibre */
+  REG_READER, /* how a file's page images become text (design 37): utils.ocr */
+  REG_STORE,  /* how a book's changes reach calibre (design 28): store.calibre */
   REG_KINDS
 };
 

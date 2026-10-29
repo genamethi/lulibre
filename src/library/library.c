@@ -960,7 +960,7 @@ static int take_changes(struct library *lib, struct batch *b, const char *label,
         continue;
       }
       rows++;
-      const char *store = c->book < 0 ? "staging" : field_is_own(c->field) ? "own" : "calibre";
+      const char *store = c->book < 0 ? "stage" : field_is_own(c->field) ? "custom" : "calibre";
       if (!strcmp(store, "calibre")) {
         long long row = journal_add(db, b->id, label, b->need, store, OP_QUEUED, c->book, c->field, olds[i], news[i],
                                     NULL, c, undoes);

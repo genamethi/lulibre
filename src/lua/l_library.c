@@ -207,8 +207,13 @@ static int l_holder(lua_State *L) {
   return 1;
 }
 
-/* ---- the calibre store, when Lua has put one in calibredb's place:
- * lulibre.stores.calibre(book, fields) as a task, its answer back to the
+/* ---- store.calibre: a function of Lua's in calibredb's place
+ * (lua/handler.c), called as a task for each book of a write:
+ *
+ *   store.calibre = function(book, fields) ... return true end
+ *
+ * fields { title = "...", authors = "A & B", tags = "a, b", ... }; it
+ * returns true, or nil and why it failed; its answer goes back to the
  * main thread (library/library.h) ---- */
 
 struct store_answer {
@@ -223,62 +228,45 @@ static void store_answered(struct app *app, void *arg) { /* the background threa
   free(a);
 }
 
-static void store_fail(void *req, const char *why) {
+static void store_reply(void *req, const char *why) {
   struct store_answer *a = xcalloc(1, sizeof *a);
   a->q = req;
-  a->err = xstrdup(why);
+  a->err = why ? xstrdup(why) : NULL;
   queue_post(LOOP_WORK, store_answered, a);
 }
 
-static void store_start(struct app *app, void *arg) { /* the Lua thread */
-  struct store_req *q = arg;
-  lua_State *L = app->L;
-  if (!L) {
-    store_fail(q, "no lua_State: the scripts are restarting");
-    return;
-  }
-  lua_getglobal(L, "require");
-  lua_pushliteral(L, "lulibre.stores");
-  if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-    store_fail(q, lua_tostring(L, -1));
-    lua_pop(L, 1);
-    return;
-  }
-  lua_getfield(L, -1, "_run");
-  lua_remove(L, -2);
-  lapi_push_reply(L, q, store_fail);
+/* one call: (book, fields) */
+static void store_calls(lua_State *L, void *req) {
+  struct store_req *q = req;
+  lua_createtable(L, 1, 0);
+  lua_createtable(L, 2, 0);
   lua_pushinteger(L, q->book);
+  lua_rawseti(L, -2, 1);
   lua_createtable(L, 0, q->n);
   for (int i = 0; i < q->n; i++) {
     lua_pushstring(L, q->values[i]);
     lua_setfield(L, -2, q->fields[i]);
   }
-  sched_spawn(L, 3, "store (lulibre.stores.calibre)");
+  lua_rawseti(L, -2, 2);
+  lua_rawseti(L, -2, 1);
 }
+
+static void store_answer(lua_State *L, void *req, int results, const char *why) {
+  const char *err = why;
+  lua_rawgeti(L, results, 1);
+  if (!why) {
+    lua_rawgeti(L, -1, 1);
+    lua_rawgeti(L, -2, 2);
+    if (!lua_toboolean(L, -2)) err = lua_isstring(L, -1) ? lua_tostring(L, -1) : "the store said no";
+  }
+  store_reply(req, err); /* NULL: written */
+  lua_settop(L, results);
+}
+
+static const struct lapi_part store_part = {REG_STORE, "store (store.calibre)", store_calls, store_answer, store_reply};
 
 void lapi_store_write(struct store_req *q) {
-  queue_post(LOOP_LUA, store_start, q);
-}
-
-/* answer(handle [, err]) */
-static int l_store_answer(lua_State *L) {
-  struct store_req *q = lapi_take_reply(L, 1);
-  struct store_answer *a = xcalloc(1, sizeof *a);
-  a->q = q;
-  a->err = lua_isstring(L, 2) ? xstrdup(lua_tostring(L, 2)) : NULL;
-  queue_post(LOOP_WORK, store_answered, a);
-  return 0;
-}
-
-static int l_store_filled(lua_State *L) {
-  registry_set_lua(REG_STORE, lua_toboolean(L, 1));
-  return 0;
-}
-
-int luaopen_lulibre_stores_core(lua_State *L) {
-  static const luaL_Reg fns[] = {{"answer", l_store_answer}, {"filled", l_store_filled}, {NULL, NULL}};
-  luaL_newlib(L, fns);
-  return 1;
+  lapi_handle(&store_part, q);
 }
 
 int luaopen_store(lua_State *L) {
@@ -287,5 +275,7 @@ int luaopen_store(lua_State *L) {
     {NULL, NULL},
   };
   luaL_newlib(L, fns);
+  static const struct lapi_handler handlers[] = {{"calibre", &store_part}, {NULL, NULL}};
+  lapi_handlers(L, -1, handlers);
   return 1;
 }

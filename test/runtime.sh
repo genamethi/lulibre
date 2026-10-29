@@ -54,23 +54,22 @@ again=$("$bin" -L "$t/lib" -o persistent=true run "$t/probe.lua" 2>&1)
 elsewhere=$("$bin" -L "$t/lib" -o path.state="$t/st/saved" -o persistent=true run "$t/probe.lua" 2>&1)
 saved=$(cat "$t/st/saved" 2>/dev/null || true)
 
-# a reader of Lua's in tesseract's place (lulibre.ocr.read), and back
+# a reader of Lua's in tesseract's place (utils.ocr), and back; it waits
+# once before it answers
 cat >"$cfg/init.lua" <<'LUA'
-local ocr = require "lulibre.ocr"
-function ocr.read(path, page, lang) return "Read By Lua\npage " .. page .. " " .. lang end
+utils.ocr = function(path, page, lang) taskman.sleep(10) return "Read By Lua\npage " .. page .. " " .. lang end
 LUA
 "$bin" -L "$t/lib" -o ocr=auto index >/dev/null 2>&1
 db=$(ls "$t"/data/lulibre/lib-*.db | grep -v '\.[a-z]*\.db$')
 ocr=$(sqlite3 "$db" "SELECT group_concat(text, '|') FROM lines WHERE file = 1" 2>/dev/null || true)
 printf '' >"$cfg/init.lua"
 
-# a calibre store of Lua's in calibredb's place (lulibre.stores.calibre)
+# a calibre store of Lua's in calibredb's place (store.calibre)
 cat >"$t/store.lua" <<'LUA'
-local stores = require "lulibre.stores"
 local store = require "store"
 local seen, changed = {}, nil
 evman.add("records_changed", function(ev) changed = table.concat(ev.ids, ",") .. "|" .. table.concat(ev.fields, ",") end)
-function stores.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
+function store.calibre(book, fields) seen[#seen + 1] = book .. ":" .. fields.title; return true end
 local batch = store.apply({ { book = 1, field = "title", value = "Stored By Lua" } })
 local sql, sqlite3 = require "sql", require "lsqlite3"
 local jdb = sql.open(setman.get("path.journaldb"), sqlite3.OPEN_READONLY)
@@ -79,13 +78,16 @@ jdb:close()
 print("store|" .. table.concat(seen, ",") .. "|" .. row.store .. "|" .. row.state)
 for _ = 1, 50 do if changed then break end taskman.sleep(20) end
 print("changed|" .. tostring(changed))
-function stores.calibre() return nil, "not today" end
+function store.calibre() return nil, "not today" end
 print("refused|" .. tostring(select(2, store.apply({ { book = 1, field = "title", value = "Again" } }))))
+function store.calibre() taskman.sleep(10) error("broken") end
+print("raised|" .. tostring(select(2, store.apply({ { book = 1, field = "title", value = "Again" } }))))
+print("kept|" .. type(store.calibre) .. "|" .. type(store.apply))
 -- a store whose task is cancelled while it waits still answers: the write fails
-function stores.calibre() taskman.sleep(60000) return true end
+function store.calibre() taskman.sleep(60000) return true end
 taskman.spawn(function()
   taskman.sleep(100)
-  for _, t in ipairs(taskman.tasks()) do if t.name:find("lulibre.stores.calibre", 1, true) then taskman.cancel(t.id) end end
+  for _, t in ipairs(taskman.tasks()) do if t.name:find("store.calibre", 1, true) then taskman.cancel(t.id) end end
 end)
 print("cancelled|" .. tostring(select(2, store.apply({ { book = 1, field = "title", value = "Never" } }))))
 LUA
@@ -238,6 +240,9 @@ if command -v sqlite3 >/dev/null; then
 fi
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
+contains "a store that raises after it waits fails the write, with the error" "raised|" "$store"
+contains "and broken" "broken" "$store"
+contains "the handler reads back; the module's functions are untouched" "kept|function|function" "$store"
 contains "a change that applied posts records_changed with its books and fields" "changed|1|title" "$store"
 contains "a store's task cancelled before it answers fails the write" "cancelled|the task that was to answer ended" "$store"
 contains "coroutine.resume passes values both ways" "co|true|3" "$co"
