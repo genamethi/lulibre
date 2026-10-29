@@ -182,6 +182,29 @@ printf 'require("store").calibre = function(book, f) print("stored|" .. book .. 
 dotsw=$("$bin" -L "$t/tags" run tag-dots write 2>&1)
 printf '' >"$cfg/init.lua"
 
+# every Lua file of lulibre's compiles in the Lua lulibre runs (5.5 will
+# not load a file that assigns to a for loop's own variable)
+cat >"$t/compile.lua" <<'LUA'
+local luv = require "luv"
+local bad = {}
+local function walk(dir)
+  local req = luv.fs_scandir(dir)
+  while req do
+    local name, kind = luv.fs_scandir_next(req)
+    if not name then break end
+    local path = dir .. "/" .. name
+    if kind == "directory" then walk(path)
+    elseif name:match("%.lua$") then
+      local ok, err = loadfile(path)
+      if not ok then bad[#bad + 1] = err end
+    end
+  end
+end
+for _, dir in ipairs { ... } do walk(dir) end
+print(#bad == 0 and "compiled|all" or "compiled|" .. table.concat(bad, "\n"))
+LUA
+compiled=$("$bin" -L "$t/lib" run "$t/compile.lua" "$src/../lua" "$src/../scripts" "$src/../examples" 2>&1)
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -348,6 +371,7 @@ contains "the categories calibre shows as trees, from its preferences" 'trees|["
 contains "tag-dots lists the tags it would rewrite" "    2  math/algebra  →  math.algebra" "$dots"
 contains "and with write, rewrites them as one operation" "stored|2|math.algebra" "$dotsw"
 contains "which it says can be undone" "as operation" "$dotsw"
+contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
