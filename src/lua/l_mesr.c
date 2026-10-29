@@ -10,13 +10,17 @@
  *   mesr.canonical(type, value)  an identifier's canonical form, or nil
  *
  * kind: "text" (title, series, publisher), "people" (authors), "tags",
- * "date" ("1942", "1942-05", "1942-05-03"), "ident" ("type:value"). Words
+ * "date" ("1942", "1942-05", "1942-05-03"), "ident" ("type:value"); or a
+ * field's name, compared as its kind: title, series and publisher as
+ * text, authors as people, tags, pubdate as a date, identifiers and
+ * identifier:TYPE as identifiers, any other of the library's as text. Words
  * are weighed by their rarity in the library, built again after calibre's
  * records are read again. The thresholds near and same are the settings
  * similar_near and similar_same when not passed: code that takes its
  * values once (design 3) passes them. */
 #include <stdatomic.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -24,6 +28,7 @@
 #include "app.h"
 #include "core/log.h"
 #include "db/db.h"
+#include "library/fields.h"
 #include "lua/lapi.h"
 #include "match/similar.h"
 
@@ -51,6 +56,17 @@ static const struct rarity *weights(lua_State *L) {
 
 static enum field_kind check_kind(lua_State *L, int idx) {
   static const char *const kinds[] = {"text", "people", "tags", "date", "ident", NULL};
+  static const struct { const char *field; enum field_kind kind; } fields[] = {
+    {"title", KIND_TEXT},  {"series", KIND_TEXT}, {"publisher", KIND_TEXT},    {"authors", KIND_PEOPLE},
+    {"pubdate", KIND_DATE}, {"identifiers", KIND_IDENT},
+  };
+  const char *name = luaL_checkstring(L, idx);
+  if (!strncmp(name, "identifier:", 11)) return KIND_IDENT;
+  for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++)
+    if (!strcmp(name, fields[i].field)) return fields[i].kind;
+  for (int i = 0; kinds[i]; i++)
+    if (!strcmp(name, kinds[i])) return (enum field_kind)i;
+  if (field_known(name)) return KIND_TEXT; /* languages, series_index, #own */
   return (enum field_kind)luaL_checkoption(L, idx, NULL, kinds);
 }
 

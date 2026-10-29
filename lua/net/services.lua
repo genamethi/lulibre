@@ -53,7 +53,7 @@ service.define("crossref", {
       authors = people(m.author, "given", "family"),
       publisher = m.publisher,
       series = m["container-title"] and m["container-title"][1],
-      year = issued and issued[1] and tostring(issued[1]),
+      pubdate = issued and issued[1] and tostring(issued[1]),
     }
   end,
 })
@@ -79,7 +79,7 @@ service.define("openlibrary", {
       title = b.title and (b.subtitle and (b.title .. ": " .. b.subtitle) or b.title),
       authors = #authors > 0 and table.concat(authors, " & ") or nil,
       publisher = b.publishers and b.publishers[1] and b.publishers[1].name,
-      year = year,
+      pubdate = year,
     }
   end,
 })
@@ -110,7 +110,7 @@ service.define("arxiv", {
     return {
       title = xml_text(answer:match("<title>(.-)</title>") or ""),
       authors = #authors > 0 and table.concat(authors, " & ") or nil,
-      year = answer:match("<published>(%d%d%d%d)"),
+      pubdate = answer:match("<published>(%d%d%d%d)"),
     }
   end,
 })

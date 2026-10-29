@@ -10,16 +10,14 @@ local M = {}
 --- How much each kind of source weighs in agreement (lulibre.rank).
 M.weight = { record = 1, embedded = 0.5, online = 1 }
 
+-- the record's fields that have a value, as bookman.get gives them
 local function record(b)
-  local fields = {
-    title = b.title,
-    authors = b.author,
-    publisher = b.publisher,
-    series = b.series,
-    year = b.pubdate,
-  }
-  if b.tags and #b.tags > 0 then fields.tags = table.concat(b.tags, ", ") end
-  for kind, value in pairs(b.idents or {}) do fields[kind] = kind .. ":" .. value end
+  local fields = {}
+  for _, field in ipairs { "title", "authors", "publisher", "series", "pubdate", "tags" } do
+    local v = bookman.get(b.id, field)
+    if v ~= "" then fields[field] = v end
+  end
+  for kind, value in pairs(b.idents or {}) do fields["identifier:" .. kind] = value end
   return fields
 end
 
@@ -31,7 +29,7 @@ end
 -- fields = { [field] = value } }`
 function M.of(book, t)
   local out = {}
-  local b = bookman.book(book)
+  local b = bookman.get(book)
   if b then out[#out + 1] = { name = "record", kind = "record", fields = record(b) } end
   local meta = t and t.meta
   if meta and (meta.title or meta.author) then

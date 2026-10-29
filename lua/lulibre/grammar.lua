@@ -40,8 +40,8 @@ end
 
 --- A field: patt's match is the value, `{ value=, start=, stop= }` under
 -- the field's name in the parse; start and stop as string.sub takes them.
--- @tparam string name title, authors, publisher, series, year, tags, or an
--- identifier's type
+-- @tparam string name a field as calibre names it: title, authors,
+-- publisher, series, pubdate, tags, or identifier:TYPE (identifier:isbn)
 function M.field(name, patt)
   local value = Ct(Cg(Cp(), "start") * Cg(C(patt), "value") * Cg(Cp() / function(p) return p - 1 end, "stop"))
   return Cg(value, name)

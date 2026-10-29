@@ -31,7 +31,7 @@ for _, g in ipairs(groups) do
   spare = spare + g.size * (#g.files - 1)
   print(("%s  %d bytes  %d copies"):format(g.md5, g.size, #g.files))
   for _, f in ipairs(g.files) do
-    local b = bookman.book(f.book)
+    local b = bookman.get(f.book)
     print(("  %5d  %s  —  %s"):format(f.book, b.title or "", b.author or ""))
   end
 end

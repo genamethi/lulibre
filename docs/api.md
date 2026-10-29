@@ -138,7 +138,8 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 |---|---|
 | `bookman.ids(filter)` | `{ id, ... }` |
 | `bookman.books(filter)` | `{ book, ... }` |
-| `bookman.book(id)` | a book, or nil |
+| `bookman.get(id)` | a book, or nil |
+| `bookman.get(id, field)` | the field's value as a string, `""` when it has none (an unknown author too); `identifier:TYPE` one identifier's value; nil when there is no such book |
 | `bookman.count(filter)` | number |
 | `bookman.authors()` `bookman.tags()` | `{ {name=, books=}, ... }`, most used first |
 | `bookman.files(id)` | what the index holds of the book's files: `{ {path=, format=, outcome=, pages=, ...}, ... }` |
@@ -263,11 +264,13 @@ predicates test the line at the current position: `largest`, `bold`,
 `expr.where` for one of yours. `grammar.parse(t)` returns every
 grammar's parse of a text.
 
-| | |
-|---|---|
 A **wit** is a value for a book's field, with the source that gave it,
 kept until a review accepts or rejects it. `:propose` makes them from the
-grammars' parses and the online records, and `:review` shows them.
+grammars' parses, the identifiers in the text and the online records, and
+`:review` shows them. A field is named as calibre's metadata sources name
+it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
+`identifier:TYPE` for one identifier (`identifier:isbn`, its value
+`9780387900407`), which accepting adds to the book's identifiers.
 
     local wit = require "wit"
 
@@ -279,7 +282,7 @@ grammars' parses and the online records, and `:review` shows them.
 | `wit.reject(id)` | waits: kept in the journal; the field keeps its value |
 | `lulibre.propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulibre.propose.settings()` |
 | `lulibre.rank`, `trust`, `lulibre.sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
-| `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident` |
+| `mesr.compare(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
 
 ## Online lookups
 

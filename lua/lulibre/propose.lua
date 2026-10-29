@@ -33,9 +33,10 @@ function M.settings()
 end
 
 --- A value as the field holds it: authors as calibre writes them, "A & B";
--- an identifier as "type:value".
+-- an identifier (identifier:TYPE) in its canonical form, when it has one.
 function M.normalize(field, value)
-  if not trust.library_field[field] and not value:find("^[%w_%-]+:") then return field .. ":" .. value end
+  local kind = field:match("^identifier:(.+)")
+  if kind then return mesr.canonical(kind, value) or value end
   if field ~= "authors" then return value end
   local names = {}
   for name in (value:gsub("%s+and%s+", "&"):gsub("[,;]", "&") .. "&"):gmatch("%s*(.-)%s*&") do
@@ -71,7 +72,7 @@ function M.rows(ranked, srcs, w)
       else
         local same = false
         for _, a in ipairs(list) do
-          same = same or mesr.compare(rank.kind(field), a.value, value, w.near, w.same) == "equal"
+          same = same or mesr.compare(field, a.value, value, w.near, w.same) == "equal"
         end
         if not same then list[#list + 1] = alt end
       end
@@ -89,7 +90,7 @@ function M.rows(ranked, srcs, w)
   local record = srcs[1] and srcs[1].kind == "record" and srcs[1].fields or {}
   for field, list in pairs(rows) do
     local now = record[field]
-    if now and mesr.compare(rank.kind(field), list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
+    if now and mesr.compare(field, list[1].value, now, w.near, w.same) == "equal" then rows[field] = nil end
   end
   return rows
 end
@@ -100,7 +101,7 @@ local function found(t)
   local fields = {}
   for _, kind in ipairs { "isbn", "doi", "arxiv", "issn" } do
     local start, stop, id = expr.find(t, lex[kind])
-    if start then fields[kind] = { value = kind .. ":" .. id, start = start, stop = stop } end
+    if start then fields["identifier:" .. kind] = { value = id, start = start, stop = stop } end
   end
   if next(fields) then return { grammar = "lex", fields = fields } end
 end

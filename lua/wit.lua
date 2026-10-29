@@ -72,12 +72,13 @@ function M.get(book)
 end
 
 --- The change a decision on a wit makes: the library's field, with the
--- wit's provenance (design 27). An identifier is added to the book's;
--- tags are added to its own.
+-- wit's provenance (design 27). An identifier (identifier:TYPE) is added
+-- to the book's identifiers as TYPE:value; tags are added to its own.
 local function change(w, value)
-  local field = trust.field(w.field)
-  return { book = w.book, field = field, value = value, proposal = w.id, proposed = w.value, source = w.source,
-           op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
+  local field, kind = trust.field(w.field), w.field:match("^identifier:(.+)")
+  local function written(v) return kind and v and kind .. ":" .. v or v end
+  return { book = w.book, field = field, value = written(value), proposal = w.id, proposed = written(w.value),
+           source = w.source, op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
 end
 
 local function row(id)

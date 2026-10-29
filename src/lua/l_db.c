@@ -3,7 +3,9 @@
  *
  *   bookman.ids(filter)     { id, ... }
  *   bookman.books(filter)   { book, ... }
- *   bookman.book(id)        book or nil
+ *   bookman.get(id)         book or nil
+ *   bookman.get(id, field)  the field's value, a string ("" when it has
+ *                           none); nil when there is no such book
  *   bookman.count(filter)   number
  *   bookman.authors()       { {name=, books=}, ... } most books first
  *   bookman.tags()          { {name=, books=}, ... }
@@ -26,6 +28,7 @@
 #include "core/queue.h"
 #include "core/util.h"
 #include "db/query.h"
+#include "library/fields.h"
 #include "library/library.h"
 #include "lua/bridge.h"
 #include "lua/lapi.h"
@@ -173,11 +176,28 @@ static int l_count(lua_State *L) {
   return 1;
 }
 
-static int l_book(lua_State *L) {
+static int l_get(lua_State *L) {
   lua_Integer id = luaL_checkinteger(L, 1);
   struct db *db = db_of(L);
   sqlite3_stmt *st;
   char *err = NULL;
+  if (!lua_isnoneornil(L, 2)) {
+    const char *field = luaL_checkstring(L, 2);
+    char *v = field_current(db, id, field, &err);
+    if (v) {
+      lua_pushstring(L, v);
+      free(v);
+      return 1;
+    }
+    int no_book = !strncmp(err, "no book", 7);
+    lua_pushstring(L, err);
+    free(err);
+    if (no_book) {
+      lua_pushnil(L);
+      return 1;
+    }
+    return lua_error(L);
+  }
   if (db_prepare(db, "SELECT " BOOK_COLS " FROM books b WHERE b.id = ?", &st, &err)) {
     lua_pushstring(L, err);
     free(err);
@@ -265,7 +285,7 @@ int l_db_reload(lua_State *L) {
 
 int luaopen_bookman(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"ids", l_ids},         {"books", l_books}, {"book", l_book}, {"count", l_count},
+    {"ids", l_ids},         {"books", l_books}, {"get", l_get}, {"count", l_count},
     {"authors", l_authors}, {"tags", l_tags},   {"files", l_doc_files}, {NULL, NULL},
   };
   luaL_newlib(L, fns);

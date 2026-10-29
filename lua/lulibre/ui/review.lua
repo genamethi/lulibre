@@ -27,15 +27,6 @@ function M.cells(entry, current)
   return { entry.field, current or "", alt.value .. which, alt.source, agree }
 end
 
-local function current(book, field)
-  local b = bookman.book(book)
-  if not b then return "" end
-  if field == "authors" then return b.author end
-  if field == "year" then return b.pubdate end
-  if field == "tags" then return table.concat(b.tags or {}, ", ") end
-  return b[field] or (b.idents and b.idents[field]) or ""
-end
-
 --- The entries for the books: per book with proposals, a heading and a
 -- row per field.
 local function entries(books)
@@ -43,8 +34,8 @@ local function entries(books)
   for _, book in ipairs(books) do
     local fields = wit.get(book)
     if #fields > 0 then
-      local b = bookman.book(book)
-      out[#out + 1] = { book = book, head = (b and b.title or ("book " .. book)) }
+      local title = bookman.get(book, "title")
+      out[#out + 1] = { book = book, head = title and title ~= "" and title or ("book " .. book) }
       for _, f in ipairs(fields) do
         out[#out + 1] = { book = book, field = f.field, alts = f.alts, i = 1 }
       end
@@ -59,7 +50,7 @@ local function rows_of(list)
     if e.head then
       rows[#rows + 1] = { e.head, id = e.book, style = "head" }
     else
-      local r = M.cells(e, current(e.book, e.field))
+      local r = M.cells(e, bookman.get(e.book, e.field))
       r.id = e.book
       rows[#rows + 1] = r
     end

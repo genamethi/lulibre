@@ -114,6 +114,21 @@ static char *col_or_empty(sqlite3_stmt *st, int col) {
 }
 
 char *field_current(struct db *db, long long book, const char *field, char **err) {
+  /* one identifier, by its type, as calibre's metadata sources name it */
+  if (!strncmp(field, "identifier:", 11)) {
+    char *all = field_current(db, book, "identifiers", err);
+    if (!all) return NULL;
+    struct items it = {0};
+    split("identifiers", all, &it);
+    const char *type = field + 11;
+    size_t n = strlen(type);
+    char *v = NULL;
+    for (int i = 0; i < it.n && !v; i++)
+      if (!strncmp(it.v[i], type, n) && it.v[i][n] == ':') v = xstrdup(it.v[i] + n + 1);
+    items_free(&it);
+    free(all);
+    return v ? v : xstrdup("");
+  }
   if (!field_known(field)) {
     *err = xasprintf("no field is called %s", field);
     return NULL;

@@ -24,7 +24,8 @@ int field_is_own(const char *field);   /* "#name": lulibre's own */
 /* The book's current value of field, from the index's copy of the records
  * (or the custom database): malloc'd, "" when it has none; NULL and *err
  * when the book or field is unknown. An unknown author is "", and so is a
- * series index without a series. */
+ * series index without a series. identifier:TYPE is one identifier's
+ * value, without its type. */
 char *field_current(struct db *db, long long book, const char *field, char **err);
 
 /* The value after a change: set replaces it; add and remove keep a list's

@@ -27,7 +27,7 @@ M.FORGET = 30 * 86400
 -- is the service's text, false when it has no record), or nil, the reason,
 -- and true when the service asked to be left alone (with the seconds it
 -- asked for); record(answer), the fields of the record: `{ title=,
--- authors=, year=, publisher=, series=, ... }`
+-- authors=, pubdate=, publisher=, series=, ... }`, as calibre names them
 function M.define(name, how)
   M.services[name] = { name = name, how = how, queue = {}, answers = {}, asking = {}, next_at = 0, held_until = 0 }
 end

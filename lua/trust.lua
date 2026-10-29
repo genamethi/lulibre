@@ -23,30 +23,10 @@ M.prior = 0.5
 --- How many decisions the prior weighs as.
 M.prior_weight = 5
 
---- The library field a proposal's field is written to, and the kind its
--- values are compared as.
-M.library_field = { title = "title", authors = "authors", publisher = "publisher", series = "series",
-                    year = "pubdate", tags = "tags" }
-local kinds = { title = "text", authors = "people", publisher = "text", series = "text", pubdate = "date",
-                tags = "tags", identifiers = "ident" }
-
---- A proposal's field as the library's: an identifier's type goes to
--- identifiers.
+--- The library field a wit's field is written to: identifier:TYPE goes to
+-- identifiers; every other field is the library's own.
 function M.field(f)
-  return M.library_field[f] or "identifiers"
-end
-
-local function now(book, field)
-  local b = bookman.book(book)
-  if not b then return "" end
-  if field == "authors" then return (b.author == "Unknown" or b.author == "()") and "" or b.author or "" end
-  if field == "tags" then return table.concat(b.tags or {}, ", ") end
-  if field == "identifiers" then
-    local out = {}
-    for k, v in pairs(b.idents or {}) do out[#out + 1] = k .. ":" .. v end
-    return table.concat(out, ", ")
-  end
-  return b[field] or ""
+  return f:find("^identifier:") and "identifiers" or f
 end
 
 local function score(field, proposed, current, near, same)
@@ -57,7 +37,7 @@ local function score(field, proposed, current, near, same)
     end
     return 0
   end
-  local _, ab, ba = mesr.compare(kinds[field] or "text", proposed, current, near, same)
+  local _, ab, ba = mesr.compare(field, proposed, current, near, same)
   return (ab + ba) / 2
 end
 
@@ -88,7 +68,7 @@ function M.records(after, near, same)
     local key = r.source .. "\0" .. r.field
     local s = sums[key] or { parse = r.source, field = r.field, sum = 0, n = 0 }
     sums[key] = s
-    s.sum = s.sum + score(r.field, r.proposed or "", now(r.book, r.field), near, same)
+    s.sum = s.sum + score(r.field, r.proposed or "", bookman.get(r.book, r.field) or "", near, same)
     s.n = s.n + 1
   end
   for _, s in pairs(sums) do

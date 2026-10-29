@@ -13,16 +13,9 @@ local trust = require "trust"
 
 local M = {}
 
---- Each field's kind, for mesr; any other field is an identifier.
-M.kinds = { title = "text", authors = "people", publisher = "text", series = "text", year = "date", tags = "tags" }
-
 --- What filling a field is worth: title and authors the majority,
--- publisher, series and year about equal.
-M.coverage_weight = { title = 0.3, authors = 0.3, publisher = 0.4 / 3, series = 0.4 / 3, year = 0.4 / 3 }
-
-function M.kind(field)
-  return M.kinds[field] or "ident"
-end
+-- publisher, series and pubdate about equal.
+M.coverage_weight = { title = 0.3, authors = 0.3, publisher = 0.4 / 3, series = 0.4 / 3, pubdate = 0.4 / 3 }
 
 --- A parse's coverage, 0 to 1.
 function M.coverage(parse)
@@ -43,7 +36,7 @@ function M.agreement(parse, srcs, w)
       local own = src.name == parse.grammar or (src.from and src.from[field] == parse.grammar)
       if v and v ~= "" and not own then
         local ws = sources.weight[src.kind] or 1
-        local like, ab, ba = mesr.compare(M.kind(field), f.value, v, w.near, w.same)
+        local like, ab, ba = mesr.compare(field, f.value, v, w.near, w.same)
         num = num + wf * ws * (ab + ba) / 2
         den = den + wf * ws
         local into = like == "differs" and disagree or agree

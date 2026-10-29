@@ -38,17 +38,15 @@ end
 -- asked by: `{ {service=, key=}, ... }`. A key is an identifier the
 -- record has, or one a wit proposes (found in the book's text).
 function M.keys(book)
-  local out, b = {}, bookman.book(book)
+  local out, b = {}, bookman.get(book)
   if not b then return out end
   local idents = {}
   for kind, value in pairs(b.idents or {}) do idents[kind] = { value } end
   for _, f in ipairs(wit.get(book)) do
-    for _, a in ipairs(f.alts) do
-      local kind, value = (a.value or ""):match("^([%w_%-]+):(.+)$")
-      if kind == f.field then
-        idents[kind] = idents[kind] or {}
-        table.insert(idents[kind], value)
-      end
+    local kind = f.field:match("^identifier:(.+)")
+    for _, a in ipairs(kind and f.alts or {}) do
+      idents[kind] = idents[kind] or {}
+      table.insert(idents[kind], a.value)
     end
   end
   for name, s in pairs(service.services) do

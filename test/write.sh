@@ -42,18 +42,18 @@ local batch, err = store.apply({
   { book = 1, field = "#partof", value = "Cambridge Studies" },
 }, "a test")
 say("apply", tostring(batch), tostring(err))
-local b = bookman.book(1)
+local b = bookman.get(1)
 say("record", b.title, b.author, table.concat(b.tags, ","), b.pubdate)
 say("same", tostring(store.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
 say("bad", select(2, store.apply({ { book = 1, field = "pubdate", value = "soon" } })))
 local r = q("journaldb", "SELECT proposal, source FROM journal WHERE field = 'title'")[1]
 say("provenance", r.proposal, r.source)
 say("undo", tostring(store.undo(batch)))
-b = bookman.book(1)
+b = bookman.get(1)
 say("after undo", b.title, b.author)
 say("undone", q("journaldb", "SELECT count(*) AS n FROM journal WHERE batch = ? AND state = 4", batch)[1].n)
 store.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
-say("in order", table.concat(bookman.book(1).tags, ","))
+say("in order", table.concat(bookman.get(1).tags, ","))
 LUA
 
 cat > "$t/embed.lua" <<'LUA'
@@ -79,12 +79,16 @@ for _, f in ipairs(wit.get(1)) do id[f.field] = f.alts[1].id end
 print("filter|" .. #bookman.ids("is:proposed"))
 print("accept|" .. tostring(wit.accept(id.title)))
 print("reject|" .. tostring(wit.reject(id.authors)))
-local b = bookman.book(1)
+local b = bookman.get(1)
 print("decided|" .. b.title .. "|" .. b.author .. "|" .. #wit.get(1) .. "|" .. #bookman.ids("is:proposed"))
 local r = q("journaldb", "SELECT store, field, proposal, source FROM journal WHERE batch = 2")[1]
 print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
 local rec = trust.records(1, 0.7, 0.95)
 print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
+-- an identifier's wit, accepted: added to the record's identifiers
+wit.set(1, { { field = "identifier:isbn", value = "9780387900407", source = "lex" } })
+print("ident accept|" .. tostring(wit.accept(wit.get(1)[1].alts[1].id) ~= nil))
+print("ident|" .. bookman.get(1, "identifier:isbn") .. "|" .. bookman.get(1, "authors") .. "|" .. tostring(bookman.get(99, "title")))
 LUA
 
 cat > "$t/inside.sh" <<'IN'
@@ -170,6 +174,8 @@ expect "a wit rejected is a decision in the journal" "reject|2"
 expect "the record has the one, not the other, and the wits are gone" "decided|Topics in Additive Combinatorics|Unknown|0|0"
 expect "a rejection changes nothing but is kept" "rejection|review|authors|2|front"
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
+expect "an identifier's wit accepted is added to the record's identifiers" "ident accept|true"
+expect "bookman.get gives one identifier by its type, an unknown author as nothing, no book as nil" "ident|9780387900407||nil"
 expect "the content server is seen to hold the library" "holder|server"
 expect "a change goes through the server" "apply|1"
 expect "a copy of the library the server has open is not reached through it" "copy holder|other"
