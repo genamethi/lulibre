@@ -193,9 +193,9 @@ void le_free(struct lineedit *le);
 /* The current list: the ids matching the filter, in order, plus cursor and
  * marks. Rows themselves are fetched from the index only when drawn. */
 /* A heading of a grouped list: an author, a series, a subject (subjects
- * nest: "math/number-theory" is under "math") with the books under it. */
+ * nest: "math.number-theory" is under "math") with the books under it. */
 struct ghead {
-  char *path;        /* what it is known by: "math/number-theory" */
+  char *path;        /* what it is known by: "math.number-theory" */
   char *label;       /* its last part, as shown */
   char *sortkey;
   int depth, parent; /* parent: a heading's number, -1 at the top */

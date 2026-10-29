@@ -531,8 +531,8 @@ static void test_similar(void) {
   double two = similar(NULL, KIND_PEOPLE, "Terence Tao & Van Vu", "Terence Tao");
   ok(two > 0.5 && two < 0.75, "two people, one found: about half");
   ok(similar(NULL, KIND_PEOPLE, "Terence Tao", "Terence Tao & Van Vu") == 1, "the one is in the two");
-  ok(similar(NULL, KIND_TAGS, "math", "math/number-theory/additive") == 1, "a broader term is in a narrower tag");
-  ok(similar(NULL, KIND_TAGS, "math/number-theory/additive", "math") < 0.5, "but not the narrower in the broader");
+  ok(similar(NULL, KIND_TAGS, "math", "math.number-theory.additive") == 1, "a broader term is in a narrower tag");
+  ok(similar(NULL, KIND_TAGS, "math.number-theory.additive", "math") < 0.5, "but not the narrower in the broader");
   ok(similar(NULL, KIND_DATE, "1942-05-03", "1942") == 1, "a day lies in its year");
   double part = similar(NULL, KIND_DATE, "1942", "1942-05");
   ok(part > 0.08 && part < 0.09, "a month is a twelfth of its year");

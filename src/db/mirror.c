@@ -21,7 +21,7 @@
 #include <stdatomic.h>
 
 /* Bump when the SQL below changes, so existing indexes re-copy. */
-#define MIRROR_VERSION "5"
+#define MIRROR_VERSION "6" /* 6: calibre_hierarchical */
 
 /* calibre's books (in the database attached as `cal`) as the index keeps
  * them: one row each, list fields joined into text. calibre stores "no date"
@@ -256,6 +256,17 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
         db_meta_set(db, "calibre_opf_behind", n);
       }
       sqlite3_finalize(ds);
+      /* the categories calibre shows as trees, their levels split at "."
+       * (Preferences, Look & feel, "Categories with hierarchical items"):
+       * calibre's JSON list, [] when it has none */
+      char *tree = NULL;
+      if (sqlite3_prepare_v2(db->h, "SELECT val FROM cal.preferences WHERE key = 'categories_using_hierarchy'", -1,
+                             &ds, NULL) == SQLITE_OK &&
+          sqlite3_step(ds) == SQLITE_ROW && sqlite3_column_text(ds, 0))
+        tree = xstrdup((const char *)sqlite3_column_text(ds, 0));
+      sqlite3_finalize(ds);
+      db_meta_set(db, "calibre_hierarchical", tree ? tree : "[]");
+      free(tree);
     }
     /* replacing the names above took the staged files' with them */
     ok = ok && db_stage_refresh(db, 1, err) == 0;

@@ -15,8 +15,9 @@
  *
  * Fields: title author tag subject publisher series lang path fmt id year
  *         ident doi isbn arxiv url emb text has no is sort
- *   subject:   hierarchical tag match; subject:number-theory also matches
- *              math/number-theory/additive
+ *   subject:   tags by whole levels, at calibre's ".": subject:number-theory
+ *              also matches math.number-theory.additive (tag:=..x as
+ *              calibre's =..; tag:=.x the tag x or one inside it, its =.)
  *   author:unknown       calibre's placeholder authors
  *   id: year:  numbers: 12  10-20  >1990  <=2001  1,5,9-12
  *   text:      full-text search of the indexed pages (text:= takes raw FTS5)

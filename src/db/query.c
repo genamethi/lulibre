@@ -204,10 +204,14 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
       }
       sb_puts(sql, "EXISTS(SELECT 1 FROM book_tags bt JOIN tags t ON t.id = bt.tag"
                    " WHERE bt.book = b.id AND ");
-      if (f->kind == F_SUBJECT && !strchr("=^~", *val)) {
-        /* a whole part of the tag between its slashes */
-        sb_puts(sql, "instr('/' || fold(t.name) || '/', ?) > 0");
-        add_folded(q, "/", val, "/");
+      if (!strncmp(val, "=..", 3) || (f->kind == F_SUBJECT && !strchr("=^~", *val))) {
+        /* calibre's =..x: whole levels of the tag, between its dots */
+        sb_puts(sql, "instr('.' || fold(t.name) || '.', ?) > 0");
+        add_folded(q, ".", *val == '=' ? val + 3 : val, ".");
+      } else if (!strncmp(val, "=.", 2)) {
+        /* calibre's =.x: the tag x, or one inside it */
+        sb_puts(sql, "instr(fold(t.name) || '.', ?) = 1");
+        add_folded(q, "", val + 2, ".");
       } else {
         match(q, sql, "t.name", val);
       }

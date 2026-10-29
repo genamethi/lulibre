@@ -151,6 +151,11 @@ static void test_query(void) {
   ok(compiles("title:~^The", SCOPE_LIBRARY, "find("), "~ is a Lua pattern");
   ok(compiles("sort:-year", SCOPE_LIBRARY, NULL), "sort");
   ok(compiles("is:dupe is:missing has:doi no:tags", SCOPE_LIBRARY, NULL), "is, has, no");
+  ok(query_compile("subject:number-theory tag:=.math tag:=..algebra", &q, &err) == 0, "levels of tags compile");
+  eq(q.params[0], ".number-theory.", "subject: is a run of whole levels, between calibre's dots");
+  eq(q.params[1], "math.", "tag:=. is the tag or one inside it, as calibre's =.");
+  eq(q.params[2], ".algebra.", "tag:=.. is whole levels, as calibre's =..");
+  query_free(&q);
 
   ok(query_compile("nosuchfield:x", &q, &err) != 0 && err && strstr(err, "unknown field"),
      "an unknown field is reported");

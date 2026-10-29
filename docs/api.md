@@ -9,12 +9,13 @@ below is there without it.
     :restart-scripts            a new Lua state; init.lua runs first, as at start
     :tasks   :cancel ID|all
 
-lulibre comes with these scripts, which change nothing and show what they find in a list (`lulibre run` prints it):
+lulibre comes with these scripts, which show what they find in a list (`lulibre run` prints it):
 
 | | |
 |---|---|
-| `dupes` | books whose files hold the same bytes: files of the same size hashed, grouped by hash |
-| `orphans` | files a record names that are not on disk, files in the books' folders no record names, empty folders |
+| `dupes` | books whose files hold the same bytes: files of the same size hashed, grouped by hash. Changes nothing |
+| `orphans` | files a record names that are not on disk, files in the books' folders no record names, empty folders. Changes nothing |
+| `tag-dots [write]` | tags whose levels are split with "/", and each as calibre writes levels, with "."; with `write`, rewrites them, one operation `:undo` puts back |
 
 ## How scripts run
 

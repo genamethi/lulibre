@@ -19,7 +19,7 @@ leaving it:
 | Grouping | Headings |
 |---|---|
 | `author` | each author; a book by two authors appears under both |
-| `subject` | the tree of subjects: `math`, inside it `number-theory`, inside that `additive` |
+| `subject` | the tags as a tree, split at calibre's ".": `math`, inside it `number-theory`, inside that `additive` (`math.number-theory.additive`); a tree only when calibre shows tags as one (Preferences → Look & feel → "Categories with hierarchical items"), each tag as it is otherwise |
 | `series` `publisher` `year` `format` | each value; years newest first |
 | `folder` | the folders of the calibre library, as it is filed on disk |
 | `none` | the plain list |

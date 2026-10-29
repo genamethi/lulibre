@@ -51,8 +51,8 @@ static void words(const char *s, struct tokens *ts) {
   sb_free(&f);
 }
 
-/* Tags, comma-separated, and each tag's broader terms: "math/nt/additive"
- * is math, math/nt and math/nt/additive. */
+/* Tags, comma-separated, and each tag's broader terms: "math.nt.additive"
+ * is math, math.nt and math.nt.additive: calibre's levels. */
 static void tags(const char *s, struct tokens *ts) {
   sbuf f = SBUF_INIT;
   fold_utf8(&f, s, strlen(s));
@@ -62,7 +62,7 @@ static void tags(const char *s, struct tokens *ts) {
     size_t n = strlen(tag);
     while (n && tag[n - 1] == ' ') n--;
     for (size_t i = 0; i < n; i++)
-      if (tag[i] == '/' || tag[i] == '.') add(ts, tag, i);
+      if (tag[i] == '.') add(ts, tag, i);
     add(ts, tag, n);
   }
   sb_free(&f);

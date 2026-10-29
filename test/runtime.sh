@@ -158,6 +158,30 @@ kc=$(grammar keith-conrad "24|GALOIS GROUPS OF CUBICS" "12|KEITH CONRAD" "10|1. 
 hb=$(grammar handbook-of-algebra "24|Quantum Groups" "12|A. Author" "10|HANDBOOK OF ALGEBRA, VOL. 3" "10|2003 Elsevier Science B.V.")
 sp=$(grammar stacks-project "24|MORPHISMS OF SCHEMES" "12|01QZ" "10|Contents")
 
+# subjects at calibre's ".": the filters, calibre's list of the categories
+# it shows as trees, and tag-dots, which rewrites "/" as "." (through a
+# store in calibredb's place)
+sh "$src/mklib.sh" "$t/tags" >/dev/null 2>&1
+sqlite3 "$t/tags/metadata.db" "DELETE FROM tags; DELETE FROM books_tags_link;
+  INSERT INTO tags VALUES (1, 'math.number-theory.additive'), (2, 'math/algebra');
+  INSERT INTO books_tags_link(book, tag) VALUES (1, 1), (2, 2);
+  CREATE TABLE preferences(id INTEGER PRIMARY KEY, key TEXT NOT NULL, val TEXT NOT NULL, UNIQUE(key));
+  INSERT INTO preferences(key, val) VALUES ('categories_using_hierarchy', '[\"tags\", \"#genre\"]');"
+cat >"$t/levels.lua" <<'LUA'
+local bookman, sql, sqlite3 = require "bookman", require "sql", require "lsqlite3"
+local function ids(f) return table.concat(bookman.ids(f), ",") end
+print("levels|" .. ids("subject:number-theory") .. "|" .. ids("subject:math.number-theory") .. "|" .. ids("tag:=.math")
+      .. "|" .. ids("tag:=..additive") .. "|" .. ids("tag:=.math.number"))
+local db = sql.open(setman.get("path.indexdb"), sqlite3.OPEN_READONLY)
+print("trees|" .. sql.run(db, "SELECT value FROM meta WHERE key = 'calibre_hierarchical'")[1].value)
+db:close()
+LUA
+levels=$("$bin" -L "$t/tags" run "$t/levels.lua" 2>&1)
+dots=$("$bin" -L "$t/tags" run tag-dots 2>&1)
+printf 'require("store").calibre = function(book, f) print("stored|" .. book .. "|" .. f.tags) return true end\n' >"$cfg/init.lua"
+dotsw=$("$bin" -L "$t/tags" run tag-dots write 2>&1)
+printf '' >"$cfg/init.lua"
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -319,6 +343,11 @@ contains "the woken run on; a cancelled sleeper ends; self is each task's own" "
 contains "the Keith Conrad grammar: the title in title case, the author as spelled" "keith-conrad|Galois Groups of Cubics|Keith Conrad|-|-|-|-" "$kc"
 contains "the Handbook of Algebra grammar: the volume from the page's foot, the year, the title" "handbook-of-algebra|Quantum Groups|-|Elsevier|2003|Handbook of Algebra, Volume 3|-" "$hb"
 contains "the Stacks project grammar: the chapter, and its number from the reading order" "stacks-project|Morphisms of Schemes|The Stacks Project|-|-|The Stacks Project|29" "$sp"
+contains "subject: whole levels; tag:=. the tag or inside it; tag:=.. a level; never part of one" "levels|1|1|1|1|" "$levels"
+contains "the categories calibre shows as trees, from its preferences" 'trees|["tags", "#genre"]' "$levels"
+contains "tag-dots lists the tags it would rewrite" "    2  math/algebra  →  math.algebra" "$dots"
+contains "and with write, rewrites them as one operation" "stored|2|math.algebra" "$dotsw"
+contains "which it says can be undone" "as operation" "$dotsw"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
