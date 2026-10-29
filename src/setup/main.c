@@ -163,10 +163,11 @@ static void build_items(void) {
                     .help = "Enter runs require \"luv\" under lulibre's own Lua (build/lulibre, in pixi's "
                             "environment when pixi is chosen) and says whether it loads."});
   /* lulibre's settings, but those set on the command line alone (where
-   * the saved state is) and persistent, which the saved state never holds */
+   * init.lua and the saved state are) and persistent: options.lua, which
+   * these go to, is the way without it */
   int head = add((struct item){.kind = K_HEAD, .label = "Settings", .depth = 1, .head = adv,
-                               .help = "lulibre's settings, kept in its saved state: each at lulibre's default "
-                                       "until it is set here."});
+                               .help = "lulibre's settings, written to lua/config/options.lua in lulibre's "
+                                       "configuration folder: each at lulibre's default until it is set here."});
   for (int i = 0; i < S_COUNT; i++) {
     const struct setting_def *o = &setting_defs[i];
     int skip = (o->flags & (SETTING_CLI_ONLY | SETTING_PERSIST)) != 0;
@@ -494,7 +495,7 @@ static void type_value(struct item *it) {
   free(prompt);
   if (!v) return;
   if (it->opt && v[0]) {
-    /* the value as lulibre will read it from the saved state */
+    /* the value as lulibre will read it */
     union setting_value parsed;
     char *err = NULL;
     if (settings_parse(it->opt, v, &parsed, &err)) {

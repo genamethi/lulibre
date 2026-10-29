@@ -114,16 +114,17 @@ unit: $(BIN) $(UNIT) $(CORE)
 	$(UNIT)
 	$(CORE)
 
-# test/setup.sh comes back with lulibre-setup's rework for 0.3
-check: unit
+check: unit $(SETUP)
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
 	sh test/curl.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
 
-e2e: $(BIN)
+e2e: $(BIN) $(SETUP)
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
 	sh test/curl.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
 	sh test/write.sh $(BIN)
 	python3 -I test/tasks.py $(BIN)
 	python3 -I test/screens.py $(BIN)

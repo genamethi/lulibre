@@ -25,7 +25,11 @@ one build installs under any prefix.
 
 Setup is separate from the build. `build/lulibre-setup` (src/setup/) keeps
 the choices in `setup.conf`, and `setup/install.sh` carries them out;
-`sh setup/install.sh -n` prints the commands without running them.
+`sh setup/install.sh -n` prints the commands without running them. The
+settings chosen go to `lua/config/options.lua` in the configuration
+folder, through `setup/options.lua`; where there is no init.lua, setup
+writes `setup/init.lua` there with its `require "config.options"`
+uncommented.
 
 After building, `make` prints the version and md5 of the new binary next to
 those of the `lulibre` on PATH. `make status` prints the same on its own.
@@ -79,15 +83,12 @@ and `lulib.build.commit`, and a crash log names both.
 
 | | |
 |---|---|
-| `make unit` | `test/unit.c` (the C core) and `test/core.c` (the 0.3 runtime: settings, events, the registry) |
-| `make check` | the unit tests, `test/runtime.sh` (settings, init.lua, where modules are found), `test/net.sh` (online lookups with canned answers, no network) and `test/curl.sh` (the curl module against a server of its own in a private network namespace) |
-| `make e2e` | every end-to-end test: those three, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) and `test/screens.py` (`uiman.list`, `uiman.form` and review, on a pseudo-terminal) |
-
-`test/setup.sh` tests lulibre-setup, which still writes 0.2's init.lua; it
-comes back into the targets with lulibre-setup's rework.
+| `make unit` | `test/unit.c` (the C core) and `test/core.c` (the runtime: settings, events, the registry) |
+| `make check` | the unit tests, `test/runtime.sh` (settings, init.lua, where modules are found), `test/net.sh` (online lookups with canned answers, no network), `test/curl.sh` (the curl module against a server of its own in a private network namespace) and `test/setup.sh` (setup/install.sh under a temporary prefix, the settings it writes, and the setup screen in a private tmux server) |
+| `make e2e` | every end-to-end test: those four, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) and `test/screens.py` (`uiman.list`, `uiman.form` and review, on a pseudo-terminal) |
 
 Previously the end-to-end tests drove the 0.2 Lua runtime. Now they are
-written again as each part of 0.3 is.
+written again as each part of 0.4 is.
 
 Tests that write need calibre and `unshare`. They run inside a private
 network namespace against throwaway libraries, because calibre refuses
@@ -209,7 +210,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/library/    calibre's library as a resource: its holder, operations, the journal, the write core's values
     src/match/      text folding, fuzzy matching, the similarity measure
     src/tui/        the interface: windows, views, keymap, commands, pickers, console, the edit form
-    src/setup/      lulibre-setup (still 0.2's; setup/ holds install.sh)
+    src/setup/      lulibre-setup (setup/ holds install.sh, the settings writer and the default init.lua)
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
     lua/            the modules written in Lua: expr, lex, iter, sql, wit, net, trust, exprman, cmd

@@ -3,8 +3,10 @@
 #   setup.sh BUILT_LULIBRE BUILT_LULIBRE_SETUP
 # A plan shown without running (-n), a plan with a choice missing, a
 # user-level install under a temporary prefix (a library whose name has a
-# quote in it, an init.lua that was there before, a password file open to
-# others), and the setup screen driven through a private tmux server.
+# quote in it, the settings in lua/config/options.lua and an init.lua that
+# loads them, a password file open to others), the settings written again
+# over a file edited since, and the setup screen driven through a private
+# tmux server.
 # Touches nothing outside a temporary directory.
 set -eu
 
@@ -18,7 +20,8 @@ mkdir -p "$t/home/it's lib" "$t/home/.config/calibre"
 : >"$t/home/it's lib/metadata.db"
 echo password >"$t/home/.config/calibre/pw"
 chmod 644 "$t/home/.config/calibre/pw"
-export HOME="$t/home" XDG_CONFIG_HOME="$t/home/.config" XDG_DATA_HOME="$t/home/.local/share"
+export HOME="$t/home" XDG_CONFIG_HOME="$t/home/.config" XDG_DATA_HOME="$t/home/.local/share" \
+  XDG_STATE_HOME="$t/home/.local/state"
 
 fails=0
 expect() { # description, expected, actual
@@ -26,6 +29,9 @@ expect() { # description, expected, actual
 }
 contains() { # description, needle, haystack
   case $3 in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in: $3"; fails=$((fails + 1)) ;; esac
+}
+lacks() { # description, needle, haystack
+  case $3 in *"$2"*) echo "FAIL  $1: '$2' in: $3"; fails=$((fails + 1)) ;; *) echo "ok    $1" ;; esac
 }
 
 # ---- the script on a plan
@@ -45,7 +51,7 @@ out=$(sh "$src/setup/install.sh" -n "$t/system.conf" 2>&1) || true
 contains "-n: a system install goes through sudo" "\$ sudo make -s -C" "$out"
 contains "-n: pixi's environment is installed" "\$ pixi install --manifest-path $src/pixi.toml" "$out"
 contains "-n: the password file is made mode 600" "\$ chmod 600" "$out"
-contains "-n: a value with a quote is shown as the shell takes it" "library=$t/home/it's lib" "$out"
+contains "-n: a value with a quote is shown as the shell takes it" "path.library=$t/home/it's lib" "$out"
 expect "-n: nothing is installed" "no" "$([ -e "$t/sys" ] && echo yes || echo no)"
 expect "-n: the password file is as it was" "644" "$(stat -c %a "$t/home/.config/calibre/pw")"
 
@@ -54,8 +60,6 @@ out=$(sh "$src/setup/install.sh" "$t/gap.conf" 2>&1) && status=0 || status=$?
 expect "a choice missing: the script stops" "1" "$status"
 contains "and says which" "not set in the plan: library; content server" "$out"
 
-mkdir -p "$t/home/.config/lulibre"
-printf 'local o = lulibre.o\no.pages = 3\n' >"$t/home/.config/lulibre/init.lua"
 cat >"$t/user.conf" <<EOF
 LEVEL='user'
 PIXI='no'
@@ -72,15 +76,37 @@ out=$(sh "$src/setup/install.sh" "$t/user.conf" 2>&1) && status=0 || status=$?
 expect "a user install runs through" "0" "$status"
 [ "$status" -eq 0 ] || printf '%s\n' "$out"
 expect "lulibre is under the prefix" "yes" "$([ -x "$t/user/bin/lulibre" ] && echo yes || echo no)"
-printf 'print(lulibre.settings.paths().installed)\n' >"$t/where.lua"
-expect "and finds its files beside it" "$(realpath "$t/user/share/lulibre")" \
+printf 'print((package.path:match("^([^;]+)")))\n' >"$t/where.lua"
+expect "and finds its files beside it" "$(realpath "$t/user/share/lulibre")/lua/?.lua" \
   "$("$t/user/bin/lulibre" --clean run "$t/where.lua" 2>&1)"
-init=$(cat "$t/home/.config/lulibre/init.lua")
-contains "init.lua: the library, quote and all" "o.library = \"$t/home/it's lib\"" "$init"
-contains "init.lua: the content server" 'o.server = "http://127.0.0.1:8080"' "$init"
-contains "init.lua: an option of the plan's, on the line that set it" "o.pages = 8" "$init"
-expect "init.lua.bak: the file before setup" "$(printf 'local o = lulibre.o\no.pages = 3')" \
-  "$(cat "$t/home/.config/lulibre/init.lua.bak")"
+cfg=$t/home/.config/lulibre
+options=$(cat "$cfg/lua/config/options.lua" 2>/dev/null || true)
+contains "options.lua: through setman.settings" "local _ENV = setman.settings" "$options"
+contains "options.lua: the library, quote and all" "path.library = \"$t/home/it's lib\"" "$options"
+contains "options.lua: the content server" 'server = "http://127.0.0.1:8080"' "$options"
+contains "options.lua: a setting of the plan's, as a number" "pages = 8" "$options"
+expect "no init.lua before: setup writes one that loads them" 'require "config.options"' "$(cat "$cfg/init.lua" 2>/dev/null)"
+printf 'print(setman.get("pages") .. "|" .. setman.get("server"))\n' >"$t/read.lua"
+expect "and lulibre starts with them" "8|http://127.0.0.1:8080" "$("$t/user/bin/lulibre" run "$t/read.lua" 2>&1)"
+
+# again, over an options.lua edited since and an init.lua of the user's
+printf 'ocr = "auto"\n' >>"$cfg/lua/config/options.lua"
+before=$(cat "$cfg/lua/config/options.lua")
+printf 'setman.set("mouse", false)\n' >"$cfg/init.lua"
+printf 'path.library=%s\nserver=\npages=7\n' "$t/home/it's lib" >"$t/again"
+out=$("$bin" --clean run "$src/setup/options.lua" "$t/again" "$src/setup/init.lua" 2>&1) && status=0 || status=$?
+expect "written again" "0" "$status"
+options=$(cat "$cfg/lua/config/options.lua")
+contains "a line of the user's is kept" 'ocr = "auto"' "$options"
+contains "a setting's line is replaced" "pages = 7" "$options"
+lacks "an empty value takes its line out" "server =" "$options"
+expect "options.lua.bak: the file before" "$before" "$(cat "$cfg/lua/config/options.lua.bak")"
+expect "init.lua is left as it was" 'setman.set("mouse", false)' "$(cat "$cfg/init.lua")"
+contains "and setup says it does not load them" 'does not load these' "$out"
+printf 'pages=many\n' >"$t/bad"
+out=$("$bin" --clean run "$src/setup/options.lua" "$t/bad" "$src/setup/init.lua" 2>&1) && status=0 || status=$?
+contains "a value refused: nothing is written" "nothing written: pages: many is not a whole number" "$out"
+expect "and options.lua is as it was" "$options" "$(cat "$cfg/lua/config/options.lua")"
 expect "the password file is mode 600" "600" "$(stat -c %a "$t/home/.config/calibre/pw")"
 
 # ---- where modules are found: mod_tree first, and not in a pixi environment
@@ -88,7 +114,7 @@ mkdir -p "$t/mods/share/lua/5.5" "$t/modcfg/lulibre"
 lv=$("$bin" -V | sed -n 's/.*Lua \([0-9.]*\)).*/\1/p')
 [ "$lv" = 5.5 ] || mv "$t/mods/share/lua/5.5" "$t/mods/share/lua/$lv"
 echo 'return "from mod_tree"' >"$t/mods/share/lua/$lv/modprobe.lua"
-printf 'lulibre.o.mod_tree = "%s"\n' "$t/mods" >"$t/modcfg/lulibre/init.lua"
+printf 'setman.set("path.modtree", "%s")\n' "$t/mods" >"$t/modcfg/lulibre/init.lua"
 printf 'local ok, m = pcall(require, "modprobe") print(ok and m or "not found")\n' >"$t/mod.lua"
 expect "mod_tree: a module under it is found" "from mod_tree" \
   "$("$bin" -C "$t/modcfg/lulibre" run "$t/mod.lua" 2>/dev/null)"

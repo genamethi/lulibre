@@ -22,7 +22,7 @@ die() {
   exit 1
 }
 
-# the plan sets these, and names lulibre's other options with `opt`
+# the plan sets these, and names lulibre's other settings with `opt`
 LEVEL= PIXI= LIBRARY= SERVER= SERVER_URL= SERVER_USER= PASSWORD_FILE= PASSWORD_CHMOD=
 PREFIX= CONFIRM= LUV_ROCKS=
 optfile=$(mktemp "${TMPDIR:-/tmp}/lulibre-setup.XXXXXX")
@@ -137,41 +137,32 @@ if [ "$SERVER" = yes ] && [ "$PASSWORD_CHMOD" = yes ]; then
   run chmod 600 "$PASSWORD_FILE"
 fi
 
-step "init.lua"
-init=$("$lu" --clean config --path)
-fresh=
-if [ ! -e "$init" ]; then
-  run "$lu" --clean config --write
-  fresh=new
-fi
-opt library "$LIBRARY"
+# the settings go to lua/config/options.lua in the configuration folder,
+# which init.lua loads; init.lua is written only where there is none
+step "the settings"
+opt path.library "$LIBRARY"
 if [ "$SERVER" = yes ]; then
   opt server "$SERVER_URL"
   opt user "$SERVER_USER"
-  opt password_file "$PASSWORD_FILE"
+  opt path.password "$PASSWORD_FILE"
 else
   opt server ''
   opt user ''
-  opt password_file ''
+  opt path.password ''
 fi
-echo "the values set in $init (an empty one goes back to lulibre's default):"
+echo "the values for lua/config/options.lua (an empty one goes back to lulibre's default):"
 sed 's/^/  /' "$optfile"
-run "$lu" --clean run "$here/setup/options.lua" "$optfile" $fresh
+run "$lu" --clean run "$here/setup/options.lua" "$optfile" "$here/setup/init.lua"
 
 step "luv"
 if [ "$dry" = no ]; then
   if [ "$PIXI" = yes ]; then
     run pixi run --manifest-path "$here/pixi.toml" "$bin" --clean run "$here/setup/luv-check.lua" ||
-      echo "lulibre runs without luv; the sync folder, orphans and onboarding need it"
+      echo "lulibre starts without luv, but its modules that keep data (sql, wit, net) need it"
   else
     run "$bin" --clean run "$here/setup/luv-check.lua" ||
-      echo "lulibre runs without luv; the sync folder, orphans and onboarding need it"
+      echo "lulibre starts without luv, but its modules that keep data (sql, wit, net) need it"
   fi
-fi
-
-if [ "$SERVER" = yes ] && grep -q '^\(server_hook\|opf_writer\|server_restart_at\)=.' "$optfile"; then
-  step "systemd units around the content server"
-  run "$bin" units apply
 fi
 
 step "done"
@@ -180,7 +171,6 @@ case :$PATH: in
 *":$prefix/bin:"*) ;;
 *) echo "$prefix/bin is not on PATH" ;;
 esac
-echo "init.lua: $init"
 if [ "$PIXI" = yes ]; then
   echo "pixi's environment holds luv and the optional programs: lulibre started with"
   echo "  pixi run --manifest-path $here/pixi.toml lulibre"
