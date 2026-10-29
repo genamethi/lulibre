@@ -2,6 +2,16 @@
 
 Versions follow [semantic versioning](https://semver.org). The version is set in `src/version.h`.
 
+## 0.4.0
+
+**0.4.0-pre-alpha**
+
+\* There is no 0.3.0 release: every change made for 0.3.0 is part of 0.4.0-pre-alpha, and the entries below start from it.
+
+- Changed the order of settings: the command line now lies over what init.lua sets as lulibre starts. Previously `lulibre -L DIR` opened the library init.lua named; now it opens DIR. A change made after start (`:set`, a command, a script) replaces the command line's value.
+- Added `setman.settings`, the settings as a table: reading a name is `setman.get`, assigning one is `setman.set`, dotted names as written (`path.library = "~/calibre-library"`). With `local _ENV = setman.settings` at its top, a file is a file of settings.
+- Changed lulibre-setup to write the settings chosen to `lua/config/options.lua` in the configuration folder, which init.lua loads with `require "config.options"`. Setup writes an init.lua only where there is none, and keeps the file it replaces as `options.lua.bak`. The default init.lua (`setup/init.lua`) has that line commented out.
+
 ## 0.2.1
 
 - Fixed scanned cataloguing blocks whose hyphens read as middle dots or other dashes. Previously the author's heading, with its dates, was taken as the start of the title. Now the heading is read as the author.
