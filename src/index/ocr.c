@@ -35,7 +35,7 @@ static char *write_pgm(const struct doc_image *img, char **err) {
   int fd = mkstemp(path);
   FILE *f = fd >= 0 ? fdopen(fd, "wb") : NULL;
   if (!f) {
-    *err = xasprintf("a file for the page image: %s", strerror(errno));
+    *err = xasprintf("a file for the page image: %s", errstr(errno));
     if (fd >= 0) close(fd);
     free(path);
     return NULL;
@@ -49,7 +49,7 @@ static char *write_pgm(const struct doc_image *img, char **err) {
   }
   free(row);
   if (fclose(f) != 0) {
-    *err = xasprintf("writing the page image: %s", strerror(errno));
+    *err = xasprintf("writing the page image: %s", errstr(errno));
     remove(path);
     free(path);
     return NULL;
@@ -61,7 +61,7 @@ static char *write_pgm(const struct doc_image *img, char **err) {
 static char *run_tesseract(const char *tesseract, const char *image, const char *lang, char **err) {
   int out[2];
   if (pipe(out) != 0) {
-    *err = xasprintf("pipe: %s", strerror(errno));
+    *err = xasprintf("pipe: %s", errstr(errno));
     return NULL;
   }
   posix_spawn_file_actions_t fa;
@@ -76,7 +76,7 @@ static char *run_tesseract(const char *tesseract, const char *image, const char 
   close(out[1]);
   if (rc != 0) {
     close(out[0]);
-    *err = xasprintf("tesseract: %s", strerror(rc));
+    *err = xasprintf("tesseract: %s", errstr(rc));
     return NULL;
   }
   sbuf b = SBUF_INIT;

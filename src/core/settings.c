@@ -299,7 +299,7 @@ int settings_load_state(struct settings *st, const char *path, char **err) {
   FILE *f = fopen(path, "r");
   if (!f) {
     if (errno == ENOENT) return 0;
-    *err = xasprintf("%s: %s", path, strerror(errno));
+    *err = xasprintf("%s: %s", path, errstr(errno));
     return -1;
   }
   char *line = NULL;
@@ -333,7 +333,7 @@ int settings_save_state(const struct settings *st, const char *path, char **err)
   char *tmp = xasprintf("%s.new", path);
   FILE *f = fopen(tmp, "w");
   if (!f) {
-    *err = xasprintf("%s: %s", tmp, strerror(errno));
+    *err = xasprintf("%s: %s", tmp, errstr(errno));
     free(tmp);
     return -1;
   }
@@ -347,7 +347,7 @@ int settings_save_state(const struct settings *st, const char *path, char **err)
   }
   int bad = ferror(f) | fclose(f);
   if (bad || rename(tmp, path)) {
-    *err = xasprintf("%s: %s", path, strerror(errno));
+    *err = xasprintf("%s: %s", path, errstr(errno));
     remove(tmp);
     free(tmp);
     return -1;

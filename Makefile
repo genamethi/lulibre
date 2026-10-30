@@ -115,12 +115,14 @@ unit: $(BIN) $(UNIT) $(CORE)
 	$(CORE)
 
 check: unit $(SETUP)
+	sh test/lint.sh
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
 	sh test/curl.sh $(BIN)
 	sh test/setup.sh $(BIN) $(SETUP)
 
 e2e: $(BIN) $(SETUP)
+	sh test/lint.sh
 	sh test/runtime.sh $(BIN)
 	sh test/net.sh $(BIN)
 	sh test/curl.sh $(BIN)
