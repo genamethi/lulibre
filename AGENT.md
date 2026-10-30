@@ -2,6 +2,63 @@
 
 Rules for working on lulibre, and facts about calibre measured for it.
 
+## Handoff (2026-10-30): delete this section once it is done
+
+lulibre was designed and built in one agent session over 18 days
+(2026-10-11 to 2026-10-30); that session ended here. To take it over:
+
+1. Read, in this order: `/media/servd/staging/lulibre-scratch/working-rules.md`
+   (the maintainer's standing instructions and the names already decided),
+   `lulibre-scratch/plan-4s.md` (where the work stands and what comes next),
+   `lulibre-scratch/design-0.3.0.md` (decisions 1 to 48, 44 reversed, 47a,
+   and Deferred), `lulibre-scratch/TODO.md`, then docs/development.md,
+   docs/api.md and docs/configuration.md. `lulibre-scratch/api-inventory.md`
+   is the old session's working notes, never agreed. The transcript since
+   the session's last summary is `/media/servd/staging/transcript2910.txt`;
+   the maintainer also kept the session's last two answers (readiness by
+   group; the 4s).
+2. Check the state: the work is on branch `0.3.0` in the worktree
+   `/media/servd/staging/lulibre-0.2.0` (the folder's name is old and
+   stays), at the commit that added this section, version
+   0.4.0-pre-alpha (there is no 0.3.0 release).
+   `make check` and `make e2e` passed there. Nothing is pushed, and the
+   branch is not merged into `main`; the maintainer's checkout
+   (`/media/servd/staging/lulibre`) is on `main` (0.2.x).
+3. The next step is the maintainer's: settle the decisions plan-4s.md lists
+   for the 4s, then which code they share and in what order the 5s are
+   built. The pieces under most of them: settings definable from Lua (so
+   `-o help`, `:set`, completion and a config screen list them), commands
+   made in Lua equal to C's (argument completion, rebindable keys inside
+   their screens, `lulibre NAME` from the shell), the writer of
+   lua/config/options.lua as a module of its own, `utils.index{ocr=}`, and
+   scripts/ turned into commands in lua/ (decision 12).
+4. Left open, to be raised rather than fixed unasked:
+   - `:source config` calls the missing `config` command; `make install`'s
+     last line and `make datasets` name the missing `lulibre datasets`;
+     contrib/calibre-server.service.in is still installed though the units
+     are gone; cmd_run.c's help says scripts get "the same `lulibre` API";
+     test/terminal.py names files that are gone.
+   - docs/filters.md and docs/keys.md describe 0.2 commands 0.4 lacks
+     (:custom, :noncatalog, :parts, :addpages, :new). The 0.4.0 section of
+     CHANGELOG.md does not describe the new API against 0.2 yet.
+   - scripts/ (dupes, orphans, tag-dots) goes against decision 12;
+     sched.c:209's watchdog is a count hook (debug interface) in regular
+     code; title_case is written twice in examples/grammars; a uiman.list's
+     keys can't be rebound; net's pause after a 429 does not outlive the
+     run (the rule under Verifying).
+   - In the interface, dupes and orphans now open a list where 0.2 printed;
+     reverting was offered and not answered.
+   - To check: whether `lulibre run` waits for queued operations before it
+     exits; that calibredb takes an empty value for every field (:clear).
+   - Deferred by the maintainer: learn, terms, good, weigh and weights,
+     refs. Everything else 0.2 had is wanted back.
+   - The scratch repo has changes not committed (`git status` there:
+     design-0.3.0.md, TODO.md, plan-4s.md and working-rules.md among
+     them); the maintainer commits that repo.
+5. Once that is done (read, state checked, the next step taken up with the
+   maintainer), delete this section in a commit of its own: AGENT.md is
+   otherwise kept evergreen.
+
 ## A library is the motivation, not the work
 
 A calibre library's problems show what the program cannot do yet: a title
@@ -24,11 +81,10 @@ it happens, not assumed away.
 
 ## Branches and versions
 
-- `main` is the line being developed; a release has its own branch for
-  patches (`0.1`). Work for a version is put together on an integration
-  branch (`0.2.0-dev`): each change is a branch `<version>-<name>`, merged
-  into it with `--no-ff`, and the integration branch is merged into `main`
-  when a batch is whole and passes.
+- Work for the next version is done on one branch in a separate worktree,
+  a commit per change, and reaches `main` by a `--no-ff` merge through the
+  gate below. How changes move between `main`, `alpha`, `beta` and
+  `experimental` is not decided yet.
 - A checkout someone runs lulibre from is not touched by branch work: a
   binary run from a source tree reads its Lua files from that tree as it
   needs them, so checking out or merging there breaks the program while it
@@ -134,9 +190,9 @@ it as they are touched:
   In short: no static buffers handed out, no globals for a comparator, no
   `strerror`; in Lua, a task gives way only where it waits, so a test and a
   set with no wait between them are one step.
-- Lua at the prelude's top level runs before `-L` and `init.lua` are
-  applied: anything there that opens the index ends lulibre with "no
-  library" in a run without one. Put it in a task (`taskman.spawn`).
+- Lua at the prelude's top level runs before `init.lua`: anything there
+  that opens the index ends lulibre with "no library" when only init.lua
+  names the library. Put it in a task (`taskman.spawn`).
 - luv belongs to the main Lua state, loaded once at startup; never arrange
   for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
@@ -165,8 +221,6 @@ it as they are touched:
   `©?` or `[çc]` do not mean what they seem. Write the bytes, list the
   spellings, or replace whole sequences; test such a pattern with and
   without the character.
-- `src/core/log.h` includes the generated `<config.h>` with angle brackets,
-  because `src/core/config.h` is the options header.
 - A C module found on the default `cpath` may be built against another
   Lua's headers and crash in `luaopen_*`. Before blaming a widely used
   library, check the build environment (headers, ABI, the library linked).
