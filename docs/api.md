@@ -126,6 +126,11 @@ does.
     keymap.del("n", "<Leader>t")
 
     cmdman.create("hello", function(o) print(o.args, o.book, #o.selection) end, { desc = "say hello" })
+    cmdman.create("greet", function(o) print("hello " .. o.args) end, {
+      desc = "NAME  say hello to NAME",
+      complete = { "world", "you" },          -- or "filter", "setting", "command", or
+      -- complete = function(lead, line) return { "world", { text = "you", detail = "the reader" } } end,
+    })
     cmdman.del("hello")
     cmdman.ls()                 -- waits: every command, { {name=, help=}, ... }, lulibre's and yours
     cmdman.get("hello")         -- waits: one, {name=, help=}, or nil
@@ -134,7 +139,12 @@ Modes are `n` (normal) and `v` (selecting). A key's right side is a
 command line or a function. A function runs as a task with what the
 interface was at when it was invoked: `{name=, args=, book=, selection =
 {id, ...}}`, where `name` is the command's name, or a key's keys as
-typed. `cmdman.create` with a name in use replaces that command; in
+typed. `complete` says what completes the command's arguments at the `:` prompt:
+a list of words, the filter language, settings, command names, or a
+function. The function runs as a task, asked once each time the
+arguments reach a new word, with the word typed so far and the whole
+line; its list (words, or `{text=, detail=}`) fills the popup when it
+comes, and the prompt narrows it as you type. `cmdman.create` with a name in use replaces that command; in
 front of one of lulibre's own, `cmdman.del` and `:restart-scripts` bring
 lulibre's back. [Keys and commands](keys.md) has the key notation.
 

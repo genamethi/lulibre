@@ -519,9 +519,32 @@ void picker_draw(struct tui *t);
 
 typedef void command_fn(struct tui *t, const char *args);
 
+/* What completes a command's arguments at the ':' prompt (complete.c). */
+enum complete_kind {
+  COMPLETE_NONE,
+  COMPLETE_WORDS,   /* a fixed list */
+  COMPLETE_FILTER,  /* the filter language */
+  COMPLETE_SETTING, /* setting names, then name=choice */
+  COMPLETE_COMMAND, /* command names */
+  COMPLETE_SCRIPT,  /* the scripts :run finds */
+  COMPLETE_LUA,     /* a Lua function, asked by message (lapi_complete) */
+};
+struct completion {
+  enum complete_kind kind;
+  char *words; /* COMPLETE_WORDS: separated by newlines */
+  int ref;     /* COMPLETE_LUA: the function, as its reference in the main lua_State */
+};
+
 void command_register(const char *name, command_fn *fn, const char *help);
-/* A command implemented in Lua: ref is a registry reference to the function. */
-void command_register_lua(const char *name, int ref, const char *help);
+/* What completes one of lulibre's commands: kind, and for COMPLETE_WORDS
+ * the words, separated by spaces. */
+void command_set_complete(const char *name, enum complete_kind kind, const char *words);
+/* A command implemented in Lua: ref is a registry reference to the
+ * function; comp (taken over, NULL for none) what completes it. */
+void command_register_lua(const char *name, int ref, const char *help, struct completion *comp);
+/* What completes the command a line starts with (its first len bytes name
+ * it, as tui_exec finds it): its full name, and *comp; NULL for none. */
+const char *command_completion(const char *line, size_t len, const struct completion **comp);
 /* :edit and :undo (tui/edit.c) */
 void edit_commands(void);
 /* Removes a command defined in Lua: 0, or -1 when there is none. */
@@ -577,6 +600,10 @@ struct tui {
   int hist_pos;
   char *hist_prefix; /* what was typed before Up was pressed; Up and Down look for it */
   char *comp_ctx;    /* what the completion candidates were built for (complete.c) */
+  /* a Lua function's last answer, and the comp_ctx it was asked for */
+  char *comp_got_ctx;
+  char **comp_got, **comp_got_detail;
+  int ncomp_got;
   int sugg_prefix;   /* 0: fuzzy; 1: by prefix, once something is typed; 2: by prefix, all when nothing is */
 
   input_fn *input_cb; /* PROMPT_INPUT: who gets the answer */
@@ -691,6 +718,8 @@ void tui_input_suggest(struct tui *t, int n, const char *const *texts,
 void tui_input_on_change(struct tui *t, input_fn *fn);
 /* complete.c: offer completions for the ':', '&' or '/' line as it stands */
 void complete_refresh(struct tui *t);
+/* A Lua function's completions for ctx, all of it taken over (malloc'd). */
+void complete_answered(struct tui *t, char *ctx, int n, char **text, char **detail);
 const char *command_at(int i, const char **help); /* the i-th command's name; NULL past the last */
 void tui_progress(struct tui *t, const char *text); /* NULL clears */
 /* A badge in the status line under a name of the script's choosing: set again

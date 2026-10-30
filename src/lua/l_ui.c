@@ -158,13 +158,31 @@ static struct tui *need_tui(lua_State *L) {
 
 /* ---- commands and keys ---- */
 
+/* (name, the function's reference, help [, complete]): complete is a list
+ * of words, the name of a kind, or a function's reference */
 static int l_command_ui(lua_State *L) {
   const char *name = luaL_checkstring(L, 1);
   /* the function, as its reference in the main lua_State (lua/uicall.c) */
   int ref = (int)luaL_checkinteger(L, 2);
   const char *help = luaL_optstring(L, 3, "(defined in Lua)");
-  luaL_argcheck(L, *name && !strchr(name, ' '), 1, "a command name is one word");
-  command_register_lua(name, ref, help);
+  struct completion comp = {0};
+  if (lua_isinteger(L, 4)) {
+    comp.kind = COMPLETE_LUA;
+    comp.ref = (int)lua_tointeger(L, 4);
+  } else if (lua_isstring(L, 4)) {
+    const char *k = lua_tostring(L, 4);
+    comp.kind = !strcmp(k, "filter") ? COMPLETE_FILTER : !strcmp(k, "setting") ? COMPLETE_SETTING : COMPLETE_COMMAND;
+  } else if (lua_istable(L, 4)) {
+    sbuf w = SBUF_INIT;
+    for (lua_Integer i = 1; i <= (lua_Integer)lua_rawlen(L, 4); i++) {
+      lua_rawgeti(L, 4, i);
+      if (lua_isstring(L, -1)) sb_printf(&w, "%s%s", w.len ? "\n" : "", lua_tostring(L, -1));
+      lua_pop(L, 1);
+    }
+    comp.kind = COMPLETE_WORDS;
+    comp.words = sb_take(&w);
+  }
+  command_register_lua(name, ref, help, &comp);
   return 0;
 }
 
@@ -868,6 +886,107 @@ void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg)
   queue_post(LOOP_LUA, spawn_ref, r);
 }
 
+/* ---- a command's completions, from its Lua function ---- */
+
+struct creq {
+  int ref;
+  unsigned gen;
+  char *name, *arglead, *line, *ctx;
+};
+
+struct canswer {
+  char *ctx;
+  int n;
+  char **text, **detail;
+};
+
+static void complete_show(struct app *app, void *arg) { /* the interface thread */
+  struct canswer *a = arg;
+  if (app->tui) complete_answered(app->tui, a->ctx, a->n, a->text, a->detail);
+  else {
+    for (int i = 0; i < a->n; i++) {
+      free(a->text[i]);
+      free(a->detail[i]);
+    }
+    free(a->text);
+    free(a->detail);
+    free(a->ctx);
+  }
+  free(a);
+}
+
+/* the function's answer: a list of words, or of {text=, detail=} */
+static int complete_k(lua_State *L, int status, lua_KContext k) {
+  struct canswer *a = xcalloc(1, sizeof *a);
+  a->ctx = xstrdup(lua_tostring(L, 1));
+  if (lua_istable(L, -1)) {
+    int n = (int)lua_rawlen(L, -1);
+    a->text = xcalloc((size_t)n + 1, sizeof *a->text);
+    a->detail = xcalloc((size_t)n + 1, sizeof *a->detail);
+    for (int i = 1; i <= n; i++) {
+      lua_rawgeti(L, -1, i);
+      const char *text = NULL, *detail = NULL;
+      if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "text");
+        lua_getfield(L, -2, "detail");
+        text = lua_tostring(L, -2);
+        detail = lua_tostring(L, -1);
+        lua_pop(L, 2);
+      } else if (lua_type(L, -1) == LUA_TSTRING) {
+        text = lua_tostring(L, -1);
+      }
+      if (text && *text) {
+        a->text[a->n] = xstrdup(text);
+        a->detail[a->n++] = detail ? xstrdup(detail) : NULL;
+      }
+      lua_pop(L, 1);
+    }
+  }
+  queue_post(LOOP_UI, complete_show, a);
+  return 0;
+}
+
+/* a task: (ctx, fn, arglead, line) */
+static int complete_task(lua_State *L) {
+  lua_pushvalue(L, 2);
+  lua_pushvalue(L, 3);
+  lua_pushvalue(L, 4);
+  lua_callk(L, 2, 1, 0, complete_k);
+  return complete_k(L, LUA_OK, 0);
+}
+
+static void complete_ask(struct app *app, void *arg) { /* the Lua thread */
+  struct creq *r = arg;
+  lua_State *L = app->L;
+  if (L && r->gen == atomic_load(&generation)) {
+    lua_pushcfunction(L, complete_task);
+    lua_pushstring(L, r->ctx);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, r->ref);
+    lua_pushstring(L, r->arglead);
+    lua_pushstring(L, r->line);
+    char *task = xasprintf("completing :%s", r->name);
+    sched_spawn(L, 4, task);
+    free(task);
+  }
+  free(r->name);
+  free(r->arglead);
+  free(r->line);
+  free(r->ctx);
+  free(r);
+}
+
+void lapi_complete(struct app *app, int ref, const char *name, const char *arglead, const char *line,
+                   const char *ctx) {
+  struct creq *r = xcalloc(1, sizeof *r);
+  r->ref = ref;
+  r->gen = atomic_load(&generation);
+  r->name = xstrdup(name);
+  r->arglead = xstrdup(arglead);
+  r->line = xstrdup(line);
+  r->ctx = xstrdup(ctx);
+  queue_post(LOOP_LUA, complete_ask, r);
+}
+
 struct unref_req {
   int ref;
   unsigned gen;
@@ -1066,7 +1185,7 @@ static void c_cancel(struct tui *t, const char *args) {
  *                                        selection=}; opts {desc=, hidden=}
  *   keymap.del(mode, lhs)
  *   cmdman.create(name, fn [, opts])     :name runs fn{name=, args=, book=,
- *                                        selection=} as a task; opts {desc=};
+ *                                        selection=} as a task; opts {desc=, complete=};
  *                                        a command of that name is replaced
  *                                        (one of lulibre's comes back when
  *                                        this one is deleted)
@@ -1152,13 +1271,31 @@ static int cmd_create(lua_State *L) {
   luaL_argcheck(L, *name && !strchr(name, ' '), 1, "a command name is one word");
   luaL_checktype(L, 2, LUA_TFUNCTION);
   const char *desc = NULL;
+  lua_settop(L, 3);
   if (lua_istable(L, 3)) {
     lua_getfield(L, 3, "desc");
     desc = lua_tostring(L, -1);
-    lua_pop(L, 1);
+    lua_getfield(L, 3, "complete");
+  } else {
+    lua_pushnil(L);
+    lua_pushnil(L);
   }
-  lua_settop(L, 2);
-  lua_pushstring(L, desc ? desc : "(defined in Lua)");
+  /* 4: desc, 5: complete */
+  int t = lua_type(L, 5);
+  if (t == LUA_TSTRING) {
+    const char *k = lua_tostring(L, 5);
+    if (strcmp(k, "filter") && strcmp(k, "setting") && strcmp(k, "command"))
+      return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\" or \"command\", not \"%s\"", k);
+  } else if (t != LUA_TNIL && t != LUA_TTABLE && t != LUA_TFUNCTION) {
+    return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\" or \"command\"");
+  }
+  lua_pushvalue(L, 1);
+  lua_pushvalue(L, 2);
+  if (desc) lua_pushvalue(L, 4);
+  else lua_pushliteral(L, "(defined in Lua)");
+  lua_pushvalue(L, 5);
+  lua_rotate(L, 1, 4); /* the four on top come first */
+  lua_settop(L, 4);
   return ui_send(L, l_command_ui, "cmdman.create");
 }
 
@@ -1207,4 +1344,6 @@ void l_ui_open(lua_State *L) {
   command_register("console", c_console, "[focus]  show or hide the log console");
   command_register("tasks", c_tasks, "scripts that are running");
   command_register("cancel", c_cancel, "ID | all  stop a running script");
+  command_set_complete("run", COMPLETE_SCRIPT, NULL);
+  command_set_complete("console", COMPLETE_WORDS, "focus");
 }

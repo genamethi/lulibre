@@ -1,15 +1,20 @@
 /* Completion at the command line: what could come next where the cursor is.
  *
  *   :            command names
- *   :set         option names, then the values an option allows
- *   :run         scripts
- *   :sort :source :browse :pick :mark :sync :preview    their arguments
- *   :filter  &  /   the filter language: fields, then is: has: no: sort: in:
+ *   :NAME        what completes NAME's arguments, as its command says
+ *                (command_completion): a fixed list, the filter language,
+ *                settings (names, then the values one allows), command
+ *                names, scripts, or a Lua function's answer
+ *   &  /         the filter language: fields, then is: has: no: sort: in:
  *
  * The candidates go to the popup the edit form already uses for its
  * suggestions; Tab takes the highlighted one, <C-n> and <C-p> move through
  * them. Matching is by prefix, so the popup stays away while free text is
- * typed. */
+ * typed.
+ *
+ * A Lua function is not called here (design 34): it is asked by message,
+ * once for each word the arguments reach, and its answer fills the popup
+ * when it comes (complete_answered). */
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,12 +47,12 @@ static void add_owned(struct list *l, char *text, const char *detail) {
   l->owned[l->nowned++] = text;
 }
 
-static void add_words(struct list *l, const char *words) { /* "a b c" */
+static void add_words(struct list *l, const char *words) { /* "a\nb\nc" */
   for (const char *p = words; *p;) {
-    size_t len = strcspn(p, " ");
-    add_owned(l, xstrndup(p, len), NULL);
+    size_t len = strcspn(p, "\n");
+    if (len) add_owned(l, xstrndup(p, len), NULL);
     p += len;
-    while (*p == ' ') p++;
+    while (*p == '\n') p++;
   }
 }
 
@@ -95,18 +100,23 @@ void complete_refresh(struct tui *t) {
 
   /* what kind of thing is being typed; the list is rebuilt only when that changes */
   char ctx[96];
-  const char *args_of = NULL;
+  const char *name = NULL;
+  const struct completion *comp = NULL;
   if (t->prompt != PROMPT_COMMAND) {
     snprintf(ctx, sizeof ctx, "filter");
   } else if (!strchr(text, ' ')) {
     snprintf(ctx, sizeof ctx, "command");
   } else {
     size_t len = strcspn(text, " ");
-    args_of = text;
-    if (len == 3 && !strncmp(text, "set", 3))
-      snprintf(ctx, sizeof ctx, "set %.*s", (int)(strchr(last, '=') ? strcspn(last, "=") + 1 : 0), last);
-    else
-      snprintf(ctx, sizeof ctx, "arg %.*s", (int)(len < 60 ? len : 60), text);
+    name = command_completion(text, len, &comp);
+    if (!name) snprintf(ctx, sizeof ctx, "none");
+    else if (comp->kind == COMPLETE_SETTING)
+      snprintf(ctx, sizeof ctx, "set %s %.*s", name, (int)(strchr(last, '=') ? strcspn(last, "=") + 1 : 0), last);
+    else if (comp->kind == COMPLETE_LUA) { /* asked again for each word */
+      int words = 0;
+      for (const char *p = text + len; *p; p++) words += *p == ' ' && p[1] != ' ';
+      snprintf(ctx, sizeof ctx, "lua %.60s %d", name, words);
+    } else snprintf(ctx, sizeof ctx, "arg %.60s", name);
   }
   if (t->comp_ctx && !strcmp(t->comp_ctx, ctx)) return;
   free(t->comp_ctx);
@@ -120,30 +130,51 @@ void complete_refresh(struct tui *t) {
     sep = NULL;
     const char *help;
     for (int i = 0; command_at(i, &help); i++) add(&l, command_at(i, NULL), help);
-  } else {
-    size_t len = strcspn(args_of, " ");
-#define IS(word) (len == strlen(word) && !strncmp(args_of, word, len))
-    if (IS("set")) add_options(&l, last);
-    else if (IS("run")) add_scripts(&l, t->app);
-    else if (IS("filter") || IS("search")) query_words(filter_word, &l);
-    else if (IS("sort")) add_words(&l, "id title author year series added modified -id -title -author -year -added -modified");
-    else if (IS("source")) add_words(&l, "library sync");
-    else if (IS("sync")) add_words(&l, "add move drop all");
-    else if (IS("browse")) add_words(&l, "author subject series publisher year format");
-    else if (IS("pick")) add_words(&l, "books authors subjects filters");
-    else if (IS("mark")) add_words(&l, "toggle all none invert");
-    else if (IS("yank")) add_words(&l, "bib key path title");
-    else if (IS("preview")) add_words(&l, "graphic scroll page zoom pan");
-    else if (IS("focus")) add_words(&l, "next prev h j k l panel back");
-    else if (IS("console")) add_words(&l, "focus");
-    else if (IS("index")) add_words(&l, "force");
-#undef IS
+  } else if (comp) {
+    switch (comp->kind) {
+    case COMPLETE_WORDS: add_words(&l, comp->words); break;
+    case COMPLETE_FILTER: query_words(filter_word, &l); break;
+    case COMPLETE_SETTING: add_options(&l, last); break;
+    case COMPLETE_SCRIPT: add_scripts(&l, t->app); break;
+    case COMPLETE_COMMAND: {
+      const char *help;
+      for (int i = 0; command_at(i, &help); i++) add(&l, command_at(i, NULL), help);
+      break;
+    }
+    case COMPLETE_LUA:
+      if (t->comp_got_ctx && !strcmp(t->comp_got_ctx, ctx))
+        for (int i = 0; i < t->ncomp_got; i++) add(&l, t->comp_got[i], t->comp_got_detail[i]);
+      else lapi_complete(t->app, comp->ref, name, last, text, ctx);
+      break;
+    case COMPLETE_NONE: break;
+    }
   }
   /* a command's arguments are listed as soon as there is room for one */
-  t->sugg_prefix = args_of ? 2 : 1;
+  t->sugg_prefix = name ? 2 : 1;
   tui_input_suggest(t, l.n, l.text, l.detail, sep);
   for (int i = 0; i < l.nowned; i++) free(l.owned[i]);
   free(l.owned);
   free(l.text);
   free(l.detail);
+}
+
+void complete_answered(struct tui *t, char *ctx, int n, char **text, char **detail) {
+  free(t->comp_got_ctx);
+  for (int i = 0; i < t->ncomp_got; i++) {
+    free(t->comp_got[i]);
+    free(t->comp_got_detail[i]);
+  }
+  free(t->comp_got);
+  free(t->comp_got_detail);
+  t->comp_got_ctx = ctx;
+  t->comp_got = text;
+  t->comp_got_detail = detail;
+  t->ncomp_got = n;
+  /* still where it was asked: shown now */
+  if (t->mode == MODE_PROMPT && t->comp_ctx && !strcmp(t->comp_ctx, ctx)) {
+    free(t->comp_ctx);
+    t->comp_ctx = NULL;
+    complete_refresh(t);
+    tui_dirty(t);
+  }
 }

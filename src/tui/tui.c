@@ -403,6 +403,13 @@ int tui_run(struct app *app) {
   }
   free(t->hist_prefix);
   free(t->comp_ctx);
+  free(t->comp_got_ctx);
+  for (int i = 0; i < t->ncomp_got; i++) {
+    free(t->comp_got[i]);
+    free(t->comp_got_detail[i]);
+  }
+  free(t->comp_got);
+  free(t->comp_got_detail);
   free(t->prompt_saved);
   free(t->input_label);
   free(t->progress);

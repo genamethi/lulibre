@@ -61,6 +61,12 @@ char **lapi_script_dirs(struct app *app);
 /* Run a registered Lua function (by registry ref) as a task with one string
  * argument. From the interface thread; the task starts on the Lua thread. */
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg);
+/* The interface thread: asks the completion function at ref (a command's,
+ * cmdman.create's complete) what may follow, as a task; its answer reaches
+ * complete_answered with ctx. arglead is the word being typed, line the
+ * whole line. */
+void lapi_complete(struct app *app, int ref, const char *name, const char *arglead, const char *line,
+                   const char *ctx);
 /* Releases a function's reference in the main lua_State, from either
  * thread: by message to the Lua thread. */
 void lapi_unref(int ref);

@@ -16,30 +16,49 @@ static struct command {
   command_fn *fn; /* NULL for a command implemented in Lua */
   int lua_ref;
   char *help;
+  struct completion comp;
   /* a command of lulibre's that one made in Lua stands in front of: it
    * comes back when that one is removed (cmdman.del, :restart-scripts) */
   command_fn *under;
   char *under_help;
+  struct completion under_comp;
 } *cmds;
+
+static void completion_free(struct completion *c, int unref) {
+  free(c->words);
+  if (unref && c->kind == COMPLETE_LUA) lapi_unref(c->ref);
+  memset(c, 0, sizeof *c);
+}
 static void command_help(struct tui *t);
 static int ncmds, capcmds;
 
-static void add(const char *name, command_fn *fn, int ref, const char *help) {
+/* comp is taken over (NULL: none) */
+static void add(const char *name, command_fn *fn, int ref, const char *help, struct completion *comp) {
+  struct completion none = {0};
+  if (!comp) comp = &none;
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name)) { /* redefining a command replaces it */
       struct command *c = &cmds[i];
-      if (!c->fn) lapi_unref(c->lua_ref); /* the function it replaces */
+      if (!c->fn) { /* the function it replaces, and what completed it */
+        lapi_unref(c->lua_ref);
+        completion_free(&c->comp, 1);
+      }
       if (fn) { /* lulibre's own again: nothing stands in front of it */
         free(c->under_help);
+        completion_free(&c->under_comp, 0);
         c->under = NULL;
         c->under_help = NULL;
       } else if (c->fn && !c->under) { /* Lua in front of one of lulibre's */
         c->under = c->fn;
         c->under_help = c->help;
+        c->under_comp = c->comp;
         c->help = NULL;
+      } else if (c->fn) {
+        completion_free(&c->comp, 0);
       }
       c->fn = fn;
       c->lua_ref = ref;
+      c->comp = *comp;
       free(c->help);
       c->help = xstrdup(help ? help : "");
       return;
@@ -48,20 +67,23 @@ static void add(const char *name, command_fn *fn, int ref, const char *help) {
     capcmds = capcmds ? capcmds * 2 : 32;
     cmds = xrealloc(cmds, (size_t)capcmds * sizeof *cmds);
   }
-  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : ""), NULL, NULL};
+  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : ""), *comp, NULL, NULL, {0}};
 }
 
 /* The command made in Lua at i goes: lulibre's own comes back where there
  * was one in its place, else the entry is removed. */
-static void drop_lua(int i) {
+static void drop_lua(int i, int unref) {
   struct command *c = &cmds[i];
   free(c->help);
+  completion_free(&c->comp, unref);
   if (c->under) {
     c->fn = c->under;
     c->help = c->under_help;
+    c->comp = c->under_comp;
     c->lua_ref = 0;
     c->under = NULL;
     c->under_help = NULL;
+    memset(&c->under_comp, 0, sizeof c->under_comp);
     return;
   }
   free(c->name);
@@ -69,11 +91,25 @@ static void drop_lua(int i) {
 }
 
 void command_register(const char *name, command_fn *fn, const char *help) {
-  add(name, fn, 0, help);
+  add(name, fn, 0, help, NULL);
 }
 
-void command_register_lua(const char *name, int ref, const char *help) {
-  add(name, NULL, ref, help);
+void command_register_lua(const char *name, int ref, const char *help, struct completion *comp) {
+  add(name, NULL, ref, help, comp);
+}
+
+void command_set_complete(const char *name, enum complete_kind kind, const char *words) {
+  for (int i = 0; i < ncmds; i++)
+    if (!strcmp(cmds[i].name, name)) {
+      completion_free(&cmds[i].comp, 0);
+      cmds[i].comp.kind = kind;
+      if (words) {
+        cmds[i].comp.words = xstrdup(words);
+        for (char *p = cmds[i].comp.words; *p; p++)
+          if (*p == ' ') *p = '\n';
+      }
+      return;
+    }
 }
 
 void commands_drop_lua(void) {
@@ -83,7 +119,7 @@ void commands_drop_lua(void) {
       continue;
     }
     int had = !!cmds[i].under;
-    drop_lua(i);
+    drop_lua(i, 0); /* the lua_State is gone, and its references with it */
     if (had) i++; /* lulibre's own is back at i; else i holds the last entry now */
   }
 }
@@ -96,7 +132,7 @@ int command_remove_lua(const char *name) {
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name) && !cmds[i].fn) {
       lapi_unref(cmds[i].lua_ref);
-      drop_lua(i);
+      drop_lua(i, 1);
       return 0;
     }
   return -1;
@@ -112,6 +148,8 @@ void commands_free(void) {
     free(cmds[i].name);
     free(cmds[i].help);
     free(cmds[i].under_help);
+    completion_free(&cmds[i].comp, 0);
+    completion_free(&cmds[i].under_comp, 0);
   }
   free(cmds);
   cmds = NULL;
@@ -136,6 +174,13 @@ static struct command *find(const char *name, size_t len) {
     if (strlen(aliases[i].alias) == len && !strncmp(aliases[i].alias, name, len))
       return find(aliases[i].name, strlen(aliases[i].name));
   return nprefix == 1 ? prefix : NULL;
+}
+
+const char *command_completion(const char *line, size_t len, const struct completion **comp) {
+  struct command *c = find(line, len);
+  if (!c || c->comp.kind == COMPLETE_NONE) return NULL;
+  *comp = &c->comp;
+  return c->name;
 }
 
 void tui_exec(struct tui *t, const char *line) {
@@ -636,6 +681,21 @@ void commands_builtin(void) {
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "this screen");
   command_register("help-plain", c_help, "keys and commands as one long page");
+  command_set_complete("set", COMPLETE_SETTING, NULL);
+  command_set_complete("filter", COMPLETE_FILTER, NULL);
+  command_set_complete("search", COMPLETE_FILTER, NULL);
+  command_set_complete("sort", COMPLETE_WORDS,
+                       "id title author year series added modified -id -title -author -year -added -modified");
+  command_set_complete("source", COMPLETE_WORDS, "library sync");
+  command_set_complete("pick", COMPLETE_WORDS, "books authors subjects filters");
+  command_set_complete("mark", COMPLETE_WORDS, "toggle all none invert");
+  command_set_complete("preview", COMPLETE_WORDS, "graphic scroll page zoom pan");
+  command_set_complete("focus", COMPLETE_WORDS, "next prev h j k l panel back");
+  command_set_complete("index", COMPLETE_WORDS, "force");
+  command_set_complete("group", COMPLETE_WORDS, "author subject series publisher year format folder none name count");
+  command_set_complete("fold", COMPLETE_WORDS, "toggle open close all none");
+  command_set_complete("move", COMPLETE_WORDS, "top bottom half-down half-up page-down page-up");
+  command_set_complete("prompt", COMPLETE_WORDS, "command search filter");
 }
 
 static void command_help(struct tui *t) {

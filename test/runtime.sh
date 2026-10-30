@@ -271,6 +271,7 @@ for _, m in ipairs(uiman.maps()) do if m.keys == "gx" then about = m.about end e
 local f, callback = function() end, nil
 keymap.set("n", "gz", f)
 for _, m in ipairs(uiman.maps()) do if m.keys == "gz" then callback = m.callback end end
+print("bad complete|" .. tostring((pcall(cmdman.create, "x", function() end, { complete = "nope" }))))
 print("fn key|" .. made .. "|" .. tostring(about) .. "|" .. tostring(callback == f))
 LUA
 cmds=$("$bin" -L "$t/lib" run "$t/cmd.lua" 2>&1)
@@ -440,6 +441,7 @@ contains "the sync folder's ebook files are books, named after their files; a co
 contains "a file taken out of the sync folder is dropped at the next reading" "resynced|copy" "$synced"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
+contains "cmdman.create refuses a complete it does not know" "bad complete|false" "$cmds"
 contains "a key bound to a function is a binding with its desc, not a command; uiman.maps gives the function" "fn key|0|second|true" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"

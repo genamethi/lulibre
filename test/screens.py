@@ -3,7 +3,7 @@ under the cursor, the items read again after it, an action's error shown,
 a refresh on an event, a field edited through the form, review, a key
 bound to a function, a pick cancelled late, on_change let go, one task
 per panel, uiman.jump's answer, sleepers gone with their state, and the
-sync folder read again by :source sync.
+sync folder read again by :source sync, and completion of arguments.
 
   python3 -I test/screens.py BIN
 
@@ -71,6 +71,13 @@ cmdman.create("demowait", function()
   note("second|" .. tostring((pcall(p.wait, p))))
   p:close()
 end)
+-- completion of a command's arguments: a list of words, a kind of
+-- lulibre's, a function asked when the arguments reach a word
+cmdman.create("compwords", function(o) note("compwords|" .. o.args) end, { complete = { "alpha", "beta" } })
+cmdman.create("compkind", function(o) note("compkind|" .. o.args) end, { complete = "filter" })
+cmdman.create("compfn", function(o) note("compfn|" .. o.args) end, {
+  complete = function(lead, line) taskman.sleep(100) return { "gamma", { text = "delta", detail = "the fourth" } } end,
+})
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
 cmdman.create("demowits", function()
@@ -133,6 +140,16 @@ keys(":source sync\r", 1.5)  # the folder read again
 keys(":lua note('in sync|' .. #require('bookman').ids('in:sync'))\r", 0.6)
 keys(":source library\r", 0.6)
 keys(":lua note('jump|' .. tostring(uiman.jump(999999)))\r", 0.6)
+keys(":compwords b", 0.3)
+keys("\t\r", 0.6)
+keys(":compkind titl", 0.3)
+keys("\t\r", 0.6)
+keys(":compfn ", 0.8)         # the function answers after a moment
+keys("d\t\r", 0.6)
+keys(":sort tit", 0.3)        # one of lulibre's own, from the command table
+keys("\t\r", 0.6)
+keys(":lua note('sorted|' .. uiman.filter())\r", 0.6)
+keys(":sort\r", 0.4)
 keys(":demowait\r", 1)
 keys(":demoinput\r", 0.6)
 keys("hi\r", 0.8)
@@ -178,6 +195,10 @@ check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
 check(":source sync reads the sync folder again", "in sync|1" in got)
 check("uiman.jump answers false for a book not in the list", "jump|false" in got)
+check("Tab completes a command's arguments from its list of words", "compwords|beta" in got)
+check("from a kind of lulibre's: the filter language", "compkind|title:" in got)
+check("from a Lua function, whose answer comes when it comes", "compfn|delta" in got)
+check("lulibre's own commands complete from the same table", "sorted|sort:title" in got)
 check("a second task's p:wait is refused, and the first hears the panel close",
       "second|false" in got and "first|nil" in got)
 check("after :restart-scripts, wake finds no sleeper of the old state", "stale|false" in got)
