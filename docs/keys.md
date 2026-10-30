@@ -1,11 +1,12 @@
 # Keys and commands
 
-`?` inside lulibre shows the current keys, including the ones `init.lua`
-added, under headings that open and close. Enter opens a heading, `/`
-searches all the keys as you type, and `K` shows what the guides say about
-the key under the cursor. `:help TOPIC` shows the part of these guides about
-a word (`:help enrich`, `:help filters`). Every key runs a command, and `:`
-runs a command by name.
+`?` inside lulibre shows the keys of the window you are in first, then the
+global keys (including the ones `init.lua` added), every place's and the
+commands, under headings that open and close: `<CR>` or `za` on a heading,
+`zR` and `zM` for all of them. `/` searches as you type and opens the
+headings with a match. A heading stays as you left it the next time; `:help-plain`
+shows every one open. Every key runs a command, and `:` runs a command by
+name.
 
 ## The list
 
@@ -177,6 +178,8 @@ keymap.set("panel", "n", "down")        -- n moves down in every panel
 keymap.set("line", "<C-g>", "cancel")   -- <C-g> leaves the line being typed
 keymap.set("console", "x", "close")
 keymap.del("line", "<C-k>")             -- unbind
+keymap.set("panel", "n", "down", { desc = "the next row" })   -- what ? says the action does
+keymap.set("console", "c", "clear", { hidden = true })       -- ? leaves the action out
 ```
 
 | Place | Actions |
@@ -184,7 +187,7 @@ keymap.del("line", "<C-k>")             -- unbind
 | `panel` | `down` `up` `top` `bottom` `half-down` `half-up` `page-down` `page-up` `close` |
 | `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` `word-left` `word-right` |
 | `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
-| `pager` | `down` `up` `page-down` `page-up` `top` (any other key closes it) |
+| `pager` | `down` `up` `page-down` `page-up` `top` `bottom` `toggle` `open` `close` `all` `none` `search` `next` `prev` `leave` (any other key closes it) |
 | `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
 
 A screen made in Lua is a place too (`scrnman.create`, [the API](api.md)):

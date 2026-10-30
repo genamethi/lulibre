@@ -301,14 +301,16 @@ static int l_cmd_get_ui(lua_State *L) {
 }
 ASK(l_cmd_get, "cmdman.get")
 
-/* keymap.set(place, key, action): a key of a place that has keys of its
- * own ("panel", "line", "picker", "pager", "console", "select") bound to
- * one of its actions; "" unbinds. */
+/* keymap.set(place, key, action [, desc, hidden]): a key of a place that
+ * has keys of its own ("panel", "line", "picker", "pager", "console",
+ * "select", or a screen's) bound to one of its actions; "" unbinds. desc
+ * and hidden change what ? says of the action. */
 static int l_place_map_ui(lua_State *L) {
   const char *place = luaL_checkstring(L, 1);
   if (ctx_named(place) < 0) return luaL_error(L, "no place is called %s", place);
   char *err = NULL;
-  if (ctx_bind(place, luaL_checkstring(L, 2), luaL_optstring(L, 3, ""), &err)) {
+  int hidden = lua_isboolean(L, 5) ? lua_toboolean(L, 5) : -1;
+  if (ctx_bind(place, luaL_checkstring(L, 2), luaL_optstring(L, 3, ""), luaL_optstring(L, 4, NULL), hidden, &err)) {
     lua_pushstring(L, err);
     free(err);
     return lua_error(L);
@@ -1221,7 +1223,13 @@ static int keymap_set(lua_State *L) {
   if (is_place(L, 1)) { /* a place's key: one of its actions */
     luaL_checkstring(L, 2);
     luaL_checkstring(L, 3);
-    lua_settop(L, 3);
+    /* opts {desc=, hidden=}: what ? says the action does, or that it leaves it out */
+    if (lua_istable(L, 4)) {
+      lua_getfield(L, 4, "desc");
+      lua_getfield(L, 4, "hidden");
+      lua_remove(L, 4);
+    }
+    lua_settop(L, 5);
     return ui_send(L, l_place_map_ui, "keymap.set");
   }
   modes_of(L, 1);

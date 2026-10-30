@@ -201,15 +201,18 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
   p->nown = n > 0 ? n : 0;
 }
 
-/* Is this key one that goes past the panel to a global binding? Only for a
- * panel that has said which keys are its own, only for a key that is not,
- * and only when it starts a binding to one of the commands let through. */
+/* Is this key one that goes past the panel to a global binding? Not when
+ * the panel has it: its movement, its screen's actions, the keys it said
+ * are its own. Help (?) goes past any panel; other commands only past a
+ * panel that has said which keys are its own, and only those let through. */
 int panel_passes(const struct panel *p, uint32_t key) {
-  if (!p->open || !p->pass || (!p->nown && p->place < 0)) return 0;
+  if (!p->open) return 0;
   if (p->pending || ctx_bound(KC_PANEL, key)) return 0; /* the panel's movement, always its own */
   if (p->place >= 0 && (p->ppending || ctx_bound(p->place, key))) return 0; /* its screen's actions */
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
+  if (keymap_starts(p->t->km, MODE_NORMAL, key, "help")) return 1;
+  if (!p->pass || (!p->nown && p->place < 0)) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
 }
 

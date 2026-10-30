@@ -29,7 +29,7 @@ static void completion_free(struct completion *c, int unref) {
   if (unref && c->kind == COMPLETE_LUA) lapi_unref(c->ref);
   memset(c, 0, sizeof *c);
 }
-static void command_help(struct tui *t);
+static void command_help(struct tui *t, int plain);
 static int ncmds, capcmds;
 
 /* comp is taken over (NULL: none) */
@@ -447,7 +447,11 @@ static void c_echo(struct tui *t, const char *args) {
 }
 
 static void c_help(struct tui *t, const char *args) {
-  command_help(t);
+  command_help(t, 0);
+}
+
+static void c_help_plain(struct tui *t, const char *args) {
+  command_help(t, 1);
 }
 
 static void c_source(struct tui *t, const char *args) {
@@ -687,7 +691,7 @@ void commands_builtin(void) {
   command_register("set", c_set, "name[=value]  show or change an option");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "this screen");
-  command_register("help-plain", c_help, "keys and commands as one long page");
+  command_register("help-plain", c_help_plain, "keys and commands as one long page");
   command_set_complete("set", COMPLETE_SETTING, NULL);
   command_set_complete("filter", COMPLETE_FILTER, NULL);
   command_set_complete("search", COMPLETE_FILTER, NULL);
@@ -705,9 +709,34 @@ void commands_builtin(void) {
   command_set_complete("prompt", COMPLETE_WORDS, "command search filter");
 }
 
-static void command_help(struct tui *t) {
+/* The place whose keys the focused window takes: a panel's screen, the
+ * console, the preview while selecting; -1 for the list, whose keys are the
+ * global ones. */
+static int focused_place(struct tui *t) {
+  const struct view_class *cls = t->focus ? t->focus->cls : NULL;
+  if (preview_selecting(t)) return KC_SELECT;
+  if (cls == &view_console) return KC_CONSOLE;
+  if (cls == &view_panel) {
+    int place = panel_place(t->focus->state);
+    return place >= 0 ? place : KC_PANEL;
+  }
+  return -1;
+}
+
+/* ? and :help: the focused window's keys first, open; then the global
+ * keys, the other places' and the commands, under headings that open and
+ * close (as they were left last time). :help-plain shows every one open. */
+static void command_help(struct tui *t, int plain) {
   sbuf h = SBUF_INIT;
-  sb_puts(&h, "KEYS\n");
+  /* a screen's panel moves as any panel does: those keys come second */
+  int first = focused_place(t), second = first >= KC_N ? KC_PANEL : -1;
+  for (int c = 0; c < 2; c++) {
+    int place = c ? second : first;
+    if (place < 0) continue;
+    ctx_describe(place, &h, 1);
+    sb_putc(&h, '\n');
+  }
+  sb_puts(&h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
     if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
@@ -718,10 +747,13 @@ static void command_help(struct tui *t) {
     sb_free(&k);
   }
   for (int c = 0; c < ctx_count(); c++) {
+    if (c == first || c == second) continue;
     sb_putc(&h, '\n');
     ctx_describe(c, &h, 1);
   }
-  sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n");
+  sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n"
+              "  A command acts on the range being selected, else on the marked books in the list, else on\n"
+              "  the book under the cursor.\n");
   for (int i = 0; i < ncmds; i++) sb_printf(&h, "  %-10s %s\n", cmds[i].name, cmds[i].help);
   sb_puts(&h,
           "\nSEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
@@ -731,11 +763,7 @@ static void command_help(struct tui *t) {
           "  title:~^%d+%.%d+        ~ takes a Lua pattern;  = exact;  ^ prefix\n"
           "  text:\"class field\"      full text of the indexed pages\n"
           "  author:unknown  subject:none  no:ids  is:filetitle  is:marked\n"
-          "  -term negates;  or  starts an alternative;  sort:-added orders\n"
-          "\nA command acts on the range being selected, else on the marked books in\n"
-          "the list, else on the book under the cursor.\n"
-          "\nEvery key on this page can be changed in init.lua with keymap.set: a command line for\n"
-          "the keys at the top, an action name for the places listed after them.\n");
-  tui_pager(t, "help", h.s);
+          "  -term negates;  or  starts an alternative;  sort:-added orders\n");
+  tui_pager_folded(t, "help", h.s, plain ? -1 : second >= 0 ? 2 : 1);
   sb_free(&h);
 }

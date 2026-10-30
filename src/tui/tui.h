@@ -161,7 +161,8 @@ enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PRE
        LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
        LA_KILL_START, LA_KILL_END, LA_KILL_WORD, LA_WORD_LEFT, LA_WORD_RIGHT };
 enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
-enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP };
+enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP, GA_BOTTOM, GA_TOGGLE, GA_OPEN, GA_CLOSE, GA_ALL, GA_NONE,
+       GA_SEARCH, GA_NEXT, GA_PREV, GA_LEAVE };
 enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
        CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
 #define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
@@ -190,7 +191,7 @@ const char *ctx_action_name(int ctx, int action); /* NULL for none */
  * edit"); how many it has. */
 int ctx_hint_line(int ctx, sbuf *out);
 /* Put a key (one, or two in a row) on an action; an empty action unbinds. */
-int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
+int ctx_bind(const char *ctx, const char *spec, const char *action, const char *desc, int hidden, char **err);
 /* The action a key means: 0 for none, CTX_PENDING while a pair is open.
  * pending holds the first key of a pair between calls; NULL where pairs are
  * not wanted. */
@@ -779,6 +780,11 @@ void tui_badge(struct tui *t, const char *name, const char *text, int color);
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
 void tui_pager_end(struct tui *t); /* the open pager shows its end */
+/* The same, with the first `open` sections open and the others as they
+ * were left the last time a text of that title was shown, else closed;
+ * open < 0: every section open. */
+void tui_pager_folded(struct tui *t, const char *title, const char *text, int open);
+void tui_pager_forget(void); /* what was opened and closed (at the end) */
 /* Put text on the message line without logging it (tui_msg logs first). */
 void tui_show_msg(struct tui *t, int error, const char *text);
 /* The console window (view_console.c): its keys when focused, the wheel. */

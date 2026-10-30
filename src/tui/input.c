@@ -211,16 +211,17 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   if (nckey_synthesized_p(ni->id) && ni->id >= NCKEY_CAPS_LOCK) return;
 
   uint32_t key = key_from_input(ni);
-  /* One path: a window that takes every key while it is up (the pager, the
-   * picker); the line being typed, which the bottom line holds; the focused
-   * window's own keys; then the global ones. */
+  /* One path: the line being typed, which the bottom line holds (a search
+   * in the pager, say); a window that takes every key while it is up (the
+   * pager, the picker, which gives up any line first); the focused window's
+   * own keys; then the global ones. */
+  if (t->mode == MODE_PROMPT) {
+    prompt_key(t, key, ni);
+    return;
+  }
   struct node *top = wm_top(t);
   if (top && top->cls->modal) {
     top->cls->key(t, top->state, key, ni);
-    return;
-  }
-  if (t->mode == MODE_PROMPT) {
-    prompt_key(t, key, ni);
     return;
   }
   if (key == (KEY_CTRL | 'c')) key = NCKEY_ESC;

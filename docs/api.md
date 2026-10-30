@@ -132,6 +132,7 @@ does.
     keymap.set("n", "<Leader>t", "filter tag:none", { desc = "books with no tags" })
     keymap.set({"n", "v"}, "gx", function(o) print(#o.selection) end)
     keymap.del("n", "<Leader>t")
+    keymap.set("review", "y", "accept", { desc = "take it" })   -- a place's or screen's action (keys.md)
 
     cmdman.create("hello", function(o) print(o.args, o.book, #o.selection) end, { desc = "say hello" })
     cmdman.create("greet", function(o) print("hello " .. o.args) end, {
@@ -410,7 +411,8 @@ A list's keys are a screen's actions: `scrnman.create` names the screen
 and its actions, with the keys each is on by default and what it does;
 `keymap.set(screen, key, action)` rebinds them as it rebinds a place's
 (keys.md), and the list's bar shows the hint's actions with the keys they
-are on now. A key bound to no action of the screen does nothing in it.
+are on now. A key bound to no action of the screen does nothing in it,
+but for `?`, which shows help with the screen's actions first.
 
     scrnman.create("todo", {
       actions = { { "mark", "t", "tag the book todo" } },     -- name, keys, what it does

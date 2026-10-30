@@ -22,6 +22,8 @@ for _, kind in ipairs { "band", "column", "over", "tiled", "float", "overlay" } 
   scrnman.create("p" .. kind, { place = { kind = kind }, actions = { { "hello", "h", "say hello" } }, hint = { "hello" } })
   cmdman.create("p" .. kind, function() uiman.list { title = "P-" .. kind, screen = "p" .. kind, items = { "row" } } end)
 end
+keymap.set("pband", "y", "hello", { desc = "greet the row" })
+keymap.set("console", "c", "clear", { hidden = true })
 scrnman.create("ptab", { title = "Tabbed", tab = true })
 cmdman.create("ptab", function() uiman.list { title = "P-tab", screen = "ptab", items = { "row" } } end)
 LUA
@@ -108,6 +110,36 @@ sleep 0.4
 $T send-keys -t s q
 sleep 0.4
 check "and closing it gives the focus back to the panel: q closes the panel" sh -c "! $T capture-pane -p -t s | grep -q 'P-band'"
+# ? shows the focused screen's keys first, under headings that open and close
+open pband P-band
+$T send-keys -t s "?"
+wait_for "KEYS" || true
+check "? in a screen's panel: its actions first, open" sh -c "screen() { $T capture-pane -p -t s; }; screen | grep -A1 ' pband ' | grep -q 'greet the row'"
+check "then a panel's movement, open" sh -c "$T capture-pane -p -t s | grep -q 'down a row'"
+check "and the global keys closed" sh -c "! $T capture-pane -p -t s | grep -q 'move +1'"
+$T send-keys -t s z M
+sleep 0.3
+check "zM closes every heading" sh -c "! $T capture-pane -p -t s | grep -q 'greet the row'"
+$T send-keys -t s / g r e e t Enter
+sleep 0.3
+check "/ finds a line under a closed heading and opens it" sh -c "$T capture-pane -p -t s | grep -q '› .*greet the row'"
+$T send-keys -t s q
+sleep 0.3
+check "q leaves help for the panel" sh -c "$T capture-pane -p -t s | grep -q 'P-band' && ! $T capture-pane -p -t s | grep -q 'KEYS'"
+close
+$T send-keys -t s "?"
+wait_for "KEYS" || true
+check "from the list: its keys first, open" sh -c "$T capture-pane -p -t s | grep -q 'move +1'"
+check "and pband's heading closed, as it was left" sh -c "! $T capture-pane -p -t s | grep -q 'greet the row'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":help-plain" Enter
+wait_for "KEYS" || true
+$T send-keys -t s / f o r g e t Enter
+sleep 0.3
+check "an action keymap.set hid is left out" sh -c "$T capture-pane -p -t s | grep -q 'no line holds it'"
+$T send-keys -t s q
+sleep 0.3
 check "the bar has a tab for a tab screen" sh -c "$T capture-pane -p -t s | head -1 | grep -q 'Tabbed'"
 open ptab P-tab
 $T send-keys -t s ":source library" Enter
