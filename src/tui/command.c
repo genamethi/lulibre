@@ -44,6 +44,7 @@ static void add(const char *name, command_fn *fn, int ref, const char *help, str
         completion_free(&c->comp, 1);
       }
       if (fn) { /* lulibre's own again: nothing stands in front of it */
+        if (c->fn) completion_free(&c->comp, 0); /* made again, as the scripts start again */
         free(c->under_help);
         completion_free(&c->under_comp, 0);
         c->under = NULL;
