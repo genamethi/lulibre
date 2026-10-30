@@ -16,6 +16,10 @@ static struct command {
   command_fn *fn; /* NULL for a command implemented in Lua */
   int lua_ref;
   char *help;
+  /* a command of lulibre's that one made in Lua stands in front of: it
+   * comes back when that one is removed (cmdman.del, :restart-scripts) */
+  command_fn *under;
+  char *under_help;
 } *cmds;
 static void command_help(struct tui *t);
 static int ncmds, capcmds;
@@ -23,18 +27,45 @@ static int ncmds, capcmds;
 static void add(const char *name, command_fn *fn, int ref, const char *help) {
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name)) { /* redefining a command replaces it */
-      if (!cmds[i].fn) lapi_unref(cmds[i].lua_ref); /* the function it replaces */
-      cmds[i].fn = fn;
-      cmds[i].lua_ref = ref;
-      free(cmds[i].help);
-      cmds[i].help = xstrdup(help ? help : "");
+      struct command *c = &cmds[i];
+      if (!c->fn) lapi_unref(c->lua_ref); /* the function it replaces */
+      if (fn) { /* lulibre's own again: nothing stands in front of it */
+        free(c->under_help);
+        c->under = NULL;
+        c->under_help = NULL;
+      } else if (c->fn && !c->under) { /* Lua in front of one of lulibre's */
+        c->under = c->fn;
+        c->under_help = c->help;
+        c->help = NULL;
+      }
+      c->fn = fn;
+      c->lua_ref = ref;
+      free(c->help);
+      c->help = xstrdup(help ? help : "");
       return;
     }
   if (ncmds == capcmds) {
     capcmds = capcmds ? capcmds * 2 : 32;
     cmds = xrealloc(cmds, (size_t)capcmds * sizeof *cmds);
   }
-  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : "")};
+  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : ""), NULL, NULL};
+}
+
+/* The command made in Lua at i goes: lulibre's own comes back where there
+ * was one in its place, else the entry is removed. */
+static void drop_lua(int i) {
+  struct command *c = &cmds[i];
+  free(c->help);
+  if (c->under) {
+    c->fn = c->under;
+    c->help = c->under_help;
+    c->lua_ref = 0;
+    c->under = NULL;
+    c->under_help = NULL;
+    return;
+  }
+  free(c->name);
+  cmds[i] = cmds[--ncmds];
 }
 
 void command_register(const char *name, command_fn *fn, const char *help) {
@@ -51,9 +82,9 @@ void commands_drop_lua(void) {
       i++;
       continue;
     }
-    free(cmds[i].name);
-    free(cmds[i].help);
-    cmds[i] = cmds[--ncmds];
+    int had = !!cmds[i].under;
+    drop_lua(i);
+    if (had) i++; /* lulibre's own is back at i; else i holds the last entry now */
   }
 }
 
@@ -65,9 +96,7 @@ int command_remove_lua(const char *name) {
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name) && !cmds[i].fn) {
       lapi_unref(cmds[i].lua_ref);
-      free(cmds[i].name);
-      free(cmds[i].help);
-      cmds[i] = cmds[--ncmds];
+      drop_lua(i);
       return 0;
     }
   return -1;
@@ -82,6 +111,7 @@ void commands_free(void) {
   for (int i = 0; i < ncmds; i++) {
     free(cmds[i].name);
     free(cmds[i].help);
+    free(cmds[i].under_help);
   }
   free(cmds);
   cmds = NULL;

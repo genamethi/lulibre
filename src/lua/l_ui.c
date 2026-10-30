@@ -1039,6 +1039,8 @@ static void c_cancel(struct tui *t, const char *args) {
  *   cmdman.create(name, fn [, opts])     :name runs fn{name=, args=, book=,
  *                                        selection=} as a task; opts {desc=};
  *                                        a command of that name is replaced
+ *                                        (one of lulibre's comes back when
+ *                                        this one is deleted)
  *   cmdman.del(name)
  *   cmdman.ls()  cmdman.get(name)        waits: every command, or one
  *

@@ -230,6 +230,12 @@ local n = 0
 for _, c in ipairs(cmdman.ls()) do if c.name == "propose" or c.name == "hello" then n = n + 1 end end
 local h = cmdman.get("hello")
 print("cmdman|" .. n .. "|" .. tostring(h and h.help) .. "|" .. tostring(cmdman.get("nope")))
+-- a command made in Lua in front of one of lulibre's, then removed: lulibre's is back
+cmdman.create("quit", function() end, { desc = "mine" })
+local mine = cmdman.get("quit")
+cmdman.del("quit")
+local back = cmdman.get("quit")
+print("in front|" .. tostring(mine and mine.help) .. "|" .. tostring(back and back.help))
 LUA
 cmds=$("$bin" -L "$t/lib" run "$t/cmd.lua" 2>&1)
 
@@ -395,6 +401,7 @@ contains "and with write, rewrites them as one operation" "stored|2|math.algebra
 contains "which it says can be undone" "as operation" "$dotsw"
 contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
+contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 contains "a store that raises after it waits fails the write, with the error" "raised|" "$store"
