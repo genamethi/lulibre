@@ -602,6 +602,16 @@ static int l_input(lua_State *L) {
     lua_getfield(L, 1, "on_change");
     if (lua_isfunction(L, -1)) w->change_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     else lua_pop(L, 1);
+    /* the options go to the interface without on_change: a function in a
+     * message is held for the receiver, and this one stays here */
+    lua_newtable(L);
+    for (lua_pushnil(L); lua_next(L, 1); lua_pop(L, 1)) {
+      if (lua_type(L, -2) == LUA_TSTRING && !strcmp(lua_tostring(L, -2), "on_change")) continue;
+      lua_pushvalue(L, -2);
+      lua_pushvalue(L, -2);
+      lua_rawset(L, -5);
+    }
+    lua_replace(L, 1);
   }
   lua_pushinteger(L, (lua_Integer)(intptr_t)w);
   w->task = sched_begin_wait(L);

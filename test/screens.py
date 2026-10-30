@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key bound to a function, and a pick cancelled late.
+a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, and on_change let go.
 
   python3 -I test/screens.py BIN
 
@@ -46,6 +46,19 @@ cmdman.create("demopick", function()
   taskman.sleep(300)
   uiman.exec("pick books")
   taskman.cancel(a)
+end)
+-- a question with on_change, answered: nothing holds on_change afterwards
+local held = setmetatable({}, { __mode = "v" })
+cmdman.create("demoinput", function()
+  local function ask()
+    local f = function() end
+    held[1] = f
+    uiman.input { prompt = "say: ", on_change = f }
+  end
+  ask()
+  collectgarbage()
+  collectgarbage()
+  note("on_change let go|" .. tostring(held[1] == nil))
 end)
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
@@ -102,6 +115,8 @@ keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+keys(":demoinput\r", 0.6)
+keys("hi\r", 0.8)
 keys(":demopick\r", 1.5)
 keys(":lua note('typed')\r", 0.6)   # into the books picker, which is still open
 keys("\x1b", 0.3)
@@ -138,6 +153,7 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("uiman.input lets go of on_change once answered", "on_change let go|true" in got)
 check("a task's pick cancelled late leaves the picker that took its place open",
       "after" in got and "typed" not in got)
 if fails:
