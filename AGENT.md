@@ -2,6 +2,11 @@
 
 Rules for working on lulibre, and facts about calibre measured for it.
 
+The maintainer's standing instructions (how to work with the maintainer,
+the names already decided, what never to touch) are in
+`/media/servd/staging/lulibre-scratch/working-rules.md`: read it at the
+start of every session.
+
 ## Handoff (2026-10-30): delete this section once it is done
 
 lulibre was designed and built in one agent session over 18 days
