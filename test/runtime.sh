@@ -249,6 +249,14 @@ print("resynced|" .. titles())
 LUA
 synced=$("$bin" -L "$t/lib" -o path.sync="$t/sync" run "$t/sync.lua" "$t/sync" 2>&1)
 
+# expose_modules: a packaged module's internal functions in its table, or not
+cat >"$t/expose.lua" <<'LUA'
+local review = require "lulib._review"
+print("exposed|" .. type(review.actions) .. "|" .. type(review.open))
+LUA
+exposed=$("$bin" -L "$t/lib" run "$t/expose.lua" 2>&1)
+hidden=$("$bin" -L "$t/lib" -o expose_modules=false run "$t/expose.lua" 2>&1)
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -444,6 +452,8 @@ contains "which it says can be undone" "as operation" "$dotsw"
 contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
 contains "the sync folder's ebook files are books, named after their files; a copy of the library's is in the library" "synced|copy,My Notes|1" "$synced"
 contains "a file taken out of the sync folder is dropped at the next reading" "resynced|copy" "$synced"
+contains "with expose_modules, a packaged module's internal functions are in its table" "exposed|table|function" "$exposed"
+contains "without, they are not; its own functions still are" "exposed|nil|function" "$hidden"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
 contains "scrnman.create refuses a place of lulibre's, a name like modes, a hint that is no action; takes a screen" "screens|false|false|false|true" "$cmds"

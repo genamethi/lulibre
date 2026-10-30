@@ -6,12 +6,13 @@
 local bookman = require "bookman"
 
 local M = {}
+local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
 --- How much each kind of source weighs in agreement (lulib._rank).
 M.weight = { record = 1, embedded = 0.5, online = 1 }
 
 -- the record's fields that have a value, as bookman.get gives them
-local function record(b)
+function own.record(b)
   local fields = {}
   for _, field in ipairs { "title", "authors", "publisher", "series", "pubdate", "tags" } do
     local v = bookman.get(b.id, field)
@@ -30,7 +31,7 @@ end
 function M.of(book, t)
   local out = {}
   local b = bookman.get(book)
-  if b then out[#out + 1] = { name = "record", kind = "record", fields = record(b) } end
+  if b then out[#out + 1] = { name = "record", kind = "record", fields = get("record")(b) } end
   local meta = t and t.meta
   if meta and (meta.title or meta.author) then
     out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = meta.title, authors = meta.author } }

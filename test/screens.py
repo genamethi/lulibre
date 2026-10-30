@@ -83,6 +83,11 @@ cmdman.create("compkind", function(o) note("compkind|" .. o.args) end, { complet
 cmdman.create("compfn", function(o) note("compfn|" .. o.args) end, {
   complete = function(lead, line) taskman.sleep(100) return { "gamma", { text = "delta", detail = "the fourth" } } end,
 })
+-- an action of your own added to review (expose_modules, on by default)
+local review = require "lulib._review"
+table.insert(review.screen.actions, { "mine", "m", "note the row" })
+review.actions.mine = function(e, alt) note("mine|" .. e.field .. "|" .. alt.value) return true end
+scrnman.create("review", review.screen)
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
 cmdman.create("demowits", function()
@@ -137,6 +142,7 @@ keys(":demowits\r", 1)
 keys(":review\r", 1.5)
 keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
+keys("m")            # an action added to review
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
 with open(os.path.join(t, "sync", "arrived.txt"), "w") as f:
@@ -198,6 +204,7 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
 check(":source sync reads the sync folder again", "in sync|1" in got)
 check("uiman.jump answers false for a book not in the list", "jump|false" in got)
 check("Tab completes a command's arguments from its list of words", "compwords|beta" in got)

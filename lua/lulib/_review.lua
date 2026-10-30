@@ -15,8 +15,17 @@ local propose = require "lulib._propose"
 local wit = require "wit"
 
 local M = {}
+local own, get = require "lulib._expose" (M) -- internal (expose_modules)
 
-scrnman.create("review", {
+-- The screen, and what each of its actions does to a field's row: e the
+-- row, alt the alternative in view, view the review's own state ({which=}).
+-- With expose_modules, an action is added by adding it to both and making
+-- the screen again:
+--     local review = require "lulib._review"
+--     table.insert(review.screen.actions, { "mine", "m", "what it does" })
+--     review.actions.mine = function(e, alt, view) ... end
+--     scrnman.create("review", review.screen)
+own.screen = {
   actions = {
     { "accept", "a", "accept the alternative in view" },
     { "edit", "e", "edit the alternative in view, and accept that" },
@@ -24,7 +33,21 @@ scrnman.create("review", {
     { "next", "<Space>", "show the row's next alternative" },
   },
   hint = { "accept", "edit", "reject", "next" },
-})
+}
+own.actions = {
+  accept = function(_, alt) return wit.accept(alt.id) end,
+  edit = function(e, alt)
+    local value = uiman.input { prompt = e.field .. ": ", default = alt.value }
+    if value then return wit.accept(alt.id, value) end
+    return true
+  end,
+  reject = function(_, alt) return wit.reject(alt.id) end,
+  next = function(e, _, view)
+    view.which[e.key] = e.i % #e.alts + 1
+    return true
+  end,
+}
+scrnman.create("review", own.screen)
 
 --- A row's cells: field, the record's value, the alternative in view (and
 -- which of how many), where it came from and what agrees.
@@ -59,9 +82,15 @@ function M.open(books)
     if #out == 0 then out[1] = { note = "no proposals for these books: :propose makes them" } end
     return out
   end
-  -- a key's action on a field's row; a heading's or the note's does nothing
-  local function on(fn)
-    return function(e) if e.alts then return fn(e, e.alts[e.i]) end end
+  -- an action on a field's row, as the module's actions say when it is
+  -- taken; on a heading or the note it does nothing
+  local view = { which = which }
+  local actions = {}
+  for _, a in ipairs(get("screen").actions) do
+    actions[a[1]] = function(e)
+      local fn = get("actions")[a[1]]
+      if fn and e.alts then return fn(e, e.alts[e.i], view) end
+    end
   end
   uiman.list {
     title = "review", screen = "review", follow = true,
@@ -74,16 +103,7 @@ function M.open(books)
       r.id = e.book
       return r
     end,
-    actions = {
-      accept = on(function(_, alt) return wit.accept(alt.id) end),
-      edit = on(function(e, alt)
-        local value = uiman.input { prompt = e.field .. ": ", default = alt.value }
-        if value then return wit.accept(alt.id, value) end
-        return true
-      end),
-      reject = on(function(_, alt) return wit.reject(alt.id) end),
-      next = on(function(e) which[e.key] = e.i % #e.alts + 1 return true end),
-    },
+    actions = actions,
     refresh = {
       records_changed = function(ev)
         for _, book in ipairs(ev.ids) do

@@ -66,4 +66,7 @@ const struct setting_def setting_defs[S_COUNT] = {
                 "calibre content server URL; changes go through it (http://127.0.0.1:8080)"},
   [S_USER] = {"user", SETTING_STR, 0, "", NULL, "content server user"},
   [S_PASSWORD_FILE] = {"path.password", SETTING_PATH, 0, "", NULL, "file holding the content server password"},
+  [S_EXPOSE_MODULES] = {"expose_modules", SETTING_BOOL, 0, "true", NULL,
+                        "true: the internal functions of lulibre's modules (lulib._*) are in their tables, and "
+                        "redefining one changes what lulibre does; false: lulibre calls its own, whatever is redefined"},
 };

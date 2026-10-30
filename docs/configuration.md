@@ -86,6 +86,7 @@ removed.
 | `track_after` | `100` | review decisions the journal holds before a record of decisions counts |
 | `similar_near` `similar_same` | `0.7` `0.95` | how much of one value found in another makes them near, and the same |
 | `embed` | `false` | every change to a record is also written into the book's files, once per batch |
+| `expose_modules` | `true` | the internal functions of lulibre's modules are in their tables, and redefining one changes what lulibre does; `false`: lulibre calls its own |
 | `write_jobs` | `4` | calibredb processes at once through the content server; straight to the folder, one |
 | `contact_email` | | sent to the metadata services with each request, when set |
 | `server` `user` `path.password` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |

@@ -43,6 +43,7 @@ enum setting_id {
   S_SERVER,
   S_USER,
   S_PASSWORD_FILE,
+  S_EXPOSE_MODULES,
   S_COUNT
 };
 

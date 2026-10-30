@@ -57,9 +57,17 @@ time of the call, so the redefinition takes effect from the next call.
       return normalize(field, value)
     end
 
+A packaged module's internal functions (`lulib._review.actions`,
+`lulib._propose.once` ...) are in its table too while the setting
+`expose_modules` is true, the default, and redefining one changes what
+lulibre does; with it false, they are not, and lulibre calls its own
+whatever you redefine. The setting is read each time, so the command
+line, options.lua and `:set` all reach it.
+
 No file of yours replaces a packaged module: lulibre's own modules are
 found first, then `lua/` in the configuration folder, then the module
-prefix `path.modtree` names.
+prefix `path.modtree` names. A module of yours is required under a name
+of its own.
 
 Two parts are C's unless a handler of yours takes their place, set as a
 field; setting it to nil gives the part back. A handler runs as a task,

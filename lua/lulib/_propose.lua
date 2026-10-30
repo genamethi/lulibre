@@ -21,6 +21,7 @@ local trust = require "trust"
 local wit = require "wit"
 
 local M = {}
+local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
 --- What proposing goes by, taken once by the command that proposes
 -- (design 3) and passed down: the settings, and the parses' track records
@@ -46,7 +47,7 @@ function M.normalize(field, value)
 end
 
 -- an online record's fields have no span: they take none
-local function overlaps(a, b)
+function own.overlaps(a, b)
   return a.start ~= nil and b.start ~= nil and a.start <= b.stop and b.start <= a.stop
 end
 
@@ -62,7 +63,7 @@ function M.rows(ranked, srcs, w)
       local list = rows[field]
       local free = true
       for _, t in ipairs(taken) do
-        if t.field ~= field and overlaps(t, f) then free = false end
+        if t.field ~= field and get("overlaps")(t, f) then free = false end
       end
       if not list then
         if free then
@@ -97,7 +98,7 @@ end
 
 -- the identifiers in a text, as a parse named "lex": per type, the first
 -- found
-local function found(t)
+function own.found(t)
   local fields = {}
   for _, kind in ipairs { "isbn", "doi", "arxiv", "issn" } do
     local start, stop, id = expr.find(t, lex[kind])
@@ -108,12 +109,12 @@ end
 
 -- reads, parses and ranks the book's values once, and keeps them as its
 -- wits
-local function once(book, w)
+function own.once(book, w)
   local t <close> = txt.of(book)
   local srcs = sources.of(book, t)
   -- an online record is a parse too (design 39), ranked beside the grammars'
   local parses = t and exprman.parse(t, book) or {}
-  parses[#parses + 1] = t and found(t) or nil
+  parses[#parses + 1] = t and get("found")(t) or nil
   for _, s in ipairs(srcs) do
     if s.kind == "online" then
       local fields = {}
@@ -154,7 +155,7 @@ function M.propose(book, w)
   local n
   repeat
     running[book] = true
-    n = once(book, w)
+    n = get("once")(book, w)
   until running[book] ~= "again"
   return n
 end

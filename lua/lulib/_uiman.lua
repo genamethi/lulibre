@@ -21,6 +21,7 @@
 --
 -- @library lulib._uiman
 local M = {}
+local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
 -- the options uiman.panel takes as they are
 local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen" }
@@ -29,14 +30,14 @@ local passed = { "title", "help", "columns", "follow", "preview", "height", "sid
 scrnman.create("form", { actions = { { "edit", "e <CR>", "edit the field under the cursor" } }, hint = { "edit" } })
 
 -- items: a list, an iter, or a function giving either, read again each time
-local function read(items)
+function own.read(items)
   if type(items) == "function" then items = items() end
   if type(items) == "table" and items.totable then items = items:totable() end
   return items or {}
 end
 
 -- a key's action, its error shown: it raised, or returned nil and why
-local function act(fn, ...)
+function own.act(fn, ...)
   local ok, r, why = pcall(fn, ...)
   if not ok then uiman.notify(tostring(r), "error")
   elseif r == nil and why then uiman.notify(tostring(why), "error") end
@@ -57,7 +58,7 @@ end
 -- `{ [kind] = function(ev) }` to run first. Without the interface
 -- (lulibre run), the rows are printed, their cells two spaces apart.
 function M.list(o)
-  local items = read(o.items)
+  local items = get("read")(o.items)
   local function rows()
     local out = {}
     for i, item in ipairs(items) do
@@ -85,7 +86,7 @@ function M.list(o)
     local kind, fn = k, v
     if type(k) == "number" then kind, fn = v, nil end
     ids[#ids + 1] = evman.add(kind, function(ev)
-      if fn then act(fn, ev) end
+      if fn then get("act")(fn, ev) end
       p:send("<Refresh>")
     end)
   end
@@ -93,14 +94,14 @@ function M.list(o)
     local action, i = p:wait()
     if not action then break end
     local fn = (o.actions or {})[action]
-    if fn and items[i] ~= nil then act(fn, items[i], i) end
-    items = read(o.items)
+    if fn and items[i] ~= nil then get("act")(fn, items[i], i) end
+    items = get("read")(o.items)
     p:rows(rows())
   end
 end
 
 -- a value as one line: a list joined by commas
-local function shown(v)
+function own.shown(v)
   if type(v) == "table" then return table.concat(v, ", ") end
   return v == nil and "" or tostring(v)
 end
@@ -135,7 +136,7 @@ function M.form(o)
   for name, fn in pairs(o.actions or {}) do actions[name] = function(f) return fn(f.name, f.record) end end
   if o.edit and not actions.edit then
     actions.edit = function(f)
-      local v = uiman.input { prompt = f.label .. ": ", default = shown(f.value) }
+      local v = uiman.input { prompt = f.label .. ": ", default = get("shown")(f.value) }
       if v ~= nil then return o.edit(f.name, v, f.record) end
       return true
     end
@@ -144,7 +145,7 @@ function M.form(o)
   for k, v in pairs(o) do spec[k] = v end
   spec.screen = o.screen or "form"
   spec.columns = o.columns or { { "Field", 16 }, "Value" }
-  spec.items, spec.row, spec.actions = fields, function(f) return { f.label, shown(f.value) } end, actions
+  spec.items, spec.row, spec.actions = fields, function(f) return { f.label, get("shown")(f.value) } end, actions
   return M.list(spec)
 end
 
