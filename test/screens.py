@@ -23,12 +23,17 @@ with open(os.path.join(t, "config", "lulibre", "init.lua"), "w") as f:
 function note(s) local f = io.open(os.getenv("SCREENS_OUT"), "a") f:write(s, "\n") f:close() end -- :lua too
 keymap.set("n", "gx", function(o) note("key|" .. o.name .. "|" .. tostring(o.book)) end, { desc = "note the book" })
 local items = { "a", "b", "c" }
+scrnman.create("demolist", {
+  actions = { { "drop", "x", "drop the item" }, { "refuse", "y", "refuse, saying why" } },
+  hint = { "drop" },
+})
+keymap.set("demolist", "z", "drop") -- rebound beside x
 cmdman.create("demolist", function()
   uiman.list {
-    title = "demo", items = function() return items end,
-    keys = {
-      x = function(item, i) note("x|" .. item .. "|" .. i) table.remove(items, i) end,
-      y = function() return nil, "not this one" end,
+    title = "demo", screen = "demolist", items = function() return items end,
+    actions = {
+      drop = function(item, i) note("x|" .. item .. "|" .. i) table.remove(items, i) end,
+      refuse = function() return nil, "not this one" end,
     },
     refresh = { records_changed = function() note("refreshed") end },
   }
@@ -122,7 +127,7 @@ keys("j")            # b
 keys("x")            # b goes; c is under the cursor
 keys("y")            # refused: shown as an error
 keys(":lua evman.post('records_changed', { ids = {}, fields = {} })\r", 1)
-keys("x")            # c goes
+keys("z")            # c goes: z was bound to drop too
 keys("q", 0.6)
 keys(":demoform\r", 1)
 keys("e", 0.6)       # pages, its value 6 to edit
@@ -186,7 +191,7 @@ def check(what, ok):
 
 check("a key bound to a function runs it, with the book under the cursor", "key|gx|1" in got)
 check("a key acts on the item under the cursor", "x|b|2" in got)
-check("and the items are read again after it", "x|c|2" in got)
+check("and the items are read again after it; keymap.set rebinds a screen's action", "x|c|2" in got)
 check("an action's refusal is shown as an error", "not this one" in text)
 check("an event in refresh runs its function, and the list reads its items again", "refreshed" in got)
 check("the list returns when it closes", "list closed|a" in got)

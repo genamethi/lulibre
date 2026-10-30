@@ -167,6 +167,18 @@ enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERROR
 void ctx_defaults(void);
 void ctx_free(void);
 int ctx_named(const char *name); /* a place's number, or -1 */
+int ctx_count(void);             /* the places there are: lulibre's, then the screens' */
+int ctx_is_own(const char *name); /* one of lulibre's places? Any thread */
+/* A screen's place, made (or made again) from Lua: its actions' names,
+ * default keys (separated by spaces) and what each does, and the actions
+ * its hint line shows. Its number, or -1 and *err. */
+int ctx_add(const char *name, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char **err);
+void ctx_drop_lua(void); /* the screens' places go (:restart-scripts) */
+const char *ctx_action_name(int ctx, int action); /* NULL for none */
+/* The hint line: the hint's actions with the keys now on them ("a accept   e
+ * edit"); how many it has. */
+int ctx_hint_line(int ctx, sbuf *out);
 /* Put a key (one, or two in a row) on an action; an empty action unbinds. */
 int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
 /* The action a key means: 0 for none, CTX_PENDING while a pair is open.
@@ -446,6 +458,9 @@ void panel_set_size(struct panel *p, float size);
  * word and separated by spaces, that its other keys may reach
  * (panel_set_pass): "preview yank" lets P and yy through. */
 void panel_set_own(struct panel *p, int n, const uint32_t *keys);
+/* The panel is a screen's (ctxkeys.c's place): a key bound to one of its
+ * actions reaches the script as the action's name, other keys not at all. */
+void panel_set_place(struct panel *p, int place);
 void panel_set_pass(struct panel *p, const char *commands);
 int panel_passes(const struct panel *p, uint32_t key);
 void panel_unref(struct panel *p);  /* the opener's reference */

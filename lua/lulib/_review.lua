@@ -5,8 +5,9 @@
 -- for the book again, so its rows are ranked against the record as it now
 -- stands.
 --
--- Keys: a accepts the alternative in view, e edits it first, r rejects the
--- row, space shows the next alternative, q closes.
+-- The screen "review": a accepts the alternative in view, e edits it
+-- first, r rejects the row, space shows the next alternative, q closes;
+-- keymap.set("review", key, action) rebinds them.
 --
 -- @library lulib._review
 local bookman = require "bookman"
@@ -15,7 +16,15 @@ local wit = require "wit"
 
 local M = {}
 
-M.help = "a accept  e edit  r reject  <Space> next alternative  q close"
+scrnman.create("review", {
+  actions = {
+    { "accept", "a", "accept the alternative in view" },
+    { "edit", "e", "edit the alternative in view, and accept that" },
+    { "reject", "r", "reject the row's proposals" },
+    { "next", "<Space>", "show the row's next alternative" },
+  },
+  hint = { "accept", "edit", "reject", "next" },
+})
 
 --- A row's cells: field, the record's value, the alternative in view (and
 -- which of how many), where it came from and what agrees.
@@ -55,7 +64,7 @@ function M.open(books)
     return function(e) if e.alts then return fn(e, e.alts[e.i]) end end
   end
   uiman.list {
-    title = "review", help = M.help, follow = true,
+    title = "review", screen = "review", follow = true,
     columns = { { "Field", 10 }, "Record", "Proposed", { "From", 12 }, { "Sources", 20 } },
     items = entries,
     row = function(e)
@@ -65,15 +74,15 @@ function M.open(books)
       r.id = e.book
       return r
     end,
-    keys = {
-      a = on(function(_, alt) return wit.accept(alt.id) end),
-      e = on(function(e, alt)
+    actions = {
+      accept = on(function(_, alt) return wit.accept(alt.id) end),
+      edit = on(function(e, alt)
         local value = uiman.input { prompt = e.field .. ": ", default = alt.value }
         if value then return wit.accept(alt.id, value) end
         return true
       end),
-      r = on(function(_, alt) return wit.reject(alt.id) end),
-      ["<Space>"] = on(function(e) which[e.key] = e.i % #e.alts + 1 return true end),
+      reject = on(function(_, alt) return wit.reject(alt.id) end),
+      next = on(function(e) which[e.key] = e.i % #e.alts + 1 return true end),
     },
     refresh = {
       records_changed = function(ev)

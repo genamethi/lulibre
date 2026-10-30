@@ -152,7 +152,7 @@ lulibre's back. [Keys and commands](keys.md) has the key notation.
 
 | | |
 |---|---|
-| `taskman` `uiman` `setman` `evman` `keymap` `cmdman` | globals: tasks, the interface, settings, events, keys, commands |
+| `taskman` `uiman` `setman` `evman` `keymap` `cmdman` `scrnman` | globals: tasks, the interface, settings, events, keys, commands, screens |
 | `lulib` | a global: `version`, `build`, `headless`, `opt` (the settings as a table) |
 | `utils` | a global: `exec`, `md5`, `index` (below), and the handler `ocr_eng` (above) |
 | `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `sql` `lsqlite3` | modules, by `require` |
@@ -385,7 +385,8 @@ with a body; `timeout` is in milliseconds.
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
 | `uiman.key(command [, mode])` | waits: the keys bound to a command line, or nil |
 | `uiman.maps()` | waits: every global binding, `{modes=, keys=, command=, about=, hidden=}`; a key bound to a function has `callback`, the function, in place of `command` |
-| `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
+| `scrnman.create(name, {actions=, hint=})` | a screen: its actions (`{name, keys, what it does}`) and those its hint shows; made again under its name, it replaces the one before |
+| `uiman.panel{...}` | a panel of rows the task that opened it steers; with `screen=`, a key bound to one of the screen's actions comes back from `p:wait()` as the action's name; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
 | `uiman.theme.<name> = colour` | the interface's colours |
@@ -395,13 +396,23 @@ record, one field to a row. Each waits until it is closed, and reads its
 items again after each key it handles and each event it refreshes on.
 Without the interface (`lulibre run`) a list prints its rows.
 Both take `uiman.panel`'s `title`, `help`, `columns`, `follow`, `preview`,
-`height`, `side`, `focus`, `dialog` and `pass`.
+`height`, `side`, `focus`, `dialog`, `pass` and `screen`.
 
+A list's keys are a screen's actions: `scrnman.create` names the screen
+and its actions, with the keys each is on by default and what it does;
+`keymap.set(screen, key, action)` rebinds them as it rebinds a place's
+(keys.md), and the list's bar shows the hint's actions with the keys they
+are on now. A key bound to no action of the screen does nothing in it.
+
+    scrnman.create("todo", {
+      actions = { { "mark", "t", "tag the book todo" } },     -- name, keys, what it does
+      hint = { "mark" },                                     -- shown in the bar
+    })
     uiman.list {
-      title = "books", columns = { "Title", "Authors" }, follow = true,
+      title = "books", screen = "todo", columns = { "Title", "Authors" }, follow = true,
       items = function() return bookman.books("tag:none") end,   -- a list, an iter, or a function giving one
       row = function(b) return { b.title, b.author, id = b.id } end,
-      keys = { t = function(b) return store.apply({ { book = b.id, field = "tags", value = "todo", op = "add" } }) end },
+      actions = { mark = function(b) return store.apply({ { book = b.id, field = "tags", value = "todo", op = "add" } }) end },
       refresh = { "records_changed" },     -- or { records_changed = function(ev) ... end }, run first
     }
 
@@ -415,11 +426,12 @@ Both take `uiman.panel`'s `title`, `help`, `columns`, `follow`, `preview`,
 |---|---|
 | `items` | a list, an iter, or a function giving one |
 | `row(item)` | the item's cells, with `id=` (a book) and `style=` as a panel's rows; by default the item itself when it is a table, else the item as text |
-| `keys` | `{ [key] = function(item, i) }`: the key's action on the item under the cursor; its error, raised or nil and why, is shown |
+| `screen` | the screen it is (`scrnman.create`); a form without one is the screen `form`, whose action `edit` is on e and Enter |
+| `actions` | `{ [action] = function(item, i) }`: what one of the screen's actions does to the item under the cursor; its error, raised or nil and why, is shown |
 | `refresh` | event kinds that read the items again |
 | `record` | a form's record: a table, or a function giving it |
 | `fields` | the fields a form shows, in order; by default every one, by name |
-| `edit(field, value, record)` | takes a field edited with e or Enter; nil and why refuses it |
+| `edit(field, value, record)` | takes a field edited by the screen's action `edit`; nil and why refuses it |
 
 ## Tasks, processes, indexing: taskman, utils
 

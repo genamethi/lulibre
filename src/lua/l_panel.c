@@ -21,7 +21,11 @@
  *     reloads = true,     -- and "<Reload>" when the library has been read again
  *     tabs = { "this run (9)", "all waiting (212)" }, tab = 1,
  *                         -- names in the bar, one of them as the one in view
- *     keys = { "a", "r", "<CR>" },   -- the keys this script handles, and
+ *     screen = "review",             -- the screen it is (scrnman.create): a key
+ *                                    -- bound to one of its actions reaches
+ *                                    -- wait() as the action's name, and the
+ *                                    -- bar shows its hint where no help is
+ *     keys = { "a", "r", "<CR>" },   -- else the keys this script handles, and
  *     pass = "preview yank",         -- the global commands its other keys may
  *                                    -- still reach (P, ], yy ...); see below
  *   }
@@ -318,6 +322,13 @@ static int l_panel_ui(lua_State *L) {
     return luaL_error(L, "panels need the interface, which is not running");
   }
   luaL_checktype(L, 1, LUA_TTABLE);
+  int place = -1;
+  lua_getfield(L, 1, "screen");
+  if (lua_isstring(L, -1) && (place = ctx_named(lua_tostring(L, -1))) < 0) {
+    on_event(NULL, NULL, 0, (void *)(intptr_t)id); /* closed at once */
+    return luaL_error(L, "no screen is called %s (scrnman.create makes one)", lua_tostring(L, -1));
+  }
+  lua_pop(L, 1);
   lua_getfield(L, 1, "side");
   char side = !lua_isstring(L, -1) ? 'b' : lua_tostring(L, -1)[0] == 'l' ? 'l' : lua_tostring(L, -1)[0] == 'm' ? 'm' : 'b';
   lua_getfield(L, 1, side == 'l' ? "width" : "height");
@@ -335,6 +346,7 @@ static int l_panel_ui(lua_State *L) {
   if (keep_focus && was) t->focus = was;
   panel_on_event(p, on_event, (void *)(intptr_t)id);
   if (screen_tab) panel_set_screen_tab(p);
+  if (place >= 0) panel_set_place(p, place);
 
   lua_getfield(L, 1, "title");
   if (lua_isstring(L, -1)) panel_set_title(p, lua_tostring(L, -1));

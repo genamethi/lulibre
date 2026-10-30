@@ -75,6 +75,7 @@ void lapi_unref(int ref);
 void lapi_new_generation(void);
 int luaopen_keymap(struct lua_State *L);
 int luaopen_cmdman(struct lua_State *L);
+int luaopen_scrnman(struct lua_State *L);
 
 /* setman (l_setman.c). The copy of the settings in the registry: filled
  * when the lua_State is made, and kept current by l_setman_changed, a

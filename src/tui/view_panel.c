@@ -43,6 +43,8 @@ struct panel {
   void *event_ud;
   char *search;    /* what / looks for in the rows, folded; NULL for nothing */
   int search_from; /* the row the cursor was on when / was pressed */
+  int place;          /* its screen's place (ctxkeys.c), whose actions its keys mean; -1 for none */
+  uint32_t ppending;  /* the first key of a two-key action of that place */
 };
 
 static void free_rows(struct panel *p) {
@@ -92,6 +94,7 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->title = xstrdup("");
   p->help = xstrdup("");
   p->page = 10;
+  p->place = -1;
   p->size = size;
   p->side = side;
   if (side == 'm') wm_over_list(t, &view_panel, p);
@@ -194,11 +197,18 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
  * panel that has said which keys are its own, only for a key that is not,
  * and only when it starts a binding to one of the commands let through. */
 int panel_passes(const struct panel *p, uint32_t key) {
-  if (!p->open || !p->pass || !p->nown) return 0;
+  if (!p->open || !p->pass || (!p->nown && p->place < 0)) return 0;
   if (p->pending || ctx_bound(KC_PANEL, key)) return 0; /* the panel's movement, always its own */
+  if (p->place >= 0 && (p->ppending || ctx_bound(p->place, key))) return 0; /* its screen's actions */
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
+}
+
+void panel_set_place(struct panel *p, int place) {
+  p->place = place;
+  p->ppending = 0;
+  tui_dirty(p->t);
 }
 
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud) {
@@ -498,6 +508,15 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     wm_focus_back(t);
     return 1;
   }
+  /* a screen's own action, by its name: rebound with keymap.set(screen, ...) */
+  if (p->place >= 0) {
+    int a = ctx_feed(p->place, &p->ppending, key);
+    if (a == CTX_PENDING) return 1;
+    if (a > 0) {
+      if (p->event) p->event(p, ctx_action_name(p->place, a), p->nrows ? p->cur : -1, p->event_ud);
+      return 1;
+    }
+  }
   if (search_key(t, p, key)) return 1;
   switch (key) {
     /* these stay global, so the list and preview remain reachable */
@@ -514,6 +533,7 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     for (int i = 0; i < p->nown; i++) own = own || p->own[i] == key;
     if (!own) return 0;
   }
+  if (p->place >= 0) return 1; /* a screen's panel hears its actions, not its keys */
   if (p->event) {
     sbuf k = SBUF_INIT;
     key_format(&k, &key, 1);
@@ -608,11 +628,17 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     used += tw[i] + 1;
   }
   if (p->ntabs) used += 2;
-  int hw = dr_width(p->help, strlen(p->help));
+  /* the help: what the opener said, else the screen's hint, with the keys
+   * its actions are on now */
+  sbuf hint = SBUF_INIT;
+  const char *help = p->help;
+  if (!*help && p->place >= 0 && ctx_hint_line(p->place, &hint)) help = hint.s;
+  int hw = dr_width(help, strlen(help));
   if (hw && used + hw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
-    dr_text(n, r.y, r.x + r.w - hw - 1, hw, p->help);
+    dr_text(n, r.y, r.x + r.w - hw - 1, hw, help);
   }
+  sb_free(&hint);
   if (r.h < 3 || p->ncols == 0) return;
 
   int x[32], w[32], nc = columns(p, r, x, w);

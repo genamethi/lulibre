@@ -182,6 +182,10 @@ keymap.del("line", "<C-k>")             -- unbind
 | `pager` | `down` `up` `page-down` `page-up` `top` (any other key closes it) |
 | `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
 
+A screen made in Lua is a place too (`scrnman.create`, [the API](api.md)):
+`review` (`accept` `edit` `reject` `next`) and `form` (`edit`) are
+lulibre's, and `keymap.set("review", "y", "accept")` rebinds one.
+
 A binding here is one key, or two in a row (`gg`). `?` lists every place
 with its actions and their keys. In a panel, the movement keys take
 precedence over the panel's own: a key bound to both moves.

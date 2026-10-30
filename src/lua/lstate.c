@@ -191,7 +191,8 @@ lua_State *lstate_new(struct app *app) {
   luaL_requiref(L, "evman", luaopen_evman, 1);
   luaL_requiref(L, "keymap", luaopen_keymap, 1);
   luaL_requiref(L, "cmdman", luaopen_cmdman, 1);
-  lua_pop(L, 4);
+  luaL_requiref(L, "scrnman", luaopen_scrnman, 1);
+  lua_pop(L, 5);
   /* packaged modules written in C, found by require like the others */
   luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
   lua_pushcfunction(L, luaopen_txt);
@@ -310,6 +311,7 @@ static void rebuild(struct app *app) {
   commands_drop_lua();
   keymap_free(&tui_keymap);
   keymap_defaults(&tui_keymap);
+  ctx_drop_lua();
   ctx_defaults();
   lapi_new_generation();
   lstate_close(app);

@@ -7,7 +7,12 @@
  *
  *   keymap.set("panel", "n", "down")       keymap.set("line", "<C-g>", "cancel")
  *
- * A binding is one key, or two in a row ("gg"). An empty action unbinds. */
+ * A binding is one key, or two in a row ("gg"). An empty action unbinds.
+ *
+ * lulibre's places come first, in the order of the enums in tui.h; a
+ * screen made in Lua (scrnman.create) adds a place of its own after them,
+ * with its actions and the ones its hint shows, and goes with the
+ * lua_State (:restart-scripts). */
 #include <stdlib.h>
 #include <string.h>
 
@@ -105,7 +110,7 @@ static const struct {
   const char *name, *title;
   const struct action *actions;
   int n;
-} ctxs[KC_N] = {
+} own[KC_N] = {
   [KC_PANEL] = {"panel", "IN A PANEL", panel_actions, (int)ARRAY_LEN(panel_actions)},
   [KC_LINE] = {"line", "WHILE TYPING", line_actions, (int)ARRAY_LEN(line_actions)},
   [KC_PICKER] = {"picker", "IN A PICKER (the line's editing keys work too)", picker_actions, (int)ARRAY_LEN(picker_actions)},
@@ -113,6 +118,58 @@ static const struct {
   [KC_CONSOLE] = {"console", "IN THE CONSOLE", console_actions, (int)ARRAY_LEN(console_actions)},
   [KC_SELECT] = {"select", "SELECTING TEXT IN THE PREVIEW", select_actions, (int)ARRAY_LEN(select_actions)},
 };
+
+/* Every place: lulibre's (copied from own[] on first use) and those made
+ * in Lua after them. The interface thread's. */
+struct place {
+  char *name, *title;
+  struct action *actions; /* the strings are the place's */
+  int n;
+  int *hint, nhint; /* the actions its hint line shows, by number */
+  int lua;
+};
+static struct place *ctxs;
+static int nctxs;
+
+static void own_places(void) {
+  if (nctxs) return;
+  ctxs = xcalloc(KC_N, sizeof *ctxs);
+  for (int c = 0; c < KC_N; c++) {
+    struct place *pl = &ctxs[c];
+    pl->name = xstrdup(own[c].name);
+    pl->title = xstrdup(own[c].title);
+    pl->n = own[c].n;
+    pl->actions = xcalloc((size_t)pl->n, sizeof *pl->actions);
+    for (int a = 0; a < pl->n; a++)
+      pl->actions[a] = (struct action){xstrdup(own[c].actions[a].name), xstrdup(own[c].actions[a].keys),
+                                       xstrdup(own[c].actions[a].about)};
+  }
+  nctxs = KC_N;
+}
+
+static void place_free(struct place *pl) {
+  for (int a = 0; a < pl->n; a++) {
+    free((char *)pl->actions[a].name);
+    free((char *)pl->actions[a].keys);
+    free((char *)pl->actions[a].about);
+  }
+  free(pl->actions);
+  free(pl->hint);
+  free(pl->name);
+  free(pl->title);
+  memset(pl, 0, sizeof *pl);
+}
+
+int ctx_is_own(const char *name) { /* own[] is constant: any thread */
+  for (int c = 0; c < KC_N; c++)
+    if (!strcmp(own[c].name, name)) return 1;
+  return 0;
+}
+
+int ctx_count(void) {
+  own_places();
+  return nctxs;
+}
 
 static struct cbind {
   int ctx, action, nkeys;
@@ -143,30 +200,100 @@ static void ctx_bind_keys(int ctx, const uint32_t *keys, int n, int action) {
   memcpy(b->keys, keys, (size_t)n * sizeof *keys);
 }
 
-void ctx_defaults(void) {
-  nbinds = 0;
-  for (int c = 0; c < KC_N; c++)
-    for (int a = 0; a < ctxs[c].n; a++) {
-      char *specs = xstrdup(ctxs[c].actions[a].keys), *save = NULL;
-      for (char *s = strtok_r(specs, " ", &save); s; s = strtok_r(NULL, " ", &save)) {
-        uint32_t keys[KEYSEQ_MAX];
-        int n = key_parse(s, keys);
-        if (n == 1 || n == 2) ctx_bind_keys(c, keys, n, a + 1);
-      }
-      free(specs);
+/* place c's keys as its actions name them */
+static void bind_defaults(int c) {
+  for (int a = 0; a < ctxs[c].n; a++) {
+    char *specs = xstrdup(ctxs[c].actions[a].keys), *save = NULL;
+    for (char *s = strtok_r(specs, " ", &save); s; s = strtok_r(NULL, " ", &save)) {
+      uint32_t keys[KEYSEQ_MAX];
+      int n = key_parse(s, keys);
+      if (n == 1 || n == 2) ctx_bind_keys(c, keys, n, a + 1);
     }
+    free(specs);
+  }
+}
+
+static void unbind_place(int c) {
+  int k = 0;
+  for (int i = 0; i < nbinds; i++)
+    if (binds[i].ctx != c) binds[k++] = binds[i];
+  nbinds = k;
+}
+
+void ctx_defaults(void) {
+  own_places();
+  nbinds = 0;
+  for (int c = 0; c < nctxs; c++) bind_defaults(c);
 }
 
 void ctx_free(void) {
   free(binds);
   binds = NULL;
   nbinds = capbinds = 0;
+  for (int c = 0; c < nctxs; c++) place_free(&ctxs[c]);
+  free(ctxs);
+  ctxs = NULL;
+  nctxs = 0;
 }
 
 int ctx_named(const char *name) {
-  for (int c = 0; c < KC_N; c++)
+  own_places();
+  for (int c = 0; c < nctxs; c++)
     if (!strcmp(ctxs[c].name, name)) return c;
   return -1;
+}
+
+int ctx_add(const char *name, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char **err) {
+  own_places();
+  int c = ctx_named(name);
+  if (c >= 0 && !ctxs[c].lua) {
+    *err = xasprintf("%s is one of lulibre's places: its keys are rebound with keymap.set", name);
+    return -1;
+  }
+  for (int a = 0; a < n; a++)
+    for (int b = 0; b < a; b++)
+      if (!strcmp(names[a], names[b])) {
+        *err = xasprintf("%s has two actions called %s", name, names[a]);
+        return -1;
+      }
+  if (c < 0) {
+    ctxs = xrealloc(ctxs, (size_t)(nctxs + 1) * sizeof *ctxs);
+    c = nctxs++;
+  } else { /* made again: its keys go back to what the new actions say */
+    place_free(&ctxs[c]);
+    unbind_place(c);
+  }
+  struct place *pl = &ctxs[c];
+  memset(pl, 0, sizeof *pl);
+  pl->name = xstrdup(name);
+  pl->title = xstrdup(name);
+  pl->lua = 1;
+  pl->n = n;
+  pl->actions = xcalloc((size_t)n + 1, sizeof *pl->actions);
+  for (int a = 0; a < n; a++)
+    pl->actions[a] = (struct action){xstrdup(names[a]), xstrdup(keys[a] ? keys[a] : ""), xstrdup(abouts[a] ? abouts[a] : "")};
+  pl->hint = xcalloc((size_t)nhint + 1, sizeof *pl->hint);
+  for (int h = 0; h < nhint; h++)
+    for (int a = 0; a < n; a++)
+      if (!strcmp(hint[h], names[a])) pl->hint[pl->nhint++] = a + 1;
+  bind_defaults(c);
+  return c;
+}
+
+void ctx_drop_lua(void) {
+  own_places();
+  for (int c = KC_N; c < nctxs; c++) place_free(&ctxs[c]);
+  nctxs = KC_N;
+  int k = 0;
+  for (int i = 0; i < nbinds; i++)
+    if (binds[i].ctx < KC_N) binds[k++] = binds[i];
+  nbinds = k;
+}
+
+const char *ctx_action_name(int ctx, int action) {
+  if (ctx < 0 || ctx >= nctxs || action < 1 || action > ctxs[ctx].n) return NULL;
+  return ctxs[ctx].actions[action - 1].name;
 }
 
 int ctx_bind(const char *ctx, const char *spec, const char *action, char **err) {
@@ -221,6 +348,22 @@ int ctx_bound(int ctx, uint32_t key) {
   for (int i = 0; i < nbinds; i++)
     if (binds[i].ctx == ctx && binds[i].keys[0] == key) return 1;
   return 0;
+}
+
+static int ctx_key_of(int ctx, int action, sbuf *out);
+
+int ctx_hint_line(int ctx, sbuf *out) {
+  if (ctx < 0 || ctx >= nctxs) return 0;
+  int n = 0;
+  for (int h = 0; h < ctxs[ctx].nhint; h++) {
+    sbuf k = SBUF_INIT;
+    int a = ctxs[ctx].hint[h];
+    if (ctx_key_of(ctx, a, &k)) { /* an action left with no key is not offered */
+      sb_printf(out, "%s%s %s", n++ ? "   " : "", k.s, ctxs[ctx].actions[a - 1].name);
+    }
+    sb_free(&k);
+  }
+  return n;
 }
 
 static int ctx_key_of(int ctx, int action, sbuf *out) {

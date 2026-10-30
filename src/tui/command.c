@@ -710,7 +710,7 @@ static void command_help(struct tui *t) {
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }
-  for (int c = 0; c < KC_N; c++) {
+  for (int c = 0; c < ctx_count(); c++) {
     sb_putc(&h, '\n');
     ctx_describe(c, &h, 1);
   }
