@@ -3,8 +3,10 @@
  * keys are the place "pager"; any other key closes it. While it is up every
  * key is its own, and the mouse only selects (modal).
  *
- * A line that does not begin with a space is a heading, and the lines under
- * it up to the next heading are its section, which opens and closes. A
+ * The text is a struct rich (rich.c): its headings open sections, the
+ * lines under one up to the next heading, which open and close; its spans
+ * are drawn in their styles, its links as links. In a plain text, a line
+ * that does not begin with a space is a heading (rich_plain). A
  * cursor line shows where the keys act; / searches as it is typed, opening
  * the sections the matches are in. Which sections were opened and closed is
  * kept, per title, for the next time a text of that title is shown.
@@ -23,13 +25,13 @@ struct pline {
   size_t off, len;
   int sec; /* its section, -1 before the first heading */
   int head;
+  int span0; /* the first of its spans (sorted by offset) */
 };
 
 /* what is shown, as kept in the pages gone back and forward through */
 struct page {
-  char *text, *title, *where; /* where: the file it is, for its links; NULL for none */
-  struct pager_link *links;   /* in the order of their offsets */
-  int nlinks;
+  struct rich r;
+  char *title, *where;   /* where: the file it is, for its links; NULL for none */
   unsigned char *folded; /* per section */
   int cur, top;          /* the cursor's line; the first row shown */
 };
@@ -51,11 +53,9 @@ struct pager {
 };
 
 static void page_free(struct page *p) {
-  free(p->text);
+  rich_free(&p->r);
   free(p->title);
   free(p->where);
-  for (int i = 0; i < p->nlinks; i++) free(p->links[i].target);
-  free(p->links);
   free(p->folded);
   memset(p, 0, sizeof *p);
 }
@@ -68,9 +68,13 @@ static struct fold_memory {
 } *memory;
 static int nmemory;
 
+static const char *text_of(const struct page *p) {
+  return p->r.text.s ? p->r.text.s : "";
+}
+
 static char *memory_key(const struct pager *pg, int sec) {
   const struct pline *h = &pg->ln[pg->sec_head[sec]];
-  return xasprintf("%s\t%.*s", pg->p.title, (int)h->len, pg->p.text + h->off);
+  return xasprintf("%s\t%.*s", pg->p.title, (int)h->len, text_of(&pg->p) + h->off);
 }
 
 static int remembered(const struct pager *pg, int sec) {
@@ -97,25 +101,36 @@ static void set_fold(struct pager *pg, int sec, int folded) {
 
 /* ---- lines ---- */
 
+static int by_offset(const void *a, const void *b) {
+  const struct rich_span *x = a, *y = b;
+  return x->off < y->off ? -1 : x->off > y->off;
+}
+
 /* The lines and sections of the page's text; its folds stay if it has them. */
 static void split(struct pager *pg) {
+  struct rich *r = &pg->p.r;
+  const char *text = text_of(&pg->p);
   free(pg->ln);
   free(pg->sec_head);
   pg->n = pg->nsec = 0;
+  qsort(r->spans, (size_t)r->nspans, sizeof *r->spans, by_offset);
   size_t cap = 16;
   pg->ln = xcalloc(cap, sizeof *pg->ln);
   pg->sec_head = xcalloc(cap, sizeof *pg->sec_head);
-  for (const char *p = pg->p.text; *p;) {
+  int h = 0, sp = 0;
+  for (const char *p = text; *p;) {
     const char *nl = strchr(p, '\n');
-    size_t len = nl ? (size_t)(nl - p) : strlen(p);
+    size_t len = nl ? (size_t)(nl - p) : strlen(p), off = (size_t)(p - text);
     if ((size_t)pg->n == cap) {
       cap *= 2;
       pg->ln = xrealloc(pg->ln, cap * sizeof *pg->ln);
       pg->sec_head = xrealloc(pg->sec_head, cap * sizeof *pg->sec_head);
     }
-    int head = len > 0 && p[0] != ' ';
+    while (h < r->nheads && r->heads[h].line < pg->n) h++;
+    int head = h < r->nheads && r->heads[h].line == pg->n;
     if (head) pg->sec_head[pg->nsec++] = pg->n;
-    pg->ln[pg->n++] = (struct pline){(size_t)(p - pg->p.text), len, pg->nsec - 1, head};
+    while (sp < r->nspans && r->spans[sp].off < off) sp++;
+    pg->ln[pg->n++] = (struct pline){off, len, pg->nsec - 1, head, sp};
     p = nl ? nl + 1 : p + len;
   }
   if (!pg->p.folded) pg->p.folded = xcalloc((size_t)pg->nsec + 1, 1);
@@ -134,17 +149,18 @@ static int shown(const struct pager *pg, int i) {
 static int matches(const struct pager *pg, int i) {
   if (!pg->search) return 0;
   sbuf f = SBUF_INIT;
-  fold_utf8(&f, pg->p.text + pg->ln[i].off, pg->ln[i].len);
+  fold_utf8(&f, text_of(&pg->p) + pg->ln[i].off, pg->ln[i].len);
   int hit = f.s && strstr(f.s, pg->search);
   sb_free(&f);
   return hit;
 }
 
-/* Each line wraps at the text's width, and what wraps lines up under its
- * last column: what follows the last gap of two spaces or more on its first
- * row, in its first two thirds, or a list item's text (else under the
- * line's own indent). Calls fn for each row of line i as shown and returns
- * how many rows it takes. */
+/* Each line wraps at the text's width, and what wraps lines up under the
+ * column the text gives it (its hang), else under its last column: what
+ * follows the last gap of two spaces or more on its first row, in its first
+ * two thirds, or a list item's text (else under the line's own indent).
+ * Calls fn for each row of line i as shown and returns how many rows it
+ * takes. */
 typedef void row_fn(struct tui *t, int row, int indent, const char *s, size_t len, void *ud);
 
 static int hanging(const char *p, size_t len, int w) {
@@ -162,9 +178,12 @@ static int hanging(const char *p, size_t len, int w) {
 }
 
 static int rows_of(struct tui *t, const struct pager *pg, int i, row_fn *fn, void *ud) {
-  const char *p = pg->p.text + pg->ln[i].off;
+  const char *p = text_of(&pg->p) + pg->ln[i].off;
   size_t len = pg->ln[i].len;
-  int w = pg->w > 0 ? pg->w : 1, n = 0, ind = hanging(p, len, w);
+  const struct rich *r = &pg->p.r;
+  int w = pg->w > 0 ? pg->w : 1, n = 0;
+  int ind = r->hang && i < r->nlines && r->hang[i] >= 0 ? r->hang[i] : hanging(p, len, w);
+  if (ind > w * 2 / 3) ind = 0;
   size_t k = 0;
   do {
     int lead = k ? ind : 0;
@@ -209,27 +228,39 @@ struct pager_draw {
   const struct pager *pg;
   int x, y, row0, rows; /* the screen's first text row; the text's row it shows; how many */
   int at;               /* the text's row the line being drawn begins on */
-  int heading, current;
+  int line, heading, current;
 };
 
-/* a row, with the links in it drawn as links */
+/* a row, its spans in their styles and its links drawn as links */
 static void draw_row(struct tui *t, int row, int indent, const char *s, size_t len, void *ud) {
   struct pager_draw *d = ud;
   int r = d->at + row - d->row0;
   if (r < 0 || r >= d->rows) return;
+  const struct rich *rt = &d->pg->p.r;
+  const char *text = text_of(&d->pg->p);
+  const struct pline *ln = &d->pg->ln[d->line];
   int bg = d->current ? theme.cursor_bg : theme.bar_bg, x = d->x + indent;
-  size_t off = (size_t)(s - d->pg->p.text), end = off + len;
-  const struct page *p = &d->pg->p;
+  size_t off = (size_t)(s - text), end = off + len, line_end = ln->off + ln->len;
   int l = 0;
-  while (l < p->nlinks && p->links[l].off + p->links[l].len <= off) l++;
+  while (l < rt->nlinks && rt->links[l].off + rt->links[l].len <= off) l++;
   for (size_t at = off; at < end;) {
-    int in = l < p->nlinks && p->links[l].off <= at;
-    size_t to = in ? p->links[l].off + p->links[l].len : l < p->nlinks ? p->links[l].off : end;
+    int in = l < rt->nlinks && rt->links[l].off <= at;
+    size_t to = in ? rt->links[l].off + rt->links[l].len : l < rt->nlinks ? rt->links[l].off : end;
+    unsigned style = 0;
+    for (int k = ln->span0; k < rt->nspans && rt->spans[k].off < line_end; k++) {
+      const struct rich_span *sp = &rt->spans[k];
+      size_t e = sp->off + sp->len;
+      if (sp->off <= at && e > at) style |= sp->style;
+      if (sp->off > at && sp->off < to) to = sp->off;
+      if (e > at && e < to) to = e;
+    }
     if (to > end) to = end;
-    if (in) dr_style(t->std, theme.accent, bg, A_UNDERLINE);
-    else dr_style(t->std, d->heading ? theme.accent : C_DEFAULT, bg, d->heading ? A_BOLD : 0);
-    x += dr_textn(t->std, d->y + r, x, 1 << 30, d->pg->p.text + at, to - at);
-    if (in) l++;
+    unsigned attrs = (style & RS_STRONG || d->heading ? A_BOLD : 0) | (style & RS_EM ? A_ITALIC : 0) |
+                     (style & RS_STRIKE ? A_STRUCK : 0) | (in ? A_UNDERLINE : 0);
+    int fg = in || d->heading ? theme.accent : style & RS_CODE ? theme.ok : C_DEFAULT;
+    dr_style(t->std, fg, bg, attrs);
+    x += dr_textn(t->std, d->y + r, x, 1 << 30, text + at, to - at);
+    if (in && to >= rt->links[l].off + rt->links[l].len) l++;
     at = to;
   }
 }
@@ -238,7 +269,7 @@ static void draw(struct tui *t, void *state, struct rect area, int focused) {
   struct pager *pg = state;
   struct ncplane *n = t->std;
   int W = t->cols_n, H = t->rows_n;
-  int w = W > 84 ? 80 : W - 2, h = H - 4;
+  int w = W > PAGER_WIDTH + 8 ? PAGER_WIDTH + 4 : W - 2, h = H - 4;
   if (w < 20 || h < 4) return;
   int x = (W - w) / 2, y = 1;
   pg->w = w - 4;
@@ -270,9 +301,10 @@ static void draw(struct tui *t, void *state, struct rect area, int focused) {
   int hw = ctx_hint_line(KC_PAGER, &hint) ? dr_width(hint.s, hint.len) : 0;
   if (hw && used + hw + 6 <= w) dr_text(n, y, x + w - hw - 2, hw, hint.s);
   sb_free(&hint);
-  struct pager_draw d = {pg, x + 2, y + 1, pg->p.top, pg->body, 0, 0, 0};
+  struct pager_draw d = {pg, x + 2, y + 1, pg->p.top, pg->body, 0, 0, 0, 0};
   for (int i = 0; i < pg->n; i++) {
     if (!shown(pg, i)) continue;
+    d.line = i;
     d.heading = pg->ln[i].head;
     d.current = i == pg->p.cur;
     int k = rows_of(t, pg, i, NULL, NULL);
@@ -372,10 +404,11 @@ static void search_done(struct tui *t, const char *text, void *ud) {
 /* the links on line i: the first's index, and how many */
 static int links_on(const struct pager *pg, int i, int *first) {
   size_t from = pg->ln[i].off, to = from + pg->ln[i].len;
+  const struct rich *r = &pg->p.r;
   int n = 0;
   *first = -1;
-  for (int l = 0; l < pg->p.nlinks; l++)
-    if (pg->p.links[l].off >= from && pg->p.links[l].off < to) {
+  for (int l = 0; l < r->nlinks; l++)
+    if (r->links[l].off >= from && r->links[l].off < to) {
       if (*first < 0) *first = l;
       n++;
     }
@@ -405,9 +438,8 @@ static void show_page(struct pager *pg, struct page *p) {
  * link leads nowhere, when it stays. */
 static void follow(struct tui *t, struct pager *pg, int l) {
   struct page was = pg->p;
-  char *target = xstrdup(pg->p.links[l].target);
-  memset(&pg->p, 0, sizeof pg->p);
-  pg->p.text = xstrdup(""); /* until the link's page comes */
+  char *target = xstrdup(pg->p.r.links[l].target);
+  memset(&pg->p, 0, sizeof pg->p); /* empty until the link's page comes */
   if (guides_follow(t, target, was.where)) {
     push(pg->back, &pg->nback, &was);
     for (int i = 0; i < pg->nfwd; i++) page_free(&pg->fwd[i]);
@@ -420,7 +452,7 @@ static void follow(struct tui *t, struct pager *pg, int l) {
 
 static void link_chosen(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
   struct pager *pg = open_pager(t);
-  if (pg && id >= 0 && id < pg->p.nlinks) follow(t, pg, (int)id);
+  if (pg && id >= 0 && id < pg->p.r.nlinks) follow(t, pg, (int)id);
   tui_dirty(t);
 }
 
@@ -433,8 +465,9 @@ static void follow_cursor(struct tui *t, struct pager *pg) {
   } else {
     struct picker *pk = picker_new(t, "follow", link_chosen, NULL);
     for (int l = first; l < first + n; l++) {
-      char *text = xstrndup(pg->p.text + pg->p.links[l].off, pg->p.links[l].len);
-      picker_add(pk, l, text, pg->p.links[l].target);
+      const struct pager_link *k = &pg->p.r.links[l];
+      char *text = xstrndup(text_of(&pg->p) + k->off, k->len);
+      picker_add(pk, l, text, k->target);
       free(text);
     }
     picker_open(t, pk);
@@ -508,15 +541,17 @@ static int key(struct tui *t, void *state, uint32_t k, const struct ncinput *ni)
 
 const struct view_class view_pager = {"pager", NULL, destroy, draw, NULL, key, 1};
 
-void tui_pager_folded(struct tui *t, const char *title, const char *text, int open) {
+void tui_pager_rich(struct tui *t, const char *title, struct rich *text, int open, const char *where) {
   struct pager *pg = open_pager(t);
   int fresh = !pg;
   if (fresh) pg = xcalloc(1, sizeof *pg);
   page_free(&pg->p);
   free(pg->search);
   pg->search = NULL;
-  pg->p.text = xstrdup(text ? text : "");
+  pg->p.r = *text;
+  memset(text, 0, sizeof *text);
   pg->p.title = xstrdup(title ? title : "");
+  pg->p.where = where ? xstrdup(where) : NULL;
   split(pg);
   for (int s = 0; s < pg->nsec; s++) {
     int r = open < 0 || s < open ? 0 : remembered(pg, s);
@@ -526,23 +561,15 @@ void tui_pager_folded(struct tui *t, const char *title, const char *text, int op
   tui_dirty(t);
 }
 
-void tui_pager(struct tui *t, const char *title, const char *text) {
-  tui_pager_folded(t, title, text, 1 << 30);
+void tui_pager_folded(struct tui *t, const char *title, const char *text, int open) {
+  struct rich r = {0};
+  sb_puts(&r.text, text ? text : "");
+  rich_plain(&r);
+  tui_pager_rich(t, title, &r, open, NULL);
 }
 
-void tui_pager_links(struct tui *t, struct pager_link *links, int n, const char *where) {
-  struct pager *pg = open_pager(t);
-  if (!pg) {
-    for (int i = 0; i < n; i++) free(links[i].target);
-    free(links);
-    return;
-  }
-  for (int i = 0; i < pg->p.nlinks; i++) free(pg->p.links[i].target);
-  free(pg->p.links);
-  free(pg->p.where);
-  pg->p.links = links;
-  pg->p.nlinks = n;
-  pg->p.where = where ? xstrdup(where) : NULL;
+void tui_pager(struct tui *t, const char *title, const char *text) {
+  tui_pager_folded(t, title, text, 1 << 30);
 }
 
 void tui_pager_at(struct tui *t, int line) {

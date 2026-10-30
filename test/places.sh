@@ -186,6 +186,18 @@ check "a word no guide has: said" sh -c "$T capture-pane -p -t s | grep -q 'say 
 $T send-keys -t s ":help calibredb" Enter
 wait_for "MENTION IT" || true
 check "a word without a tag: the lines that mention it" sh -c "$T capture-pane -p -t s | grep -q 'api:[0-9]'"
+$T send-keys -t s j K
+wait_for "help: api" || true
+check "K on one: the guide, that line at the top" sh -c "$T capture-pane -p -t s | sed -n 3,4p | grep -qi 'calibredb'"
+$T send-keys -t s q
+sleep 0.3
+# Markdown from a script, laid out as the guides are
+$T send-keys -t s ':lua uiman.pager("notes", "# Hello\n\nSome **bold** and a [link](keys.md#the-leader-key)\n", {markdown = true})' Enter
+wait_for "HELLO" || true
+check "uiman.pager lays Markdown out" sh -c "$T capture-pane -p -t s | grep -q 'Some bold and a link' && ! $T capture-pane -p -t s | grep -q '\\*\\*'"
+$T send-keys -t s j j K
+wait_for "help: keys" || true
+check "and its links lead into the guides" sh -c "$T capture-pane -p -t s | sed -n 3p | grep -q 'THE LEADER KEY'"
 $T send-keys -t s q
 sleep 0.3
 $T send-keys -t s ":help plu" Tab

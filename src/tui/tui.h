@@ -32,6 +32,7 @@ enum {
   A_BOLD = 1,
   A_ITALIC = 2,
   A_UNDERLINE = 4,
+  A_STRUCK = 8,
 };
 #define C_DEFAULT (-1)
 
@@ -781,6 +782,8 @@ void tui_progress(struct tui *t, const char *text); /* NULL clears */
 /* A badge in the status line under a name of the script's choosing: set again
  * to change it, with NULL text to take it away. color is a theme colour. */
 void tui_badge(struct tui *t, const char *name, const char *text, int color);
+struct rich;
+enum { PAGER_WIDTH = 76 }; /* the pager's text at its widest */
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
 void tui_pager_end(struct tui *t); /* the open pager shows its end */
@@ -789,16 +792,59 @@ void tui_pager_end(struct tui *t); /* the open pager shows its end */
  * open < 0: every section open. */
 void tui_pager_folded(struct tui *t, const char *title, const char *text, int open);
 void tui_pager_forget(void); /* what was opened and closed (at the end) */
-/* A link in the open pager's text: its bytes, and what it names (a guide's
- * file, file#heading, file:line, a tag; guides_follow). */
+/* The same with a text of styles and links (rich.c), taken over; where is
+ * the file it is, which relative links start from (NULL: none). */
+void tui_pager_rich(struct tui *t, const char *title, struct rich *text, int open, const char *where);
+void tui_pager_at(struct tui *t, int line); /* the cursor to the line, shown at the top */
+
+/* ------------------------------------------------------------------ rich.c */
+
+/* A link in a text: its bytes, and what it names (a guide's file,
+ * file#heading, file:line, a tag; guides_follow). */
 struct pager_link {
   size_t off, len;
   char *target;
 };
-/* The open pager's links (taken over; in the order of their offsets), and
- * the file its text is, which relative links start from (NULL: none). */
-void tui_pager_links(struct tui *t, struct pager_link *links, int n, const char *where);
-void tui_pager_at(struct tui *t, int line); /* the cursor to the line, shown at the top */
+enum { RS_STRONG = 1, RS_EM = 2, RS_CODE = 4, RS_STRIKE = 8 };
+struct rich_span {
+  size_t off, len;
+  unsigned style; /* RS_* */
+};
+struct rich_heading {
+  int line, level;      /* the line from 0 */
+  char *text, *anchor; /* as written; as GitHub makes it (NULL in plain text) */
+};
+struct rich_cell {
+  size_t off, len;
+};
+struct rich_row { /* a table's row */
+  int line, head;
+  int ncells;
+  struct rich_cell *cells;
+};
+/* Text with styles and links: lines, each ending in a newline, with the
+ * column each line's wrapped rows start at (hang; -1 or past nlines: the
+ * pager's guess); spans of style; links; headings, which the pager opens
+ * and closes; tables' rows. Offsets are in text; all of it is the struct's. */
+struct rich {
+  sbuf text;
+  int nlines, *hang;
+  struct rich_span *spans; /* in the order of their ends */
+  struct pager_link *links; /* in the order of their offsets */
+  struct rich_heading *heads;
+  struct rich_row *rows;
+  int nspans, nlinks, nheads, nrows;
+  int hang_cap, spans_cap, links_cap, heads_cap, rows_cap;
+};
+/* Markdown (CommonMark with GitHub's tables, strikethrough, task lists and
+ * links of bare addresses) as a text laid out for width columns (0: the
+ * pager's); -1 when md4c gave up, with what it made so far. */
+int md_render(const char *src, size_t n, int width, struct rich *out);
+/* The lines and headings of r's text, as plain text: a line that does not
+ * begin with a space is a heading. */
+void rich_plain(struct rich *r);
+void rich_link(struct rich *r, size_t off, size_t len, const char *target); /* target copied */
+void rich_free(struct rich *r);
 
 /* ---------------------------------------------------------------- guides.c */
 
@@ -811,8 +857,8 @@ int guides_help(struct tui *t, const char *topic); /* :help TOPIC; 0 when nothin
  * or file:line, or several to try, separated by newlines; shown in the
  * pager. 0 when it leads nowhere (and said), the pager untouched. */
 int guides_follow(struct tui *t, const char *target, const char *from);
-/* The guides, a line each, with a link to each, for ? (offsets in *text). */
-void guides_list(struct tui *t, sbuf *text, struct pager_link **links, int *nlinks);
+/* The guides, a line each, with a link to each, at the end of text (for ?). */
+void guides_list(struct tui *t, struct rich *text);
 /* Every tag, for completing :help, separated by newlines; the caller's. */
 char *guides_tags(struct tui *t);
 void guides_forget(void); /* the index (at the end) */

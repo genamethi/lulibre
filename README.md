@@ -12,7 +12,7 @@ removals included. [Changelog](CHANGELOG.md).
 
 Needs a C compiler, pkgconf and the development files of **libuv**,
 **sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto),
-**libcurl** and **Lua 5.4 or 5.5**.
+**libcurl**, **md4c** and **Lua 5.4 or 5.5**.
 
     ./configure
     make                # build/lulibre, and build/lulibre-setup

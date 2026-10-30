@@ -393,6 +393,7 @@ with a body; `timeout` is in milliseconds.
 | `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
 | `uiman.key(command [, mode])` | waits: the keys bound to a command line, or nil |
+| `uiman.pager(title, text [, {markdown = true}])` | the text in the pager, as `?` and the guides are shown: in a plain text, a line that does not begin with a space is a heading; Markdown is laid out, and its links lead into the guides |
 | `uiman.maps()` | waits: every global binding, `{modes=, keys=, command=, about=, hidden=}`; a key bound to a function has `callback`, the function, in place of `command` |
 | `scrnman.create(name, {title=, actions=, hint=, place=, tab=})` | a screen: its actions (`{name, keys, what it does}`) and those its hint shows; where its views go, `place = {kind=, size=}` with kind `band` (along the bottom), `column` (down the left), `over` (in the list's place), `tiled` (beside the focused window), `float` (a box above the windows) or `overlay` (over all of them), unless the one opening a view says otherwise; `tab = true` gives it a tab in the bar, which runs the command named as the screen, and its view stands in the list's place while it is open. Made again under its name, it replaces the one before |
 | `scrnman.set(name, {hint=, title=})` | a screen's, or one of lulibre's places' (`console`, `pager`, `picker`, `select`, `panel`, `line`), hint and title; `hint = {}` shows none. Until `:restart-scripts` |

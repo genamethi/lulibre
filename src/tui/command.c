@@ -727,18 +727,19 @@ static int focused_place(struct tui *t) {
 }
 
 /* a link in the help: target is taken over */
-static void help_link(struct pager_link **v, int *n, size_t off, size_t len, char *target) {
-  *v = xrealloc(*v, (size_t)(*n + 1) * sizeof **v);
-  (*v)[(*n)++] = (struct pager_link){off, len, target};
+static void help_link(struct rich *h, size_t off, size_t len, char *target) {
+  rich_link(h, off, len, target);
+  free(target);
 }
 
 /* a place's keys, its title a link to what the guides say of it */
-static void help_place(sbuf *h, int place, struct pager_link **links, int *n) {
+static void help_place(struct rich *r, int place) {
+  sbuf *h = &r->text;
   size_t at = h->len;
   ctx_describe(place, h, 1);
   const char *line = h->s + at, *call = strstr(line, "   keymap.set(");
   size_t len = call && call < line + strcspn(line, "\n") ? (size_t)(call - line) : strcspn(line, "\n");
-  help_link(links, n, at, len, xasprintf("%s\nKeys that belong to a place", ctx_name(place)));
+  help_link(r, at, len, xasprintf("%s\nKeys that belong to a place", ctx_name(place)));
 }
 
 /* ? and :help: the focused window's keys first, open; then the global
@@ -747,46 +748,45 @@ static void help_place(sbuf *h, int place, struct pager_link **links, int *n) {
  * a place is a link to what the guides say of it. :help-plain shows every
  * heading open. :help TOPIC opens the guides where they speak of TOPIC. */
 static void command_help(struct tui *t, int plain) {
-  sbuf h = SBUF_INIT;
-  struct pager_link *links = NULL;
-  int nlinks = 0;
+  struct rich r = {0};
+  sbuf *h = &r.text;
   /* a screen's panel moves as any panel does: those keys come second */
   int first = focused_place(t), second = first >= KC_N ? KC_PANEL : -1;
   for (int c = 0; c < 2; c++) {
     int place = c ? second : first;
     if (place < 0) continue;
-    help_place(&h, place, &links, &nlinks);
-    sb_putc(&h, '\n');
+    help_place(&r, place);
+    sb_putc(h, '\n');
   }
-  sb_puts(&h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
+  sb_puts(h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
     if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_puts(&h, "  ");
-    help_link(&links, &nlinks, h.len, k.len,
+    sb_puts(h, "  ");
+    help_link(&r, h->len, k.len,
               b->command ? xasprintf("%s\n:%.*s", k.s, (int)strcspn(b->command, " "), b->command) : xstrdup(k.s));
-    sb_printf(&h, "%-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
+    sb_printf(h, "%-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }
   for (int c = 0; c < ctx_count(); c++) {
     if (c == first || c == second) continue;
-    sb_putc(&h, '\n');
-    help_place(&h, c, &links, &nlinks);
+    sb_putc(h, '\n');
+    help_place(&r, c);
   }
-  sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n"
+  sb_puts(h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n"
               "  A command acts on the range being selected, else on the marked books in the list, else on\n"
               "  the book under the cursor.\n");
   for (int i = 0; i < ncmds; i++) {
-    sb_puts(&h, "  ");
-    help_link(&links, &nlinks, h.len, strlen(cmds[i].name), xasprintf(":%s\n%s", cmds[i].name, cmds[i].name));
-    sb_printf(&h, "%-10s %s\n", cmds[i].name, cmds[i].help);
+    sb_puts(h, "  ");
+    help_link(&r, h->len, strlen(cmds[i].name), xasprintf(":%s\n%s", cmds[i].name, cmds[i].name));
+    sb_printf(h, "%-10s %s\n", cmds[i].name, cmds[i].help);
   }
-  sb_putc(&h, '\n');
-  help_link(&links, &nlinks, h.len, strlen("SEARCH AND FILTER"), xstrdup("filters"));
-  sb_puts(&h,
+  sb_putc(h, '\n');
+  help_link(&r, h->len, strlen("SEARCH AND FILTER"), xstrdup("filters"));
+  sb_puts(h,
           "SEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
           "                    & narrows the list to them. Both take the same terms:\n"
           "  word  \"a phrase\"        in title, authors or subject\n"
@@ -795,8 +795,7 @@ static void command_help(struct tui *t, int plain) {
           "  text:\"class field\"      full text of the indexed pages\n"
           "  author:unknown  subject:none  no:ids  is:filetitle  is:marked\n"
           "  -term negates;  or  starts an alternative;  sort:-added orders\n\n");
-  guides_list(t, &h, &links, &nlinks);
-  tui_pager_folded(t, "help", h.s, plain ? -1 : second >= 0 ? 2 : 1);
-  tui_pager_links(t, links, nlinks, NULL);
-  sb_free(&h);
+  guides_list(t, &r);
+  rich_plain(&r);
+  tui_pager_rich(t, "help", &r, plain ? -1 : second >= 0 ? 2 : 1, NULL);
 }

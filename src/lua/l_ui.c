@@ -327,6 +327,36 @@ static int l_exec_ui(lua_State *L) {
 }
 SEND(l_exec, "exec")
 
+/* uiman.pager(title, text [, {markdown = true}]): Markdown is laid out,
+ * and its links lead into the guides */
+static int l_pager_ui(lua_State *L) {
+  struct tui *t = need_tui(L);
+  size_t n;
+  const char *title = lua_tostring(L, 1), *text = lua_tolstring(L, 2, &n);
+  if (!lua_toboolean(L, 3)) {
+    tui_pager(t, title, text);
+    return 0;
+  }
+  struct rich r;
+  md_render(text, n, 0, &r);
+  tui_pager_rich(t, title, &r, -1, NULL);
+  return 0;
+}
+
+static int l_pager(lua_State *L) {
+  luaL_checkstring(L, 1);
+  luaL_checkstring(L, 2);
+  if (!lua_isnoneornil(L, 3)) luaL_checktype(L, 3, LUA_TTABLE);
+  int md = 0;
+  if (lua_istable(L, 3)) {
+    lua_getfield(L, 3, "markdown");
+    md = lua_toboolean(L, -1);
+  }
+  lua_settop(L, 2);
+  lua_pushboolean(L, md); /* title, text, markdown */
+  return ui_send(L, l_pager_ui, "pager");
+}
+
 /* ---- the list ---- */
 
 
@@ -1341,7 +1371,8 @@ void l_ui_open(lua_State *L) {
     {"input", l_input},   {"progress", l_progress},
     {"status", l_status}, {"edit_file", l_edit_file}, {"in_terminal", l_in_terminal},
     {"jump", l_goto},     {"clipboard", l_clipboard}, {"log", l_log},
-    {"key", l_key},       {"maps", l_maps},       {NULL, NULL},
+    {"key", l_key},       {"maps", l_maps},       {"pager", l_pager},
+    {NULL, NULL},
   };
   luaL_setfuncs(L, fns, 0);
   lua_pushcfunction(L, l_print);

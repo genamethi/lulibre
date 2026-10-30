@@ -43,6 +43,13 @@ char *path_expand(const char *p);   /* leading ~ -> $HOME; malloc'd */
  * expanded ("~/.local/share/lulibre"); malloc'd */
 char *path_xdg(const char *var, const char *fallback);
 const char *path_ext(const char *p); /* extension without the dot, or "" */
+/* Calls fn for each entry in dir, in the order of their names, hidden ones
+ * (.name) passed over; and, for a folder fn returns 1 for, for the entries
+ * in it, down to depth folders below dir. rel is the entry's path from dir;
+ * st as stat gives it (a link followed). */
+struct stat;
+typedef int path_walk_fn(const char *path, const char *rel, const struct stat *st, void *ud);
+void path_walk(const char *dir, int depth, path_walk_fn *fn, void *ud);
 unsigned long long hash_fnv1a(const char *s);
 
 /* crash.c: on a fatal signal, append a backtrace to the crash log. Install

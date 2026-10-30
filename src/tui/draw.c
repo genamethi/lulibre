@@ -52,6 +52,7 @@ void dr_style(struct ncplane *n, int fg, int bg, unsigned attrs) {
   if (attrs & A_BOLD) s |= NCSTYLE_BOLD;
   if (attrs & A_ITALIC) s |= NCSTYLE_ITALIC;
   if (attrs & A_UNDERLINE) s |= NCSTYLE_UNDERLINE;
+  if (attrs & A_STRUCK) s |= NCSTYLE_STRUCK;
   ncplane_set_styles(n, s);
 }
 

@@ -209,7 +209,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/index/      the parallel indexer, OCR, what reading a file came to
     src/library/    calibre's library as a resource: its holder, operations, the journal, the write core's values
     src/match/      text folding, fuzzy matching, the similarity measure
-    src/tui/        the interface: windows, views, keymap, commands, pickers, console, the edit form
+    src/tui/        the interface: windows, views, keymap, commands, pickers, console, the edit form, Markdown laid out (md4c)
     src/setup/      lulibre-setup (setup/ holds install.sh, the settings writer and the default init.lua)
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends

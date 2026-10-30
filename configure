@@ -119,6 +119,7 @@ need mupdf     mupdf
 need djvulibre ddjvuapi
 need libcrypto libcrypto
 need libcurl   libcurl
+need md4c      md4c
 
 # ---- Lua: 5.4 and 5.5 are both supported ----
 case $lua_want in

@@ -7,7 +7,6 @@
  * are positive, staged files negative, and a filter's scope (in:library,
  * in:sync) is a test of the sign. Those rows are derived, rebuilt here
  * whenever `staged` changes or the mirror is replaced. */
-#include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -229,30 +228,13 @@ static int is_ebook(const char *name) {
   return 0;
 }
 
-/* Every ebook file under d; hidden entries are passed over, and at the top
- * the folder unsynced/, which holds books taken back out of the library
- * rather than books waiting to go in. */
-static void walk(const char *d, int top, struct found *f) {
-  DIR *dir = opendir(d);
-  if (!dir) return;
-  for (struct dirent *e; (e = readdir(dir));) {
-    if (e->d_name[0] == '.') continue;
-    char *path = xasprintf("%s/%s", d, e->d_name);
-    struct stat sb;
-    if (stat(path, &sb)) {
-      free(path);
-      continue;
-    }
-    if (S_ISDIR(sb.st_mode)) {
-      if (!(top && !strcmp(e->d_name, "unsynced"))) walk(path, 0, f);
-      free(path);
-    } else if (S_ISREG(sb.st_mode) && is_ebook(e->d_name)) {
-      found_add(f, path, &sb);
-    } else {
-      free(path);
-    }
-  }
-  closedir(dir);
+/* Every ebook file in the sync folder; hidden entries are passed over, and
+ * at the top the folder unsynced/, which holds books taken back out of the
+ * library rather than books waiting to go in. */
+static int walk_one(const char *path, const char *rel, const struct stat *st, void *ud) {
+  if (S_ISDIR(st->st_mode)) return strcmp(rel, "unsynced") != 0;
+  if (S_ISREG(st->st_mode) && is_ebook(rel)) found_add(ud, xstrdup(path), st);
+  return 0;
 }
 
 /* A file's name as a title: no folder, no extension, _ as a space. */
@@ -310,7 +292,7 @@ int db_stage_scan(struct db *db, const char *dir, long long **ids, int *nids, ch
     *err = xasprintf("the sync folder %s is not a folder", dir);
     return -1;
   }
-  walk(dir, 1, &f);
+  path_walk(dir, 64, walk_one, &f);
   /* what each file is: keep[i] its staged row (0: new), twin[i] for the new
    * and the changed (-1: unchanged). Worked out before the transaction, so
    * that hashing holds no lock on the index. */
