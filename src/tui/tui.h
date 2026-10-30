@@ -92,7 +92,8 @@ struct binding {
   unsigned modes;
   uint32_t keys[KEYSEQ_MAX];
   int nkeys;
-  char *command;
+  char *command; /* NULL for a Lua function's */
+  int lua_ref;   /* the function, as its reference in the main lua_State; 0 for none */
   char *about; /* what the help overlay says the key does, when given; else the command */
   int hidden;  /* left out of the help overlay */
 };
@@ -114,11 +115,15 @@ void key_format(sbuf *out, const uint32_t *keys, int n);
  * from it. */
 int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
                    int hidden);
+/* The same with a Lua function in place of a command: ref is its reference
+ * in the main lua_State, released when no mode is left bound to it. */
+int keymap_bind_fn(struct keymap *km, unsigned modes, const char *spec, int ref, const char *about, int hidden);
 /* Takes a binding out of these modes: 0, 1 when there was none, -1 when
  * spec is no key sequence. */
 int keymap_unbind(struct keymap *km, unsigned modes, const char *spec);
-/* Feed one key. Returns a command to run, or NULL (pending or unbound). */
-const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
+/* Feed one key. Returns the binding to run (a command, or a Lua function),
+ * or NULL (pending or unbound). Valid until the keymap next changes. */
+const struct binding *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
 /* Does a binding in this mode begin with key and run one of these commands
  * (first words, separated by spaces)? */
 int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands);

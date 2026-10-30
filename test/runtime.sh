@@ -236,6 +236,13 @@ local mine = cmdman.get("quit")
 cmdman.del("quit")
 local back = cmdman.get("quit")
 print("in front|" .. tostring(mine and mine.help) .. "|" .. tostring(back and back.help))
+-- a key bound to a function, twice: a binding with its desc, no command made for it
+keymap.set("n", "gx", function() end, { desc = "first" })
+keymap.set("n", "gx", function() end, { desc = "second" })
+local made, about = 0, nil
+for _, c in ipairs(cmdman.ls()) do if c.name:match("^lua%.") then made = made + 1 end end
+for _, m in ipairs(uiman.maps()) do if m.keys == "gx" then about = m.about end end
+print("fn key|" .. made .. "|" .. tostring(about))
 LUA
 cmds=$("$bin" -L "$t/lib" run "$t/cmd.lua" 2>&1)
 
@@ -402,6 +409,7 @@ contains "which it says can be undone" "as operation" "$dotsw"
 contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
+contains "a key bound to a function is a binding with its desc, not a command" "fn key|0|second" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"
 contains "and what it refuses fails, with its reason" "refused|not today" "$store"
 contains "a store that raises after it waits fails the write, with the error" "raised|" "$store"

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "lua/bridge.h"
+#include "lua/lapi.h"
 #include "tui/tui.h"
 
 /* ----------------------------------------------------------------- input */
@@ -262,9 +263,14 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   if (t->mode == MODE_NORMAL && t->focus->cls == &view_panel && t->km->npending == 0 &&
       !panel_passes(t->focus->state, key) && panel_key(t, t->focus->state, key))
     return;
-  const char *cmd = keymap_feed(t->km, t->mode, key);
-  if (cmd) {
-    char *copy = xstrdup(cmd); /* the command may rebind keys */
+  const struct binding *b = keymap_feed(t->km, t->mode, key);
+  if (b && b->lua_ref) { /* a Lua function: a task, named after its keys */
+    sbuf k = SBUF_INIT;
+    key_format(&k, b->keys, b->nkeys);
+    lapi_spawn_ref(t->app, b->lua_ref, k.s, "");
+    sb_free(&k);
+  } else if (b && b->command) {
+    char *copy = xstrdup(b->command); /* the command may rebind keys */
     tui_exec(t, copy);
     free(copy);
   }

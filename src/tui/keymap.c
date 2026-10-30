@@ -3,6 +3,7 @@
 #include <string.h>
 #include <strings.h>
 
+#include "lua/lapi.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -115,16 +116,24 @@ static int keymap_bind(struct keymap *km, unsigned modes, const char *spec, cons
   return keymap_bind_as(km, modes, spec, command, NULL, 0);
 }
 
-int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
-                   int hidden) {
+/* A binding loses these modes; one left in none lets go of its function. */
+static void take_modes(struct binding *b, unsigned modes) {
+  b->modes &= ~modes;
+  if (!b->modes && b->lua_ref) {
+    lapi_unref(b->lua_ref);
+    b->lua_ref = 0;
+  }
+}
+
+static int add_binding(struct keymap *km, unsigned modes, const char *spec, const char *command, int ref,
+                       const char *about, int hidden) {
   uint32_t keys[KEYSEQ_MAX];
   int n = key_parse(spec, keys);
   if (!n) return -1;
   for (int i = 0; i < km->n; i++) {
     struct binding *b = &km->b[i];
-    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
-      b->modes &= ~modes; /* the new binding takes these modes over */
-    }
+    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys))
+      take_modes(b, modes); /* the new binding takes these modes over */
   }
   if (km->n == km->cap) {
     km->cap = km->cap ? km->cap * 2 : 64;
@@ -135,10 +144,20 @@ int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const ch
   b->modes = modes;
   b->nkeys = n;
   memcpy(b->keys, keys, (size_t)n * sizeof *keys);
-  b->command = xstrdup(command);
+  b->command = command ? xstrdup(command) : NULL;
+  b->lua_ref = ref;
   b->about = about && *about ? xstrdup(about) : NULL;
   b->hidden = hidden;
   return 0;
+}
+
+int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
+                   int hidden) {
+  return add_binding(km, modes, spec, command, 0, about, hidden);
+}
+
+int keymap_bind_fn(struct keymap *km, unsigned modes, const char *spec, int ref, const char *about, int hidden) {
+  return add_binding(km, modes, spec, NULL, ref, about, hidden);
 }
 
 int keymap_unbind(struct keymap *km, unsigned modes, const char *spec) {
@@ -148,7 +167,7 @@ int keymap_unbind(struct keymap *km, unsigned modes, const char *spec) {
   for (int i = 0; i < km->n; i++) {
     struct binding *b = &km->b[i];
     if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
-      b->modes &= ~modes;
+      take_modes(b, modes);
       found = 1;
     }
   }
@@ -171,7 +190,7 @@ void keymap_set_leader(struct keymap *km, const char *spec) {
 int keymap_key_of(const struct keymap *km, unsigned mode, const char *command, sbuf *out) {
   for (int i = km->n - 1; i >= 0; i--) { /* the newest binding is the one to show */
     const struct binding *b = &km->b[i];
-    if (!(b->modes & mode) || strcmp(b->command, command)) continue;
+    if (!(b->modes & mode) || !b->command || strcmp(b->command, command)) continue;
     key_format(out, b->keys, b->nkeys);
     return 1;
   }
@@ -186,7 +205,7 @@ const char *key_hint_in(char *buf, size_t size, const char *command) {
   return buf;
 }
 
-const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
+const struct binding *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
   for (int attempt = 0; attempt < 2; attempt++) {
     if (km->npending == KEYSEQ_MAX) km->npending = 0;
     km->pending[km->npending++] = key;
@@ -201,7 +220,7 @@ const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
     }
     if (exact && !longer) {
       km->npending = 0;
-      return exact->command;
+      return exact;
     }
     if (longer) return NULL; /* wait for the rest of the sequence */
     /* a dead end: drop the prefix and try this key on its own */
@@ -215,7 +234,7 @@ const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
 int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands) {
   for (int i = 0; i < km->n; i++) {
     const struct binding *b = &km->b[i];
-    if (!(b->modes & mode) || b->nkeys < 1 || !keys_match(km, b->keys, &key, 1)) continue;
+    if (!(b->modes & mode) || !b->command || b->nkeys < 1 || !keys_match(km, b->keys, &key, 1)) continue;
     size_t len = strcspn(b->command, " ");
     for (const char *c = commands; *c;) {
       size_t cl = strcspn(c, " ");

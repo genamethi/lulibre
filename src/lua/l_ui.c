@@ -174,7 +174,6 @@ static int l_command_ui(lua_State *L) {
  * overlay shows the command line, or for a function "a Lua function".
  * false keeps the key out of the overlay. */
 static int l_map_ui(lua_State *L) {
-  static int anon;
   const char *modes = luaL_checkstring(L, 1);
   const char *keys = luaL_checkstring(L, 2);
   unsigned mask = 0;
@@ -185,18 +184,14 @@ static int l_map_ui(lua_State *L) {
   }
   int hidden = lua_isboolean(L, 4) && !lua_toboolean(L, 4);
   const char *about = lua_type(L, 4) == LUA_TSTRING ? lua_tostring(L, 4) : NULL;
-  char name[32];
-  const char *target;
-  if (lua_isinteger(L, 3)) { /* a function, as its reference in the main lua_State */
-    snprintf(name, sizeof name, "lua.%d", ++anon);
-    command_register_lua(name, (int)lua_tointeger(L, 3), about ? about : "(a Lua function)");
-    target = name;
-    if (!about) about = "a Lua function";
-  } else {
-    target = luaL_checkstring(L, 3);
-  }
-  if (keymap_bind_as(&tui_keymap, mask, keys, target, about, hidden))
+  int failed;
+  if (lua_isinteger(L, 3)) /* a function, as its reference in the main lua_State */
+    failed = keymap_bind_fn(&tui_keymap, mask, keys, (int)lua_tointeger(L, 3), about ? about : "a Lua function", hidden);
+  else failed = keymap_bind_as(&tui_keymap, mask, keys, luaL_checkstring(L, 3), about, hidden);
+  if (failed) {
+    if (lua_isinteger(L, 3)) lapi_unref((int)lua_tointeger(L, 3)); /* nothing holds it */
     return luaL_error(L, "cannot parse the key sequence '%s'", keys);
+  }
   return 0;
 }
 
@@ -214,7 +209,8 @@ static int l_key_ui(lua_State *L) {
 }
 ASK(l_key, "key")
 
-/* uiman.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... } */
+/* uiman.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... };
+ * a key bound to a function has no command */
 static int l_maps_ui(lua_State *L) {
   lua_newtable(L);
   int n = 0;

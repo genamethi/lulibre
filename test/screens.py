@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, and review.
+a refresh on an event, a field edited through the form, review, and a key bound to a function.
 
   python3 -I test/screens.py BIN
 
@@ -18,6 +18,7 @@ os.makedirs(os.path.join(t, "config", "lulibre"))
 with open(os.path.join(t, "config", "lulibre", "init.lua"), "w") as f:
     f.write(r'''
 local function note(s) local f = io.open(os.getenv("SCREENS_OUT"), "a") f:write(s, "\n") f:close() end
+keymap.set("n", "gx", function(o) note("key|" .. o.name .. "|" .. tostring(o.book)) end, { desc = "note the book" })
 local items = { "a", "b", "c" }
 cmdman.create("demolist", function()
   uiman.list {
@@ -75,6 +76,7 @@ def keys(s, then=0.4):
 
 
 pump(3)
+keys("gx", 1)        # a key bound to a function: a task with the book under the cursor
 keys(":demolist\r", 1)
 keys("j")            # b
 keys("x")            # b goes; c is under the cursor
@@ -115,6 +117,7 @@ def check(what, ok):
     fails += not ok
 
 
+check("a key bound to a function runs it, with the book under the cursor", "key|gx|1" in got)
 check("a key acts on the item under the cursor", "x|b|2" in got)
 check("and the items are read again after it", "x|c|2" in got)
 check("an action's refusal is shown as an error", "not this one" in text)

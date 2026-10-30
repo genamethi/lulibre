@@ -645,7 +645,7 @@ static void command_help(struct tui *t) {
     if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command,
+    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }

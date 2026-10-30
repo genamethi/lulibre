@@ -133,7 +133,8 @@ does.
 Modes are `n` (normal) and `v` (selecting). A key's right side is a
 command line or a function. A function runs as a task with what the
 interface was at when it was invoked: `{name=, args=, book=, selection =
-{id, ...}}`. `cmdman.create` with a name in use replaces that command; in
+{id, ...}}`, where `name` is the command's name, or a key's keys as
+typed. `cmdman.create` with a name in use replaces that command; in
 front of one of lulibre's own, `cmdman.del` and `:restart-scripts` bring
 lulibre's back. [Keys and commands](keys.md) has the key notation.
 
