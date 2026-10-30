@@ -712,18 +712,23 @@ void commands_builtin(void) {
   command_set_complete("prompt", COMPLETE_WORDS, "command search filter");
 }
 
-/* The place whose keys the focused window takes: a panel's screen, the
- * console, the preview while selecting; -1 for the list, whose keys are the
- * global ones. */
-static int focused_place(struct tui *t) {
+/* The places whose keys the focused window takes, the first first: a
+ * panel's screen, a form's, a panel's own; the console's; the preview's
+ * while selecting. None for the list, whose keys are the global ones. */
+static int focused_places(struct tui *t, int out[3]) {
   const struct view_class *cls = t->focus ? t->focus->cls : NULL;
-  if (preview_selecting(t)) return KC_SELECT;
-  if (cls == &view_console) return KC_CONSOLE;
-  if (cls == &view_panel) {
-    int place = panel_place(t->focus->state);
-    return place >= 0 ? place : KC_PANEL;
+  int n = 0;
+  if (preview_selecting(t)) {
+    out[n++] = KC_SELECT;
+  } else if (cls == &view_console) {
+    out[n++] = KC_CONSOLE;
+  } else if (cls == &view_panel) {
+    struct panel *p = t->focus->state;
+    if (panel_place(p) >= 0) out[n++] = panel_place(p);
+    if (panel_form(p)) out[n++] = KC_FORM;
+    out[n++] = KC_PANEL;
   }
-  return -1;
+  return n;
 }
 
 /* a link in the help: target is taken over */
@@ -750,12 +755,10 @@ static void help_place(struct rich *r, int place) {
 static void command_help(struct tui *t, int plain) {
   struct rich r = {0};
   sbuf *h = &r.text;
-  /* a screen's panel moves as any panel does: those keys come second */
-  int first = focused_place(t), second = first >= KC_N ? KC_PANEL : -1;
-  for (int c = 0; c < 2; c++) {
-    int place = c ? second : first;
-    if (place < 0) continue;
-    help_place(&r, place);
+  /* a screen's panel moves as any panel does: those keys come after its own */
+  int first[3], nfirst = focused_places(t, first);
+  for (int c = 0; c < nfirst; c++) {
+    help_place(&r, first[c]);
     sb_putc(h, '\n');
   }
   sb_puts(h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
@@ -772,7 +775,9 @@ static void command_help(struct tui *t, int plain) {
     sb_free(&k);
   }
   for (int c = 0; c < ctx_count(); c++) {
-    if (c == first || c == second) continue;
+    int shown = 0;
+    for (int k = 0; k < nfirst; k++) shown = shown || first[k] == c;
+    if (shown) continue;
     sb_putc(h, '\n');
     help_place(&r, c);
   }
@@ -797,5 +802,5 @@ static void command_help(struct tui *t, int plain) {
           "  -term negates;  or  starts an alternative;  sort:-added orders\n\n");
   guides_list(t, &r);
   rich_plain(&r);
-  tui_pager_rich(t, "help", &r, plain ? -1 : second >= 0 ? 2 : 1, NULL);
+  tui_pager_rich(t, "help", &r, plain ? -1 : nfirst ? nfirst : 1, NULL);
 }

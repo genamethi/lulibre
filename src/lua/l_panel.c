@@ -25,6 +25,10 @@
  *                                    -- bound to one of its actions reaches
  *                                    -- wait() as the action's name, and the
  *                                    -- bar shows its hint where no help is
+ *     form = true,                   -- the rows are a form's fields, {label,
+ *                                    -- value} each: the place form's edit asks
+ *                                    -- for a field's value on the line, and
+ *                                    -- wait() returns "edit", the row and it
  *     keys = { "a", "r", "<CR>" },   -- else the keys this script handles, and
  *     pass = "preview yank",         -- the global commands its other keys may
  *                                    -- still reach (P, ], yy ...); see below
@@ -93,6 +97,7 @@ struct lpanel {
   struct {
     char key[32];
     int row;
+    char *value; /* a form's edited value */
   } q[QUEUE];
   int qhead, qn;
   int closed; /* the panel has closed, or was closed from Lua */
@@ -134,6 +139,7 @@ struct pevent {
   long long id;
   int has_key, row;
   char key[32];
+  char *value;
 };
 
 static void deliver(struct app *app, void *arg) { /* Lua thread */
@@ -143,25 +149,33 @@ static void deliver(struct app *app, void *arg) { /* Lua thread */
   memcpy(keybuf, e->key, sizeof keybuf);
   const char *key = e->has_key ? keybuf : NULL;
   int row = e->row;
+  char *value = e->value;
   free(e);
-  if (!lp) return; /* the Lua object is gone */
+  if (!lp) { /* the Lua object is gone */
+    free(value);
+    return;
+  }
   if (!key) lp->closed = 1;
   if (lp->waiter) {
     struct task *t = lp->waiter;
     lp->waiter = NULL;
     lua_State *L = sched_end_wait(t);
-    if (!L) return;
-    if (key) {
+    if (L && key) {
       lua_pushstring(L, key);
       lua_pushinteger(L, row + 1);
-      sched_wake(t, 2);
-    } else {
+      if (value) lua_pushstring(L, value);
+      sched_wake(t, value ? 3 : 2);
+    } else if (L) {
       lua_pushnil(L);
       sched_wake(t, 1);
     }
+    free(value);
     return;
   }
-  if (!key) return;
+  if (!key) {
+    free(value);
+    return;
+  }
   /* nobody is waiting (the script is busy): keep the key for the next wait().
    * A run of cursor movements is worth only its last position. */
   if (lp->qn > 0 && (!strcmp(key, "<Move>") || !strcmp(key, "<Reload>"))) {
@@ -172,20 +186,23 @@ static void deliver(struct app *app, void *arg) { /* Lua thread */
     }
   }
   if (lp->qn == QUEUE) {
+    free(lp->q[lp->qhead].value);
     lp->qhead = (lp->qhead + 1) % QUEUE;
     lp->qn--;
   }
   int slot = (lp->qhead + lp->qn++) % QUEUE;
   snprintf(lp->q[slot].key, sizeof lp->q[slot].key, "%s", key);
   lp->q[slot].row = row;
+  lp->q[slot].value = value;
 }
 
-/* interface thread: a key the panel does not handle itself, or NULL when the
- * panel has closed */
-static void on_event(struct panel *p, const char *key, int row, void *ud) {
+/* interface thread: a key the panel does not handle itself (with a form's
+ * edited value), or NULL when the panel has closed */
+static void on_event(struct panel *p, const char *key, int row, const char *value, void *ud) {
   struct pevent *e = xcalloc(1, sizeof *e);
   e->id = (long long)(intptr_t)ud;
   e->row = row;
+  e->value = value ? xstrdup(value) : NULL;
   if (key) {
     e->has_key = 1;
     snprintf(e->key, sizeof e->key, "%s", key);
@@ -230,8 +247,31 @@ static int style_of(lua_State *L, int idx) {
 }
 
 /* rows table at idx -> the panel */
+/* a form's rows, {label, value} each: its fields, the label their name */
+static void set_fields(lua_State *L, struct panel *p, int idx) {
+  int n = (int)lua_rawlen(L, idx);
+  const char **labels = xcalloc((size_t)n + 1, sizeof *labels), **values = xcalloc((size_t)n + 1, sizeof *values);
+  luaL_checkstack(L, 2 * n + 4, "form fields");
+  for (int i = 0; i < n; i++) {
+    lua_rawgeti(L, idx, i + 1);
+    lua_rawgeti(L, -1, 1);
+    labels[i] = luaL_tolstring(L, -1, NULL); /* stays on the stack */
+    lua_rawgeti(L, -3, 2);
+    values[i] = lua_isnil(L, -1) ? "" : luaL_tolstring(L, -1, NULL);
+  }
+  panel_set_fields(p, n, labels, labels, values);
+  free(labels);
+  free(values);
+}
+
 static void set_rows(lua_State *L, struct panel *p, int idx) {
   idx = lua_absindex(L, idx);
+  if (panel_form(p)) {
+    int top = lua_gettop(L);
+    set_fields(L, p, idx);
+    lua_settop(L, top);
+    return;
+  }
   luaL_checkstack(L, 80, "panel row");
   panel_clear_rows(p);
   lua_Integer n = (lua_Integer)lua_rawlen(L, idx);
@@ -318,14 +358,14 @@ static int l_panel_ui(lua_State *L) {
   struct tui *t = lapi_app(L)->tui;
   long long id = luaL_checkinteger(L, 2);
   if (!t || !t->nc) {
-    on_event(NULL, NULL, 0, (void *)(intptr_t)id); /* closed at once */
+    on_event(NULL, NULL, 0, NULL, (void *)(intptr_t)id); /* closed at once */
     return luaL_error(L, "panels need the interface, which is not running");
   }
   luaL_checktype(L, 1, LUA_TTABLE);
   int place = -1;
   lua_getfield(L, 1, "screen");
   if (lua_isstring(L, -1) && (place = ctx_named(lua_tostring(L, -1))) < 0) {
-    on_event(NULL, NULL, 0, (void *)(intptr_t)id); /* closed at once */
+    on_event(NULL, NULL, 0, NULL, (void *)(intptr_t)id); /* closed at once */
     return luaL_error(L, "no screen is called %s (scrnman.create makes one)", lua_tostring(L, -1));
   }
   lua_pop(L, 1);
@@ -385,6 +425,9 @@ static int l_panel_ui(lua_State *L) {
   lua_getfield(L, 1, "tabs");
   if (lua_istable(L, -1)) set_tabs(L, p, -1, tab);
   lua_pop(L, 2);
+  lua_getfield(L, 1, "form");
+  if (lua_toboolean(L, -1)) panel_set_form(p, FORM_DIRECT);
+  lua_pop(L, 1);
   lua_getfield(L, 1, "rows");
   if (lua_istable(L, -1)) set_rows(L, p, -1);
   lua_pop(L, 1);
@@ -557,11 +600,14 @@ static void wait_cancelled(void *ud) {
 static int m_wait(lua_State *L) {
   struct lpanel *lp = check(L);
   if (lp->qn > 0) {
+    char *value = lp->q[lp->qhead].value;
     lua_pushstring(L, lp->q[lp->qhead].key);
     lua_pushinteger(L, lp->q[lp->qhead].row + 1);
+    if (value) lua_pushstring(L, value);
+    free(value);
     lp->qhead = (lp->qhead + 1) % QUEUE;
     lp->qn--;
-    return 2;
+    return value ? 3 : 2;
   }
   if (lp->closed) {
     lua_pushnil(L);
@@ -609,6 +655,7 @@ static int m_gc(lua_State *L) {
   *ud = NULL;
   release(L, lp);
   drop(&lua_side, lp->id); /* a key still on its way finds no panel, and is dropped */
+  for (int i = 0; i < lp->qn; i++) free(lp->q[(lp->qhead + i) % QUEUE].value);
   free(lp);
   return 0;
 }

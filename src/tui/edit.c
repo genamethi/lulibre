@@ -1,10 +1,11 @@
 /* The edit form and undo (design 31, 32): editing works in C, with no Lua.
  *
  * :edit opens a form on the selection (the book under the cursor, or the
- * marked books): a row per field with the value it has (the first book's,
- * when there are several) and the value it is to get. Enter or e edits a
- * row's value; for a list field, "+a, -b" adds a and takes b out and keeps
- * the rest. x drops a row's change, w writes them all as one operation of
+ * marked books): a staged form (panel_set_form), a row per field with the
+ * value it has (the first book's, when there are several) and the value it
+ * is to get. Its keys are the place form's: edit (Enter or e) a row's
+ * value, for a list field "+a, -b" adding a and taking b out and keeping
+ * the rest; drop (x) a row's change; write (w) them all as one operation of
  * the library, to every book in the form. :undo puts the last change back. */
 #include <stdlib.h>
 #include <string.h>
@@ -20,41 +21,13 @@ enum { NFIELDS = 9 }; /* field_names */
 
 struct form {
   struct tui *t;
-  struct panel *p;
   long long *books;
   int nbooks;
-  char *now[NFIELDS];     /* the first book's values */
-  char *pending[NFIELDS]; /* as typed; NULL: no change */
-  int editing;            /* the row being typed, or -1 */
 };
 
 static void form_free(struct form *f) {
-  for (int i = 0; i < NFIELDS; i++) {
-    free(f->now[i]);
-    free(f->pending[i]);
-  }
   free(f->books);
   free(f);
-}
-
-static void show(struct form *f) {
-  int cur = panel_cursor(f->p);
-  panel_clear_rows(f->p);
-  for (int i = 0; i < NFIELDS; i++) {
-    const char *cells[] = {field_names[i], f->now[i], f->pending[i] ? (*f->pending[i] ? f->pending[i] : "(blank)") : ""};
-    panel_add_row(f->p, 3, cells, f->books[0], f->pending[i] ? PSTYLE_ACCENT : PSTYLE_NORMAL);
-  }
-  panel_set_cursor(f->p, cur < 0 ? 0 : cur);
-}
-
-static void typed(struct tui *t, const char *text, void *ud) {
-  struct form *f = ud;
-  int i = f->editing;
-  f->editing = -1;
-  if (!text || i < 0 || !panel_is_open(f->p)) return;
-  free(f->pending[i]);
-  f->pending[i] = xstrdup(text);
-  show(f);
 }
 
 /* "+a, -b" for a list field: the changes it makes; else one that sets it. */
@@ -151,14 +124,15 @@ static void to_library(struct app *app, void *arg) { /* the background thread */
   }
 }
 
-static void write_form(struct form *f) {
+/* the panel's changes, to every book in the form, as one operation */
+static void write_form(struct form *f, struct panel *p) {
   enum { PER = 64 };
   struct change *ch = xcalloc((size_t)f->nbooks * NFIELDS * PER, sizeof *ch);
   int n = 0;
   for (int b = 0; b < f->nbooks; b++)
     for (int i = 0; i < NFIELDS; i++) {
-      if (!f->pending[i]) continue;
-      n += changes_of(field_names[i], f->pending[i], f->books[b], ch + n, PER);
+      const char *change, *field = panel_field(p, i, &change);
+      if (field && change) n += changes_of(field_names[i], change, f->books[b], ch + n, PER);
     }
   if (!n) {
     tui_msg(f->t, 0, "no change to write");
@@ -172,29 +146,16 @@ static void write_form(struct form *f) {
   j->ch = ch;
   j->n = n;
   queue_post(LOOP_WORK, to_library, j);
-  panel_close(f->p);
+  panel_close(p);
 }
 
-static void on_key(struct panel *p, const char *key, int row, void *ud) {
+static void on_event(struct panel *p, const char *key, int row, const char *value, void *ud) {
   struct form *f = ud;
   if (!key) { /* closed */
-    if (f->editing >= 0) tui_input_cancel(f->t);
     panel_unref(p);
     form_free(f);
-    return;
-  }
-  if (row < 0 || row >= NFIELDS) return;
-  if (!strcmp(key, "<CR>") || !strcmp(key, "e")) {
-    f->editing = row;
-    char label[48];
-    snprintf(label, sizeof label, "%s: ", field_names[row]);
-    tui_input(f->t, label, f->pending[row] ? f->pending[row] : f->now[row], typed, f);
-  } else if (!strcmp(key, "x")) {
-    free(f->pending[row]);
-    f->pending[row] = NULL;
-    show(f);
-  } else if (!strcmp(key, "w")) {
-    write_form(f);
+  } else if (!strcmp(key, "write")) {
+    write_form(f, p);
   }
 }
 
@@ -212,37 +173,30 @@ static void c_edit(struct tui *t, const char *args) {
   }
   struct form *f = xcalloc(1, sizeof *f);
   f->t = t;
-  f->editing = -1;
   f->nbooks = n;
   f->books = xcalloc((size_t)n, sizeof *f->books);
   for (int i = 0; i < n; i++) f->books[i] = ids[i];
   free(ids);
+  char *now[NFIELDS];
   for (int i = 0; i < NFIELDS; i++) {
     char *err = NULL;
-    f->now[i] = field_current(&t->app->db, f->books[0], field_names[i], &err);
-    if (!f->now[i]) {
+    now[i] = field_current(&t->app->db, f->books[0], field_names[i], &err);
+    if (!now[i]) {
       free(err);
-      f->now[i] = xstrdup("");
+      now[i] = xstrdup("");
     }
   }
-  f->p = panel_open(t, 0.45f, 'b');
-  char title[96];
-  if (n == 1) snprintf(title, sizeof title, "edit book %lld", f->books[0]);
-  else snprintf(title, sizeof title, "edit %d books (the values shown are the first's)", n);
-  panel_set_title(f->p, title);
-  panel_set_help(f->p, "<CR>/e edit  x drop the change  w write  q close  (lists: +a, -b)");
-  const char *titles[] = {"Field", "Now", "To be"};
-  int widths[] = {14, 0, 0};
-  panel_set_columns(f->p, 3, titles, widths);
-  uint32_t own[4], k[KEYSEQ_MAX];
-  int nown = 0;
-  const char *keys[] = {"<CR>", "e", "x", "w"};
-  for (int i = 0; i < 4; i++)
-    if (key_parse(keys[i], k) == 1) own[nown++] = k[0];
-  panel_set_own(f->p, nown, own);
-  panel_set_dialog(f->p, 1);
-  panel_on_event(f->p, on_key, f);
-  show(f);
+  struct panel *p = panel_open(t, 0.45f, 'b');
+  char title[128];
+  if (n == 1) snprintf(title, sizeof title, "edit book %lld   lists take +a, -b", f->books[0]);
+  else snprintf(title, sizeof title, "edit %d books (the values shown are the first's)   lists take +a, -b", n);
+  panel_set_title(p, title);
+  panel_set_form(p, FORM_STAGED);
+  panel_set_fields(p, NFIELDS, field_names, field_names, (const char *const *)now);
+  for (int i = 0; i < NFIELDS; i++) free(now[i]);
+  panel_set_dialog(p, 1);
+  panel_on_event(p, on_event, f);
+  panel_set_cursor(p, 0);
 }
 
 /* The last change lulibre made that is not undone, nor itself an undo, nor

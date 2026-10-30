@@ -92,6 +92,9 @@ get.
 | `w` | write every change, to every book in the form, as one change |
 | `q` | close without writing |
 
+These are the keys of the place `form`, which `keymap.set("form", key,
+action)` rebinds ([keys](keys.md)).
+
 In a list field (authors, tags, identifiers, languages), `+x, -y` adds
 and removes values and leaves the rest alone. That is how you add one tag
 to two hundred books. An empty value blanks the field.

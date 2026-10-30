@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key
+a refresh on an event, a field edited through the form, the edit form, review, a key
 bound to a function, a pick cancelled late, on_change let go, one task
 per panel, uiman.jump's answer, sleepers gone with their state, and the
 sync folder read again by :source sync, and completion of arguments.
@@ -91,7 +91,9 @@ scrnman.create("review", review.screen)
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
 cmdman.create("demowits", function()
-  require("store").calibre = function(book, fields) note("stored|" .. book .. "|" .. fields.title) return true end
+  require("store").calibre = function(book, fields)
+    note("stored|" .. book .. "|" .. tostring(fields.title) .. (fields.authors and "|authors" or "")) return true
+  end
   require("wit").set(1, { { field = "title", value = "First Title", source = "front" },
                           { field = "title", value = "Second Title", source = "crossref" } })
   note("wits")
@@ -145,6 +147,14 @@ keys(" ")            # its second alternative
 keys("m")            # an action added to review
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+keys(":lua uiman.jump(1)\r", 0.6)
+keys(":edit\r", 1)  # the edit form on book 1, a form that writes on w
+keys("e", 0.4)       # the title
+keys("\x15Edited Title\r", 0.4)
+keys("je", 0.4)      # the authors
+keys("\x15Someone Else\r", 0.4)
+keys("x", 0.3)       # and that change taken back
+keys("w", 1.5)       # written through store.calibre: the title alone
 with open(os.path.join(t, "sync", "arrived.txt"), "w") as f:
     f.write("a file put in the sync folder while lulibre runs\n")
 keys(":source sync\r", 1.5)  # the folder read again
@@ -205,6 +215,8 @@ check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
 check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
+check("the edit form: e edits a field, x takes a change back, w writes the rest",
+      "stored|1|Edited Title" in got and "stored|1|Edited Title|authors" not in got)
 check(":source sync reads the sync folder again", "in sync|1" in got)
 check("uiman.jump answers false for a book not in the list", "jump|false" in got)
 check("Tab completes a command's arguments from its list of words", "compwords|beta" in got)

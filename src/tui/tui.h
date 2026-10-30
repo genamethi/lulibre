@@ -154,7 +154,7 @@ void tui_setup(void);
 
 /* Keys that belong to a place: each place has named actions, and its code
  * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
-enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_N };
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_FORM, KC_N };
 enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END, SA_TOP, SA_BOTTOM, SA_MARK, SA_LINE,
        SA_COPY, SA_LEAVE };
 enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE, PA_BACK };
@@ -164,6 +164,7 @@ enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PRE
 enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
 enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP, GA_BOTTOM, GA_TOGGLE, GA_OPEN, GA_CLOSE, GA_ALL, GA_NONE,
        GA_SEARCH, GA_NEXT, GA_PREV, GA_FOLLOW, GA_BACK, GA_FORWARD, GA_LEAVE };
+enum { FA_EDIT = 1, FA_DROP, FA_WRITE };
 enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
        CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
 #define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
@@ -194,6 +195,8 @@ const char *ctx_action_name(int ctx, int action); /* NULL for none */
 /* The hint line: the hint's actions with the keys now on them ("a accept   e
  * edit"); how many it has. */
 int ctx_hint_line(int ctx, sbuf *out);
+/* The same with only the actions keep says yes to. */
+int ctx_hint_line_if(int ctx, sbuf *out, int (*keep)(int action, const void *ud), const void *ud);
 /* Put a key (one, or two in a row) on an action; an empty action unbinds. */
 int ctx_bind(const char *ctx, const char *spec, const char *action, const char *desc, int hidden, char **err);
 /* The action a key means: 0 for none, CTX_PENDING while a pair is open.
@@ -482,8 +485,9 @@ struct panel;
 /* HEAD and NOTE rows show their first cell across the whole width: a
  * heading, and text too long for a column. */
 enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD, PSTYLE_NOTE };
-/* key is NULL when the panel has closed */
-typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud);
+/* key is NULL when the panel has closed; value is a form's edited value
+ * (with the key "edit"), else NULL */
+typedef void panel_event_fn(struct panel *p, const char *key, int row, const char *value, void *ud);
 
 /* side: 'b' along the bottom (size is a share of the height), 'l' down the
  * left (a share of the width). */
@@ -538,6 +542,22 @@ void panel_leave_screen_tab(struct tui *t);
  * date. panels_reloaded tells every panel on screen that asked. */
 void panel_set_reloads(struct panel *p, int reloads);
 void panels_reloaded(struct tui *t);
+/* A form: the panel's rows are a record's fields, and its keys are also
+ * the place "form"'s (edit, drop, write). edit asks for the field's value
+ * on the line, with its value as it stands. In a FORM_DIRECT form the value
+ * typed goes to the event function as "edit", with the row and the value;
+ * one that FORM_STAGED keeps it as the field's change (the rows show Now
+ * and To be), drop takes a change back, and write is told as "write" for
+ * the opener to read the changes (panel_field). */
+enum { FORM_DIRECT = 1, FORM_STAGED };
+void panel_set_form(struct panel *p, int kind);
+int panel_form(const struct panel *p); /* 0 for a panel that is no form */
+/* The fields, each a name, a label and its value; a staged form keeps the
+ * changes of the fields still there by name. */
+void panel_set_fields(struct panel *p, int n, const char *const *names, const char *const *labels,
+                      const char *const *values);
+/* Field i's name, and its change in a staged form (NULL for none). */
+const char *panel_field(const struct panel *p, int i, const char **change);
 /* width > 0: that many columns; width <= 0: a share of what is left */
 void panel_set_columns(struct panel *p, int n, const char *const *titles, const int *widths);
 void panel_clear_rows(struct panel *p);

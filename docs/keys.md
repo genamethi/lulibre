@@ -133,7 +133,7 @@ and paste it with `<C-v>`.
 
 | Key | Command | |
 |---|---|---|
-| `e` | `edit` | the edit form for the selection: Enter or `e` types a field's value (`+a, -b` adds to a list and takes out of it), `x` drops a field's change, `w` writes them all |
+| `e` | `edit` | the edit form for the selection: Enter or `e` types a field's value (`+a, -b` adds to a list and takes out of it), `x` drops a field's change, `w` writes them all (the place `form`) |
 | `gr` · `r` | `review` · `review selection` | the proposals of every book that has any, or of the selection: `a` accepts, `e` edits first, `r` rejects, Space shows the next alternative |
 | `u` | `undo` | put the last change back |
 | `1` `gl` | `source library` | back to the library |
@@ -205,10 +205,12 @@ actions, which `scrnman.set` changes; `hint = {}` shows none.
 | `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
 | `pager` | `down` `up` `page-down` `page-up` `top` `bottom` `toggle` `open` `close` `all` `none` `search` `next` `prev` `follow` `back` `forward` `leave` (any other key closes it) |
 | `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
+| `select` | `left` `right` `up` `down` `word` `back` `start` `end` `top` `bottom` `mark` `line` `copy` `leave` |
+| `form` | `edit` `drop` `write`: in the edit form and the forms of scripts (`uiman.form`); `drop` and `write` in a form that writes on `w` |
 
 A screen made in Lua is a place too (`scrnman.create`, [the API](api.md)):
-`review` (`accept` `edit` `reject` `next`) and `form` (`edit`) are
-lulibre's, and `keymap.set("review", "y", "accept")` rebinds one.
+`review` (`accept` `edit` `reject` `next`) is lulibre's, and
+`keymap.set("review", "y", "accept")` rebinds one.
 
 A binding here is one key, or two in a row (`gg`). `?` lists every place
 with its actions and their keys. In a panel, the movement keys take

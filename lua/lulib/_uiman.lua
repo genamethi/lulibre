@@ -24,10 +24,7 @@ local M = {}
 local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
 -- the options uiman.panel takes as they are
-local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen" }
-
--- a form's own screen, for a form given none: e and Enter edit
-scrnman.create("form", { actions = { { "edit", "e <CR>", "edit the field under the cursor" } }, hint = { "edit" } })
+local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen", "form" }
 
 -- items: a list, an iter, or a function giving either, read again each time
 function own.read(items)
@@ -91,10 +88,10 @@ function M.list(o)
     end)
   end
   while true do
-    local action, i = p:wait()
+    local action, i, value = p:wait()
     if not action then break end
     local fn = (o.actions or {})[action]
-    if fn and items[i] ~= nil then get("act")(fn, items[i], i) end
+    if fn and items[i] ~= nil then get("act")(fn, items[i], i, value) end
     items = get("read")(o.items)
     p:rows(rows())
   end
@@ -106,15 +103,16 @@ function own.shown(v)
   return v == nil and "" or tostring(v)
 end
 
---- Shows a record, one field to a row, and waits until it is closed: e or
--- Enter edits the field under the cursor.
+--- Shows a record, one field to a row, and waits until it is closed: a
+-- form of lulibre's (uiman.panel's form), whose keys are the place form's:
+-- edit (e or Enter) asks for the field's value on the line.
 -- @tparam table o `{ record=, fields=, edit=, screen=, actions=, refresh= }` and the
 -- options uiman.list passes to the panel. record: a table, or a function
 -- giving it, read again as list's items are; fields: the fields shown, in
 -- order, each a name or `{ name, label }` (by default every field, by
 -- name); edit(field, value, record): takes an edited value (nil and why
--- refuses it), on the screen's action edit (the screen "form" when none is
--- given: e and Enter); actions: `{ [action] = function(field, record) }`.
+-- refuses it); screen: a screen whose actions it has too, `actions`
+-- saying what they do: `{ [action] = function(field, record) }`.
 function M.form(o)
   local function record() return (type(o.record) == "function" and o.record() or o.record) or {} end
   local function fields()
@@ -135,16 +133,11 @@ function M.form(o)
   local actions = {}
   for name, fn in pairs(o.actions or {}) do actions[name] = function(f) return fn(f.name, f.record) end end
   if o.edit and not actions.edit then
-    actions.edit = function(f)
-      local v = uiman.input { prompt = f.label .. ": ", default = get("shown")(f.value) }
-      if v ~= nil then return o.edit(f.name, v, f.record) end
-      return true
-    end
+    actions.edit = function(f, _, value) return o.edit(f.name, value, f.record) end
   end
   local spec = {}
   for k, v in pairs(o) do spec[k] = v end
-  spec.screen = o.screen or "form"
-  spec.columns = o.columns or { { "Field", 16 }, "Value" }
+  spec.form = true
   spec.items, spec.row, spec.actions = fields, function(f) return { f.label, get("shown")(f.value) } end, actions
   return M.list(spec)
 end

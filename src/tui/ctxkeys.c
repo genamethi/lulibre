@@ -121,6 +121,12 @@ static const struct action select_actions[] = {
   {"leave", "q <Esc>", "leave without copying"},
 };
 
+static const struct action form_actions[] = {
+  {"edit", "e <CR>", "edit the field under the cursor"},
+  {"drop", "x", "take the field's change back (a form that writes on w)"},
+  {"write", "w", "write the changes (a form that writes on w)"},
+};
+
 /* hint: the actions the place's hint line shows, separated by spaces */
 static const struct {
   const char *name, *title;
@@ -138,6 +144,8 @@ static const struct {
                   "errors warnings notices everything clear close"},
   [KC_SELECT] = {"select", "SELECTING TEXT IN THE PREVIEW", select_actions, (int)ARRAY_LEN(select_actions),
                  "left down up right mark line copy leave"},
+  [KC_FORM] = {"form", "IN A FORM (the edit form, a script's form; a panel's keys too)", form_actions,
+               (int)ARRAY_LEN(form_actions), "edit drop write"},
 };
 
 /* Every place: lulibre's (copied from own[] on first use) and those made
@@ -461,12 +469,16 @@ int ctx_bound(int ctx, uint32_t key) {
 static int ctx_key_of(int ctx, int action, sbuf *out);
 
 int ctx_hint_line(int ctx, sbuf *out) {
+  return ctx_hint_line_if(ctx, out, NULL, NULL);
+}
+
+int ctx_hint_line_if(int ctx, sbuf *out, int (*keep)(int action, const void *ud), const void *ud) {
   if (ctx < 0 || ctx >= nctxs) return 0;
   int n = 0;
   for (int h = 0; h < ctxs[ctx].nhint; h++) {
     sbuf k = SBUF_INIT;
     int a = ctxs[ctx].hint[h];
-    if (ctx_key_of(ctx, a, &k)) { /* an action left with no key is not offered */
+    if ((!keep || keep(a, ud)) && ctx_key_of(ctx, a, &k)) { /* an action left with no key is not offered */
       sb_printf(out, "%s%s %s", n++ ? "   " : "", k.s, ctxs[ctx].actions[a - 1].name);
     }
     sb_free(&k);

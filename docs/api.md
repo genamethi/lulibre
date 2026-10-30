@@ -397,7 +397,7 @@ with a body; `timeout` is in milliseconds.
 | `uiman.maps()` | waits: every global binding, `{modes=, keys=, command=, about=, hidden=}`; a key bound to a function has `callback`, the function, in place of `command` |
 | `scrnman.create(name, {title=, actions=, hint=, place=, tab=})` | a screen: its actions (`{name, keys, what it does}`) and those its hint shows; where its views go, `place = {kind=, size=}` with kind `band` (along the bottom), `column` (down the left), `over` (in the list's place), `tiled` (beside the focused window), `float` (a box above the windows) or `overlay` (over all of them), unless the one opening a view says otherwise; `tab = true` gives it a tab in the bar, which runs the command named as the screen, and its view stands in the list's place while it is open. Made again under its name, it replaces the one before |
 | `scrnman.set(name, {hint=, title=})` | a screen's, or one of lulibre's places' (`console`, `pager`, `picker`, `select`, `panel`, `line`), hint and title; `hint = {}` shows none. Until `:restart-scripts` |
-| `uiman.panel{...}` | a panel of rows the task that opened it steers; with `screen=`, a key bound to one of the screen's actions comes back from `p:wait()` as the action's name; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
+| `uiman.panel{...}` | a panel of rows the task that opened it steers; with `screen=`, a key bound to one of the screen's actions comes back from `p:wait()` as the action's name; with `form = true`, its rows (`{label, value}`) are a form's fields, and the place `form`'s `edit` asks for a field's value on the line, `p:wait()` returning `"edit"`, the row and the value; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
 | `uiman.theme.<name> = colour` | the interface's colours |
@@ -438,7 +438,7 @@ but for `?`, which shows help with the screen's actions first.
 |---|---|
 | `items` | a list, an iter, or a function giving one |
 | `row(item)` | the item's cells, with `id=` (a book) and `style=` as a panel's rows; by default the item itself when it is a table, else the item as text |
-| `screen` | the screen it is (`scrnman.create`); a form without one is the screen `form`, whose action `edit` is on e and Enter |
+| `screen` | the screen it is (`scrnman.create`); a form's keys are the place `form`'s (`edit`, on e and Enter), and a screen given to it adds its actions |
 | `actions` | `{ [action] = function(item, i) }`: what one of the screen's actions does to the item under the cursor; its error, raised or nil and why, is shown |
 | `refresh` | event kinds that read the items again |
 | `record` | a form's record: a table, or a function giving it |
