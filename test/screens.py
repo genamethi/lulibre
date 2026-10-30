@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, and one task per panel.
+a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, one task per panel, and sleepers gone with their state.
 
   python3 -I test/screens.py BIN
 
@@ -130,6 +130,10 @@ keys(":demopick\r", 1.5)
 keys(":lua note('typed')\r", 0.6)   # into the books picker, which is still open
 keys("\x1b", 0.3)
 keys(":lua note('after')\r", 0.6)
+keys(":lua note('asleep|' .. taskman.spawn(function() taskman.sleep(60000) end))\r", 0.6)
+keys(":restart-scripts\r", 2.5)
+asleep = [l for l in open(out).read().splitlines() if l.startswith("asleep|")] if os.path.exists(out) else []
+keys(":lua note('stale|' .. tostring(taskman.wake(%s)))\r" % (asleep[0].split("|")[1] if asleep else "0"), 0.6)
 keys(":q\r", 0)
 end = time.time() + 5
 while time.time() < end:
@@ -164,6 +168,7 @@ check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
 check("a second task's p:wait is refused, and the first hears the panel close",
       "second|false" in got and "first|nil" in got)
+check("after :restart-scripts, wake finds no sleeper of the old state", "stale|false" in got)
 check("uiman.input lets go of on_change once answered", "on_change let go|true" in got)
 check("a task's pick cancelled late leaves the picker that took its place open",
       "after" in got and "typed" not in got)
