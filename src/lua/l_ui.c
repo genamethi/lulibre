@@ -210,7 +210,7 @@ static int l_key_ui(lua_State *L) {
 ASK(l_key, "key")
 
 /* uiman.maps(): every global binding, { {modes = "nv", keys = "gg", command = "move top"}, ... };
- * a key bound to a function has no command */
+ * a key bound to a function has the function as callback, and no command */
 static int l_maps_ui(lua_State *L) {
   lua_newtable(L);
   int n = 0;
@@ -226,6 +226,10 @@ static int l_maps_ui(lua_State *L) {
     lua_setfield(L, -2, "keys");
     lua_pushstring(L, b->command);
     lua_setfield(L, -2, "command");
+    if (b->lua_ref) {
+      ui_push_ref(L, b->lua_ref);
+      lua_setfield(L, -2, "callback");
+    }
     if (b->about) {
       lua_pushstring(L, b->about);
       lua_setfield(L, -2, "about");

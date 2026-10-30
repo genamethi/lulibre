@@ -373,7 +373,8 @@ with a body; `timeout` is in milliseconds.
 | `uiman.filter([text])` | waits: the filter, or set it |
 | `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
-| `uiman.key(command [, mode])` `uiman.maps()` | waits |
+| `uiman.key(command [, mode])` | waits: the keys bound to a command line, or nil |
+| `uiman.maps()` | waits: every global binding, `{modes=, keys=, command=, about=, hidden=}`; a key bound to a function has `callback`, the function, in place of `command` |
 | `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |

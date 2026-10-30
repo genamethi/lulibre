@@ -151,6 +151,9 @@ void *lapi_take_reply(struct lua_State *L, int idx);
 int ui_send(struct lua_State *L, int (*fn)(struct lua_State *), const char *name);
 int ui_ask(struct lua_State *L, int (*fn)(struct lua_State *), const char *name);
 void ui_state_close(void);
+/* In an interface function's answer: a function of the main lua_State, by
+ * its reference, which the asking task gets as the function itself. */
+void ui_push_ref(struct lua_State *L, int ref);
 
 /* A value from the copy, for C on the Lua thread; the string is malloc'd. */
 long long lapi_setting_int(struct lua_State *L, enum setting_id id);

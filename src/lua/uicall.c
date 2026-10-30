@@ -9,6 +9,7 @@
  * reference in the main lua_State's registry (an integer), which the
  * function on the other side keeps or releases. */
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <lua.h>
@@ -29,7 +30,9 @@ static void put_raw(sbuf *b, const void *p, size_t n) {
   sb_putn(b, p, n);
 }
 
-static void put_value(lua_State *L, int idx, sbuf *b, int depth) {
+/* refs: a light userdata is a reference into the main lua_State being
+ * given back (ui_push_ref); only the interface's answers carry them */
+static void put_value(lua_State *L, int idx, sbuf *b, int depth, int refs) {
   idx = lua_absindex(L, idx);
   switch (lua_type(L, idx)) {
   case LUA_TBOOLEAN:
@@ -59,8 +62,8 @@ static void put_value(lua_State *L, int idx, sbuf *b, int depth) {
     sb_putc(b, V_TABLE);
     lua_pushnil(L);
     while (lua_next(L, idx)) {
-      put_value(L, -2, b, depth + 1);
-      put_value(L, -1, b, depth + 1);
+      put_value(L, -2, b, depth + 1, refs);
+      put_value(L, -1, b, depth + 1, refs);
       lua_pop(L, 1);
     }
     sb_putc(b, V_END);
@@ -72,12 +75,20 @@ static void put_value(lua_State *L, int idx, sbuf *b, int depth) {
     put_raw(b, &ref, sizeof ref);
     return;
   }
+  case LUA_TLIGHTUSERDATA:
+    if (!refs) break;
+    lua_Integer ref = (lua_Integer)(intptr_t)lua_touserdata(L, idx);
+    sb_putc(b, V_REF);
+    put_raw(b, &ref, sizeof ref);
+    return;
   }
   sb_putc(b, V_NIL);
 }
 
-/* Pushes the value at *p onto L, and moves *p past it. */
-static void get_value(lua_State *L, const char **p) {
+/* Pushes the value at *p onto L, and moves *p past it. With resolve (L is
+ * the main lua_State's side), a reference is pushed as what it refers to;
+ * else as its number. */
+static void get_value(lua_State *L, const char **p, int resolve) {
   char tag = *(*p)++;
   switch (tag) {
   case V_TRUE:
@@ -89,7 +100,8 @@ static void get_value(lua_State *L, const char **p) {
     lua_Integer i;
     memcpy(&i, *p, sizeof i);
     *p += sizeof i;
-    lua_pushinteger(L, i);
+    if (tag == V_REF && resolve) lua_rawgeti(L, LUA_REGISTRYINDEX, i);
+    else lua_pushinteger(L, i);
     return;
   }
   case V_NUM: {
@@ -110,8 +122,8 @@ static void get_value(lua_State *L, const char **p) {
   case V_TABLE:
     lua_newtable(L);
     while (**p != V_END) {
-      get_value(L, p);
-      get_value(L, p);
+      get_value(L, p, resolve);
+      get_value(L, p, resolve);
       if (lua_isnil(L, -2)) lua_pop(L, 2);
       else lua_rawset(L, -3);
     }
@@ -122,19 +134,23 @@ static void get_value(lua_State *L, const char **p) {
 }
 
 /* The values from index first to the top of L, as bytes. */
-static char *pack(lua_State *L, int first, int *n, size_t *len) {
+static char *pack(lua_State *L, int first, int *n, size_t *len, int refs) {
   sbuf b = SBUF_INIT;
   int top = lua_gettop(L);
-  for (int i = first; i <= top; i++) put_value(L, i, &b, 0);
+  for (int i = first; i <= top; i++) put_value(L, i, &b, 0, refs);
   *n = top >= first ? top - first + 1 : 0;
   *len = b.len;
   return sb_take(&b);
 }
 
-static void unpack(lua_State *L, const char *bytes, int n) {
+static void unpack(lua_State *L, const char *bytes, int n, int resolve) {
   luaL_checkstack(L, n, NULL);
   const char *p = bytes;
-  for (int i = 0; i < n; i++) get_value(L, &p);
+  for (int i = 0; i < n; i++) get_value(L, &p, resolve);
+}
+
+void ui_push_ref(lua_State *L, int ref) {
+  lua_pushlightuserdata(L, (void *)(intptr_t)ref);
 }
 
 /* ---- the interface's own lua_State: values only ---- */
@@ -168,7 +184,7 @@ static void answered(struct app *app, void *arg) { /* the Lua thread */
   lua_State *L = sched_end_wait(c->task);
   if (L) {
     lua_pushboolean(L, c->ok);
-    unpack(L, c->results, c->nresults);
+    unpack(L, c->results, c->nresults, 1);
     sched_wake(c->task, c->nresults + 1);
   }
   free(c->results);
@@ -180,7 +196,7 @@ static void run(struct app *app, void *arg) { /* the interface thread */
   lua_State *U = ui_state(app);
   lua_settop(U, 0);
   lua_pushcfunction(U, c->fn);
-  unpack(U, c->args, c->nargs);
+  unpack(U, c->args, c->nargs, 0);
   free(c->args);
   c->ok = lua_pcall(U, c->nargs, LUA_MULTRET, 0) == LUA_OK;
   if (!c->task) {
@@ -194,7 +210,7 @@ static void run(struct app *app, void *arg) { /* the interface thread */
     return;
   }
   size_t len;
-  c->results = pack(U, 1, &c->nresults, &len);
+  c->results = pack(U, 1, &c->nresults, &len, 1);
   lua_settop(U, 0);
   queue_post(LOOP_LUA, answered, c);
 }
@@ -204,7 +220,7 @@ int ui_send(lua_State *L, lua_CFunction fn, const char *name) {
   size_t len;
   c->fn = fn;
   c->name = name;
-  c->args = pack(L, 1, &c->nargs, &len);
+  c->args = pack(L, 1, &c->nargs, &len, 0);
   queue_post(LOOP_UI, run, c);
   return 0;
 }
@@ -221,7 +237,7 @@ int ui_ask(lua_State *L, lua_CFunction fn, const char *name) {
   size_t len;
   c->fn = fn;
   c->name = name;
-  c->args = pack(L, 1, &c->nargs, &len);
+  c->args = pack(L, 1, &c->nargs, &len, 0);
   int base = lua_gettop(L);
   c->task = sched_begin_wait(L);
   queue_post(LOOP_UI, run, c);
