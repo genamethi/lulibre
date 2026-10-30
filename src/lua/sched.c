@@ -163,7 +163,10 @@ static void watch_hook(lua_State *L, lua_Debug *ar) {
   if (atomic_load(&stop_id) == t->id) t->cancelled = 1;
   if (!t->warned) {
     t->warned = 1;
-    char *msg = xasprintf("task %d (%s) has run %.1f s without waiting%s", t->id, t->name,
+    /* "task 3 (propose)", or "task 3" for one taskman.spawn named so */
+    char *msg = xasprintf("task %d%s%s%s has run %.1f s without waiting%s", t->id,
+                          strncmp(t->name, "task ", 5) ? " (" : "", strncmp(t->name, "task ", 5) ? t->name : "",
+                          strncmp(t->name, "task ", 5) ? ")" : "",
                           (now_ms() - atomic_load(&running_since)) / 1000.0, t->cancelled || !t->ctx.app->tui ? "" : "; :cancel stops it");
     lapi_report(t->ctx.app, 1, msg);
     free(msg);
@@ -356,7 +359,7 @@ int sched_spawn(lua_State *L, int nargs, const char *name) {
   t->ctx.task = t;
   t->s = s;
   t->id = s->next_id++;
-  t->name = xstrdup(name && *name ? name : "task");
+  t->name = name && *name ? xstrdup(name) : xasprintf("task %d", t->id); /* taskman.spawn's */
   t->co = lua_newthread(L);
   *(struct lctx **)lua_getextraspace(t->co) = &t->ctx;
   t->ref = luaL_ref(L, LUA_REGISTRYINDEX);

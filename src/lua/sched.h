@@ -20,7 +20,7 @@ void sched_free(struct app *app);
 
 /* The function and its nargs arguments are on top of L's stack; they are
  * moved into a new task, which starts on the next loop iteration. Returns
- * the task id. */
+ * the task id. name says what started it; NULL names it "task N". */
 int sched_spawn(struct lua_State *L, int nargs, const char *name);
 
 /* The same, but the task runs its first slice now, until it first waits,

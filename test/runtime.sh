@@ -297,8 +297,9 @@ co=$("$bin" -L "$t/lib" run "$t/co.lua" 2>&1)
 # allocates: under TSan, a signal waits for a call into the C library.
 cat >"$t/busy.lua" <<'LUA'
 local function busy(s) local t = os.clock() while os.clock() - t < s do local _ = {} end end
-taskman.spawn(function() coroutine.wrap(busy)(2.5) print("busy|done") end)
-taskman.spawn(function() for _ = 1, 25 do busy(0.1) taskman.sleep(0) end print("polite|done") end)
+local a = taskman.spawn(function() coroutine.wrap(busy)(2.5) print("busy|done") end)
+local b = taskman.spawn(function() for _ = 1, 25 do busy(0.1) taskman.sleep(0) end print("polite|done") end)
+print(("ids|task %d has|task %d has"):format(a, b))
 LUA
 busy=$("$bin" -L "$t/lib" run "$t/busy.lua" 2>&1)
 
@@ -457,9 +458,11 @@ contains "an error inside is false and the error" "co|false|boom" "$co"
 contains "coroutine.wrap yields its values" "wrap|1|2|3" "$co"
 contains "and raises the error inside, where it was called" "wrap error|false|" "$co"
 contains "a coroutine inside a coroutine" "nested|deep" "$co"
-contains "a task that runs 2 s without waiting is reported" "busy.lua:2) has run 2." "$busy"
+busy_id=$(printf '%s\n' "$busy" | sed -n 's/^ids|\([^|]*\)|.*/\1/p')
+polite_id=$(printf '%s\n' "$busy" | sed -n 's/^ids|[^|]*|\(.*\)/\1/p')
+contains "a task that runs 2 s without waiting is reported" "${busy_id} run 2." "$busy"
 contains "and goes on" "busy|done" "$busy"
-lacks "one that waits as often is not" "busy.lua:3)" "$busy"
+lacks "one that waits as often is not" "${polite_id} run" "$busy"
 contains "expr.find, with an LPeg pattern, as string.find" "find|5|7|two" "$ex"
 contains "with a Lua pattern, string.find itself" "find lua|5|7" "$ex"
 contains "expr.match: the captures" "match|12" "$ex"

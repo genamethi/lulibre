@@ -23,11 +23,7 @@
 
 static int l_spawn(lua_State *L) {
   luaL_checktype(L, 1, LUA_TFUNCTION);
-  lua_Debug ar;
-  char name[96] = "task";
-  lua_pushvalue(L, 1);
-  if (lua_getinfo(L, ">S", &ar)) snprintf(name, sizeof name, "%s:%d", ar.short_src, ar.linedefined);
-  lua_pushinteger(L, sched_spawn(L, lua_gettop(L) - 1, name));
+  lua_pushinteger(L, sched_spawn(L, lua_gettop(L) - 1, NULL)); /* named "task N" */
   return 1;
 }
 
