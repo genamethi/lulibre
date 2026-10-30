@@ -36,7 +36,7 @@
  *
  * This file also holds the ':' commands that exist because of Lua:
  * run, lua, messages, tasks, cancel. */
-#include <dirent.h>
+#include <sys/stat.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -798,7 +798,8 @@ ASK(l_goto, "jump")
 
 /* ---- scripts ---- */
 
-char **lapi_script_dirs(struct app *app) {
+/* Directories searched for scripts, in order; NULL-terminated, malloc'd. */
+static char **script_dirs(struct app *app) {
   char **dirs = xcalloc(4, sizeof *dirs);
   int n = 0;
   dirs[n++] = xasprintf("%s/scripts", app->config_dir);
@@ -832,7 +833,7 @@ static void free_dirs(char **dirs) {
 
 char *lapi_find_script(struct app *app, const char *name) {
   if (strchr(name, '/')) return access(name, R_OK) == 0 ? xstrdup(name) : NULL;
-  char **dirs = lapi_script_dirs(app);
+  char **dirs = script_dirs(app);
   char *found = NULL;
   size_t nl = strlen(name);
   int has_ext = nl > 4 && !strcmp(name + nl - 4, ".lua");
@@ -844,6 +845,29 @@ char *lapi_find_script(struct app *app, const char *name) {
   free_dirs(dirs);
   if (!found && access(name, R_OK) == 0) found = xstrdup(name);
   return found;
+}
+
+struct each_script {
+  void (*fn)(const char *name, const char *dir, void *ud);
+  const char *dir;
+  void *ud;
+};
+
+static int each_one(const char *path, const char *rel, const struct stat *st, void *ud) {
+  struct each_script *e = ud;
+  size_t n = strlen(rel);
+  if (S_ISREG(st->st_mode) && n > 4 && !strcmp(rel + n - 4, ".lua")) {
+    char *name = xstrndup(rel, n - 4);
+    e->fn(name, e->dir, e->ud);
+    free(name);
+  }
+  return 0;
+}
+
+void lapi_each_script(struct app *app, void (*fn)(const char *name, const char *dir, void *ud), void *ud) {
+  char **dirs = script_dirs(app);
+  for (char **d = dirs; *d; d++) path_walk(*d, 0, each_one, &(struct each_script){fn, *d, ud});
+  free_dirs(dirs);
 }
 
 int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char **err) {
@@ -1075,6 +1099,10 @@ static void run_named(struct tui *t, const char *line) {
   free(name);
 }
 
+static void pick_script(const char *name, const char *dir, void *ud) {
+  picker_add(ud, 0, name, dir);
+}
+
 static void run_picked(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
   run_named(t, text);
 }
@@ -1085,20 +1113,7 @@ static void c_run(struct tui *t, const char *args) {
     return;
   }
   struct picker *p = picker_new(t, "scripts", run_picked, NULL);
-  char **dirs = lapi_script_dirs(t->app);
-  for (char **d = dirs; *d; d++) {
-    DIR *dir = opendir(*d);
-    if (!dir) continue;
-    for (struct dirent *e; (e = readdir(dir));) {
-      size_t n = strlen(e->d_name);
-      if (n <= 4 || strcmp(e->d_name + n - 4, ".lua")) continue;
-      char *name = xstrndup(e->d_name, n - 4);
-      picker_add(p, 0, name, *d);
-      free(name);
-    }
-    closedir(dir);
-  }
-  free_dirs(dirs);
+  lapi_each_script(t->app, pick_script, p);
   picker_open(t, p);
 }
 

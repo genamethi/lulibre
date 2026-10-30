@@ -56,8 +56,9 @@ void lapi_tasks_changed(struct app *app, struct sched_task_list *list); /* takes
 int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char **err);
 /* Find a script by name in the script directories; malloc'd path or NULL. */
 char *lapi_find_script(struct app *app, const char *name);
-/* Directories searched for scripts, in order; NULL-terminated, malloc'd. */
-char **lapi_script_dirs(struct app *app);
+/* Calls fn for each script in the script directories, in their order: its
+ * name without .lua, and its directory. */
+void lapi_each_script(struct app *app, void (*fn)(const char *name, const char *dir, void *ud), void *ud);
 /* Run a registered Lua function (by registry ref) as a task with one string
  * argument. From the interface thread; the task starts on the Lua thread. */
 void lapi_spawn_ref(struct app *app, int ref, const char *name, const char *arg);

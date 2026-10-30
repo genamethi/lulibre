@@ -15,7 +15,6 @@
  * A Lua function is not called here (design 34): it is asked by message,
  * once for each word the arguments reach, and its answer fills the popup
  * when it comes (complete_answered). */
-#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -60,18 +59,12 @@ static void filter_word(const char *word, void *ud) {
   add_owned(ud, xstrdup(word), NULL);
 }
 
+static void add_script(const char *name, const char *dir, void *ud) {
+  add_owned(ud, xstrdup(name), NULL);
+}
+
 static void add_scripts(struct list *l, struct app *app) {
-  char **dirs = lapi_script_dirs(app);
-  for (char **d = dirs; *d; d++) {
-    DIR *dir = opendir(*d);
-    for (struct dirent *e; dir && (e = readdir(dir));) {
-      size_t n = strlen(e->d_name);
-      if (n > 4 && !strcmp(e->d_name + n - 4, ".lua")) add_owned(l, xstrndup(e->d_name, n - 4), NULL);
-    }
-    if (dir) closedir(dir);
-    free(*d);
-  }
-  free(dirs);
+  lapi_each_script(app, add_script, l);
 }
 
 static void add_options(struct list *l, const char *word) {
