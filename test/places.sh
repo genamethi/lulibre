@@ -188,7 +188,8 @@ sleep 0.4
 check "a word no guide has: said" sh -c "$T capture-pane -p -t s | grep -q 'say nothing about'"
 $T send-keys -t s ":help calibredb" Enter
 wait_for "MENTION IT" || true
-check "a word without a tag: the lines that mention it" sh -c "$T capture-pane -p -t s | grep -q 'api:[0-9]'"
+first=$(grep -n -i calibredb "$src/../docs/api.md" | head -1 | cut -d: -f1)
+check "a word without a tag: the lines that mention it, by their line in the file" sh -c "$T capture-pane -p -t s | grep -q 'api.md:$first '"
 $T send-keys -t s j K
 wait_for "help: api" || true
 check "K on one: the guide, that line at the top" sh -c "$T capture-pane -p -t s | sed -n 3,4p | grep -qi 'calibredb'"

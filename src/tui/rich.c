@@ -69,6 +69,7 @@ static int last_blank(const struct rich *r) {
 void rich_free(struct rich *r) {
   sb_free(&r->text);
   free(r->hang);
+  free(r->src);
   free(r->spans);
   for (int i = 0; i < r->nlinks; i++) free(r->links[i].target);
   free(r->links);
@@ -134,10 +135,20 @@ struct open_span {
   char *href;
 };
 
+struct cell_at { /* where a table's cell is */
+  int row, col;
+  long at; /* in the source; -1 until its text comes */
+};
+
 struct md {
   struct rich *out;
   int width;
+  const char *src;
+  size_t srclen;
+  long *ats; /* each line's start in the source, -1 for none */
+  int ats_cap;
   struct rich line; /* a paragraph, a heading, an item's text, a code block, as it comes */
+  long line_at;     /* where its text starts in the source */
   struct nest nest[NEST_MAX];
   int depth, over; /* over: lists and quotes past NEST_MAX, in the last one's place */
   struct open_span open[OPEN_MAX];
@@ -145,7 +156,8 @@ struct md {
   int code, html, heading;
   /* a table, as it comes: its cells, row by row */
   struct rich *cells;
-  int ncells, cells_cap, *row_of, cols, in_cell, rows, head_rows;
+  struct cell_at *cell;
+  int ncells, cells_cap, cols, in_cell, rows, head_rows;
 };
 
 static struct rich *cur(struct md *m) {
@@ -183,8 +195,18 @@ static int tight(const struct md *m) {
   return 0;
 }
 
+/* the end of a line of the text, which starts at `at` in the source */
+static void md_end(struct md *m, int hang, long at) {
+  if (m->out->nlines >= m->ats_cap) {
+    m->ats_cap = m->out->nlines + 64;
+    m->ats = xrealloc(m->ats, (size_t)m->ats_cap * sizeof *m->ats);
+  }
+  m->ats[m->out->nlines] = at;
+  end_line(m->out, hang);
+}
+
 static void gap(struct md *m) {
-  if (m->out->text.len && !last_blank(m->out)) end_line(m->out, -1);
+  if (m->out->text.len && !last_blank(m->out)) md_end(m, -1, -1);
 }
 
 /* the gathered line, after its lead, as a line of the text */
@@ -193,7 +215,8 @@ static void flush(struct md *m) {
   if (!l->text.len) return;
   int hang = lead(m, &m->out->text);
   append(m->out, l);
-  end_line(m->out, hang);
+  md_end(m, hang, m->line_at);
+  m->line_at = -1;
   rich_free(l);
   for (int i = 0; i < m->nopen; i++) m->open[i].at = 0; /* spans still open go on in the next line */
 }
@@ -237,7 +260,7 @@ static void table(struct md *m) {
   int ncols = m->cols < COLS_MAX ? m->cols : COLS_MAX, width[COLS_MAX] = {0};
   int budget = m->width - 32 > 16 ? m->width - 32 : 16;
   for (int c = 0; c < m->ncells; c++) {
-    int col = m->row_of[c] & 0xff, w = m->cells[c].text.s ? dr_width(m->cells[c].text.s, m->cells[c].text.len) : 0;
+    int col = m->cell[c].col, w = m->cells[c].text.s ? dr_width(m->cells[c].text.s, m->cells[c].text.len) : 0;
     if (col < ncols && w > width[col]) width[col] = w;
   }
   for (;;) {
@@ -251,15 +274,16 @@ static void table(struct md *m) {
   }
   struct rich *o = m->out;
   for (int c = 0; c < m->ncells;) {
-    int row = m->row_of[c] >> 8, first = c, last;
-    while (c < m->ncells && m->row_of[c] >> 8 == row) c++;
+    int row = m->cell[c].row, first = c, last;
+    long at = m->cell[c].at;
+    while (c < m->ncells && m->cell[c].row == row) c++;
     for (last = c - 1; last > first && !m->cells[last].text.len; last--) {} /* nothing after the last cell with something */
     grow((void **)&o->rows, o->nrows, &o->rows_cap, sizeof *o->rows);
     struct rich_row *rr = &o->rows[o->nrows++];
     *rr = (struct rich_row){o->nlines, row < m->head_rows, c - first, xcalloc((size_t)(c - first), sizeof *rr->cells)};
     int col = lead(m, &o->text);
     for (int k = first; k <= last; k++) {
-      int j = m->row_of[k] & 0xff, w = m->cells[k].text.s ? dr_width(m->cells[k].text.s, m->cells[k].text.len) : 0;
+      int j = m->cell[k].col, w = m->cells[k].text.s ? dr_width(m->cells[k].text.s, m->cells[k].text.len) : 0;
       int start = col;
       rr->cells[k - first] = (struct rich_cell){o->text.len, m->cells[k].text.len};
       if (rr->head) add_span(o, o->text.len, m->cells[k].text.len, RS_STRONG);
@@ -268,18 +292,18 @@ static void table(struct md *m) {
       int pad = width[j] - w + 3;
       col += width[j] + 3;
       if (w > width[j]) { /* the next cell, below in its column */
-        end_line(o, start);
+        md_end(m, start, at);
         pad = col;
       }
       for (int p = 0; p < pad; p++) sb_putc(&o->text, ' ');
     }
-    end_line(o, col);
+    md_end(m, col, at);
   }
   for (int c = 0; c < m->ncells; c++) rich_free(&m->cells[c]);
   free(m->cells);
-  free(m->row_of);
+  free(m->cell);
   m->cells = NULL;
-  m->row_of = NULL;
+  m->cell = NULL;
   m->ncells = m->cells_cap = m->cols = m->rows = 0;
 }
 
@@ -333,7 +357,7 @@ static int enter_block(MD_BLOCKTYPE type, void *detail, void *ud) {
       gap(m);
       int hang = lead(m, &m->out->text);
       for (int i = 0; i < 24; i++) sb_puts(&m->out->text, "─");
-      end_line(m->out, hang);
+      md_end(m, hang, -1);
       break;
     }
     case MD_BLOCK_TABLE:
@@ -347,11 +371,11 @@ static int enter_block(MD_BLOCKTYPE type, void *detail, void *ud) {
     case MD_BLOCK_TH:
     case MD_BLOCK_TD: {
       int col = 0;
-      for (int c = m->ncells - 1; c >= 0 && m->row_of[c] >> 8 == m->rows - 1; c--) col++;
+      for (int c = m->ncells - 1; c >= 0 && m->cell[c].row == m->rows - 1; c--) col++;
       grow((void **)&m->cells, m->ncells, &m->cells_cap, sizeof *m->cells);
-      m->row_of = xrealloc(m->row_of, (size_t)m->cells_cap * sizeof *m->row_of);
+      m->cell = xrealloc(m->cell, (size_t)m->cells_cap * sizeof *m->cell);
       memset(&m->cells[m->ncells], 0, sizeof *m->cells);
-      m->row_of[m->ncells++] = ((m->rows - 1) << 8) | (col & 0xff);
+      m->cell[m->ncells++] = (struct cell_at){m->rows - 1, col, -1};
       m->in_cell = 1;
       break;
     }
@@ -385,7 +409,8 @@ static int leave_block(MD_BLOCKTYPE type, void *detail, void *ud) {
         for (size_t k = 0; k < l->text.len; k++)
           if (l->text.s[k] >= 'a' && l->text.s[k] <= 'z') l->text.s[k] = (char)(l->text.s[k] - 'a' + 'A');
       append(o, l);
-      end_line(o, 0);
+      md_end(m, 0, m->line_at);
+      m->line_at = -1;
       rich_free(l);
       m->heading = 0;
       break;
@@ -395,6 +420,7 @@ static int leave_block(MD_BLOCKTYPE type, void *detail, void *ud) {
       const char *s = l->text.s ? l->text.s : "";
       size_t n = l->text.len;
       if (n && s[n - 1] == '\n') n--;
+      long from = m->line_at; /* each line of code is a line of the source */
       for (size_t at = 0; at < n;) {
         size_t len = strcspn(s + at, "\n");
         if (at + len > n) len = n - at;
@@ -402,9 +428,12 @@ static int leave_block(MD_BLOCKTYPE type, void *detail, void *ud) {
         sb_puts(&m->out->text, "  ");
         add_span(m->out, m->out->text.len, len, RS_CODE);
         sb_putn(&m->out->text, s + at, len);
-        end_line(m->out, hang);
+        md_end(m, hang, from);
+        const char *nl = from >= 0 ? memchr(m->src + from, '\n', m->srclen - (size_t)from) : NULL;
+        from = nl ? nl + 1 - m->src : -1;
         at += len + 1;
       }
+      m->line_at = -1;
       rich_free(l);
       m->code = 0;
       break;
@@ -451,6 +480,9 @@ static int text(MD_TEXTTYPE type, const MD_CHAR *s, MD_SIZE n, void *ud) {
   struct md *m = ud;
   if (m->html) return 0;
   sbuf *out = &cur(m)->text;
+  long at = s >= m->src && s < m->src + m->srclen ? s - m->src : -1;
+  if (m->in_cell && m->cell[m->ncells - 1].at < 0) m->cell[m->ncells - 1].at = at;
+  else if (!m->in_cell && m->line_at < 0) m->line_at = at;
   switch (type) {
     case MD_TEXT_HTML: break;
     case MD_TEXT_NULLCHAR: sb_puts(out, "\xef\xbf\xbd"); break;
@@ -467,7 +499,7 @@ static int text(MD_TEXTTYPE type, const MD_CHAR *s, MD_SIZE n, void *ud) {
 
 int md_render(const char *src, size_t n, int width, struct rich *out) {
   memset(out, 0, sizeof *out);
-  struct md m = {.out = out, .width = width > 0 ? width : PAGER_WIDTH};
+  struct md m = {.out = out, .width = width > 0 ? width : PAGER_WIDTH, .src = src, .srclen = n, .line_at = -1};
   const MD_PARSER parser = {0,          MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEURLAUTOLINKS,
                             enter_block, leave_block, enter_span, leave_span, text, NULL, NULL};
   int r = md_parse(src, (MD_SIZE)n, &parser, &m);
@@ -476,11 +508,32 @@ int md_render(const char *src, size_t n, int width, struct rich *out) {
   for (int i = 0; i < m.nopen; i++) free(m.open[i].href);
   for (int c = 0; c < m.ncells; c++) rich_free(&m.cells[c]);
   free(m.cells);
-  free(m.row_of);
+  free(m.cell);
   /* no blank lines at the end */
   while (out->text.len >= 2 && out->text.s[out->text.len - 1] == '\n' && out->text.s[out->text.len - 2] == '\n') {
     out->text.s[--out->text.len] = '\0';
     out->nlines--;
   }
+  /* each line's line in the source, from 1; one with none has the one before's */
+  out->src = xcalloc((size_t)out->nlines + 1, sizeof *out->src);
+  long done = 0;
+  for (int i = 0, line = 1, prev = 1; i < out->nlines; i++) {
+    long at = m.ats[i];
+    if (at >= done) {
+      for (; done < at; done++) line += src[done] == '\n';
+    } else if (at >= 0) { /* earlier than the line before: count again */
+      line = 1;
+      for (done = 0; done < at; done++) line += src[done] == '\n';
+    }
+    out->src[i] = prev = at >= 0 ? line : prev;
+  }
+  free(m.ats);
   return r ? -1 : 0;
+}
+
+int rich_line_of(const struct rich *r, int src) {
+  int best = 0;
+  for (int i = 0; r->src && i < r->nlines; i++)
+    if (r->src[i] <= src && r->src[i] > r->src[best]) best = i;
+  return best;
 }

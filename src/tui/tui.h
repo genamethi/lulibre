@@ -824,11 +824,13 @@ struct rich_row { /* a table's row */
 };
 /* Text with styles and links: lines, each ending in a newline, with the
  * column each line's wrapped rows start at (hang; -1 or past nlines: the
- * pager's guess); spans of style; links; headings, which the pager opens
- * and closes; tables' rows. Offsets are in text; all of it is the struct's. */
+ * pager's guess) and, when made from a source, the line of the source it
+ * comes from (src, from 1; NULL for plain text); spans of style; links;
+ * headings, which the pager opens and closes; tables' rows. Offsets are in
+ * text; all of it is the struct's. */
 struct rich {
   sbuf text;
-  int nlines, *hang;
+  int nlines, *hang, *src;
   struct rich_span *spans; /* in the order of their ends */
   struct pager_link *links; /* in the order of their offsets */
   struct rich_heading *heads;
@@ -844,6 +846,9 @@ int md_render(const char *src, size_t n, int width, struct rich *out);
  * begin with a space is a heading. */
 void rich_plain(struct rich *r);
 void rich_link(struct rich *r, size_t off, size_t len, const char *target); /* target copied */
+/* the first line of r made from line `src` of its source (else from the
+ * nearest line before it) */
+int rich_line_of(const struct rich *r, int src);
 void rich_free(struct rich *r);
 
 /* ---------------------------------------------------------------- guides.c */

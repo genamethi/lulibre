@@ -248,6 +248,15 @@ static int show(struct tui *t, const char *path, int line) {
   return 1;
 }
 
+/* the line, as shown, that line `src` of the file is in */
+static int source_line(const char *path, int src) {
+  struct rich r;
+  if (!render(path, &r)) return 0;
+  int line = rich_line_of(&r, src);
+  rich_free(&r);
+  return line;
+}
+
 /* the line of the heading whose anchor is `anchor`, or 0 */
 static int anchor_line(const char *path, const char *anchor, size_t n) {
   struct rich r;
@@ -294,7 +303,7 @@ static int follow_one(struct tui *t, const char *target, size_t n, const char *f
     const char *rest = target + flen, *end = target + n;
     int line = 0;
     if (rest < end && *rest == '#') line = anchor_line(path, rest + 1, (size_t)(end - rest - 1));
-    else if (rest < end && *rest == ':') line = atoi(rest + 1) - 1; /* a line as shown, from 1 */
+    else if (rest < end && *rest == ':') line = source_line(path, atoi(rest + 1));
     struct stat st;
     int ok = stat(path, &st) == 0 && show(t, path, line);
     free(path);
@@ -322,8 +331,29 @@ int guides_follow(struct tui *t, const char *target, const char *from) {
   return 0;
 }
 
+/* the line of the source, from 1, that line i of r (made from it) has the
+ * folded word q on: the first of those it comes from that holds it */
+static int source_hit(const char *source, const struct rich *r, int i, const char *q) {
+  int from = r->src[i], to = from + 1;
+  for (int j = i + 1; j < r->nlines && to == from + 1; j++)
+    if (r->src[j] > from) to = r->src[j];
+  const char *p = source;
+  for (int line = 1; *p && line < to; line++) {
+    size_t len = strcspn(p, "\n");
+    if (line >= from) {
+      sbuf fl = SBUF_INIT;
+      fold_utf8(&fl, p, len);
+      int hit = fl.s && strstr(fl.s, q);
+      sb_free(&fl);
+      if (hit) return line;
+    }
+    p += len + (p[len] == '\n');
+  }
+  return from;
+}
+
 /* no tag fits: the lines of the guides, as shown, that mention the topic,
- * each a link */
+ * each a link to the file at its line (as grep has it: name:line) */
 static int mentions(struct tui *t, const char *topic) {
   sbuf q = SBUF_INIT;
   struct rich out = {0};
@@ -331,15 +361,19 @@ static int mentions(struct tui *t, const char *topic) {
   int found = 0;
   sb_printf(&out.text, "NO GUIDE HAS A TAG FOR '%s'; THESE LINES MENTION IT\n", topic);
   for (int f = 0; f < nfiles && found < 200; f++) {
+    size_t n;
+    char *source = slurp(files[f].path, &n);
+    if (!source) continue;
     struct rich r;
-    if (!render(files[f].path, &r)) continue;
+    md_render(source, n, PAGER_WIDTH, &r);
     const char *p = r.text.s ? r.text.s : "";
     for (int i = 0; *p && found < 200; i++) {
       size_t len = strcspn(p, "\n");
       sbuf fl = SBUF_INIT;
       fold_utf8(&fl, p, len);
       if (fl.s && q.s && strstr(fl.s, q.s)) {
-        char *where = xasprintf("%s:%d", files[f].name, i + 1), *target = xasprintf("%s:%d", files[f].path, i + 1);
+        int at = source_hit(source, &r, i, q.s);
+        char *where = xasprintf("%s.md:%d", files[f].name, at), *target = xasprintf("%s:%d", files[f].path, at);
         sb_puts(&out.text, "  ");
         rich_link(&out, out.text.len, strlen(where), target);
         size_t skip = strspn(p, " ");
@@ -352,6 +386,7 @@ static int mentions(struct tui *t, const char *topic) {
       p += len + (p[len] == '\n');
     }
     rich_free(&r);
+    free(source);
   }
   if (found) {
     char *title = xasprintf("help: %s", topic);
