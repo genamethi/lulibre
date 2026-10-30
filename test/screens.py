@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, and on_change let go.
+a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, and one task per panel.
 
   python3 -I test/screens.py BIN
 
@@ -60,6 +60,14 @@ cmdman.create("demoinput", function()
   collectgarbage()
   note("on_change let go|" .. tostring(held[1] == nil))
 end)
+-- a second task waiting on a panel is refused; the first still hears it close
+cmdman.create("demowait", function()
+  local p <close> = uiman.panel { title = "two waits", rows = { { "a" } }, focus = false }
+  taskman.spawn(function() note("first|" .. tostring(p:wait())) end)
+  taskman.sleep(200)
+  note("second|" .. tostring((pcall(p.wait, p))))
+  p:close()
+end)
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
 cmdman.create("demowits", function()
@@ -115,6 +123,7 @@ keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+keys(":demowait\r", 1)
 keys(":demoinput\r", 0.6)
 keys("hi\r", 0.8)
 keys(":demopick\r", 1.5)
@@ -153,6 +162,8 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("a second task's p:wait is refused, and the first hears the panel close",
+      "second|false" in got and "first|nil" in got)
 check("uiman.input lets go of on_change once answered", "on_change let go|true" in got)
 check("a task's pick cancelled late leaves the picker that took its place open",
       "after" in got and "typed" not in got)

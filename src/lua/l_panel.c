@@ -26,7 +26,8 @@
  *                                    -- still reach (P, ], yy ...); see below
  *   }
  *   while true do
- *     local key, row = p:wait()     -- nil once the panel is closed
+ *     local key, row = p:wait()     -- nil once the panel is closed; one
+ *                                   -- task waits on a panel, a second raises
  *     if not key then break end
  *     ...
  *     p:rows(new_rows)
@@ -543,6 +544,9 @@ static int m_wait(lua_State *L) {
     lua_pushnil(L);
     return 1;
   }
+  /* a panel's keys go to one task (design 33): a second would take the
+   * first one's place, and the first would wait for ever */
+  if (lp->waiter) return luaL_error(L, "another task is waiting on this panel; its keys go to that task");
   lp->waiter = sched_begin_wait(L);
   sched_on_cancel(lp->waiter, wait_cancelled, lp);
   return lua_yield(L, 0);

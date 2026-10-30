@@ -373,7 +373,7 @@ with a body; `timeout` is in milliseconds.
 | `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
 | `uiman.key(command [, mode])` `uiman.maps()` | waits |
-| `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys |
+| `uiman.panel{...}` | a panel of rows the task that opened it steers; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |
 | `uiman.theme.<name> = colour` | the interface's colours |
