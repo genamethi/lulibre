@@ -268,7 +268,7 @@ static void lua_read(struct ocr_req *r) {
       read++;
     }
   }
-  if (r->err) log_warn("OCR (utils.ocr): %s", r->err);
+  if (r->err) log_warn("OCR (utils.ocr_eng): %s", r->err);
   ocr_choose(j, o, read);
   ocr_req_free(r);
   j->ocr_lua = 0;

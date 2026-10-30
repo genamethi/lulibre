@@ -5,12 +5,12 @@
  *
  * An entry is a part C does with its own code unless Lua has put a
  * function in its place: a handler, set as a field of a library table
- * (utils.ocr for the OCR reader; lua/handler.c). C then calls the handler
+ * (utils.ocr_eng for the OCR reader; lua/handler.c). C then calls the handler
  * by the queue: it runs as a task on the Lua thread, and the answer comes
  * back as a message. C never calls Lua and waits. */
 
 enum registry_kind {
-  REG_READER, /* how a file's page images become text (design 37): utils.ocr */
+  REG_READER, /* how a file's page images become text (design 37): utils.ocr_eng */
   REG_STORE,  /* how a book's changes reach calibre (design 28): store.calibre */
   REG_KINDS
 };

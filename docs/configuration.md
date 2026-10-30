@@ -28,24 +28,21 @@ setman.set("path.library", "~/calibre-library")
 setman.set("ocr", "auto")
 ```
 
-`setman.settings` is the settings as a table: a name read is `setman.get`,
-a name assigned is `setman.set`. Made the environment of a file, it gives
-a file of settings:
+`lulib.opt` is the settings as a table, as Neovim's `vim.opt`: a setting
+read is `setman.get`, a setting assigned is `setman.set`.
 
 ```lua
 -- lua/config/options.lua, loaded by `require "config.options"` in init.lua
-local _ENV = setman.settings
-path.library = "~/calibre-library"
-ocr = "auto"
-path.log = os.getenv("HOME") .. "/lulibre.log"
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.ocr = "auto"
+opt.path.log = os.getenv("HOME") .. "/lulibre.log"
 ```
 
-Assigning a name that is no setting is an error. A name read that is no
-setting is the global of that name, so Lua's functions stay in reach.
-lulibre-setup writes the values chosen on its screen to
-`lua/config/options.lua`.
-With `persistent` true, what this file sets is set again at each start,
-over the saved state.
+Any other name is a field of the table like any other, so options of your
+own can be kept there too. lulibre-setup writes the values chosen on its
+screen to `lua/config/options.lua`. With `persistent` true, what this file
+sets is set again at each start, over the saved state.
 
 Every setting Lua can set takes effect at once, except the files the
 index opens with (`path.indexdb` and the files beside it), which are read
@@ -149,9 +146,9 @@ require "config.events"
 
 ```lua
 -- lua/config/options.lua
-local _ENV = setman.settings
-path.library = "~/calibre-library"
-ocr = "auto"
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.ocr = "auto"
 ```
 
 ```lua

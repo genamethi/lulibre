@@ -63,13 +63,15 @@ prefix `path.modtree` names.
 
 Two parts are C's unless a handler of yours takes their place, set as a
 field; setting it to nil gives the part back. A handler runs as a task,
-so it can wait.
+so it can wait. setman and `lulib.opt` reach both by name, `ocr_eng` and
+`store.calibre`, though they are no settings of the store: the command
+line and the saved state hold none.
 
-    utils.ocr = function(path, page, lang) return utils.exec({ "my-ocr", path, tostring(page) }).stdout end
+    utils.ocr_eng = function(path, page, lang) return utils.exec({ "my-ocr", path, tostring(page) }).stdout end
 
 | | |
 |---|---|
-| `utils.ocr = function(path, page, lang)` | reads a page for OCR in tesseract's place, for each page the indexer reads: the page's text, or a list of lines `{text=, size=, x0=, y0=, x1=, y1=, block=}`, or nil when it cannot |
+| `utils.ocr_eng = function(path, page, lang)` | reads a page for OCR in tesseract's place, for each page the indexer reads: the page's text, or a list of lines `{text=, size=, x0=, y0=, x1=, y1=, block=}`, or nil when it cannot |
 | `store.calibre = function(book, fields)` | writes a book's changes in calibredb's place, for each book of a write; `fields` as `{title=, authors = "A & B", tags = "a, b", ...}`: true, or nil and why; it takes its own route to calibre |
 
 ## Settings: setman
@@ -78,8 +80,8 @@ so it can wait.
     setman.set("ocr", "auto")
     setman.set("ocr", nil)       -- back to what the saved state or the default says
     setman.save()                -- write the saved state now (with persistent = true)
-    setman.settings.ocr = "auto" -- the same set, through the settings as a table
-    setman.settings.path.library -- the same get
+    lulib.opt.ocr = "auto"       -- the same set, through the settings as a table
+    lulib.opt.path.library       -- the same get
 
 `get` returns the values in effect, in order. Code that may run again
 while it waits (a callback, a command) takes its values once, at its
@@ -138,8 +140,8 @@ interface was at when it was invoked: `{name=, args=, book=, selection =
 | | |
 |---|---|
 | `taskman` `uiman` `setman` `evman` `keymap` `cmdman` | globals: tasks, the interface, settings, events, keys, commands |
-| `lulib` | a global: `version`, `build`, `headless` |
-| `utils` | a global: `exec`, `md5`, `index` (below), and the handler `ocr` (above) |
+| `lulib` | a global: `version`, `build`, `headless`, `opt` (the settings as a table) |
+| `utils` | a global: `exec`, `md5`, `index` (below), and the handler `ocr_eng` (above) |
 | `bookman` `store` `wit` `net` `txt` `expr` `lex` `iter` `mesr` `trust` `curl` `sql` `lsqlite3` | modules, by `require` |
 
 ## The library: bookman

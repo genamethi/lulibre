@@ -81,25 +81,25 @@ expect "and finds its files beside it" "$(realpath "$t/user/share/lulibre")/lua/
   "$("$t/user/bin/lulibre" --clean run "$t/where.lua" 2>&1)"
 cfg=$t/home/.config/lulibre
 options=$(cat "$cfg/lua/config/options.lua" 2>/dev/null || true)
-contains "options.lua: through setman.settings" "local _ENV = setman.settings" "$options"
-contains "options.lua: the library, quote and all" "path.library = \"$t/home/it's lib\"" "$options"
-contains "options.lua: the content server" 'server = "http://127.0.0.1:8080"' "$options"
-contains "options.lua: a setting of the plan's, as a number" "pages = 8" "$options"
+contains "options.lua: through lulib.opt" "local opt = lulib.opt" "$options"
+contains "options.lua: the library, quote and all" "opt.path.library = \"$t/home/it's lib\"" "$options"
+contains "options.lua: the content server" 'opt.server = "http://127.0.0.1:8080"' "$options"
+contains "options.lua: a setting of the plan's, as a number" "opt.pages = 8" "$options"
 expect "no init.lua before: setup writes one that loads them" 'require "config.options"' "$(cat "$cfg/init.lua" 2>/dev/null)"
 printf 'print(setman.get("pages") .. "|" .. setman.get("server"))\n' >"$t/read.lua"
 expect "and lulibre starts with them" "8|http://127.0.0.1:8080" "$("$t/user/bin/lulibre" run "$t/read.lua" 2>&1)"
 
 # again, over an options.lua edited since and an init.lua of the user's
-printf 'ocr = "auto"\n' >>"$cfg/lua/config/options.lua"
+printf 'opt.ocr = "auto"\n' >>"$cfg/lua/config/options.lua"
 before=$(cat "$cfg/lua/config/options.lua")
 printf 'setman.set("mouse", false)\n' >"$cfg/init.lua"
 printf 'path.library=%s\nserver=\npages=7\n' "$t/home/it's lib" >"$t/again"
 out=$("$bin" --clean run "$src/setup/options.lua" "$t/again" "$src/setup/init.lua" 2>&1) && status=0 || status=$?
 expect "written again" "0" "$status"
 options=$(cat "$cfg/lua/config/options.lua")
-contains "a line of the user's is kept" 'ocr = "auto"' "$options"
-contains "a setting's line is replaced" "pages = 7" "$options"
-lacks "an empty value takes its line out" "server =" "$options"
+contains "a line of the user's is kept" 'opt.ocr = "auto"' "$options"
+contains "a setting's line is replaced" "opt.pages = 7" "$options"
+lacks "an empty value takes its line out" "opt.server =" "$options"
 expect "options.lua.bak: the file before" "$before" "$(cat "$cfg/lua/config/options.lua.bak")"
 expect "init.lua is left as it was" 'setman.set("mouse", false)' "$(cat "$cfg/init.lua")"
 contains "and setup says it does not load them" 'does not load these' "$out"

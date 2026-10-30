@@ -54,25 +54,30 @@ local path = dir .. "/options.lua"
 os.execute(("mkdir -p '%s'"):format(dir:gsub("'", "'\\''")))
 
 local before = read(path)
+local header = "local opt = lulib.opt"
 local text = before or "-- lulibre's settings, written by lulibre-setup; init.lua loads them with\n"
-  .. "-- `require \"config.options\"`\nlocal _ENV = setman.settings\n"
--- a file of setman.set lines, without setman.settings as its environment
-local plain = before and not before:find("_ENV%s*=%s*setman%.settings")
+  .. "-- `require \"config.options\"`\n" .. header .. "\n"
 
-local function pattern(name)
+-- the lines that set a setting: opt.NAME =, lulib.opt.NAME =, setman.set("NAME"
+local function setting(line, name)
   local quoted = name:gsub("%p", "%%%0")
-  if plain then return "^%s*setman%.set%(%s*[\"']" .. quoted .. "[\"']" end
-  return "^%s*" .. quoted .. "%s*="
+  return line:find("^%s*opt%." .. quoted .. "%s*=") or line:find("^%s*lulib%.opt%." .. quoted .. "%s*=")
+    or line:find("^%s*setman%.set%(%s*[\"']" .. quoted .. "[\"']")
 end
 
 local lines = {}
 for line in (text:sub(-1) == "\n" and text or text .. "\n"):gmatch("(.-)\n") do lines[#lines + 1] = line end
+-- opt, where the file has none: after its first comments
+if not text:find("local%s+opt%s*=%s*lulib%.opt") then
+  local at = 1
+  while lines[at] and lines[at]:find("^%-%-") do at = at + 1 end
+  table.insert(lines, at, header)
+end
 for _, it in ipairs(items) do
-  local new = it.text ~= "" and (plain and ("setman.set(%q, %s)"):format(it.name, it.literal)
-    or ("%s = %s"):format(it.name, it.literal))
+  local new = it.text ~= "" and ("opt.%s = %s"):format(it.name, it.literal)
   local found
   for i = #lines, 1, -1 do
-    if lines[i]:find(pattern(it.name)) then
+    if setting(lines[i], it.name) then
       if new and not found then lines[i] = new else table.remove(lines, i) end
       found = true
     end

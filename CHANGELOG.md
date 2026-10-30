@@ -9,7 +9,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 \* 0.4.0-pre-alpha includes every change made for 0.3.0, which was not released.
 
 - Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
-- Added `setman.settings`: assigning a field sets that setting, reading one gets its value.
+- Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 
 ## 0.2.1

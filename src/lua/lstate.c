@@ -217,7 +217,8 @@ lua_State *lstate_new(struct app *app) {
   sched_init(app);
 
   /* lulib.version: "0.1.0-alpha"; lulib.build: its parts and the kind of
-   * build; lulib.headless: set without the interface (main.c) */
+   * build; lulib.opt: the settings as a table; lulib.headless: set without
+   * the interface (main.c) */
   lua_newtable(L);
   lua_pushstring(L, LULIBRE_VERSION);
   lua_setfield(L, -2, "version");
@@ -242,6 +243,8 @@ lua_State *lstate_new(struct app *app) {
   lua_pushstring(L, lulibre_build_commit);
   lua_setfield(L, -2, "commit");
   lua_setfield(L, -2, "build");
+  l_setman_push_opt(L);
+  lua_setfield(L, -2, "opt");
   lua_setglobal(L, "lulib");
   lua_newtable(L);
   l_proc_open(L);

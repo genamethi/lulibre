@@ -1,5 +1,5 @@
 /* Handlers (core/registry.h): a function of Lua's in the place of a part
- * of C's, set as a field of a library table, `utils.ocr = fn` or
+ * of C's, set as a field of a library table, `utils.ocr_eng = fn` or
  * `store.calibre = fn`; nil gives the part back to C.
  *
  * The functions are kept in the registry by part, so C finds them without

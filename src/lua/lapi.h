@@ -77,6 +77,8 @@ int luaopen_setman(struct lua_State *L);
 void l_setman_fill(struct lua_State *L, const struct settings *st);
 /* While on, a set lies under the command line: init.lua's start. */
 void l_setman_starting(int on);
+/* Pushes lulib.opt: the settings as a table (l_setman.c). */
+void l_setman_push_opt(struct lua_State *L);
 struct setman_change *setman_change_new(const struct settings *st, int def);
 void l_setman_changed(struct app *app, void *arg);
 /* evman (l_evman.c); l_evman_close drops Lua's callbacks before the
@@ -102,10 +104,10 @@ int l_doc_files(struct lua_State *L);  /* bookman.files */
 int luaopen_curl(struct lua_State *L);
 /* lsqlite3 (vendor/lsqlite3), preloaded. */
 int luaopen_lsqlite3(struct lua_State *L);
-/* Hands an OCR request to utils.ocr (l_ocr.c); any thread. */
+/* Hands an OCR request to utils.ocr_eng (l_ocr.c); any thread. */
 struct ocr_req;
 void lapi_ocr_read(struct ocr_req *req);
-/* utils.ocr's field, for the table utils is built in (l_ocr.c). */
+/* utils.ocr_eng's field, for the table utils is built in (l_ocr.c). */
 void l_ocr_open(struct lua_State *L);
 
 /* Handlers (lua/handler.c): a function of Lua's in the place of a part of

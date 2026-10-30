@@ -11,10 +11,15 @@
  *                             line's value
  *   setman.save()             write the saved state now (only while the
  *                             setting persistent is true)
- *   setman.settings           the settings as a table: a name read is get,
- *                             a name assigned is set, path.library and
- *                             the like as written; for a file of settings,
- *                             `local _ENV = setman.settings`
+ *   lulib.opt                 the settings as a table, as vim.opt: a name
+ *                             read is get, a name assigned is set,
+ *                             path.library and the like as written; any
+ *                             other name is the table's own field
+ *
+ * Two names are the handlers C calls, not settings in the store: ocr_eng
+ * is utils.ocr_eng and store.calibre is store.calibre. get and set read
+ * and assign that field; the command line and the saved state know
+ * nothing of them.
  *
  * The store belongs to the main thread (core/settings.h). The lua_State
  * holds a copy, a table in its registry: get reads it and never waits, so
@@ -84,6 +89,26 @@ static void put(lua_State *L, int def, const union setting_value *v) {
   push_value(L, &setting_defs[def], v);
   lua_setfield(L, -2, setting_defs[def].name);
   lua_pop(L, 1);
+}
+
+/* the handlers get and set reach: a name, the module, the field */
+static const char *const aliases[][3] = {{"ocr_eng", "utils", "ocr_eng"}, {"store.calibre", "store", "calibre"}};
+#define NALIASES (sizeof aliases / sizeof aliases[0])
+
+static int alias(const char *name) {
+  for (size_t i = 0; i < NALIASES; i++)
+    if (!strcmp(aliases[i][0], name)) return (int)i;
+  return -1;
+}
+
+/* pushes the table alias a's handler is a field of: a global (utils), or
+ * else a module */
+static void push_module(lua_State *L, int a) {
+  if (lua_getglobal(L, aliases[a][1]) != LUA_TNIL) return;
+  lua_pop(L, 1);
+  lua_getglobal(L, "require");
+  lua_pushstring(L, aliases[a][1]);
+  lua_call(L, 1, 1);
 }
 
 static int find(const char *name) {
@@ -189,6 +214,13 @@ static int l_get(lua_State *L) {
   lua_getfield(L, LUA_REGISTRYINDEX, COPY);
   for (int i = 1; i <= n; i++) {
     const char *name = luaL_checkstring(L, i);
+    int a = alias(name);
+    if (a >= 0) {
+      push_module(L, a);
+      lua_getfield(L, -1, aliases[a][2]);
+      lua_remove(L, -2);
+      continue;
+    }
     if (lua_getfield(L, n + 1, name) == LUA_TNIL) return luaL_error(L, "no setting is called %s", name);
     if (!strncmp(name, "path.", 5) && !*lua_tostring(L, -1) && push_worked_out(L, name)) lua_remove(L, -2);
   }
@@ -197,6 +229,14 @@ static int l_get(lua_State *L) {
 
 static int l_set(lua_State *L) {
   const char *name = luaL_checkstring(L, 1);
+  int a = alias(name);
+  if (a >= 0) {
+    lua_settop(L, 2);
+    push_module(L, a);
+    lua_insert(L, 2);
+    lua_setfield(L, 2, aliases[a][2]);
+    return 0;
+  }
   int def = find(name);
   if (def < 0) return luaL_error(L, "no setting is called %s", name);
   const struct setting_def *d = &setting_defs[def];
@@ -229,14 +269,15 @@ static int l_set(lua_State *L) {
   return 0;
 }
 
-/* setman.settings, and a part of it: the settings whose names begin with
- * the prefix, its upvalue. A name read is setman.get, or the part of the
- * settings it begins (path); at the top, any other name is the global of
- * that name. A name assigned is setman.set. */
+/* lulib.opt, and a part of it: the settings whose names begin with the
+ * prefix, its upvalue. A setting's name read is setman.get, a name some
+ * settings begin with (path) the part of them, kept in the table; a name
+ * assigned is setman.set. Any other name is the table's own field, as in
+ * any table. */
 static void push_part(lua_State *L, const char *prefix);
 
-/* f(name, value) from a metamethod: an error says where the assignment or
- * the read is */
+/* f(name[, value]) from a metamethod: an error says where the assignment
+ * or the read is */
 static int call_at(lua_State *L, lua_CFunction f, int nargs, int nres) {
   lua_pushcfunction(L, f);
   lua_insert(L, -nargs - 1);
@@ -249,27 +290,47 @@ static int call_at(lua_State *L, lua_CFunction f, int nargs, int nres) {
   return nres;
 }
 
-static int part_index(lua_State *L) {
-  const char *prefix = lua_tostring(L, lua_upvalueindex(1));
-  const char *k = luaL_checkstring(L, 2);
-  const char *name = lua_pushfstring(L, "%s%s", prefix, k);
-  if (find(name) >= 0) return call_at(L, l_get, 1, 1);
+/* 1: name is a setting or a handler; 2: some begin with name and a dot */
+static int known(const char *name) {
+  if (find(name) >= 0 || alias(name) >= 0) return 1;
   size_t n = strlen(name);
   for (int i = 0; i < S_COUNT; i++)
-    if (!strncmp(setting_defs[i].name, name, n) && setting_defs[i].name[n] == '.') {
-      lua_pushfstring(L, "%s.", name);
-      push_part(L, lua_tostring(L, -1));
-      return 1;
-    }
-  if (!*prefix && lua_getglobal(L, k) != LUA_TNIL) return 1;
-  return luaL_error(L, "no setting%s is called %s", *prefix ? "" : " or global", name);
+    if (!strncmp(setting_defs[i].name, name, n) && setting_defs[i].name[n] == '.') return 2;
+  for (size_t i = 0; i < NALIASES; i++)
+    if (!strncmp(aliases[i][0], name, n) && aliases[i][0][n] == '.') return 2;
+  return 0;
+}
+
+static int part_index(lua_State *L) {
+  const char *prefix = lua_tostring(L, lua_upvalueindex(1));
+  if (lua_type(L, 2) != LUA_TSTRING) return 0;
+  const char *name = lua_pushfstring(L, "%s%s", prefix, lua_tostring(L, 2));
+  switch (known(name)) {
+  case 1:
+    return call_at(L, l_get, 1, 1);
+  case 2:
+    lua_pushfstring(L, "%s.", name);
+    push_part(L, lua_tostring(L, -1));
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, -2);
+    lua_rawset(L, 1);
+    return 1;
+  }
+  return 0;
 }
 
 static int part_newindex(lua_State *L) {
   const char *prefix = lua_tostring(L, lua_upvalueindex(1));
-  lua_pushfstring(L, "%s%s", prefix, luaL_checkstring(L, 2));
-  lua_pushvalue(L, 3);
-  return call_at(L, l_set, 2, 0);
+  if (lua_type(L, 2) == LUA_TSTRING) {
+    const char *name = lua_pushfstring(L, "%s%s", prefix, lua_tostring(L, 2));
+    if (known(name) == 1) {
+      lua_pushvalue(L, 3);
+      return call_at(L, l_set, 2, 0);
+    }
+    lua_pop(L, 1);
+  }
+  lua_rawset(L, 1);
+  return 0;
 }
 
 static void push_part(lua_State *L, const char *prefix) {
@@ -284,6 +345,10 @@ static void push_part(lua_State *L, const char *prefix) {
   lua_setmetatable(L, -2);
 }
 
+void l_setman_push_opt(lua_State *L) {
+  push_part(L, "");
+}
+
 static int l_save(lua_State *L) {
   queue_post(LOOP_UI, store_save, NULL);
   return 0;
@@ -292,8 +357,6 @@ static int l_save(lua_State *L) {
 int luaopen_setman(lua_State *L) {
   static const luaL_Reg fns[] = {{"get", l_get}, {"set", l_set}, {"save", l_save}, {NULL, NULL}};
   luaL_newlib(L, fns);
-  push_part(L, "");
-  lua_setfield(L, -2, "settings");
   return 1;
 }
 

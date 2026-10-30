@@ -25,16 +25,26 @@ cat >"$cfg/init.lua" <<'LUA'
 require "config.options"
 LUA
 cat >"$cfg/lua/config/options.lua" <<LUA
-local _ENV = setman.settings
-pages = 9
-jobs = 3
-path.modtree = "$t/mods"
+local opt = lulib.opt
+opt.pages = 9
+opt.jobs = 3
+opt.path.modtree = "$t/mods"
 LUA
 cat >"$t/probe.lua" <<'LUA'
 local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
 say("pages", setman.get("pages"))
 say("jobs", setman.get("jobs"))
-say("settings typo", select(2, pcall(function() setman.settings.path.librar = "x" end)))
+local opt = lulib.opt
+opt.path.librar, opt.mine = "x", 1
+say("opt own", rawget(opt.path, "librar"), opt.mine, opt.path.library == setman.get("path.library"))
+local function reader() end
+local function writer() end
+setman.set("ocr_eng", reader)
+opt.store.calibre = writer
+say("handlers", utils.ocr_eng == reader, opt.ocr_eng == reader, require("store").calibre == writer,
+  setman.get("store.calibre") == writer)
+opt.ocr_eng, opt.store.calibre = nil, nil
+say("handlers back", utils.ocr_eng == nil, require("store").calibre == nil)
 say("ocr", setman.get("ocr"))
 say("packaged", type(require("exprman")))
 say("prelude", type(uiman.list), type(uiman.form))
@@ -63,10 +73,10 @@ again=$("$bin" -L "$t/lib" -o persistent=true run "$t/probe.lua" 2>&1)
 elsewhere=$("$bin" -L "$t/lib" -o path.state="$t/st/saved" -o persistent=true run "$t/probe.lua" 2>&1)
 saved=$(cat "$t/st/saved" 2>/dev/null || true)
 
-# a reader of Lua's in tesseract's place (utils.ocr), and back; it waits
+# a reader of Lua's in tesseract's place (utils.ocr_eng), and back; it waits
 # once before it answers
 cat >"$cfg/init.lua" <<'LUA'
-utils.ocr = function(path, page, lang) taskman.sleep(10) return "Read By Lua\npage " .. page .. " " .. lang end
+utils.ocr_eng = function(path, page, lang) taskman.sleep(10) return "Read By Lua\npage " .. page .. " " .. lang end
 LUA
 "$bin" -L "$t/lib" -o ocr=auto index >/dev/null 2>&1
 db=$(ls "$t"/data/lulibre/lib-*.db | grep -v '\.[a-z]*\.db$')
@@ -352,8 +362,10 @@ lacks() { # description, needle, haystack
 }
 contains "the command line's value over init.lua's" "pages|4" "$out"
 contains "the command line's where init.lua is silent" "ocr|never" "$out"
-contains "lua/config/options.lua, required by init.lua, sets through setman.settings" "jobs|3" "$out"
-contains "a name setman.settings does not know is an error" "no setting is called path.librar" "$out"
+contains "lua/config/options.lua, required by init.lua, sets through lulib.opt" "jobs|3" "$out"
+contains "a name lulib.opt does not know is its own field, under a part too" "opt own|x|1|true" "$out"
+contains "ocr_eng and store.calibre: the handlers, through setman and lulib.opt" "handlers|true|true|true|true" "$out"
+contains "and nil gives them back to C" "handlers back|true|true" "$out"
 contains "lulibre's own module before the user's of the same name" "packaged|table" "$out"
 contains "the prelude loaded: uiman.list and uiman.form are there" "prelude|function|function" "$out"
 contains "the user's own module is found" "user|the user's own" "$out"

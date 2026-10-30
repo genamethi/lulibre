@@ -245,7 +245,7 @@ task until the answer comes back as a message (`src/lua/uicall.c`). The
 interface runs `x_ui` on a lua_State of its own that holds only the copied
 values. C never calls Lua and waits: where Lua may take a part's place
 (`src/core/registry.h`), C asks by message and goes on when the answer
-comes. A handler of Lua's is a field of a library table (`utils.ocr`,
+comes. A handler of Lua's is a field of a library table (`utils.ocr_eng`,
 `store.calibre`); `src/lua/handler.c` keeps it, runs it as a task once
 per call the part lists, and hands the results to the part's answer, a
 C function beside the part (`src/lua/l_ocr.c`, `src/lua/l_library.c`).

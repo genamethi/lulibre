@@ -1,12 +1,12 @@
-/* utils.ocr (core/registry.h, index/ocr.h, lua/handler.c): a reader of
+/* utils.ocr_eng (core/registry.h, index/ocr.h, lua/handler.c): a reader of
  * Lua's in tesseract's place, called as a task for each page the indexer
  * is to read:
  *
- *   utils.ocr = function(path, page, lang) ... end
+ *   utils.ocr_eng = function(path, page, lang) ... end
  *
  * It returns the page's text (lines; a blank line before a paragraph), or
  * a list of lines {text=, size=, x0=, y0=, x1=, y1=, block=}, or nil when
- * it could not read the page. utils.ocr = nil gives the pages back to
+ * it could not read the page. utils.ocr_eng = nil gives the pages back to
  * tesseract. */
 #include <stdint.h>
 #include <stdlib.h>
@@ -109,13 +109,13 @@ static void answer(lua_State *L, void *req, int results, const char *why) {
   queue_post(LOOP_WORK, answer_main, r);
 }
 
-static const struct lapi_part part = {REG_READER, "OCR (utils.ocr)", calls, answer, fail};
+static const struct lapi_part part = {REG_READER, "OCR (utils.ocr_eng)", calls, answer, fail};
 
 void lapi_ocr_read(struct ocr_req *r) {
   lapi_handle(&part, r);
 }
 
 void l_ocr_open(lua_State *L) {
-  static const struct lapi_handler fields[] = {{"ocr", &part}, {NULL, NULL}};
+  static const struct lapi_handler fields[] = {{"ocr_eng", &part}, {NULL, NULL}};
   lapi_handlers(L, -1, fields);
 }
