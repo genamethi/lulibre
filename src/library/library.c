@@ -651,8 +651,9 @@ struct reload {
   uv_work_t req;
   struct library *lib;
   char *index, *library_dir;
+  char *sync_dir; /* read after the records (path.sync), or "" */
   int force, rc;
-  char *err;
+  char *err, *sync_err;
   long long *ids; /* the books the copy found changed */
   int nids;
   struct reload_wait *waits;
@@ -667,6 +668,16 @@ static void reload_work(uv_work_t *req) {
   }
   r->rc = db_mirror(&db, r->library_dir, r->force, &r->err);
   if (r->rc > 0) r->ids = db_mirror_changed(&db, &r->nids);
+  /* the sync folder with them: its files are books too (design 36) */
+  long long *staged = NULL;
+  int nstaged = 0;
+  if (r->rc >= 0 && r->sync_dir[0] && db_stage_scan(&db, r->sync_dir, &staged, &nstaged, &r->sync_err) == 0 &&
+      nstaged) {
+    r->ids = xrealloc(r->ids, (size_t)(r->nids + nstaged) * sizeof *r->ids);
+    memcpy(r->ids + r->nids, staged, (size_t)nstaged * sizeof *staged);
+    r->nids += nstaged;
+  }
+  free(staged);
   db_close(&db);
 }
 
@@ -715,6 +726,7 @@ static void reload_after(uv_work_t *req, int status) {
   struct library *lib = r->lib;
   lib->reloading = 0;
   if (r->rc < 0) log_warn("reading calibre's records again: %s", r->err);
+  if (r->sync_err) log_warn("reading the sync folder: %s", r->sync_err);
   struct event *ev = lib->closing ? NULL : changed_event(r);
   for (struct reload_wait *w = r->waits, *n; w; w = n) {
     n = w->next;
@@ -726,8 +738,10 @@ static void reload_after(uv_work_t *req, int status) {
   if (ev) events_post(ev);
   free(r->ids);
   free(r->err);
+  free(r->sync_err);
   free(r->index);
   free(r->library_dir);
+  free(r->sync_dir);
   free(r);
   if (lib->closing) {
     if (lib->probe_closed) free(lib);
@@ -744,6 +758,7 @@ static void reload_start(struct library *lib) {
   r->index = xstrdup(app->db.path);
   char *real = realpath(work_str(S_LIBRARY), NULL);
   r->library_dir = real ? real : xstrdup(work_str(S_LIBRARY));
+  r->sync_dir = xstrdup(work_str(S_SYNC_DIR));
   r->waits = lib->waiting;
   lib->waiting = NULL;
   for (struct reload_wait *w = r->waits; w; w = w->next)

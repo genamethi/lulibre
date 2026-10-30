@@ -223,6 +223,32 @@ print(#bad == 0 and "compiled|all" or "compiled|" .. table.concat(bad, "\n"))
 LUA
 compiled=$("$bin" -L "$t/lib" run "$t/compile.lua" "$src/../lua" "$src/../scripts" "$src/../examples" 2>&1)
 
+# the sync folder, read with calibre's records: an ebook file is a book in
+# in:sync, named after its file; a copy of a library book's file is
+# is:inlibrary; hidden files, unsynced/ and other files are passed over;
+# a file taken out is dropped at the next reading
+mkdir -p "$t/sync/sub" "$t/sync/unsynced"
+cp "$t/lib/Unknown/paper (1)/paper - Unknown.pdf" "$t/sync/copy.pdf"
+printf 'notes\n' >"$t/sync/sub/My_Notes.txt"
+printf 'x\n' >"$t/sync/unsynced/back.txt"
+printf 'x\n' >"$t/sync/.hidden.txt"
+printf 'x\n' >"$t/sync/readme.md"
+cat >"$t/sync.lua" <<'LUA'
+local bookman, store = require "bookman", require "store"
+local dir = ...
+local function titles()
+  local t = {}
+  for _, b in ipairs(bookman.books("in:sync sort:title")) do t[#t + 1] = b.title end
+  return table.concat(t, ",")
+end
+store.reload()
+print("synced|" .. titles() .. "|" .. #bookman.ids("in:sync is:inlibrary"))
+os.remove(dir .. "/sub/My_Notes.txt")
+store.reload()
+print("resynced|" .. titles())
+LUA
+synced=$("$bin" -L "$t/lib" -o path.sync="$t/sync" run "$t/sync.lua" "$t/sync" 2>&1)
+
 # cmdman: every command, lulibre's and one made in Lua, and one by name
 cat >"$t/cmd.lua" <<'LUA'
 cmdman.create("hello", function() end, { desc = "say hello" })
@@ -410,6 +436,8 @@ contains "tag-dots lists the tags it would rewrite" "    2  math/algebra  →  m
 contains "and with write, rewrites them as one operation" "stored|2|math.algebra" "$dotsw"
 contains "which it says can be undone" "as operation" "$dotsw"
 contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
+contains "the sync folder's ebook files are books, named after their files; a copy of the library's is in the library" "synced|copy,My Notes|1" "$synced"
+contains "a file taken out of the sync folder is dropped at the next reading" "resynced|copy" "$synced"
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
 contains "a key bound to a function is a binding with its desc, not a command; uiman.maps gives the function" "fn key|0|second|true" "$cmds"

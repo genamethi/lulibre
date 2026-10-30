@@ -266,7 +266,7 @@ static int count_books(struct tui *t, const char *where) {
 const char *tab_command(const struct tui *t, int i) {
   int sync = app_str(t->app, S_SYNC_DIR)[0] != '\0';
   if (i == 0) return "source library";
-  if (i == 1 && sync) return "sync";
+  if (i == 1 && sync) return "source sync";
   return "source config";
 }
 

@@ -80,7 +80,7 @@ removed.
 | `leader` | `\` | the key `<Leader>` stands for |
 | `blitter` | `auto` | how page images are drawn: `auto` · `pixel` · `sextant` · `quadrant` · `half` |
 | `preview` | `text` | what the preview shows first: `text` · `image` |
-| `path.sync` | | a folder of files waiting to be added to the library |
+| `path.sync` | | a folder of files waiting to be added to the library: its ebook files are read with calibre's records, and each is a book in `in:sync` (2 or gS shows them) |
 | `path.modtree` | | a module prefix searched after lulibre's own modules and yours; not in a pixi environment |
 | `rank_coverage` `rank_agreement` `rank_track` | `45` `35` `20` | what ranking a parse weighs: the fields it fills, its agreement with the sources, its record of review decisions |
 | `track_after` | `100` | review decisions the journal holds before a record of decisions counts |

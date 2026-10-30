@@ -84,8 +84,8 @@ and `lulib.build.commit`, and a crash log names both.
 | | |
 |---|---|
 | `make unit` | `test/unit.c` (the C core) and `test/core.c` (the runtime: settings, events, the registry) |
-| `make check` | the unit tests, `test/lint.sh` (rules the sources can be searched for: no `strerror`), `test/runtime.sh` (settings, init.lua, where modules are found), `test/net.sh` (online lookups with canned answers, no network), `test/curl.sh` (the curl module against a server of its own in a private network namespace) and `test/setup.sh` (setup/install.sh under a temporary prefix, the settings it writes, and the setup screen in a private tmux server) |
-| `make e2e` | every end-to-end test: those five, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) and `test/screens.py` (`uiman.list`, `uiman.form`, review, a key bound to a function, and a pick cancelled late, on a pseudo-terminal) |
+| `make check` | the unit tests, `test/lint.sh` (rules the sources can be searched for: no `strerror`), `test/runtime.sh` (settings, init.lua, where modules are found, the sync folder read), `test/net.sh` (online lookups with canned answers, no network), `test/curl.sh` (the curl module against a server of its own in a private network namespace) and `test/setup.sh` (setup/install.sh under a temporary prefix, the settings it writes, and the setup screen in a private tmux server) |
+| `make e2e` | every end-to-end test: those five, `test/write.sh` (the write path against throwaway libraries, straight to the folder and through a content server) `test/tasks.py` (tasks that never wait, in the interface on a pseudo-terminal: reported, cancelled, and quitting past one) and `test/screens.py` (`uiman.list`, `uiman.form`, review, a key bound to a function, a pick cancelled late, `:source sync` reading the folder again, on a pseudo-terminal) |
 
 Previously the end-to-end tests drove the 0.2 Lua runtime. Now they are
 written again as each part of 0.4 is.

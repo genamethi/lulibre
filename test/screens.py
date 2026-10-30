@@ -2,7 +2,8 @@
 under the cursor, the items read again after it, an action's error shown,
 a refresh on an event, a field edited through the form, review, a key
 bound to a function, a pick cancelled late, on_change let go, one task
-per panel, uiman.jump's answer, and sleepers gone with their state.
+per panel, uiman.jump's answer, sleepers gone with their state, and the
+sync folder read again by :source sync.
 
   python3 -I test/screens.py BIN
 
@@ -81,10 +82,11 @@ end)
 ''')
 env = dict(os.environ, TERM="xterm-256color", LULIBRE_LOG=log, XDG_CONFIG_HOME=t + "/config",
            XDG_DATA_HOME=t + "/data", XDG_STATE_HOME=t + "/state", SCREENS_OUT=out)
+os.makedirs(os.path.join(t, "sync"))
 pid, fd = pty.fork()
 if pid == 0:
     fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
-    os.execve(bin_, [bin_, "-L", os.path.join(t, "lib")], env)
+    os.execve(bin_, [bin_, "-L", os.path.join(t, "lib"), "-o", "path.sync=" + os.path.join(t, "sync")], env)
 
 
 def pump(secs):
@@ -125,6 +127,11 @@ keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+with open(os.path.join(t, "sync", "arrived.txt"), "w") as f:
+    f.write("a file put in the sync folder while lulibre runs\n")
+keys(":source sync\r", 1.5)  # the folder read again
+keys(":lua note('in sync|' .. #require('bookman').ids('in:sync'))\r", 0.6)
+keys(":source library\r", 0.6)
 keys(":lua note('jump|' .. tostring(uiman.jump(999999)))\r", 0.6)
 keys(":demowait\r", 1)
 keys(":demoinput\r", 0.6)
@@ -169,6 +176,7 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check(":source sync reads the sync folder again", "in sync|1" in got)
 check("uiman.jump answers false for a book not in the list", "jump|false" in got)
 check("a second task's p:wait is refused, and the first hears the panel close",
       "second|false" in got and "first|nil" in got)

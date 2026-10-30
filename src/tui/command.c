@@ -420,6 +420,7 @@ static void c_source(struct tui *t, const char *args) {
   }
   rows_set_source(t, to);
   preview_book_changed(t);
+  if (to) tui_mirror(t, 0, 0); /* the folder read again: the list follows */
 }
 
 /* ---- pickers ---- */

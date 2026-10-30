@@ -42,6 +42,21 @@ char *db_uri(const char *path, const char *mode);
 /* Rebuild the rows that show staged files (the `staged` table) as books
  * with negative ids. In its own transaction unless in_txn. */
 int db_stage_refresh(struct db *db, int in_txn, char **err);
+/* The sync folder dir read into `staged` (design 28, 36): a file new there
+ * is staged under its name, a changed one takes its size and time, one
+ * gone is dropped, and each new or changed one is checked against the
+ * library's files by content (`twin`); then db_stage_refresh. *ids (malloc'd,
+ * *nids of them; NULL when none) are the books new, changed or gone, as
+ * negative ids. Returns 0, or -1 with *err. */
+int db_stage_scan(struct db *db, const char *dir, long long **ids, int *nids, char **err);
+
+/* The hashes table (db/hash.c): a file's MD5 while its size and time are
+ * unchanged. get: 1 and hex when known; file: 0 and hex, else an errno. */
+struct stat;
+long long db_mtime_ns(const struct stat *sb);
+int db_hash_get(sqlite3 *h, const char *path, long long size, long long mtime_ns, char hex[33]);
+void db_hash_put(sqlite3 *h, const char *path, long long size, long long mtime_ns, const char *hex);
+int db_hash_file(sqlite3 *h, const char *path, char hex[33]);
 int db_exec(struct db *db, const char *sql, char **err);
 int db_prepare(struct db *db, const char *sql, sqlite3_stmt **st, char **err);
 
