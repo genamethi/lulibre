@@ -126,6 +126,11 @@ and paste it with `<C-v>`.
 | `gr` · `r` | `review` · `review selection` | the proposals of every book that has any, or of the selection: `a` accepts, `e` edits first, `r` rejects, Space shows the next alternative |
 | `u` | `undo` | put the last change back |
 | `1` `gl` | `source library` | back to the library |
+| `2` `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
+
+The bar's tabs are the library, the sync folder once one is set, and
+each screen made with `tab = true` ([the API](api.md)); clicking one, or
+`:source NAME`, shows it.
 
 ## Other commands
 

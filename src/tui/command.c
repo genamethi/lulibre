@@ -451,11 +451,18 @@ static void c_help(struct tui *t, const char *args) {
 }
 
 static void c_source(struct tui *t, const char *args) {
-  if (arg_is(args, "config")) {
-    /* whether the window is open is decided now, as the key is read: the
-     * script's own look (:config) comes later, after any key typed since */
-    if (t->screen_tab && panel_is_open(t->screen_tab)) panel_focus(t->screen_tab);
-    else tui_exec(t, "config");
+  int screen = *args && !arg_is(args, "sync") && !arg_is(args, "library") ? ctx_named(args) : -1;
+  if (screen >= 0 && ctx_is_tab(screen)) {
+    /* a tab screen: shown again if it is open, else its command opens it.
+     * Whether it is open is decided now, as the key is read: the script's
+     * own look comes later, after any key typed since */
+    if (t->screen_tab && panel_is_open(t->screen_tab) && panel_place(t->screen_tab) == screen)
+      panel_focus(t->screen_tab);
+    else tui_exec(t, args);
+    return;
+  }
+  if (*args && !arg_is(args, "sync") && !arg_is(args, "library")) {
+    tui_msg(t, 1, "the bar has no tab %s: library, sync, or a screen made with tab = true", args);
     return;
   }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
@@ -676,7 +683,7 @@ void commands_builtin(void) {
   command_register("index", c_index, "[force]  extract text from new or changed files");
   command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
-                   "[library | sync | config]  the bar's tabs: the calibre library or the sync folder in the list, or the configuration window");
+                   "[library | sync | SCREEN]  the bar's tabs: the calibre library or the sync folder in the list, or a tab screen");
   command_register("set", c_set, "name[=value]  show or change an option");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "this screen");

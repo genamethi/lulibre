@@ -248,8 +248,9 @@ static void draw_help(struct tui *t) {
 }
 
 /* ---- the bar's tabs: which of the library and the sync folder the list
- * is showing, and the configuration window, which takes the list's place
- * while it is open. The sync folder's tab is there once one is set. */
+ * is showing, and the screens made with tab = true (scrnman.create), whose
+ * view takes the list's place while it is open. The sync folder's tab is
+ * there once one is set. */
 
 static int count_books(struct tui *t, const char *where) {
   sqlite3_stmt *st;
@@ -262,12 +263,13 @@ static int count_books(struct tui *t, const char *where) {
   return n;
 }
 
-/* The command a click on tab i runs. */
-const char *tab_command(const struct tui *t, int i) {
+/* The command a click on tab i runs, in buf; NULL past the last tab. */
+const char *tab_command(const struct tui *t, int i, char *buf, size_t size) {
   int sync = app_str(t->app, S_SYNC_DIR)[0] != '\0';
-  if (i == 0) return "source library";
-  if (i == 1 && sync) return "source sync";
-  return "source config";
+  const char *name = i == 0 ? "library" : i == 1 && sync ? "sync" : NULL, *title;
+  if (!name && ctx_tab(i - 1 - sync, &name, &title) < 0) return NULL;
+  snprintf(buf, size, "source %s", name);
+  return buf;
 }
 
 static void draw_tabs(struct tui *t) {
@@ -275,16 +277,20 @@ static void draw_tabs(struct tui *t) {
   dr_style(n, theme.dim, theme.bar_bg, 0);
   dr_fill(n, 0, 0, t->cols_n);
   int sync = app_str(t->app, S_SYNC_DIR)[0] != '\0';
-  char label[3][96];
-  int on[3], bg[3], k = 0;
-  snprintf(label[k], sizeof label[k], " 1  Library  %d ", count_books(t, "id > 0"));
-  on[k] = !t->screen_tab && t->rows.source == 0, bg[k++] = theme.accent;
+  char label[TABS_MAX][96];
+  int on[TABS_MAX], bg[TABS_MAX], k = 0;
+  int open = t->screen_tab ? panel_place(t->screen_tab) : -1;
+  snprintf(label[k], sizeof label[k], " %d  Library  %d ", k + 1, count_books(t, "id > 0"));
+  on[k] = open < 0 && t->rows.source == 0, bg[k++] = theme.accent;
   if (sync) {
-    snprintf(label[k], sizeof label[k], " 2  Sync folder  %d ", count_books(t, "id < 0"));
-    on[k] = !t->screen_tab && t->rows.source == 1, bg[k++] = theme.ok;
+    snprintf(label[k], sizeof label[k], " %d  Sync folder  %d ", k + 1, count_books(t, "id < 0"));
+    on[k] = open < 0 && t->rows.source == 1, bg[k++] = theme.ok;
   }
-  snprintf(label[k], sizeof label[k], " 3  Configuration ");
-  on[k] = t->screen_tab != NULL, bg[k++] = theme.accent;
+  const char *name, *title;
+  for (int i = 0, c; k < TABS_MAX && (c = ctx_tab(i, &name, &title)) >= 0; i++) {
+    snprintf(label[k], sizeof label[k], " %d  %s ", k + 1, title);
+    on[k] = open == c, bg[k++] = theme.accent;
+  }
   t->tab_n = k;
   int x = 0;
   for (int i = 0; i < k; i++) {
@@ -296,13 +302,10 @@ static void draw_tabs(struct tui *t) {
     if (i + 1 < k) x += dr_text(n, 0, x, t->cols_n - x, "│");
   }
   char hint[200];
-  if (t->screen_tab)
+  if (open >= 0 || t->rows.source)
     snprintf(hint, sizeof hint, "%s back to the library", key_hint("source library"));
-  else if (t->rows.source)
-    snprintf(hint, sizeof hint, "%s add   %s add and remove   %s drop   %s library", key_hint("sync add"),
-             key_hint("sync move"), key_hint("sync drop"), key_hint("source library"));
   else if (sync)
-    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("sync"));
+    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("source sync"));
   else
     hint[0] = '\0';
   int hw = dr_width(hint, strlen(hint));

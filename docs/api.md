@@ -385,7 +385,7 @@ with a body; `timeout` is in milliseconds.
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |
 | `uiman.key(command [, mode])` | waits: the keys bound to a command line, or nil |
 | `uiman.maps()` | waits: every global binding, `{modes=, keys=, command=, about=, hidden=}`; a key bound to a function has `callback`, the function, in place of `command` |
-| `scrnman.create(name, {actions=, hint=})` | a screen: its actions (`{name, keys, what it does}`) and those its hint shows; made again under its name, it replaces the one before |
+| `scrnman.create(name, {title=, actions=, hint=, place=, tab=})` | a screen: its actions (`{name, keys, what it does}`) and those its hint shows; where its views go, `place = {kind=, size=}` with kind `band` (along the bottom), `column` (down the left), `over` (in the list's place), `tiled` (beside the focused window), `float` (a box above the windows) or `overlay` (over all of them), unless the one opening a view says otherwise; `tab = true` gives it a tab in the bar, which runs the command named as the screen, and its view stands in the list's place while it is open. Made again under its name, it replaces the one before |
 | `uiman.panel{...}` | a panel of rows the task that opened it steers; with `screen=`, a key bound to one of the screen's actions comes back from `p:wait()` as the action's name; `p:wait()` waits for its keys; one task at a time waits on a panel, and a second one's `p:wait()` raises |
 | `uiman.clipboard([text])` `uiman.edit_file(path)` `uiman.in_terminal(argv)` | wait |
 | `uiman.progress(text)` `uiman.status(name, text [, style])` `uiman.log(text [, level])` | |

@@ -329,16 +329,27 @@ static int l_panel_ui(lua_State *L) {
     return luaL_error(L, "no screen is called %s (scrnman.create makes one)", lua_tostring(L, -1));
   }
   lua_pop(L, 1);
+  /* where it goes: as the opener says, else as its screen does, else along the bottom */
+  char side = 'b', screen_side = 0;
+  float size, screen_size = 0;
+  ctx_placement(place, &screen_side, &screen_size);
   lua_getfield(L, 1, "side");
-  char side = !lua_isstring(L, -1) ? 'b' : lua_tostring(L, -1)[0] == 'l' ? 'l' : lua_tostring(L, -1)[0] == 'm' ? 'm' : 'b';
-  lua_getfield(L, 1, side == 'l' ? "width" : "height");
-  float size = (float)luaL_optnumber(L, -1, side == 'l' ? 0.28 : 0.45);
+  if (lua_isstring(L, -1)) {
+    const char *s = lua_tostring(L, -1);
+    side = s[0] == 'l' ? 'l' : s[0] == 'm' ? 'm' : 'b';
+  } else if (screen_side) {
+    side = screen_side;
+  }
+  lua_getfield(L, 1, side == 'l' || side == 't' ? "width" : "height");
+  if (lua_isnumber(L, -1)) size = (float)lua_tonumber(L, -1);
+  else if (screen_size > 0 && side == screen_side) size = screen_size;
+  else size = side == 'l' ? 0.28f : side == 'f' ? 0.6f : side == 'o' ? 1.0f : side == 't' ? 0.5f : 0.45f;
   lua_pop(L, 2);
 
   lua_getfield(L, 1, "focus");
   int keep_focus = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
   lua_getfield(L, 1, "screen_tab");
-  int screen_tab = lua_toboolean(L, -1);
+  int screen_tab = lua_toboolean(L, -1) || ctx_is_tab(place);
   lua_pop(L, 2);
   struct node *was = t->focus;
   struct panel *p = panel_open(t, size, side);

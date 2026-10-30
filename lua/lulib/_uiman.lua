@@ -71,6 +71,12 @@ function M.list(o)
   end
   local spec = { rows = rows() }
   for _, k in ipairs(passed) do spec[k] = o[k] end
+  if not spec.columns then -- untitled, as many as the widest row has cells: a panel draws its rows in columns
+    local n = 1
+    for _, r in ipairs(spec.rows) do n = math.max(n, #r) end
+    spec.columns = {}
+    for c = 1, n do spec.columns[c] = "" end
+  end
   local p <close> = uiman.panel(spec)
   local ids = {}
   local _ <close> = setmetatable({}, { __close = function() for _, id in ipairs(ids) do evman.rm(id) end end })

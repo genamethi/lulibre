@@ -151,7 +151,10 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   if (t->mode != MODE_NORMAL && t->mode != MODE_VISUAL) return;
   if (left && ni->y == 0) { /* a click on one of the bar's tabs */
     for (int i = 0; i < t->tab_n; i++)
-      if (ni->x >= t->tab_x[i] && ni->x < t->tab_x[i + 1]) tui_exec(t, tab_command(t, i));
+      if (ni->x >= t->tab_x[i] && ni->x < t->tab_x[i + 1]) {
+        char cmd[128];
+        if (tab_command(t, i, cmd, sizeof cmd)) tui_exec(t, cmd);
+      }
     return;
   }
   if (!nd) { /* the status line, the message line */

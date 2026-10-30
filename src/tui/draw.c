@@ -66,6 +66,27 @@ void dr_fill(struct ncplane *n, int y, int x, int w) {
   }
 }
 
+void dr_frame(struct ncplane *n, struct rect r, int bg) {
+  for (int y = 0; y < r.h; y++) {
+    dr_style(n, C_DEFAULT, bg, 0);
+    dr_fill(n, r.y + y, r.x, r.w);
+  }
+  if (r.w < 2 || r.h < 2) return;
+  dr_style(n, theme.border, bg, 0);
+  for (int c = 1; c < r.w - 1; c++) {
+    ncplane_putstr_yx(n, r.y, r.x + c, "─");
+    ncplane_putstr_yx(n, r.y + r.h - 1, r.x + c, "─");
+  }
+  for (int y = 1; y < r.h - 1; y++) {
+    ncplane_putstr_yx(n, r.y + y, r.x, "│");
+    ncplane_putstr_yx(n, r.y + y, r.x + r.w - 1, "│");
+  }
+  ncplane_putstr_yx(n, r.y, r.x, "╭");
+  ncplane_putstr_yx(n, r.y, r.x + r.w - 1, "╮");
+  ncplane_putstr_yx(n, r.y + r.h - 1, r.x, "╰");
+  ncplane_putstr_yx(n, r.y + r.h - 1, r.x + r.w - 1, "╯");
+}
+
 void dr_bar(struct ncplane *n, struct rect r, int focused) {
   dr_style(n, focused ? theme.on_accent : theme.bar_fg, focused ? theme.accent : theme.bar_bg, A_BOLD);
   dr_fill(n, r.y, r.x, r.w);

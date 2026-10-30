@@ -86,6 +86,16 @@ void panel_unref(struct panel *p) {
   free(p);
 }
 
+/* its window, where its side says: over the list (m), floating (f), over
+ * every window (o), beside the focused window (t), else docked on the left
+ * (l) or along the bottom */
+static void place_window(struct panel *p) {
+  if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
+  else if (p->side == 'f' || p->side == 'o') wm_float(p->t, &view_panel, p, p->size, p->side == 'o');
+  else if (p->side == 't') wm_tile(p->t, &view_panel, p, p->size);
+  else wm_dock(p->t, &view_panel, p, p->size, p->side);
+}
+
 struct panel *panel_open(struct tui *t, float size, char side) {
   struct panel *p = xcalloc(1, sizeof *p);
   p->t = t;
@@ -97,8 +107,7 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->place = -1;
   p->size = size;
   p->side = side;
-  if (side == 'm') wm_over_list(t, &view_panel, p);
-  else wm_dock(t, &view_panel, p, size, side);
+  place_window(p);
   return p;
 }
 
@@ -162,8 +171,7 @@ static void follow(struct panel *p);
 void panel_show(struct panel *p) {
   if (!p->open || !p->hidden) return;
   p->hidden = 0;
-  if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
-  else wm_dock(p->t, &view_panel, p, p->size, p->side);
+  place_window(p);
   follow(p);
 }
 
@@ -203,6 +211,10 @@ int panel_passes(const struct panel *p, uint32_t key) {
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
+}
+
+int panel_place(const struct panel *p) {
+  return p->place;
 }
 
 void panel_set_place(struct panel *p, int place) {

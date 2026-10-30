@@ -50,6 +50,8 @@ const char *theme_name(int i);
 /* Fill a window's top line as its bar and leave that style set, so the
  * caller's text lands on it. */
 void dr_bar(struct ncplane *n, struct rect r, int focused);
+/* A box: r filled with bg, with a rounded border on its edge. */
+void dr_frame(struct ncplane *n, struct rect r, int bg);
 
 void dr_style(struct ncplane *n, int fg, int bg, unsigned attrs);
 void dr_fill(struct ncplane *n, int y, int x, int w);
@@ -169,11 +171,19 @@ void ctx_free(void);
 int ctx_named(const char *name); /* a place's number, or -1 */
 int ctx_count(void);             /* the places there are: lulibre's, then the screens' */
 int ctx_is_own(const char *name); /* one of lulibre's places? Any thread */
-/* A screen's place, made (or made again) from Lua: its actions' names,
- * default keys (separated by spaces) and what each does, and the actions
- * its hint line shows. Its number, or -1 and *err. */
-int ctx_add(const char *name, int n, const char *const *names, const char *const *keys,
-            const char *const *abouts, int nhint, const char *const *hint, char **err);
+/* A screen's place, made (or made again) from Lua: its title, its
+ * actions' names, default keys (separated by spaces) and what each does,
+ * the actions its hint line shows, where its views go (a panel's side and
+ * size; side 0 leaves it to the opener) and whether it is a tab of the
+ * bar. Its number, or -1 and *err. */
+int ctx_add(const char *name, const char *title, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char side, float size, int tab,
+            char **err);
+void ctx_placement(int ctx, char *side, float *size);
+/* The i-th screen that is a tab of the bar: its place, name and title; -1 past the last. */
+int ctx_tab(int i, const char **name, const char **title);
+const char *ctx_name(int ctx);
+int ctx_is_tab(int ctx);
 void ctx_drop_lua(void); /* the screens' places go (:restart-scripts) */
 const char *ctx_action_name(int ctx, int action); /* NULL for none */
 /* The hint line: the hint's actions with the keys now on them ("a accept   e
@@ -327,6 +337,8 @@ struct view_class {
   void (*hide)(struct tui *t, void *state);
 };
 
+#define TABS_MAX 10 /* the bar's tabs: library, sync folder, and the tab screens */
+
 struct node {
   char split; /* 0 leaf; 'v' side by side; 'h' stacked */
   float ratio;
@@ -338,6 +350,10 @@ struct node {
   const struct view_class *under_cls;
   void *under_state;
   struct rect r;
+  /* a window above the others (wm_float), outside the tree: its share of
+   * the windows' area, or the whole of it (full) */
+  float fsize;
+  int floating, full;
 };
 
 extern const struct view_class view_list, view_preview, view_panel, view_console;
@@ -376,6 +392,13 @@ struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, f
  * it is undocked; the focus stays where it is. Docks on the left when there
  * is no list window. */
 struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *state);
+/* A window above the others, outside the tree, for an existing view state:
+ * a framed box of size (a share of the windows' area), or all of the area
+ * (full). It takes the focus; wm_undock closes it as it closes the others. */
+struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, int full);
+/* A window beside the focused one (or the last window of the tree), which
+ * is split for it; size is the new one's share. */
+struct node *wm_tile(struct tui *t, const struct view_class *cls, void *state, float size);
 void wm_undock(struct tui *t, void *state);
 /* Give the docked window showing this state that share of the screen. */
 void wm_set_size(struct tui *t, void *state, float size);
@@ -461,6 +484,7 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys);
 /* The panel is a screen's (ctxkeys.c's place): a key bound to one of its
  * actions reaches the script as the action's name, other keys not at all. */
 void panel_set_place(struct panel *p, int place);
+int panel_place(const struct panel *p); /* -1 for none */
 void panel_set_pass(struct panel *p, const char *commands);
 int panel_passes(const struct panel *p, uint32_t key);
 void panel_unref(struct panel *p);  /* the opener's reference */
@@ -600,6 +624,8 @@ struct tui {
   unsigned mode;
   struct keymap *km; /* the global keymap */
   struct node *root, *focus;
+  struct node *floats[8]; /* windows above the tree, the last on top (wm_float) */
+  int nfloats;
   struct rows rows;
   int list_rows; /* the list's rows of books when last drawn: a page */
 
@@ -669,8 +695,8 @@ struct tui {
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
   char *preview_note;   /* shown by the preview in place of any book (panel_set_preview) */
-  int tab_x[4];         /* where the bar's tabs were drawn: columns of their edges */
-  int tab_n;            /* how many tabs it has: library, [sync folder,] configuration */
+  int tab_x[TABS_MAX + 1]; /* where the bar's tabs were drawn: columns of their edges */
+  int tab_n;               /* how many tabs it has: library, [sync folder,] the tab screens */
   struct panel *screen_tab; /* the panel that is the bar's Configuration tab, while it is open */
   /* the views last focused among the windows and among the panels, so that
    * Tab and Esc go back to them (wm_focus_panel, wm_focus_back); found again
@@ -704,7 +730,7 @@ void input_read_cb(uv_poll_t *h, int status, int events);
 void bracketed_paste(int on);
 void terminal_release(struct tui *t);
 void log_arrived(void *ud);
-const char *tab_command(const struct tui *t, int i);
+const char *tab_command(const struct tui *t, int i, char *buf, size_t size);
 void render_prepare_cb(uv_prepare_t *h);
 
 int tui_run(struct app *app);

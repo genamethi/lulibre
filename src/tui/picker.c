@@ -172,25 +172,10 @@ void picker_draw(struct tui *t) {
   int inner = w - 4, list_h = h - 4;
   p->page = list_h > 1 ? list_h - 1 : 1;
 
-  /* frame */
-  for (int r = 0; r < h; r++) {
-    dr_style(n, C_DEFAULT, theme.bar_bg, 0);
-    dr_fill(n, y + r, x, w);
-  }
+  /* frame, and the line under the query */
+  dr_frame(n, (struct rect){y, x, h, w}, theme.bar_bg);
   dr_style(n, theme.border, theme.bar_bg, 0);
-  for (int c = 1; c < w - 1; c++) {
-    ncplane_putstr_yx(n, y, x + c, "─");
-    ncplane_putstr_yx(n, y + h - 1, x + c, "─");
-    ncplane_putstr_yx(n, y + 2, x + c, "─");
-  }
-  for (int r = 1; r < h - 1; r++) {
-    ncplane_putstr_yx(n, y + r, x, "│");
-    ncplane_putstr_yx(n, y + r, x + w - 1, "│");
-  }
-  ncplane_putstr_yx(n, y, x, "╭");
-  ncplane_putstr_yx(n, y, x + w - 1, "╮");
-  ncplane_putstr_yx(n, y + h - 1, x, "╰");
-  ncplane_putstr_yx(n, y + h - 1, x + w - 1, "╯");
+  for (int c = 1; c < w - 1; c++) ncplane_putstr_yx(n, y + 2, x + c, "─");
   ncplane_putstr_yx(n, y + 2, x, "├");
   ncplane_putstr_yx(n, y + 2, x + w - 1, "┤");
 

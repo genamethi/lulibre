@@ -1,9 +1,21 @@
 /* Screens, from Lua: the scrnman global.
  *
  *   scrnman.create(name, {
+ *     title = "Review",                -- in the bar and ?; by default the name
  *     actions = { {"accept", "a", "accept the proposal"}, {"edit", "e <CR>", "edit the value"} },
  *     hint = { "accept", "edit" },
+ *     place = { kind = "band", size = 0.45 },
+ *     tab = true,                      -- a tab of the bar, which runs :name
  *   })
+ *
+ * place says where the screen's views go, unless the one opening a view
+ * says otherwise (uiman.panel's side and height): kind is band (along the
+ * bottom), column (down the left), over (in the list's place), tiled
+ * (beside the focused window, splitting it), float (a box above the
+ * windows) or overlay (over all of them); size is its share of the
+ * screen. A tab screen's view stands in the list's place while it is open,
+ * and its tab in the bar shows it is; clicking the tab runs the command
+ * named as the screen.
  *
  * A screen is known by its name. Each action has a name, the keys it is on
  * by default (separated by spaces; one key, or two in a row) and what it
@@ -26,9 +38,17 @@
 
 #define MAX_ACTIONS 64
 
-/* interface thread: (name, names, keys, abouts, hint), the four as lists */
+static const char *const kinds[] = {"band", "column", "over", "tiled", "float", "overlay", NULL};
+static const char sides[] = "blmtfo"; /* the panel's side for each */
+
+/* interface thread: (name, names, keys, abouts, hint, title, side, size, tab),
+ * the four after the name as lists */
 static int create_ui(lua_State *L) {
   const char *name = luaL_checkstring(L, 1);
+  const char *title = lua_tostring(L, 6);
+  const char *side = lua_tostring(L, 7);
+  float size = (float)lua_tonumber(L, 8);
+  int tab = lua_toboolean(L, 9);
   const char *names[MAX_ACTIONS], *keys[MAX_ACTIONS], *abouts[MAX_ACTIONS], *hint[MAX_ACTIONS];
   int n = (int)lua_rawlen(L, 2), nh = (int)lua_rawlen(L, 5);
   if (n > MAX_ACTIONS) n = MAX_ACTIONS;
@@ -48,7 +68,7 @@ static int create_ui(lua_State *L) {
     lua_pop(L, 1);
   }
   char *err = NULL;
-  if (ctx_add(name, n, names, keys, abouts, nh, hint, &err) < 0) {
+  if (ctx_add(name, title, n, names, keys, abouts, nh, hint, side ? side[0] : 0, size, tab, &err) < 0) {
     lua_pushstring(L, err);
     free(err);
     return lua_error(L);
@@ -100,7 +120,35 @@ static int s_create(lua_State *L) {
     }
   }
   lua_settop(L, 6);
-  lua_remove(L, 2); /* name, names, keys, abouts, hint */
+  /* 7 title, 8 side, 9 size, 10 tab */
+  lua_getfield(L, 2, "title");
+  if (!lua_isnil(L, 7) && lua_type(L, 7) != LUA_TSTRING) return luaL_error(L, "title: a string");
+  lua_getfield(L, 2, "place");
+  char side[2] = "";
+  float size = 0;
+  if (lua_istable(L, 8)) {
+    lua_getfield(L, 8, "kind");
+    const char *kind = lua_isnil(L, -1) ? "band" : lua_tostring(L, -1);
+    int k = 0;
+    while (kinds[k] && (!kind || strcmp(kinds[k], kind))) k++;
+    if (!kinds[k]) return luaL_error(L, "place.kind: band, column, over, tiled, float or overlay");
+    side[0] = sides[k];
+    lua_getfield(L, 8, "size");
+    if (!lua_isnil(L, -1)) {
+      size = (float)luaL_checknumber(L, -1);
+      if (size <= 0 || size > 1) return luaL_error(L, "place.size: a share of the screen, above 0 and at most 1");
+    }
+    lua_pop(L, 2);
+  } else if (!lua_isnil(L, 8)) {
+    return luaL_error(L, "place: { kind = band | column | over | tiled | float | overlay, size = share }");
+  }
+  lua_pop(L, 1);
+  lua_pushstring(L, side);
+  lua_pushnumber(L, size);
+  lua_getfield(L, 2, "tab");
+  lua_toboolean(L, -1) ? lua_pushboolean(L, 1) : lua_pushboolean(L, 0);
+  lua_remove(L, -2);
+  lua_remove(L, 2); /* name, names, keys, abouts, hint, title, side, size, tab */
   return ui_send(L, create_ui, "scrnman.create");
 }
 

@@ -127,6 +127,11 @@ struct place {
   int n;
   int *hint, nhint; /* the actions its hint line shows, by number */
   int lua;
+  /* a screen's: where its views go (a panel's side: b l m f o t, 0 for
+   * the opener's choice) and their size, and whether it is a tab of the bar */
+  char side;
+  float size;
+  int tab;
 };
 static struct place *ctxs;
 static int nctxs;
@@ -243,8 +248,9 @@ int ctx_named(const char *name) {
   return -1;
 }
 
-int ctx_add(const char *name, int n, const char *const *names, const char *const *keys,
-            const char *const *abouts, int nhint, const char *const *hint, char **err) {
+int ctx_add(const char *name, const char *title, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char side, float size, int tab,
+            char **err) {
   own_places();
   int c = ctx_named(name);
   if (c >= 0 && !ctxs[c].lua) {
@@ -267,8 +273,11 @@ int ctx_add(const char *name, int n, const char *const *names, const char *const
   struct place *pl = &ctxs[c];
   memset(pl, 0, sizeof *pl);
   pl->name = xstrdup(name);
-  pl->title = xstrdup(name);
+  pl->title = xstrdup(title && *title ? title : name);
   pl->lua = 1;
+  pl->side = side;
+  pl->size = size;
+  pl->tab = tab;
   pl->n = n;
   pl->actions = xcalloc((size_t)n + 1, sizeof *pl->actions);
   for (int a = 0; a < n; a++)
@@ -289,6 +298,29 @@ void ctx_drop_lua(void) {
   for (int i = 0; i < nbinds; i++)
     if (binds[i].ctx < KC_N) binds[k++] = binds[i];
   nbinds = k;
+}
+
+void ctx_placement(int ctx, char *side, float *size) {
+  *side = ctx >= 0 && ctx < nctxs ? ctxs[ctx].side : 0;
+  *size = ctx >= 0 && ctx < nctxs ? ctxs[ctx].size : 0;
+}
+
+int ctx_tab(int i, const char **name, const char **title) {
+  for (int c = 0; c < nctxs; c++)
+    if (ctxs[c].tab && i-- == 0) {
+      *name = ctxs[c].name;
+      *title = ctxs[c].title;
+      return c;
+    }
+  return -1;
+}
+
+int ctx_is_tab(int ctx) {
+  return ctx >= 0 && ctx < nctxs && ctxs[ctx].tab;
+}
+
+const char *ctx_name(int ctx) {
+  return ctx >= 0 && ctx < nctxs ? ctxs[ctx].name : NULL;
 }
 
 const char *ctx_action_name(int ctx, int action) {
