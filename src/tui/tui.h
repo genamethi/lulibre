@@ -335,6 +335,10 @@ struct view_class {
   void (*draw)(struct tui *t, void *state, struct rect r, int focused);
   /* called when the view will not be drawn this frame (hidden or closed) */
   void (*hide)(struct tui *t, void *state);
+  /* a key for the focused view: 1 when it took it, 0 to let it go on to
+   * the global keys (input.c); NULL: none of its own */
+  int (*key)(struct tui *t, void *state, uint32_t key, const struct ncinput *ni);
+  int modal; /* while it is up, every key is its own, and the mouse only selects */
 };
 
 #define TABS_MAX 10 /* the bar's tabs: library, sync folder, and the tab screens */
@@ -351,12 +355,19 @@ struct node {
   void *under_state;
   struct rect r;
   /* a window above the others (wm_float), outside the tree: its share of
-   * the windows' area, or the whole of it (full) */
+   * the windows' area, and how it is drawn (enum float_how) */
   float fsize;
   int floating, full;
+  void *back; /* the state of the window focused before it, which gets the focus back */
 };
 
-extern const struct view_class view_list, view_preview, view_panel, view_console;
+enum float_how {
+  FLOAT_BOX,  /* a framed box of its share of the area */
+  FLOAT_FULL, /* all of the area, nothing under it showing */
+  FLOAT_BARE, /* all of the area, given to the view to draw where it likes (an overlay) */
+};
+
+extern const struct view_class view_list, view_preview, view_panel, view_console, view_pager, view_picker;
 
 void wm_init(struct tui *t);
 void wm_free(struct tui *t);
@@ -392,10 +403,12 @@ struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, f
  * it is undocked; the focus stays where it is. Docks on the left when there
  * is no list window. */
 struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *state);
-/* A window above the others, outside the tree, for an existing view state:
- * a framed box of size (a share of the windows' area), or all of the area
- * (full). It takes the focus; wm_undock closes it as it closes the others. */
-struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, int full);
+/* A window above the others, outside the tree, for an existing view state,
+ * drawn as how says (a box's size is its share of the windows' area). It
+ * takes the focus; wm_undock closes it as it closes the others. */
+struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, enum float_how how);
+/* The floating window on top, or NULL. */
+struct node *wm_top(struct tui *t);
 /* A window beside the focused one (or the last window of the tree), which
  * is split for it; size is the new one's share. */
 struct node *wm_tile(struct tui *t, const struct view_class *cls, void *state, float size);
@@ -664,9 +677,6 @@ struct tui {
   int nbadges;
 
   struct picker *picker;
-  char *help; /* pager overlay text (help, messages, script output); NULL when closed */
-  char *pager_title;
-  int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
   /* A click in a preview moves the cursor's window there only if it turns
@@ -768,6 +778,7 @@ void tui_progress(struct tui *t, const char *text); /* NULL clears */
 void tui_badge(struct tui *t, const char *name, const char *text, int color);
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
+void tui_pager_end(struct tui *t); /* the open pager shows its end */
 /* Put text on the message line without logging it (tui_msg logs first). */
 void tui_show_msg(struct tui *t, int error, const char *text);
 /* The console window (view_console.c): its keys when focused, the wheel. */

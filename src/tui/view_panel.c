@@ -91,7 +91,7 @@ void panel_unref(struct panel *p) {
  * (l) or along the bottom */
 static void place_window(struct panel *p) {
   if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
-  else if (p->side == 'f' || p->side == 'o') wm_float(p->t, &view_panel, p, p->size, p->side == 'o');
+  else if (p->side == 'f' || p->side == 'o') wm_float(p->t, &view_panel, p, p->size, p->side == 'o' ? FLOAT_FULL : FLOAT_BOX);
   else if (p->side == 't') wm_tile(p->t, &view_panel, p, p->size);
   else wm_dock(p->t, &view_panel, p, p->size, p->side);
 }
@@ -686,4 +686,10 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
 }
 
-const struct view_class view_panel = {"panel", NULL, destroy, draw, NULL};
+/* a focused panel takes a key first, unless it is one it lets through to
+ * a global binding */
+static int key(struct tui *t, void *state, uint32_t k, const struct ncinput *ni) {
+  return !panel_passes(state, k) && panel_key(t, state, k);
+}
+
+const struct view_class view_panel = {"panel", NULL, destroy, draw, NULL, key, 0};

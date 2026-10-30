@@ -2,7 +2,8 @@
 # Where a screen's views go (scrnman.create's place, tab), in the interface,
 # in a private tmux server: a band along the bottom, a column down the
 # left, over the list, tiled beside the focused window, a box floating
-# above the windows, over all of them; and a tab screen's tab in the bar.
+# above the windows, over all of them; the pager and the picker above the
+# windows, giving the focus back; and a tab screen's tab in the bar.
 #   places.sh BUILT_BINARY
 set -eu
 bin=$(realpath "$1")
@@ -90,6 +91,23 @@ set -- $(at P-overlay)
 check "overlay: over every window, from the top left" test "$1" -le 3 -a "$2" -le 3
 check "and none of them shows through" sh -c "! $T capture-pane -p -t s | grep -q 'Notes'"
 close
+# the pager and the picker are floating windows too, which take every key
+$T send-keys -t s "?"
+wait_for "COMMANDS" || true
+check "? opens the pager over the windows" sh -c "$T capture-pane -p -t s | grep -q 'KEYS'"
+$T send-keys -t s x
+sleep 0.4
+check "and a key it has no action for closes it" sh -c "! $T capture-pane -p -t s | grep -q 'COMMANDS'"
+open pband P-band
+$T send-keys -t s ":pick books" Enter
+wait_for "books" || true
+sleep 0.3
+check "the picker opens over a panel" sh -c "$T capture-pane -p -t s | grep -q '╭'"
+$T send-keys -t s Escape
+sleep 0.4
+$T send-keys -t s q
+sleep 0.4
+check "and closing it gives the focus back to the panel: q closes the panel" sh -c "! $T capture-pane -p -t s | grep -q 'P-band'"
 check "the bar has a tab for a tab screen" sh -c "$T capture-pane -p -t s | head -1 | grep -q 'Tabbed'"
 open ptab P-tab
 $T send-keys -t s ":source library" Enter

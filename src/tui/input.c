@@ -9,20 +9,6 @@
 
 /* ----------------------------------------------------------------- input */
 
-static void help_key(struct tui *t, uint32_t key) {
-  switch (ctx_feed(KC_PAGER, NULL, key)) {
-    case GA_DOWN: t->help_scroll++; break;
-    case GA_UP: t->help_scroll--; break;
-    case GA_PAGE_DOWN: t->help_scroll += 10; break;
-    case GA_PAGE_UP: t->help_scroll -= 10; break;
-    case GA_TOP: t->help_scroll = 0; break;
-    default:
-      free(t->help);
-      t->help = NULL;
-  }
-  tui_dirty(t);
-}
-
 /* Insert what was last copied into the field being typed, as one line. */
 static void prompt_insert_flat(struct tui *t, const char *text) {
   sbuf flat = SBUF_INIT;
@@ -122,8 +108,8 @@ static void on_mouse(struct tui *t, const struct ncinput *ni) {
   if (release || ni->id == NCKEY_MOTION) return;
   sel_clear(t);
 
-  /* over an overlay the mouse only selects */
-  if (t->help || t->mode == MODE_PICKER) {
+  /* over an overlay (the pager, the picker) the mouse only selects */
+  if (wm_top(t) && wm_top(t)->cls->modal) {
     if (left) sel_press(t, ni->y, ni->x, (struct rect){0, 0, t->rows_n, t->cols_n}, NULL);
     return;
   }
@@ -225,12 +211,12 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
   if (nckey_synthesized_p(ni->id) && ni->id >= NCKEY_CAPS_LOCK) return;
 
   uint32_t key = key_from_input(ni);
-  if (t->help) {
-    help_key(t, key);
-    return;
-  }
-  if (t->mode == MODE_PICKER) {
-    picker_key(t, key, ni);
+  /* One path: a window that takes every key while it is up (the pager, the
+   * picker); the line being typed, which the bottom line holds; the focused
+   * window's own keys; then the global ones. */
+  struct node *top = wm_top(t);
+  if (top && top->cls->modal) {
+    top->cls->key(t, top->state, key, ni);
     return;
   }
   if (t->mode == MODE_PROMPT) {
@@ -238,13 +224,9 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     return;
   }
   if (key == (KEY_CTRL | 'c')) key = NCKEY_ESC;
-  /* selecting text in the preview with the keys: they are its own first */
-  if (t->mode == MODE_NORMAL && t->km->npending == 0 && preview_selecting(t) && preview_select_key(t, key)) return;
-  if (key == NCKEY_ESC && t->km->npending == 0 && t->mode == MODE_NORMAL &&
-      t->focus->cls == &view_panel) {
-    panel_key(t, t->focus->state, key);
+  if (t->mode == MODE_NORMAL && t->km->npending == 0 && t->focus->cls->key &&
+      t->focus->cls->key(t, t->focus->state, key, ni))
     return;
-  }
   if (key == NCKEY_ESC && t->km->npending == 0) {
     if (t->mode == MODE_VISUAL) tui_exec(t, "visual");
     else if (t->rows.search) rows_search(t, NULL);
@@ -258,14 +240,6 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     tui_dirty(t);
     return;
   }
-  if (t->mode == MODE_NORMAL && t->focus->cls == &view_console && t->km->npending == 0 &&
-      console_key(t, t->focus->state, key))
-    return;
-  /* a focused panel takes keys first, unless a global sequence is under way
-   * or the key is one it lets through to a global binding */
-  if (t->mode == MODE_NORMAL && t->focus->cls == &view_panel && t->km->npending == 0 &&
-      !panel_passes(t->focus->state, key) && panel_key(t, t->focus->state, key))
-    return;
   const struct binding *b = keymap_feed(t->km, t->mode, key);
   if (b && b->lua_ref) { /* a Lua function: a task, named after its keys */
     sbuf k = SBUF_INIT;

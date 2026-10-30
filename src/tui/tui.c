@@ -37,14 +37,6 @@ void tui_msg(struct tui *t, int error, const char *fmt, ...) {
   free(s);
 }
 
-void tui_pager(struct tui *t, const char *title, const char *text) {
-  free(t->help);
-  free(t->pager_title);
-  t->help = xstrdup(text ? text : "");
-  t->pager_title = xstrdup(title ? title : "");
-  t->help_scroll = 0;
-  tui_dirty(t);
-}
 
 void tui_progress(struct tui *t, const char *text) {
   free(t->progress);
@@ -418,8 +410,6 @@ int tui_run(struct app *app) {
     free(t->badges[i].text);
   }
   suggest_clear(t);
-  free(t->pager_title);
-  free(t->help);
   free(t->msg);
   db_close(&t->rdb);
   return 0;

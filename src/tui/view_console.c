@@ -125,7 +125,11 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   free(g.v);
 }
 
-const struct view_class view_console = {"console", create, destroy, draw, NULL};
+static int key(struct tui *t, void *state, uint32_t k, const struct ncinput *ni) {
+  return console_key(t, state, k);
+}
+
+const struct view_class view_console = {"console", create, destroy, draw, NULL, key, 0};
 
 int console_key(struct tui *t, void *state, uint32_t key) {
   struct cstate *cs = state;

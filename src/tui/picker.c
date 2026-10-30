@@ -104,6 +104,7 @@ void picker_open(struct tui *t, struct picker *p) {
   }
   t->picker = p;
   t->mode = MODE_PICKER;
+  wm_float(t, &view_picker, p, 0, FLOAT_BARE);
   le_set(&p->query, "");
   rematch(p);
   tui_dirty(t);
@@ -118,9 +119,10 @@ void picker_close(struct tui *t) {
   if (!p) return;
   picker_cancel_fn *cancel = p->accepted ? NULL : p->cancel;
   void *ud = p->ud;
-  picker_free(p);
   t->picker = NULL;
   t->mode = MODE_NORMAL;
+  wm_undock(t, p); /* its window; the picker itself is freed here */
+  picker_free(p);
   tui_dirty(t);
   if (cancel) cancel(t, ud);
 }
@@ -214,3 +216,15 @@ void picker_draw(struct tui *t) {
     }
   }
 }
+
+/* the picker as a floating window: it draws its own box, and every key is its own */
+static void view_draw(struct tui *t, void *state, struct rect r, int focused) {
+  if (t->picker == state) picker_draw(t);
+}
+
+static int view_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni) {
+  if (t->picker == state) picker_key(t, key, ni);
+  return 1;
+}
+
+const struct view_class view_picker = {"picker", NULL, NULL, view_draw, NULL, view_key, 1};

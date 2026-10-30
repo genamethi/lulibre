@@ -88,7 +88,7 @@ void wm_layout(struct tui *t, struct rect area) {
   layout(t->root, area, t->screen_tab != NULL);
   for (int i = 0; i < t->nfloats; i++) {
     struct node *f = t->floats[i];
-    if (f->full) {
+    if (f->full) { /* FLOAT_FULL, FLOAT_BARE */
       f->r = area;
       continue;
     }
@@ -128,7 +128,7 @@ void wm_draw(struct tui *t) {
   for (int i = 0; i < t->nfloats; i++) {
     struct node *f = t->floats[i];
     if (!f->full) dr_frame(t->std, (struct rect){f->r.y - 1, f->r.x - 1, f->r.h + 2, f->r.w + 2}, C_DEFAULT);
-    else
+    else if (f->full == 1)
       for (int y = 0; y < f->r.h; y++) { /* nothing of the windows under it shows through */
         dr_style(t->std, C_DEFAULT, C_DEFAULT, 0);
         dr_fill(t->std, f->r.y + y, f->r.x, f->r.w);
@@ -162,7 +162,10 @@ static void unfloat(struct tui *t, struct node *f, int destroy) {
   memmove(&t->floats[at], &t->floats[at + 1], (size_t)(t->nfloats - at - 1) * sizeof *t->floats);
   t->nfloats--;
   if (t->focus == f) {
-    struct node *back = t->nfloats ? t->floats[t->nfloats - 1] : NULL;
+    /* the window it was opened from, if it is still there (found by its
+     * state: a node may have gone), else the one on top, else the last */
+    struct node *back = f->back ? wm_leaf_of(t, f->back) : NULL;
+    if (!back && t->nfloats) back = t->floats[t->nfloats - 1];
     if (!back && t->last_window) back = wm_leaf_of(t, t->last_window);
     if (!back) {
       back = t->root;
@@ -176,7 +179,12 @@ static void unfloat(struct tui *t, struct node *f, int destroy) {
   tui_dirty(t);
 }
 
-struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, int full) {
+struct node *wm_top(struct tui *t) {
+  return t->nfloats ? t->floats[t->nfloats - 1] : NULL;
+}
+
+struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, enum float_how how) {
+  int full = how == FLOAT_FULL ? 1 : how == FLOAT_BARE ? 2 : 0;
   if (t->nfloats == (int)ARRAY_LEN(t->floats)) unfloat(t, t->floats[0], 1); /* the oldest makes room */
   struct node *f = xcalloc(1, sizeof *f);
   f->cls = cls;
@@ -184,6 +192,7 @@ struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, 
   f->floating = 1;
   f->full = full;
   f->fsize = size > 0.1f && size <= 1.0f ? size : 0.6f;
+  f->back = t->focus ? t->focus->state : NULL;
   t->floats[t->nfloats++] = f;
   t->focus = f;
   tui_dirty(t);
@@ -493,7 +502,7 @@ static int leaves_of(struct tui *t, int panels, struct node **out) {
 }
 
 void wm_note_focus(struct tui *t) {
-  if (!t->focus || !t->focus->state) return;
+  if (!t->focus || !t->focus->state || t->focus->cls->modal) return; /* the pager, the picker are neither */
   if (is_panel(t->focus)) t->last_panel = t->focus->state;
   else t->last_window = t->focus->state;
 }

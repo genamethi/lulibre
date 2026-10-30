@@ -1109,7 +1109,7 @@ static void c_messages(struct tui *t, const char *args) {
   log_each(message_line, &out);
   tui_pager(t, "messages", out.len ? out.s : "(nothing has been logged yet)\n");
   sb_free(&out);
-  t->help_scroll = 1 << 20; /* newest at the bottom; the pager clamps this */
+  tui_pager_end(t); /* newest at the bottom */
 }
 
 /* ` : show or hide the console, leaving the focus where it is */

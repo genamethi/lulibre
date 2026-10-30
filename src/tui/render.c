@@ -183,70 +183,6 @@ static void draw_bottom(struct tui *t, int y, const struct bottom *b) {
   }
 }
 
-/* The pager (help, lulibre.show): each line wraps at the box's width, and
- * what wraps lines up under the line's own indent. Calls fn for every line
- * as shown and returns how many there are. */
-typedef void pager_line_fn(struct tui *t, int i, int indent, const char *s, size_t len, int heading, void *ud);
-
-static int pager_lines(struct tui *t, int w, pager_line_fn *fn, void *ud) {
-  int n = 0;
-  for (const char *p = t->help; *p;) {
-    const char *nl = strchr(p, '\n');
-    size_t len = nl ? (size_t)(nl - p) : strlen(p);
-    int heading = len > 0 && p[0] != ' ';
-    size_t ind = 0;
-    while (ind < len && p[ind] == ' ') ind++;
-    if ((int)ind > w / 2) ind = 0;
-    size_t i = 0;
-    do {
-      int lead = i ? (int)ind : 0;
-      size_t k = dr_wrap(p + i, len - i, w - lead), shown = k;
-      if (i + k < len)
-        while (shown > 0 && p[i + shown - 1] == ' ') shown--;
-      if (fn) fn(t, n, lead, p + i, shown, heading, ud);
-      n++;
-      i += k;
-      while (i && i < len && p[i] == ' ') i++; /* a wrapped line starts at a word */
-    } while (i < len);
-    p = nl ? nl + 1 : p + len;
-  }
-  return n;
-}
-
-struct pager_draw {
-  int x, y, h, from;
-};
-
-static void pager_draw_line(struct tui *t, int i, int indent, const char *s, size_t len, int heading, void *ud) {
-  struct pager_draw *d = ud;
-  int r = i - d->from + 1; /* the box's first row is its title */
-  if (r < 1 || r >= d->h - 1) return;
-  dr_style(t->std, heading ? theme.accent : C_DEFAULT, theme.bar_bg, heading ? A_BOLD : 0);
-  dr_textn(t->std, d->y + r, d->x + indent, 1 << 30, s, len);
-}
-
-static void draw_help(struct tui *t) {
-  struct ncplane *n = t->std;
-  int W = t->cols_n, H = t->rows_n;
-  int w = W > 84 ? 80 : W - 2, h = H - 4;
-  if (w < 20 || h < 4) return;
-  int x = (W - w) / 2, y = 1;
-  int total = pager_lines(t, w - 4, NULL, NULL);
-  if (t->help_scroll > total - h + 2) t->help_scroll = total - h + 2;
-  if (t->help_scroll < 0) t->help_scroll = 0;
-
-  for (int r = 0; r < h; r++) {
-    dr_style(n, C_DEFAULT, theme.bar_bg, 0);
-    dr_fill(n, y + r, x, w);
-  }
-  if (t->pager_title) {
-    dr_style(n, theme.dim, theme.bar_bg, 0);
-    dr_text(n, y, x + 2, w - 4, t->pager_title);
-  }
-  struct pager_draw d = {x + 2, y, h, t->help_scroll};
-  pager_lines(t, w - 4, pager_draw_line, &d);
-}
-
 /* ---- the bar's tabs: which of the library and the sync folder the list
  * is showing, and the screens made with tab = true (scrnman.create), whose
  * view takes the list's place while it is open. The sync folder's tab is
@@ -342,8 +278,6 @@ static void render(struct tui *t) {
     if (top) draw_tabs(t);
     draw_status(t, t->rows_n - 1 - b.h);
     draw_bottom(t, t->rows_n - b.h, &b);
-    if (t->help) draw_help(t);
-    if (t->picker) picker_draw(t);
     sel_draw(t);
   }
   dr_style(t->std, C_DEFAULT, C_DEFAULT, 0);

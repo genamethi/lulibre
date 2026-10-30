@@ -563,7 +563,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
 
   /* Settle the image question before drawing the rule, which reports it. */
-  int overlay = t->picker != NULL || t->help != NULL;
+  int overlay = t->nfloats > 0; /* a window above it: its image would cover that */
   int want_image = ps->graphic && ps->file && ps->fstatus != OUT_MISSING;
   enum imode imode = IMG_HALF;
   int have_image = want_image && image_ready(ps, w, &imode);
@@ -785,7 +785,9 @@ int preview_mouse(struct tui *t, void *state, int y, int x, int what) {
   return 1;
 }
 
-const struct view_class view_preview = {"preview", create, destroy, draw, hide};
+static int select_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni);
+
+const struct view_class view_preview = {"preview", create, destroy, draw, hide, select_key, 0};
 
 /* ---- commands act on the focused preview, else the first one ---- */
 
@@ -1029,4 +1031,9 @@ void preview_book_changed(struct tui *t) {
   t->settled = 0;
   uv_timer_start(&t->settle, settle_cb, 90, 0);
   tui_dirty(t);
+}
+
+/* selecting text with the keys: they are the preview's own while it does */
+static int select_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni) {
+  return preview_selecting(t) && preview_select_key(t, key);
 }
