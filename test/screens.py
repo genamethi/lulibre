@@ -1,6 +1,8 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, one task per panel, uiman.jump's answer, and sleepers gone with their state.
+a refresh on an event, a field edited through the form, review, a key
+bound to a function, a pick cancelled late, on_change let go, one task
+per panel, uiman.jump's answer, and sleepers gone with their state.
 
   python3 -I test/screens.py BIN
 
