@@ -368,7 +368,8 @@ with a body; `timeout` is in milliseconds.
 |---|---|
 | `uiman.notify(msg [, "error"])` `print(...)` | the message line, and the log |
 | `uiman.exec(line)` | run a command line |
-| `uiman.mark(id [, on])` `uiman.jump(id)` | |
+| `uiman.mark(id [, on])` | |
+| `uiman.jump(id)` | waits: the list's cursor to a book; false if the book is not in the list |
 | `uiman.filter([text])` | waits: the filter, or set it |
 | `uiman.pick(items [, {title=}])` | waits: the item picked and its index, or nil |
 | `uiman.input{prompt=, default=, suggestions=, separator=, on_change=}` | waits: the text, or nil |

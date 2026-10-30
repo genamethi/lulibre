@@ -22,8 +22,8 @@
  *                                     set again to change it, with nil to
  *                                     take it away. style: accent (default)
  *                                     ok warn error dim
- *   uiman.jump(id)                    move the list cursor to a book; false if
- *                                     it is not in the list
+ *   uiman.jump(id)                    waits: move the list cursor to a book;
+ *                                     false if it is not in the list
  *   uiman.clipboard(text)             copy to the clipboard: through tmux when
  *                                     inside it, else OSC 52 (works over ssh)
  *   uiman.clipboard()                 what was copied last (tmux's newest
@@ -738,7 +738,7 @@ static int l_goto_ui(lua_State *L) {
   lua_pushboolean(L, found);
   return 1;
 }
-SEND(l_goto, "goto")
+ASK(l_goto, "jump")
 
 
 /* ---- scripts ---- */

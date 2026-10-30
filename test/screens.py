@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, one task per panel, and sleepers gone with their state.
+a refresh on an event, a field edited through the form, review, a key bound to a function, a pick cancelled late, on_change let go, one task per panel, uiman.jump's answer, and sleepers gone with their state.
 
   python3 -I test/screens.py BIN
 
@@ -123,6 +123,7 @@ keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+keys(":lua note('jump|' .. tostring(uiman.jump(999999)))\r", 0.6)
 keys(":demowait\r", 1)
 keys(":demoinput\r", 0.6)
 keys("hi\r", 0.8)
@@ -166,6 +167,7 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("uiman.jump answers false for a book not in the list", "jump|false" in got)
 check("a second task's p:wait is refused, and the first hears the panel close",
       "second|false" in got and "first|nil" in got)
 check("after :restart-scripts, wake finds no sleeper of the old state", "stale|false" in got)
