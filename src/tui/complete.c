@@ -4,7 +4,7 @@
  *   :NAME        what completes NAME's arguments, as its command says
  *                (command_completion): a fixed list, the filter language,
  *                settings (names, then the values one allows), command
- *                names, scripts, or a Lua function's answer
+ *                names, scripts, the guides' tags, or a Lua function's answer
  *   &  /         the filter language: fields, then is: has: no: sort: in:
  *
  * The candidates go to the popup the edit form already uses for its
@@ -136,6 +136,12 @@ void complete_refresh(struct tui *t) {
     case COMPLETE_FILTER: query_words(filter_word, &l); break;
     case COMPLETE_SETTING: add_options(&l, last); break;
     case COMPLETE_SCRIPT: add_scripts(&l, t->app); break;
+    case COMPLETE_HELP: {
+      char *words = guides_tags(t);
+      add_words(&l, words);
+      free(words);
+      break;
+    }
     case COMPLETE_COMMAND: {
       const char *help;
       for (int i = 0; command_at(i, &help); i++) add(&l, command_at(i, NULL), help);

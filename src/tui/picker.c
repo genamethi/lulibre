@@ -188,6 +188,13 @@ void picker_draw(struct tui *t) {
   char *count = xasprintf(" %d/%d ", p->nmatch, p->n);
   dr_style(n, theme.dim, theme.bar_bg, 0);
   dr_text(n, y + h - 1, x + w - 2 - (int)strlen(count), (int)strlen(count), count);
+  sbuf hint = SBUF_INIT; /* the place's hint (scrnman.set), on the frame's foot */
+  if (ctx_hint_line(KC_PICKER, &hint) && dr_width(hint.s, hint.len) + (int)strlen(count) + 8 <= w) {
+    sb_putc(&hint, ' ');
+    dr_text(n, y + h - 1, x + 2, w - 4, " ");
+    dr_text(n, y + h - 1, x + 3, w - 4, hint.s);
+  }
+  sb_free(&hint);
   free(count);
 
   /* query line */

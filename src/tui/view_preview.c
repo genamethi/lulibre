@@ -858,9 +858,10 @@ void preview_select(struct tui *t) {
   ps->caret = ps->wl[li].p - ps->text;
   ps->kcol = 0;
   kb_show(ps);
-  tui_msg(t, 0, "select: %s %s %s %s move, %s begins a selection, %s the line, %s copies, %s leaves", ctx_hint(KC_SELECT, SA_LEFT),
-          ctx_hint(KC_SELECT, SA_DOWN), ctx_hint(KC_SELECT, SA_UP), ctx_hint(KC_SELECT, SA_RIGHT), ctx_hint(KC_SELECT, SA_MARK),
-          ctx_hint(KC_SELECT, SA_LINE), ctx_hint(KC_SELECT, SA_COPY), ctx_hint(KC_SELECT, SA_LEAVE));
+  sbuf hint = SBUF_INIT; /* the place's hint (scrnman.set) */
+  if (ctx_hint_line(KC_SELECT, &hint)) tui_msg(t, 0, "select:   %s", hint.s);
+  else tui_msg(t, 0, "select");
+  sb_free(&hint);
 }
 
 static int is_word(const char *s) {

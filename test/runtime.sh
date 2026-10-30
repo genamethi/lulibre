@@ -284,6 +284,9 @@ print("screens|" .. refused("panel", { actions = {} }) .. "|" .. refused("nv", {
   .. refused("s", { actions = { { "go", "g" } }, hint = { "stop" } }) .. "|"
   .. refused("s", { actions = { { "go", "x", "go" } }, hint = { "go" } }))
 print("bad complete|" .. tostring((pcall(cmdman.create, "x", function() end, { complete = "nope" }))))
+print("scrnman.set|" .. tostring((pcall(scrnman.set, "console", 5))) .. "|" .. tostring((pcall(scrnman.set, "console", { hint = "close" })))
+  .. "|" .. tostring((pcall(scrnman.set, "console", { hint = { 1 } }))) .. "|" .. tostring((pcall(scrnman.set, "console", { hint = { "close" }, title = "LOG" })))
+  .. "|" .. tostring((pcall(cmdman.create, "y", function() end, { complete = "help" }))))
 print("fn key|" .. made .. "|" .. tostring(about) .. "|" .. tostring(callback == f))
 LUA
 cmds=$("$bin" -L "$t/lib" run "$t/cmd.lua" 2>&1)
@@ -457,6 +460,7 @@ contains "without, they are not; its own functions still are" "exposed|nil|funct
 contains "cmdman.ls lists lulibre's commands and Lua's, cmdman.get finds one or none" "cmdman|2|say hello|nil" "$cmds"
 contains "a command made in Lua stands in front of lulibre's, which comes back when it goes" "in front|mine|leave lulibre" "$cmds"
 contains "scrnman.create refuses a place of lulibre's, a name like modes, a hint that is no action; takes a screen" "screens|false|false|false|true" "$cmds"
+contains "scrnman.set refuses what is not {hint=, title=}; takes a hint for a place of lulibre's; complete = \"help\"" "scrnman.set|false|false|false|true|true" "$cmds"
 contains "cmdman.create refuses a complete it does not know" "bad complete|false" "$cmds"
 contains "a key bound to a function is a binding with its desc, not a command; uiman.maps gives the function" "fn key|0|second|true" "$cmds"
 contains "a change goes to the calibre store Lua put in calibredb's place, journaled" "store|1:Stored By Lua|calibre|2" "$store"

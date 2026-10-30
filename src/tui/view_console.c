@@ -96,15 +96,13 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
            cs->back ? scrolled : "",
            LULIBRE_DEBUG ? "" : cs->level == LOG_DEBUG ? "   (no trace in a release build)" : "");
   int used = dr_text(n, r.y, r.x + 1, r.w - 2, title);
-  char keys[160];
-  snprintf(keys, sizeof keys, "%s %s %s %s level   %s clear   %s close", ctx_hint(KC_CONSOLE, CA_ERRORS),
-           ctx_hint(KC_CONSOLE, CA_WARNINGS), ctx_hint(KC_CONSOLE, CA_NOTICES), ctx_hint(KC_CONSOLE, CA_EVERYTHING),
-           ctx_hint(KC_CONSOLE, CA_CLEAR), ctx_hint(KC_CONSOLE, CA_CLOSE));
-  int kw = dr_width(keys, strlen(keys));
-  if (used + kw + 4 <= r.w) {
+  sbuf keys = SBUF_INIT; /* the place's hint (scrnman.set) */
+  int kw = ctx_hint_line(KC_CONSOLE, &keys) ? dr_width(keys.s, keys.len) : 0;
+  if (kw && used + kw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
-    dr_text(n, r.y, r.x + r.w - kw - 1, kw, keys);
+    dr_text(n, r.y, r.x + r.w - kw - 1, kw, keys.s);
   }
+  sb_free(&keys);
 
   int body = r.h - 1;
   cs->page = body > 1 ? body : 1;

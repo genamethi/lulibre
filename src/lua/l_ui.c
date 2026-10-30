@@ -171,7 +171,8 @@ static int l_command_ui(lua_State *L) {
     comp.ref = (int)lua_tointeger(L, 4);
   } else if (lua_isstring(L, 4)) {
     const char *k = lua_tostring(L, 4);
-    comp.kind = !strcmp(k, "filter") ? COMPLETE_FILTER : !strcmp(k, "setting") ? COMPLETE_SETTING : COMPLETE_COMMAND;
+    comp.kind = !strcmp(k, "filter") ? COMPLETE_FILTER : !strcmp(k, "setting") ? COMPLETE_SETTING
+                : !strcmp(k, "help") ? COMPLETE_HELP : COMPLETE_COMMAND;
   } else if (lua_istable(L, 4)) {
     sbuf w = SBUF_INIT;
     for (lua_Integer i = 1; i <= (lua_Integer)lua_rawlen(L, 4); i++) {
@@ -1292,10 +1293,10 @@ static int cmd_create(lua_State *L) {
   int t = lua_type(L, 5);
   if (t == LUA_TSTRING) {
     const char *k = lua_tostring(L, 5);
-    if (strcmp(k, "filter") && strcmp(k, "setting") && strcmp(k, "command"))
-      return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\" or \"command\", not \"%s\"", k);
+    if (strcmp(k, "filter") && strcmp(k, "setting") && strcmp(k, "command") && strcmp(k, "help"))
+      return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\", \"command\" or \"help\", not \"%s\"", k);
   } else if (t != LUA_TNIL && t != LUA_TTABLE && t != LUA_TFUNCTION) {
-    return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\" or \"command\"");
+    return luaL_error(L, "complete: a list of words, a function, or \"filter\", \"setting\", \"command\" or \"help\"");
   }
   lua_pushvalue(L, 1);
   lua_pushvalue(L, 2);

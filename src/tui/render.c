@@ -161,7 +161,14 @@ static void draw_bottom(struct tui *t, int y, const struct bottom *b) {
     size_t skip = 0;
     while (cur - dr_width(text, skip) > W - lw - 2 && skip < t->line.cur) skip++;
     while (skip < t->line.text.len && ((unsigned char)text[skip] & 0xc0) == 0x80) skip++;
-    dr_text(n, yi, lw, W - lw, text + skip);
+    int tw = dr_text(n, yi, lw, W - lw, text + skip);
+    sbuf hint = SBUF_INIT; /* the line's hint (scrnman.set("line", ...)), where it has room */
+    int hw = ctx_hint_line(KC_LINE, &hint) ? dr_width(hint.s, hint.len) : 0;
+    if (hw && lw + tw + hw + 4 <= W) {
+      dr_style(n, theme.dim, C_DEFAULT, 0);
+      dr_text(n, yi, W - hw - 1, hw, hint.s);
+    }
+    sb_free(&hint);
     if (t->nsugg_match) draw_suggestions(t, y, b->alone ? 0 : lw);
     notcurses_cursor_enable(t->nc, yi, lw + cur - dr_width(text, skip));
     return;

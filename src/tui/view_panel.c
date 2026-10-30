@@ -647,7 +647,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
    * its actions are on now */
   sbuf hint = SBUF_INIT;
   const char *help = p->help;
-  if (!*help && p->place >= 0 && ctx_hint_line(p->place, &hint)) help = hint.s;
+  if (!*help && ctx_hint_line(p->place >= 0 ? p->place : KC_PANEL, &hint)) help = hint.s;
   int hw = dr_width(help, strlen(help));
   if (hw && used + hw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);

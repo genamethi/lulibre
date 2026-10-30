@@ -448,7 +448,8 @@ static void c_echo(struct tui *t, const char *args) {
 }
 
 static void c_help(struct tui *t, const char *args) {
-  command_help(t, 0);
+  if (*args) guides_help(t, args);
+  else command_help(t, 0);
 }
 
 static void c_help_plain(struct tui *t, const char *args) {
@@ -691,9 +692,10 @@ void commands_builtin(void) {
                    "[library | sync | SCREEN]  the bar's tabs: the calibre library or the sync folder in the list, or a tab screen");
   command_register("set", c_set, "name[=value]  show or change an option");
   command_register("echo", c_echo, "text  show a message");
-  command_register("help", c_help, "this screen");
+  command_register("help", c_help, "[TOPIC]  the keys, by where they work; or the guides, where they speak of TOPIC");
   command_register("help-plain", c_help_plain, "keys and commands as one long page");
   command_set_complete("set", COMPLETE_SETTING, NULL);
+  command_set_complete("help", COMPLETE_HELP, NULL);
   command_set_complete("filter", COMPLETE_FILTER, NULL);
   command_set_complete("search", COMPLETE_FILTER, NULL);
   command_set_complete("sort", COMPLETE_WORDS,
@@ -724,17 +726,36 @@ static int focused_place(struct tui *t) {
   return -1;
 }
 
+/* a link in the help: target is taken over */
+static void help_link(struct pager_link **v, int *n, size_t off, size_t len, char *target) {
+  *v = xrealloc(*v, (size_t)(*n + 1) * sizeof **v);
+  (*v)[(*n)++] = (struct pager_link){off, len, target};
+}
+
+/* a place's keys, its title a link to what the guides say of it */
+static void help_place(sbuf *h, int place, struct pager_link **links, int *n) {
+  size_t at = h->len;
+  ctx_describe(place, h, 1);
+  const char *line = h->s + at, *call = strstr(line, "   keymap.set(");
+  size_t len = call && call < line + strcspn(line, "\n") ? (size_t)(call - line) : strcspn(line, "\n");
+  help_link(links, n, at, len, xasprintf("%s\nKeys that belong to a place", ctx_name(place)));
+}
+
 /* ? and :help: the focused window's keys first, open; then the global
  * keys, the other places' and the commands, under headings that open and
- * close (as they were left last time). :help-plain shows every one open. */
+ * close (as they were left last time), and the guides. A key, a command or
+ * a place is a link to what the guides say of it. :help-plain shows every
+ * heading open. :help TOPIC opens the guides where they speak of TOPIC. */
 static void command_help(struct tui *t, int plain) {
   sbuf h = SBUF_INIT;
+  struct pager_link *links = NULL;
+  int nlinks = 0;
   /* a screen's panel moves as any panel does: those keys come second */
   int first = focused_place(t), second = first >= KC_N ? KC_PANEL : -1;
   for (int c = 0; c < 2; c++) {
     int place = c ? second : first;
     if (place < 0) continue;
-    ctx_describe(place, &h, 1);
+    help_place(&h, place, &links, &nlinks);
     sb_putc(&h, '\n');
   }
   sb_puts(&h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
@@ -743,28 +764,39 @@ static void command_help(struct tui *t, int plain) {
     if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
+    sb_puts(&h, "  ");
+    help_link(&links, &nlinks, h.len, k.len,
+              b->command ? xasprintf("%s\n:%.*s", k.s, (int)strcspn(b->command, " "), b->command) : xstrdup(k.s));
+    sb_printf(&h, "%-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
               b->modes == MODE_VISUAL ? "   (while selecting)" : "");
     sb_free(&k);
   }
   for (int c = 0; c < ctx_count(); c++) {
     if (c == first || c == second) continue;
     sb_putc(&h, '\n');
-    ctx_describe(c, &h, 1);
+    help_place(&h, c, &links, &nlinks);
   }
   sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n"
               "  A command acts on the range being selected, else on the marked books in the list, else on\n"
               "  the book under the cursor.\n");
-  for (int i = 0; i < ncmds; i++) sb_printf(&h, "  %-10s %s\n", cmds[i].name, cmds[i].help);
+  for (int i = 0; i < ncmds; i++) {
+    sb_puts(&h, "  ");
+    help_link(&links, &nlinks, h.len, strlen(cmds[i].name), xasprintf(":%s\n%s", cmds[i].name, cmds[i].name));
+    sb_printf(&h, "%-10s %s\n", cmds[i].name, cmds[i].help);
+  }
+  sb_putc(&h, '\n');
+  help_link(&links, &nlinks, h.len, strlen("SEARCH AND FILTER"), xstrdup("filters"));
   sb_puts(&h,
-          "\nSEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
+          "SEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
           "                    & narrows the list to them. Both take the same terms:\n"
           "  word  \"a phrase\"        in title, authors or subject\n"
           "  author:erdos  subject:number-theory  year:>1990  fmt:djvu\n"
           "  title:~^%d+%.%d+        ~ takes a Lua pattern;  = exact;  ^ prefix\n"
           "  text:\"class field\"      full text of the indexed pages\n"
           "  author:unknown  subject:none  no:ids  is:filetitle  is:marked\n"
-          "  -term negates;  or  starts an alternative;  sort:-added orders\n");
+          "  -term negates;  or  starts an alternative;  sort:-added orders\n\n");
+  guides_list(t, &h, &links, &nlinks);
   tui_pager_folded(t, "help", h.s, plain ? -1 : second >= 0 ? 2 : 1);
+  tui_pager_links(t, links, nlinks, NULL);
   sb_free(&h);
 }

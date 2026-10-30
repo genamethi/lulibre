@@ -3,7 +3,9 @@
 # in a private tmux server: a band along the bottom, a column down the
 # left, over the list, tiled beside the focused window, a box floating
 # above the windows, over all of them; the pager and the picker above the
-# windows, giving the focus back; and a tab screen's tab in the bar.
+# windows, giving the focus back; help, the focused screen's first; the
+# guides, with links; hints set for lulibre's places; and a tab screen's
+# tab in the bar.
 #   places.sh BUILT_BINARY
 set -eu
 bin=$(realpath "$1")
@@ -16,7 +18,15 @@ t=$(mktemp -d)
 T="tmux -L lulibre-places-$$"
 trap 'rm -rf "$t"; $T kill-server 2>/dev/null || true' EXIT
 sh "$src/mklib.sh" "$t/lib" >/dev/null 2>&1
-mkdir -p "$t/config/lulibre"
+mkdir -p "$t/config/lulibre/docs/more"
+# a guide of the user's, in a folder below their docs/, linking to lulibre's
+cat >"$t/config/lulibre/docs/more/mine.md" <<'MD'
+# Mine
+
+## Plums
+
+Plums are kept [with the keys](keys.md#the-leader-key).
+MD
 cat >"$t/config/lulibre/init.lua" <<'LUA'
 for _, kind in ipairs { "band", "column", "over", "tiled", "float", "overlay" } do
   scrnman.create("p" .. kind, { place = { kind = kind }, actions = { { "hello", "h", "say hello" } }, hint = { "hello" } })
@@ -24,6 +34,8 @@ for _, kind in ipairs { "band", "column", "over", "tiled", "float", "overlay" } 
 end
 keymap.set("pband", "y", "hello", { desc = "greet the row" })
 keymap.set("console", "c", "clear", { hidden = true })
+scrnman.set("console", { hint = { "close" } })
+scrnman.set("pager", { hint = {} })
 scrnman.create("ptab", { title = "Tabbed", tab = true })
 cmdman.create("ptab", function() uiman.list { title = "P-tab", screen = "ptab", items = { "row" } } end)
 LUA
@@ -139,6 +151,52 @@ $T send-keys -t s / f o r g e t Enter
 sleep 0.3
 check "an action keymap.set hid is left out" sh -c "$T capture-pane -p -t s | grep -q 'no line holds it'"
 $T send-keys -t s q
+sleep 0.3
+# the guides, as vim's help
+$T send-keys -t s ":help 'ocr'" Enter
+wait_for "help: configuration" || true
+check ":help 'ocr' opens the setting's line in configuration.md, at the top" sh -c "$T capture-pane -p -t s | sed -n 3p | grep -q 'ocr .*never'"
+check "and scrnman.set took the overlay's hint away" sh -c "! $T capture-pane -p -t s | sed -n 2p | grep -q 'toggle'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":help plums" Enter
+wait_for "help: more/mine" || true
+check "a guide in docs/ under the configuration folder, found by its heading" sh -c "$T capture-pane -p -t s | grep -q 'Plums are kept'"
+$T send-keys -t s j j K
+wait_for "help: keys" || true
+check "K follows its link into lulibre's keys.md, at the heading" sh -c "$T capture-pane -p -t s | sed -n 3p | grep -q 'THE LEADER KEY'"
+$T send-keys -t s C-t
+sleep 0.3
+check "<C-t> goes back" sh -c "$T capture-pane -p -t s | grep -q 'help: more/mine'"
+$T send-keys -t s Tab
+sleep 0.3
+check "<Tab> forward again" sh -c "$T capture-pane -p -t s | grep -q 'help: keys'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s "?"
+wait_for "KEYS" || true
+$T send-keys -t s j K
+sleep 0.4
+check "on ?, K on a key: what the guides say of it" sh -c "$T capture-pane -p -t s | grep -q 'help: keys'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":help xylograph" Enter
+sleep 0.4
+check "a word no guide has: said" sh -c "$T capture-pane -p -t s | grep -q 'say nothing about'"
+$T send-keys -t s ":help calibredb" Enter
+wait_for "MENTION IT" || true
+check "a word without a tag: the lines that mention it" sh -c "$T capture-pane -p -t s | grep -q 'api:[0-9]'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":help plu" Tab
+sleep 0.4
+check "Tab completes a tag" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':help Plums'"
+$T send-keys -t s Escape
+sleep 0.2
+$T send-keys -t s '`'
+sleep 0.4
+check "the console's bar shows the hint scrnman.set gave it" sh -c "$T capture-pane -p -t s | grep 'console' | grep -q 'q close' && ! $T capture-pane -p -t s | grep -q 'e errors'"
+$T send-keys -t s '`'
 sleep 0.3
 check "the bar has a tab for a tab screen" sh -c "$T capture-pane -p -t s | head -1 | grep -q 'Tabbed'"
 open ptab P-tab

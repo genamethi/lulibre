@@ -8,6 +8,16 @@ headings with a match. A heading stays as you left it the next time; `:help-plai
 shows every one open. Every key runs a command, and `:` runs a command by
 name.
 
+`:help TOPIC` opens these guides where they speak of TOPIC: a heading
+(`:help filters`, `:help the leader key`), a command (`:help :enrich`, or
+`:help enrich`), a setting (`:help 'ocr'`), a key (`:help gh`), a Lua
+function (`:help uiman.list`); Tab completes it. With nothing headed so,
+it lists the lines that mention TOPIC. In a guide, and on `?`'s keys and
+commands, `K` or `<C-]>` follows the link on the cursor's line, `<C-t>`
+goes back and `<Tab>` forward again. The guides are lulibre's and the
+Markdown files in `docs/` under the configuration and data folders
+([configuration](configuration.md)).
+
 ## The list
 
 | Key | Command | |
@@ -180,14 +190,20 @@ keymap.set("console", "x", "close")
 keymap.del("line", "<C-k>")             -- unbind
 keymap.set("panel", "n", "down", { desc = "the next row" })   -- what ? says the action does
 keymap.set("console", "c", "clear", { hidden = true })       -- ? leaves the action out
+scrnman.set("console", { hint = { "clear", "close" } })     -- what its bar shows
 ```
+
+The hint a place shows (the console's bar, the picker's foot, the
+overlay's title, the bottom line while typing, the message when
+selecting in the preview, a panel with no hint of its own) is a list of its
+actions, which `scrnman.set` changes; `hint = {}` shows none.
 
 | Place | Actions |
 |---|---|
 | `panel` | `down` `up` `top` `bottom` `half-down` `half-up` `page-down` `page-up` `close` |
 | `line` | `accept` `cancel` `paste` `copy` `complete` `next` `prev` `up` `down` `preview-up` `preview-down` `left` `right` `home` `end` `backspace` `delete` `kill-start` `kill-end` `kill-word` `word-left` `word-right` |
 | `picker` | `accept` `cancel` `down` `up` `page-down` `page-up` |
-| `pager` | `down` `up` `page-down` `page-up` `top` `bottom` `toggle` `open` `close` `all` `none` `search` `next` `prev` `leave` (any other key closes it) |
+| `pager` | `down` `up` `page-down` `page-up` `top` `bottom` `toggle` `open` `close` `all` `none` `search` `next` `prev` `follow` `back` `forward` `leave` (any other key closes it) |
 | `console` | `up` `down` `half-up` `half-down` `top` `follow` `errors` `warnings` `notices` `everything` `clear` `close` |
 
 A screen made in Lua is a place too (`scrnman.create`, [the API](api.md)):

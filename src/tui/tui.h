@@ -162,7 +162,7 @@ enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PRE
        LA_KILL_START, LA_KILL_END, LA_KILL_WORD, LA_WORD_LEFT, LA_WORD_RIGHT };
 enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
 enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP, GA_BOTTOM, GA_TOGGLE, GA_OPEN, GA_CLOSE, GA_ALL, GA_NONE,
-       GA_SEARCH, GA_NEXT, GA_PREV, GA_LEAVE };
+       GA_SEARCH, GA_NEXT, GA_PREV, GA_FOLLOW, GA_BACK, GA_FORWARD, GA_LEAVE };
 enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
        CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
 #define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
@@ -186,6 +186,9 @@ int ctx_tab(int i, const char **name, const char **title);
 const char *ctx_name(int ctx);
 int ctx_is_tab(int ctx);
 void ctx_drop_lua(void); /* the screens' places go (:restart-scripts) */
+/* A place's or screen's title and hint line, changed (scrnman.set): title
+ * NULL keeps it; nhint < 0 keeps the hint, 0 leaves none. */
+int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char **err);
 const char *ctx_action_name(int ctx, int action); /* NULL for none */
 /* The hint line: the hint's actions with the keys now on them ("a accept   e
  * edit"); how many it has. */
@@ -581,6 +584,7 @@ enum complete_kind {
   COMPLETE_COMMAND, /* command names */
   COMPLETE_SCRIPT,  /* the scripts :run finds */
   COMPLETE_LUA,     /* a Lua function, asked by message (lapi_complete) */
+  COMPLETE_HELP,    /* the guides' tags (:help) */
 };
 struct completion {
   enum complete_kind kind;
@@ -785,6 +789,33 @@ void tui_pager_end(struct tui *t); /* the open pager shows its end */
  * open < 0: every section open. */
 void tui_pager_folded(struct tui *t, const char *title, const char *text, int open);
 void tui_pager_forget(void); /* what was opened and closed (at the end) */
+/* A link in the open pager's text: its bytes, and what it names (a guide's
+ * file, file#heading, file:line, a tag; guides_follow). */
+struct pager_link {
+  size_t off, len;
+  char *target;
+};
+/* The open pager's links (taken over; in the order of their offsets), and
+ * the file its text is, which relative links start from (NULL: none). */
+void tui_pager_links(struct tui *t, struct pager_link *links, int n, const char *where);
+void tui_pager_at(struct tui *t, int line); /* the cursor to the line, shown at the top */
+
+/* ---------------------------------------------------------------- guides.c */
+
+/* The guides: the Markdown files in lulibre's docs/ and in docs/ under the
+ * configuration and data folders, indexed by their headings and the
+ * commands, keys and settings their tables name, as vim's help is by its
+ * tags. */
+int guides_help(struct tui *t, const char *topic); /* :help TOPIC; 0 when nothing is found (and said) */
+/* A link: a tag, a file (relative to `from`, the file it is in), file#heading
+ * or file:line, or several to try, separated by newlines; shown in the
+ * pager. 0 when it leads nowhere (and said), the pager untouched. */
+int guides_follow(struct tui *t, const char *target, const char *from);
+/* The guides, a line each, with a link to each, for ? (offsets in *text). */
+void guides_list(struct tui *t, sbuf *text, struct pager_link **links, int *nlinks);
+/* Every tag, for completing :help, separated by newlines; the caller's. */
+char *guides_tags(struct tui *t);
+void guides_forget(void); /* the index (at the end) */
 /* Put text on the message line without logging it (tui_msg logs first). */
 void tui_show_msg(struct tui *t, int error, const char *text);
 /* The console window (view_console.c): its keys when focused, the wheel. */

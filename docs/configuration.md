@@ -174,7 +174,8 @@ end)
 
 | | |
 |---|---|
-| `~/.config/lulibre/` | `init.lua`, `lua/`, `scripts/` |
+| `~/.config/lulibre/` | `init.lua`, `lua/`, `scripts/`, `docs/` |
+| `~/.config/lulibre/docs/`, `~/.local/share/lulibre/docs/` | guides of your own, Markdown files `:help` reads after lulibre's (and their folders'): each heading is a tag, and so is what a table's first column names in `code` (a command under a `Command` heading, a setting under `Setting`, a key under `Key`) |
 | `~/.local/state/lulibre/settings` | the saved settings, while `persistent` is true |
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library: what lulibre read from it and its files. A new version of its tables makes it again, keeping the sync folder's files |
 | `~/.local/share/lulibre/NAME-HASH.journal.db` | beside the index, and never removed with it: every operation on the library, with where each value came from |

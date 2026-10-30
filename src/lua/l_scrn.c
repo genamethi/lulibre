@@ -7,6 +7,7 @@
  *     place = { kind = "band", size = 0.45 },
  *     tab = true,                      -- a tab of the bar, which runs :name
  *   })
+ *   scrnman.set(name, { hint = { "accept" }, title = "Proposals" })
  *
  * place says where the screen's views go, unless the one opening a view
  * says otherwise (uiman.panel's side and height): kind is band (along the
@@ -25,7 +26,13 @@
  * action's name, and its bar shows the hint's actions with the keys they
  * are on. Making a screen again under its name replaces it. Screens go with
  * the lua_State: init.lua and the packaged modules make theirs again after
- * :restart-scripts. */
+ * :restart-scripts.
+ *
+ * scrnman.set changes the title and the hint line of a screen, or of one of
+ * lulibre's places ("console", "pager", "picker", "select", "panel",
+ * "line"): what a field leaves out stays, and an empty hint shows none.
+ * Like keymap.set on lulibre's places, it holds until :restart-scripts,
+ * when init.lua says it again. */
 #include <stdlib.h>
 #include <string.h>
 
@@ -152,8 +159,49 @@ static int s_create(lua_State *L) {
   return ui_send(L, create_ui, "scrnman.create");
 }
 
+/* interface thread: (name, hint or nil, title or nil) */
+static int set_ui(lua_State *L) {
+  const char *name = luaL_checkstring(L, 1), *hint[MAX_ACTIONS];
+  int nh = lua_istable(L, 2) ? (int)lua_rawlen(L, 2) : -1;
+  if (nh > MAX_ACTIONS) nh = MAX_ACTIONS;
+  for (int i = 0; i < nh; i++) {
+    lua_rawgeti(L, 2, i + 1);
+    hint[i] = lua_tostring(L, -1); /* stays in the table */
+    lua_pop(L, 1);
+  }
+  char *err = NULL;
+  if (ctx_set(name, lua_tostring(L, 3), nh, hint, &err) < 0) {
+    lua_pushstring(L, err);
+    free(err);
+    return lua_error(L);
+  }
+  return 0;
+}
+
+static int s_set(lua_State *L) {
+  luaL_checkstring(L, 1);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  lua_settop(L, 2);
+  lua_getfield(L, 2, "hint");
+  if (lua_istable(L, 3)) {
+    int nh = (int)lua_rawlen(L, 3);
+    luaL_argcheck(L, nh <= MAX_ACTIONS, 2, "too many actions in the hint");
+    for (int i = 1; i <= nh; i++) {
+      lua_rawgeti(L, 3, i);
+      if (lua_type(L, -1) != LUA_TSTRING) return luaL_error(L, "hint[%d]: an action's name", i);
+      lua_pop(L, 1);
+    }
+  } else if (!lua_isnil(L, 3)) {
+    return luaL_error(L, "hint: a list of the actions to show");
+  }
+  lua_getfield(L, 2, "title");
+  if (!lua_isnil(L, 4) && lua_type(L, 4) != LUA_TSTRING) return luaL_error(L, "title: a string");
+  lua_remove(L, 2); /* name, hint, title */
+  return ui_send(L, set_ui, "scrnman.set");
+}
+
 int luaopen_scrnman(lua_State *L) {
-  static const luaL_Reg fns[] = {{"create", s_create}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"create", s_create}, {"set", s_set}, {NULL, NULL}};
   luaL_newlib(L, fns);
   return 1;
 }

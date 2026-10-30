@@ -199,6 +199,7 @@ void tui_teardown(void) {
   keymap_free(&tui_keymap);
   ctx_free();
   tui_pager_forget();
+  guides_forget();
 }
 
 static void closed(uv_handle_t *h) {
