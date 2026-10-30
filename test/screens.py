@@ -1,6 +1,6 @@
 """uiman.list and uiman.form, in the interface: a key's action on the item
 under the cursor, the items read again after it, an action's error shown,
-a refresh on an event, a field edited through the form, review, and a key bound to a function.
+a refresh on an event, a field edited through the form, review, a key bound to a function, and a pick cancelled late.
 
   python3 -I test/screens.py BIN
 
@@ -17,7 +17,7 @@ subprocess.run(["sh", os.path.join(here, "mklib.sh"), os.path.join(t, "lib")], c
 os.makedirs(os.path.join(t, "config", "lulibre"))
 with open(os.path.join(t, "config", "lulibre", "init.lua"), "w") as f:
     f.write(r'''
-local function note(s) local f = io.open(os.getenv("SCREENS_OUT"), "a") f:write(s, "\n") f:close() end
+function note(s) local f = io.open(os.getenv("SCREENS_OUT"), "a") f:write(s, "\n") f:close() end -- :lua too
 keymap.set("n", "gx", function(o) note("key|" .. o.name .. "|" .. tostring(o.book)) end, { desc = "note the book" })
 local items = { "a", "b", "c" }
 cmdman.create("demolist", function()
@@ -38,6 +38,14 @@ cmdman.create("demoform", function()
     edit = function(field, value) note("edit|" .. field .. "|" .. value) rec[field] = value end,
   }
   note("form closed|" .. rec.pages .. "|" .. rec.ocr)
+end)
+-- a task waiting on a pick, cancelled after a picker of lulibre's took the
+-- pick's place but before the task heard so: the other picker stays open
+cmdman.create("demopick", function()
+  local a = taskman.spawn(function() uiman.pick({ "one", "two" }, { title = "demo pick" }) end)
+  taskman.sleep(300)
+  uiman.exec("pick books")
+  taskman.cancel(a)
 end)
 -- two wits for book 1's title, and a store in calibredb's place: review
 -- writes nothing to the library
@@ -94,6 +102,10 @@ keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("a", 1.5)       # accepted: written through store.calibre
 keys("q", 0.6)
+keys(":demopick\r", 1.5)
+keys(":lua note('typed')\r", 0.6)   # into the books picker, which is still open
+keys("\x1b", 0.3)
+keys(":lua note('after')\r", 0.6)
 keys(":q\r", 0)
 end = time.time() + 5
 while time.time() < end:
@@ -126,6 +138,8 @@ check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("a task's pick cancelled late leaves the picker that took its place open",
+      "after" in got and "typed" not in got)
 if fails:
     print(got)
     print(text[-3000:])

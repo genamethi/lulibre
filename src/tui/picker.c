@@ -109,6 +109,10 @@ void picker_open(struct tui *t, struct picker *p) {
   tui_dirty(t);
 }
 
+void *picker_ud_if(struct tui *t, picker_accept *accept) {
+  return t->picker && t->picker->accept == accept ? t->picker->ud : NULL;
+}
+
 void picker_close(struct tui *t) {
   struct picker *p = t->picker;
   if (!p) return;

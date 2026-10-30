@@ -284,6 +284,10 @@ static void input_done(struct tui *t, const char *text) {
   if (cb) cb(t, text, ud);
 }
 
+void *tui_input_ud_if(struct tui *t, input_fn *cb) {
+  return t->prompt == PROMPT_INPUT && t->input_cb == cb ? t->input_ud : NULL;
+}
+
 void tui_input_cancel(struct tui *t) {
   if (t->prompt == PROMPT_INPUT) input_done(t, NULL);
 }

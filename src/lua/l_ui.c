@@ -336,10 +336,16 @@ void lapi_new_generation(void) {
   atomic_fetch_add(&generation, 1);
 }
 
+/* A pick or an input a task waits on is known to the interface by its id,
+ * never by its address: a cancel can reach the interface after the wait
+ * has ended and its struct is freed. Ids are given on the Lua thread and
+ * never reused, across :restart-scripts too. */
+static unsigned next_wait;
+
 struct pwait {
   struct app *app;
   struct task *task;
-  struct tui *t; /* set on the interface thread when the picker opens */
+  unsigned id;
   int items_ref;
   unsigned gen; /* the lua_State items_ref is in */
 };
@@ -385,13 +391,23 @@ static void pick_cancel(struct tui *t, void *ud) {
   pick_finish(ud, 0);
 }
 
-static void picker_close_ui(struct app *app, void *arg) {
-  struct pwait *w = arg;
-  if (w->t) picker_close(w->t); /* reports back through pick_cancel */
+static unsigned *wait_id(unsigned id) {
+  unsigned *p = xmalloc(sizeof *p);
+  *p = id;
+  return p;
 }
 
-static void pick_task_cancelled(void *ud) {
-  queue_post(LOOP_UI, picker_close_ui, ud);
+/* the task's picker, if it is still the one open: an open picker's pwait
+ * has not been answered, so it is not freed yet */
+static void picker_close_ui(struct app *app, void *arg) {
+  unsigned *id = arg;
+  struct pwait *w = app->tui ? picker_ud_if(app->tui, pick_accept) : NULL;
+  if (w && w->id == *id) picker_close(app->tui); /* reports back through pick_cancel */
+  free(id);
+}
+
+static void pick_task_cancelled(void *ud) { /* Lua thread, the task still waiting */
+  queue_post(LOOP_UI, picker_close_ui, wait_id(((struct pwait *)ud)->id));
 }
 
 /* items, options, the pwait (an integer) */
@@ -407,7 +423,6 @@ static int pick_open_ui(lua_State *L) {
     lua_getfield(L, 2, "title");
     if (lua_isstring(L, -1)) title = lua_tostring(L, -1);
   }
-  w->t = t;
   struct picker *p = picker_new(t, title, pick_accept, w);
   picker_on_cancel(p, pick_cancel);
   lua_Integer n = (lua_Integer)lua_rawlen(L, 1);
@@ -441,6 +456,7 @@ static int l_pick(lua_State *L) {
   sched_require_task(L);
   if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct pwait *w = xcalloc(1, sizeof *w);
+  w->id = ++next_wait;
   w->gen = atomic_load(&generation);
   w->app = lapi_app(L);
   lua_settop(L, 2);
@@ -459,7 +475,7 @@ static int l_pick(lua_State *L) {
 struct iwait {
   struct app *app;
   struct task *task;
-  struct tui *t;
+  unsigned id;
   int change_ref; /* registry ref of on_change, or LUA_NOREF */
   unsigned gen;   /* the lua_State change_ref is in */
 };
@@ -512,13 +528,16 @@ static void input_changed(struct tui *t, const char *text, void *ud) {
   input_send(ud, text ? text : "", 0);
 }
 
+/* the task's question, if it is still the one open (as for pick) */
 static void input_cancel_ui(struct app *app, void *arg) {
-  struct iwait *w = arg;
-  if (w->t) tui_input_cancel(w->t);
+  unsigned *id = arg;
+  struct iwait *w = app->tui ? tui_input_ud_if(app->tui, input_answer) : NULL;
+  if (w && w->id == *id) tui_input_cancel(app->tui);
+  free(id);
 }
 
-static void input_task_cancelled(void *ud) {
-  queue_post(LOOP_UI, input_cancel_ui, ud);
+static void input_task_cancelled(void *ud) { /* Lua thread, the task still waiting */
+  queue_post(LOOP_UI, input_cancel_ui, wait_id(((struct iwait *)ud)->id));
 }
 
 /* the options table (or prompt string), the iwait (an integer) */
@@ -564,7 +583,6 @@ static int input_open_ui(lua_State *L) {
   } else if (lua_isstring(L, 1)) {
     prompt = lua_tostring(L, 1);
   }
-  w->t = t;
   tui_input(t, prompt, initial, input_answer, w);
   if (nsugg) tui_input_suggest(t, nsugg, texts, details, sep);
   if (w->change_ref != LUA_NOREF) tui_input_on_change(t, input_changed);
@@ -575,6 +593,7 @@ static int l_input(lua_State *L) {
   sched_require_task(L);
   if (!lapi_app(L)->tui) return luaL_error(L, "this needs the interface, which is not running");
   struct iwait *w = xcalloc(1, sizeof *w);
+  w->id = ++next_wait;
   w->gen = atomic_load(&generation);
   w->app = lapi_app(L);
   w->change_ref = LUA_NOREF;
