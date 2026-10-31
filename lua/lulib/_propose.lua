@@ -104,7 +104,8 @@ function own.candidates(ranked, w, decided)
   for _, p in ipairs(ranked) do
     for field, f in pairs(p.fields) do
       local value = M.normalize(field, f.value)
-      if value ~= "" and not (decided[field] and decided[field][value]) then
+      local wanted = not w.only or w.only[field] or (w.only.identifiers and field:find("^identifier:"))
+      if wanted and value ~= "" and not (decided[field] and decided[field][value]) then
         out[#out + 1] = { parse = p, field = field, f = f, value = value, score = get("value_score")(p, f, w),
                           failed = p.failed, weak = filled[field] and not p.strong and not f.fixed }
       end

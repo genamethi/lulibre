@@ -5,9 +5,17 @@
  *     until it has applied or failed: the batch (nil when nothing was to
  *     change), or nil and why. changes: { {book=, field=, value=,
  *     op = "set"|"add"|"remove", proposal=, proposed=, source=}, ... };
- *     no value: the field keeps its value, a decision on a proposal
- *   store.command(args [, label])      a structural calibredb command
- *     ({ "add_custom_column", ... }), run once nothing holds the library
+ *     no value: the field keeps its value, a decision on a proposal; a third
+ *     argument, a batch to join
+ *   store.command(args [, label | {label=, when=, batch=}])   a calibredb command
+ *     ({ "add_custom_column", ... }); when "closed", the default, it runs once
+ *     nothing holds the library, and when "any" as a change would, through the
+ *     content server if it is set; batch, a batch to join. Waits: the batch and
+ *     what it printed, or nil and why
+ *   store.command_undo(batch, args)    the calibredb command that puts a
+ *     command's batch back, which store.undo and :undo then run
+ *   store.drop(book, held [, batch])   a staged file to the path held, its
+ *     record kept for undo: the batch, or nil and why
  *   store.undo(batch)                  puts a batch's old values back
  *   store.holder()                     "none" | "server" | "program" | "other"
  *   store.reload()                     calibre's records read again (l_db.c)
@@ -37,7 +45,13 @@ struct msg {
   int n;
   char **argv;
   char *label;
+  int when_any;       /* a command that runs as a change does */
+  long long join;     /* a batch to join */
   long long undo; /* a batch to put back */
+  long long drop;     /* a staged file to take out of the folder */
+  char *held;         /* to here */
+  int set_undo;       /* argv is what puts join back */
+  char *output;       /* what a command printed */
   struct op_settings set; /* from the lua_State's copy, as the call was made */
   /* the answer */
   long long batch;
@@ -57,6 +71,8 @@ static void msg_free(struct msg *m) {
     for (char **a = m->argv; *a; a++) free(*a);
   free(m->argv);
   free(m->label);
+  free(m->held);
+  free(m->output);
   free(m->err);
   free((char *)m->set.server);
   free((char *)m->set.user);
@@ -77,7 +93,12 @@ static void answered(struct app *app, void *arg) {
     } else {
       if (m->batch) lua_pushinteger(L, m->batch);
       else lua_pushnil(L);
-      sched_wake(m->task, 1);
+      if (m->output) {
+        lua_pushstring(L, m->output);
+        sched_wake(m->task, 2);
+      } else {
+        sched_wake(m->task, 1);
+      }
     }
   }
   msg_free(m);
@@ -102,14 +123,23 @@ static void submit(struct app *app, void *arg) { /* the background thread */
     err = xstrdup("the library is closed");
   } else if (m->undo) {
     rc = library_undo(app->library, m->undo, &m->set, done, m, &err);
+  } else if (m->set_undo) {
+    rc = library_command_undo(app->library, m->join, (const char *const *)m->argv, &err);
+    if (!rc) done(m->join, OP_APPLIED, NULL, m);
+  } else if (m->drop) {
+    long long batch = library_drop(app->library, m->drop, m->held, m->join, &err);
+    rc = batch ? 0 : -1;
+    if (!rc) done(batch, OP_APPLIED, NULL, m);
   } else {
     struct operation op = {
       .set = &m->set,
       .label = m->label,
-      .need = m->argv ? NEED_CLOSED : NEED_ANY,
+      .need = m->argv && !m->when_any ? NEED_CLOSED : NEED_ANY,
       .changes = m->changes,
       .nchanges = m->n,
       .argv = (const char *const *)m->argv,
+      .batch = m->join,
+      .output = m->argv ? &m->output : NULL,
     };
     rc = library_submit(app->library, &op, done, m, &err);
   }
@@ -172,6 +202,7 @@ static int l_apply(lua_State *L) {
     }
     c->op = (enum change_op)k;
   }
+  m->join = luaL_optinteger(L, 3, 0);
   return to_library(L, m);
 }
 
@@ -186,7 +217,45 @@ static int l_command(lua_State *L) {
     m->argv[i - 1] = xstrdup(luaL_tolstring(L, -1, NULL));
     lua_pop(L, 2);
   }
-  m->label = luaL_optstring(L, 2, NULL) ? xstrdup(lua_tostring(L, 2)) : NULL;
+  if (lua_istable(L, 2)) {
+    m->label = opt_string(L, 2, "label");
+    lua_getfield(L, 2, "when");
+    m->when_any = lua_isstring(L, -1) && !strcmp(lua_tostring(L, -1), "any");
+    lua_getfield(L, 2, "batch");
+    m->join = lua_tointeger(L, -1);
+    lua_pop(L, 2);
+  } else {
+    m->label = luaL_optstring(L, 2, NULL) ? xstrdup(lua_tostring(L, 2)) : NULL;
+  }
+  return to_library(L, m);
+}
+
+static int l_command_undo(lua_State *L) {
+  lua_Integer batch = luaL_checkinteger(L, 1);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  sched_require_task(L);
+  int n = (int)lua_rawlen(L, 2);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->argv = xcalloc((size_t)n + 1, sizeof *m->argv);
+  for (int i = 1; i <= n; i++) {
+    lua_rawgeti(L, 2, i);
+    m->argv[i - 1] = xstrdup(luaL_tolstring(L, -1, NULL));
+    lua_pop(L, 2);
+  }
+  m->set_undo = 1;
+  m->join = batch;
+  return to_library(L, m);
+}
+
+static int l_drop(lua_State *L) {
+  lua_Integer book = luaL_checkinteger(L, 1);
+  const char *held = luaL_checkstring(L, 2);
+  lua_Integer batch = luaL_optinteger(L, 3, 0);
+  sched_require_task(L);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->drop = book;
+  m->held = xstrdup(held);
+  m->join = batch;
   return to_library(L, m);
 }
 
@@ -271,7 +340,7 @@ void lapi_store_write(struct store_req *q) {
 
 int luaopen_store(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"apply", l_apply}, {"command", l_command}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
+    {"apply", l_apply}, {"command", l_command}, {"command_undo", l_command_undo}, {"drop", l_drop}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
     {NULL, NULL},
   };
   luaL_newlib(L, fns);

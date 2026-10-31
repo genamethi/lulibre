@@ -103,6 +103,36 @@ print("ident accept|" .. tostring(wit.write() ~= nil))
 print("ident|" .. bookman.get(1, "identifier:isbn") .. "|" .. bookman.get(1, "authors") .. "|" .. tostring(bookman.get(99, "title")))
 LUA
 
+cat > "$t/sync.lua" <<'LUA'
+local sync = require "lulib._sync"
+local bookman = require "bookman"
+local store = require "store"
+local wit = require "wit"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+store.reload()
+local files = bookman.ids("in:sync")
+table.sort(files, function(a, b) return a > b end)
+say("sync waiting", #files)
+local a, b = files[1], files[2]
+store.apply({ { book = a, field = "title", value = "A Waiting Book" }, { book = a, field = "publisher", value = "Some House" } })
+wit.set(a, { { field = "series", value = "Waiting Series", source = "front" } })
+local out = sync.add({ a })
+say("sync add", out.added, out.held, #out.failed, out.failed[1])
+store.reload()
+local added = bookman.ids("title:\"A Waiting Book\" in:library")
+local id = added[1]
+say("sync added", #added, bookman.get(id, "title"), bookman.get(id, "publisher"), wit.get(id)[1] and wit.get(id)[1].alts[1].value)
+say("sync undo", store.undo(out.batch) ~= nil)
+store.reload()
+say("sync undone", #bookman.ids("title:\"A Waiting Book\" in:library"))
+-- dropped, the file gone and its record with it; undone, both back
+store.apply({ { book = b, field = "title", value = "A Dropped Book" } })
+local path = sync.staged(b).path
+local d = sync.drop { b }
+say("sync drop", d.dropped, #d.failed, sync.staged(b) == nil, io.open(path) == nil)
+say("sync undrop", store.undo(d.batch) ~= nil, io.open(path) ~= nil, sync.staged(b) and sync.staged(b).title)
+LUA
+
 cat > "$t/inside.sh" <<'IN'
 #!/bin/sh
 # inside the namespace: $1 the folder, $2 the binary, $3 a PDF
@@ -147,6 +177,10 @@ mkdir -p "$t/lib"
 calibredb --with-library "$t/lib" add "$pdf" >/dev/null 2>&1
 "$bin" -L "$t/lib" index >/dev/null 2>&1
 "$bin" -L "$t/lib" run "$t/review.lua" 2>&1
+mkdir -p "$t/inbox"
+{ cat "$pdf"; echo "% one"; } > "$t/inbox/one.pdf"
+{ cat "$pdf"; echo "% another"; } > "$t/inbox/two.pdf"
+"$bin" -L "$t/lib" -o "path.sync=$t/inbox" run "$t/sync.lua" 2>&1
 rm -f "$t"/data/lulibre/*.journal.db
 ip link set lo up 2>/dev/null || true
 calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
@@ -190,6 +224,13 @@ expect "the record has the one, not the other, and the wits are gone" "decided|T
 expect "writing in one review leaves another's proposals" "other kept|Another Title"
 expect "a rejection changes nothing but is kept" "rejection|review|authors|true|front"
 expect "a discarded review's proposals go" "discarded|1|0"
+expect "the sync folder's files are waiting" "sync waiting|2"
+expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
+expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"
+expect "undo takes it back out" "sync undo|true"
+expect "of the library" "sync undone|0"
+expect "dropped, the file leaves the folder and the list" "sync drop|1|0|true|true"
+expect "undo brings it back, with its record" "sync undrop|true|true|A Dropped Book"
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
 expect "an identifier's wit accepted is added to the record's identifiers" "ident accept|true"
 expect "bookman.get gives one identifier by its type, an unknown author as nothing, no book as nil" "ident|9780387900407||nil"

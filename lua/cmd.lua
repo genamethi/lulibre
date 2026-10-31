@@ -275,6 +275,34 @@ end, { desc = "FIELDS [filter]  propose blanking fields (title authors tags iden
 cmdman.create("junk", function(o) M.junk(M.books(o, "")) end, { desc = "[filter]  mark and list the books whose title or author is plainly not one", complete = "filter" })
 cmdman.create("capture", function(o) require("lulib._capture").open(o.selection or {}, (o.args or "") ~= "" and o.args or nil) end,
   { desc = "[pattern]  pull fields out of the selected books with a pattern, and propose them" })
+cmdman.create("sync", function(o)
+  local sync = require "lulib._sync"
+  local verb, rest = (o.args or ""):match("^(%a+)%s*(.*)$")
+  if verb ~= "add" and verb ~= "move" and verb ~= "drop" then
+    return require("lulib._dialogs").sync(M.books(o))
+  end
+  local ids = M.books({ args = rest ~= "" and "in:sync " .. rest or "", selection = o.selection })
+  if verb == "drop" then
+    local out = sync.drop(ids)
+    uiman.notify(#out.failed > 0 and out.failed[1] or ("dropped %d; :undo puts them back"):format(out.dropped),
+                 #out.failed > 0 and "error" or nil)
+  else
+    local out = sync.add(ids, { remove = verb == "move" })
+    uiman.notify(sync.summary(out), #out.failed > 0 and "error" or nil)
+  end
+end, { desc = "[add | move | drop] [filter]  the sync folder's files: add the selection; add and take them out; drop without adding. Alone, a dialog", complete = { "add", "move", "drop" } })
+cmdman.create("beside", function() require("lulib._beside").open() end, { desc = "the sync folder beside the library" })
+cmdman.create("onboard", function(o)
+  if (o.args or "") == "" then return uiman.notify("give the folder", "error") end
+  local dir = o.args:gsub("^~", os.getenv("HOME") or "~")
+  setman.set("path.sync", dir)
+  require("store").reload()
+  uiman.exec("source sync")
+  uiman.notify(("%s is the sync folder for now: :sync adds its files, :propose proposes for them"):format(dir))
+end, { desc = "DIR  take a folder as the sync folder for now, to bring its ebook files in" })
+cmdman.create("change", function(o) require("lulib._dialogs").change(M.books(o)) end, { desc = "[filter]  one change to every selected book" })
+cmdman.create("enrich-dialog", function(o) require("lulib._dialogs").enrich(M.books(o)) end, { desc = "[filter]  say what :enrich would ask, choose the services, then review", complete = "filter" })
+cmdman.create("propose-review", function(o) require("lulib._dialogs").propose_review(M.books(o)) end, { desc = "a dialog for a whole round: which books, what to ask, which fields, then review" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

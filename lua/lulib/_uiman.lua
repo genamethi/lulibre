@@ -106,6 +106,111 @@ function own.shown(v)
   return v == nil and "" or tostring(v)
 end
 
+scrnman.create("dialog", {
+  actions = {
+    { "toggle", "<Space>", "tick or untick a box; step through a choice" },
+    { "change", "<CR>", "tick a box, step through a choice, type a value, or do what the line says" },
+    { "next", "l", "the next of a choice" },
+    { "prev", "h", "the one before" },
+    { "go", "w", "do the first thing the dialog offers, with things as they are set" },
+  },
+  hint = { "toggle", "change", "go" },
+})
+
+-- uiman.form with sections: boxes, choices, typed values and actions under
+-- headings; returns the action chosen and the values, nil if it is closed
+function own.dialog(spec)
+  local at -- row -> item
+  local function build()
+    local rows = {}
+    at = {}
+    for _, section in ipairs(spec.sections) do
+      if section.title and section.title ~= "" then
+        rows[#rows + 1] = { "── " .. section.title .. " " .. ("─"):rep(math.max(4, 60 - #section.title)), style = "head" }
+      end
+      for _, item in ipairs(section.items) do
+        local mark, value = "", ""
+        if item.kind == "check" then mark = item.value and not item.off and "[x]" or "[ ]"
+        elseif item.kind == "choice" then mark, value = " ‹›", tostring(item.choices[item.value] or "")
+        elseif item.kind == "number" or item.kind == "text" then mark, value = "  =", tostring(item.value or "")
+        elseif item.kind == "action" then mark = "  ▶" end
+        if item.kind == "note" then
+          rows[#rows + 1] = { "      " .. item.label, style = "note" }
+        else
+          rows[#rows + 1] = { mark, item.label, item.off and ("(%s)"):format(item.off) or value ~= "" and value or (item.hint or ""),
+                              style = item.off and "dim" or item.kind == "action" and "accent" or nil }
+        end
+        at[#rows] = item
+      end
+    end
+    return rows
+  end
+  local p <close> = uiman.panel {
+    title = spec.title or "", help = spec.help, screen = spec.screen or "dialog", height = spec.height or 0.7, dialog = true,
+    columns = { { "", 4 }, { "", spec.label_width or 44 }, { "", -1 } }, rows = build(),
+  }
+  -- start on the first thing that can be changed
+  local rows = 0
+  for i in pairs(at) do rows = math.max(rows, i) end
+  for i = 1, rows do
+    if at[i] and at[i].kind ~= "note" and not at[i].off then
+      p:cursor(i)
+      break
+    end
+  end
+  local function values()
+    local v = {}
+    for _, section in ipairs(spec.sections) do
+      for _, item in ipairs(section.items) do
+        if item.id and item.kind ~= "action" and item.kind ~= "note" then
+          if item.off and item.kind == "check" then v[item.id] = false
+          else v[item.id] = item.value end
+        end
+      end
+    end
+    return v
+  end
+  local function redraw(row)
+    p:rows(build())
+    if row then p:cursor(row) end
+  end
+  while true do
+    local act, row = p:wait()
+    if not act then return nil end
+    local item = at[row]
+    if act == "go" then
+      for _, section in ipairs(spec.sections) do
+        for _, it in ipairs(section.items) do
+          if it.kind == "action" and not it.off then return it.id, values() end
+        end
+      end
+    elseif item and item.off then
+      uiman.notify(item.off)
+    elseif item and (act == "toggle" or act == "change" or act == "next" or act == "prev") then
+      if item.kind == "check" and act ~= "next" and act ~= "prev" then
+        item.value = not item.value
+        redraw(row)
+      elseif item.kind == "choice" then
+        item.value = ((item.value or 1) - 1 + (act == "prev" and -1 or 1)) % #item.choices + 1
+        redraw(row)
+      elseif (item.kind == "number" or item.kind == "text") and act == "change" then
+        local typed = uiman.input { prompt = item.label .. ": ", default = tostring(item.value or "") }
+        if typed then
+          if item.kind == "number" then
+            local n = tonumber(typed)
+            if n then item.value = n else uiman.notify(("'%s' is not a number"):format(typed), "error") end
+          else
+            item.value = typed
+          end
+          redraw(row)
+        end
+      elseif item.kind == "action" and act == "change" then
+        return item.id, values()
+      end
+    end
+  end
+end
+
 --- Shows a record, one field to a row, and waits until it is closed: a
 -- form of lulibre's (uiman.panel's form), whose keys are the place form's:
 -- edit (e or Enter) asks for the field's value on the line.
@@ -116,7 +221,13 @@ end
 -- name); edit(field, value, record): takes an edited value (nil and why
 -- refuses it); screen: a screen whose actions it has too, `actions`
 -- saying what they do: `{ [action] = function(field, record) }`.
+-- With `sections` it is a dialog: `{ title=, sections = { {title=, items = {
+-- {id=, kind=, label=, value=, choices=, hint=, off=}, ... }}, ... }, height=,
+-- label_width= }`, kind check, choice, number, text, action or note; off says
+-- why an item can't be changed. It returns the id of the action chosen and each
+-- item's value by id, or nil when closed.
 function M.form(o)
+  if o.sections then return get("dialog")(o) end
   local function record() return (type(o.record) == "function" and o.record() or o.record) or {} end
   local function fields()
     local rec, out = record(), {}

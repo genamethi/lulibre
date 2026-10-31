@@ -98,6 +98,28 @@ cmdman.create("demowits", function()
                           { field = "title", value = "Second Title", source = "crossref" } })
   note("wits")
 end)
+-- a dialog: a box ticked, a choice stepped through, a value typed, an action
+cmdman.create("demodialog", function()
+  local did, v = uiman.form {
+    title = "demo dialog",
+    sections = {
+      { title = "Things", items = {
+        { id = "box", kind = "check", label = "a box", value = false },
+        { id = "pick", kind = "choice", label = "a choice", value = 1, choices = { "one", "two" } },
+        { id = "typed", kind = "text", label = "a value", value = "" },
+        { id = "barred", kind = "check", label = "barred", value = true, off = "not now" },
+        { kind = "note", label = "a note" },
+      } },
+      { title = "", items = { { id = "go", kind = "action", label = "Go" } } },
+    },
+  }
+  note(("dialog|%s|%s|%s|%s|%s"):format(tostring(did), tostring(v.box), tostring(v.pick), tostring(v.typed), tostring(v.barred)))
+end)
+cmdman.create("demoverify", function()
+  uiman.notify("verify")
+  require("lulib._verify").open(require("bookman").ids(""))
+  note("verify closed")
+end)
 cmdman.create("demoreview", function() note("review named|" .. tostring(require("wit").reviews()[1].name)) end)
 ''')
 env = dict(os.environ, TERM="xterm-256color", LULIBRE_LOG=log, XDG_CONFIG_HOME=t + "/config",
@@ -152,6 +174,17 @@ keys("kept\r", 0.6)
 keys("w", 1.5)       # written through store.calibre
 keys("q", 0.6)
 keys(":demoreview\r", 0.6)
+keys(":demodialog\r", 1)
+keys(" ", 0.3)        # the box
+keys("j", 0.2)
+keys("l", 0.3)        # the choice's next
+keys("j", 0.2)
+keys("\r", 0.4)       # types the value
+keys("filled\r", 0.5)
+keys("w", 0.8)        # the first action
+keys(":demoverify\r", 1.5)
+keys("z", 0.4)
+keys("q", 0.6)
 keys(":lua uiman.jump(1)\r", 0.6)
 keys(":edit\r", 1)  # the edit form on book 1, a form that writes on w
 keys("e", 0.4)       # the title
@@ -220,6 +253,9 @@ check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
 check("review, a list: space shows the next alternative, a marks it, w writes it", "stored|1|Second Title" in got)
 check("s names the review", "review named|kept" in got)
+check("a dialog: a box, a choice, a typed value, what can't be changed, an action",
+      "dialog|go|true|2|filled|false" in got)
+check(":verify opens, and closes", "verify closed" in got)
 check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
 check("the edit form: e edits a field, x takes a change back, w writes the rest",
       "stored|1|Edited Title" in got and "stored|1|Edited Title|authors" not in got)

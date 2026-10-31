@@ -8,8 +8,8 @@
 --
 -- The screen "review": a accepts the alternative in view, e edits it
 -- first, r rejects the row, u takes the mark off, space shows the next
--- alternative, w writes what is marked, z shows what the review otherwise
--- doesn't; s names the review, o opens another, n starts a new one, d
+-- alternative, w writes what is marked, y also adds its files of the sync folder
+-- to the library, z shows what the review otherwise doesn't; s names the review, o opens another, n starts a new one, d
 -- discards it, A adds books to it, E asks the online services about its
 -- books, p drops what the record now holds; q closes.
 -- keymap.set("review", key, action) rebinds them.
@@ -43,6 +43,7 @@ own.screen = {
     { "unmark", "u", "take the mark off the row" },
     { "next", "<Space>", "show the row's next alternative" },
     { "write", "w", "write what is marked" },
+    { "sync", "y", "write what is marked, and add the review's sync folder files to the library" },
     { "deep", "z", "show or hide what the review otherwise doesn't show" },
     { "name", "s", "name the review, which keeps it under that name" },
     { "recall", "o", "open another review" },
@@ -55,7 +56,7 @@ own.screen = {
   hint = { "accept", "edit", "reject", "next", "write", "deep", "recall" },
 }
 -- those that are about the review and not a row
-own.whole = { write = true, deep = true, name = true, recall = true, fresh = true, discard = true, add = true,
+own.whole = { write = true, sync = true, deep = true, name = true, recall = true, fresh = true, discard = true, add = true,
               sources = true, prune = true }
 own.actions = {
   accept = function(_, alt) return wit.accept(alt.id) end,
@@ -74,6 +75,23 @@ own.actions = {
     local batch, n = wit.write()
     if batch == nil then return nil, n end
     uiman.notify(n == 0 and "nothing is marked" or ("written: %d field%s"):format(n, n == 1 and "" or "s"))
+    return true
+  end,
+  sync = function(_, _, view)
+    local batch, n = wit.write()
+    if batch == nil then return nil, n end
+    local files = {}
+    for _, book in ipairs(view.filter or wit.books { deep = true }) do
+      if book < 0 then files[#files + 1] = book end
+    end
+    if #files == 0 then
+      uiman.notify("no file of the sync folder is in this review")
+      return true
+    end
+    local sync = require "lulib._sync"
+    local out = sync.add(files)
+    uiman.notify(sync.summary(out), #out.failed > 0 and "error" or nil)
+    view.filter = nil
     return true
   end,
   deep = function(_, _, view)

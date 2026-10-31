@@ -255,6 +255,12 @@ function M.write(review)
   return batch, #marked
 end
 
+--- A book's proposals, in every review, under another book: a file taken
+-- into the library goes from its staged id to its id there.
+function M.move(from, to)
+  run("UPDATE wits SET book = ? WHERE book = ?", to, from)
+end
+
 --- A field as the record has it now: bookman's, or for identifier:TYPE the
 -- identifier of that type.
 function M.now(book, field)

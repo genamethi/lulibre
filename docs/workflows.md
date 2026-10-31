@@ -204,6 +204,27 @@ what was kept and reads only files not read before. It changes nothing, but
 `r` proposes for the book under the cursor, adding it to the current review, and
 `R` for every book listed. `z` lists the rest too.
 
+## The sync folder
+
+The files in `path.sync` are shown by `gS` or `:source sync` as books, and
+everything that works on a book works on them: filters, the preview, `:propose`,
+review. What you change stays in lulibre until the file is added.
+
+| | |
+|---|---|
+| `:sync` | a dialog on the selected files: add, add and take out, or drop; propose first if you like |
+| `:sync add [filter]` | add them to the library, with what lulibre knows of them |
+| `:sync move [filter]` | add them, and take them out of the folder |
+| `:sync drop [filter]` | take them out of the folder without adding them |
+| `:beside`, `gb` | the waiting files in a column; the library's list follows the file under the cursor |
+| `:onboard DIR` | take a folder as the sync folder for now |
+
+In a review, `y` does what `w` does, then adds the review's files to the library:
+the same review, ending in sync instead of write. Proposals still waiting go with
+a file into the library. A file taken out of the folder goes to `dropped/` beside
+the index. `:undo` takes what was added back out of the library, and brings a
+file taken out back into the folder with what lulibre knew of it.
+
 ## Rewriting values
 
 These propose a value worked out from the value a field has, adding it to the

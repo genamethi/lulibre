@@ -55,6 +55,8 @@ struct operation {
   const struct change *changes;
   int nchanges;
   const char *const *argv; /* a structural calibredb command, NULL-terminated, in place of changes */
+  long long batch; /* a batch of the journal to join, else 0 for a new one */
+  char **output;   /* a command's: what it printed goes here (malloc'd) before done fires */
 };
 
 struct library;
@@ -95,6 +97,16 @@ void library_reload(struct library *lib, int force, library_reloaded *done, void
 /* Puts a batch's old values back, as an operation of its own. */
 int library_undo(struct library *lib, long long batch, const struct op_settings *set, library_done *done, void *ud,
                  char **err);
+
+/* What puts a command's batch back: a calibredb command, its arguments in
+ * argv (NULL-terminated). library_undo runs it in place of anything else
+ * in the batch. */
+int library_command_undo(struct library *lib, long long batch, const char *const *argv, char **err);
+
+/* Takes a staged file (book, below 0) out of the sync folder, to the path
+ * held, as a change of the journal that undo puts back, its record too, in
+ * batch, or a new one. Returns the batch, or 0 with *err. */
+long long library_drop(struct library *lib, long long book, const char *held, long long batch, char **err);
 
 /* One book's changes for the calibre store Lua has put in calibredb's place
  * (core/registry.h): fields[i] gets values[i], in the form library/fields.h

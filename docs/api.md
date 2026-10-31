@@ -216,6 +216,9 @@ The index itself is the file `setman.get("path.indexdb")`, and the journal
     }, "a label")                      -- waits
     store.undo(batch)                  -- waits
     store.command({ "add_custom_column", "partof", "Part of", "text" })  -- waits
+    local batch, printed = store.command({ "add", "file.pdf" }, { when = "any", label = "add" })
+    store.command_undo(batch, { "remove", "12" })          -- what store.undo and :undo run for it
+    store.drop(-3, "/somewhere/held.pdf")                  -- a sync folder's file out of the folder; undo brings it back
     store.holder()                     -- "none" | "server" | "program" | "other"
     store.reload()                     -- waits: calibre's records read again, when calibre has changed them
 

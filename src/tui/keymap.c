@@ -348,6 +348,11 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL | MODE_VISUAL, "gp", "propose"},
     {MODE_NORMAL, "<Leader><Space>", "mark none"},
     {MODE_NORMAL, "gr", "review"},
+    {MODE_NORMAL, "gb", "beside"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>pr", "propose-review"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>e", "enrich-dialog"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>c", "change"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>s", "sync"},
     {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
     /* the bar's tabs, by the numbers they show */
     {MODE_NORMAL, "1", "source 1"},
