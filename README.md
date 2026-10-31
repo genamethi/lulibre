@@ -36,9 +36,12 @@ At run time:
 
     make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
 
-lulibre needs only to know where the library is. With nothing said, it is
-the library calibre opened last; else `-L DIR`, `$LULIBRE_LIBRARY`, or in
-`~/.config/lulibre/init.lua`:
+lulibre needs only to know where the library is: `-L DIR`,
+`$LULIBRE_LIBRARY`, or in `~/.config/lulibre/init.lua`. With none of them,
+started on a terminal, it asks whether to open the library calibre opened
+last, then whether to send changes through calibre's content server when
+one answers at calibre's default address (with its user and password
+file), and adds each answer to init.lua:
 
 ```lua
 setman.set("path.library", "~/calibre-library")

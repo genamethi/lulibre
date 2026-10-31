@@ -59,6 +59,13 @@ char *app_index_path(const struct app *app);
 /* Resolve the library, open the index and refresh the calibre mirror.
  * Dies with a message on failure: every command needs this to proceed. */
 void app_open_db(struct app *app);
+
+/* first.c: on a terminal, with nothing set, asked once and added to
+ * init.lua: the library calibre opened last (1 when it was taken), then
+ * calibre's content server where calibre puts it, when one answers. */
+int first_interactive(void);
+int first_library(struct app *app);
+void first_server(struct app *app);
 int app_jobs(const struct app *app); /* worker thread count in effect */
 
 /* subcommands: argv[0] is the command name */

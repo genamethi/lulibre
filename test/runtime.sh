@@ -519,13 +519,15 @@ contains "with each book" "    3  paper copy" "$dupes"
 contains "orphans: a file a record names, not on disk" "    4  Copy/gone (4)/gone - Copy.epub" "$orphans"
 contains "a file no record names" "files no record names: 1" "$orphans"
 contains "an empty folder" "Empty/x (9)" "$orphans"
-# an empty init.lua, no -L: the library calibre opened last, from calibre's settings
+# an empty init.lua, no -L, nobody at a terminal: calibre's last library is
+# named, not opened (test/first.py asks on a terminal)
 mkdir -p "$t/blank/lulibre" "$t/blank/calibre" "$t/elsewhere"
 : >"$t/blank/lulibre/init.lua"
 printf '{\n  "library_path": "%s"\n}\n' "$t/lib" >"$t/blank/calibre/global.py.json"
-blank=$(cd "$t/elsewhere" && env -u LULIBRE_LIBRARY XDG_CONFIG_HOME="$t/blank" "$bin" stats 2>&1 || true)
-contains "an empty init.lua: the library calibre opened last" "books" "$blank"
+blank=$(cd "$t/elsewhere" && env -u LULIBRE_LIBRARY XDG_CONFIG_HOME="$t/blank" "$bin" stats 2>&1 </dev/null || true)
+contains "an empty init.lua, no terminal: calibre's last library named" "calibre opened $t/lib last" "$blank"
+contains "and not opened" "no library" "$blank"
 printf '{"library_path": "%s"}' "$t/no-such-library" >"$t/blank/calibre/global.py.json"
-gone=$(cd "$t/elsewhere" && env -u LULIBRE_LIBRARY XDG_CONFIG_HOME="$t/blank" "$bin" stats 2>&1 || true)
-contains "but not one that is not there" "no library" "$gone"
+gone=$(cd "$t/elsewhere" && env -u LULIBRE_LIBRARY XDG_CONFIG_HOME="$t/blank" "$bin" stats 2>&1 </dev/null || true)
+contains "one that is not there is not named" "no library" "$gone"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

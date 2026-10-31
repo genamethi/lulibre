@@ -11,12 +11,16 @@
 #include "core/util.h"
 #include "library/library.h"
 
-char *calibre_library_path(void) {
+char *calibre_config_dir(void) {
   const char *dir = getenv("CALIBRE_CONFIG_DIRECTORY"), *xdg = getenv("XDG_CONFIG_HOME");
-  char *home = path_expand("~/.config");
-  char *path = dir && *dir ? xasprintf("%s/global.py.json", dir)
-               : xasprintf("%s/calibre/global.py.json", xdg && *xdg ? xdg : home);
-  free(home);
+  if (dir && *dir) return xstrdup(dir);
+  if (xdg && *xdg) return xasprintf("%s/calibre", xdg);
+  return path_expand("~/.config/calibre");
+}
+
+char *calibre_library_path(void) {
+  char *dir = calibre_config_dir(), *path = xasprintf("%s/global.py.json", dir);
+  free(dir);
   char *text = file_read(path, NULL), *found = NULL;
   free(path);
   if (!text) return NULL;
