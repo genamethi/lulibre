@@ -195,9 +195,10 @@ print("trees|" .. sql.run(db, "SELECT value FROM meta WHERE key = 'calibre_hiera
 db:close()
 LUA
 levels=$("$bin" -L "$t/tags" run "$t/levels.lua" 2>&1)
-dots=$("$bin" -L "$t/tags" run tag-dots 2>&1)
+echo 'require("cmd").tag_dots((...) == "write")' >"$t/dots.lua"
+dots=$("$bin" -L "$t/tags" run "$t/dots.lua" 2>&1)
 printf 'require("store").calibre = function(book, f) print("stored|" .. book .. "|" .. f.tags) return true end\n' >"$cfg/init.lua"
-dotsw=$("$bin" -L "$t/tags" run tag-dots write 2>&1)
+dotsw=$("$bin" -L "$t/tags" run "$t/dots.lua" write 2>&1)
 printf '' >"$cfg/init.lua"
 
 # every Lua file of lulibre's compiles in the Lua lulibre runs (5.5 will
@@ -221,7 +222,7 @@ end
 for _, dir in ipairs { ... } do walk(dir) end
 print(#bad == 0 and "compiled|all" or "compiled|" .. table.concat(bad, "\n"))
 LUA
-compiled=$("$bin" -L "$t/lib" run "$t/compile.lua" "$src/../lua" "$src/../scripts" "$src/../examples" 2>&1)
+compiled=$("$bin" -L "$t/lib" run "$t/compile.lua" "$src/../lua" "$src/../examples" 2>&1)
 
 # the sync folder, read with calibre's records: an ebook file is a book in
 # in:sync, named after its file; a copy of a library book's file is
@@ -385,7 +386,7 @@ say("arxiv old", expr.match("arXiv:math/0601054", lex.arxiv), expr.match("1012.6
 LUA
 lx=$("$bin" -L "$t/lib" run "$t/lex.lua" 2>&1)
 
-# the bundled scripts dupes and orphans, on a library of their own: book 3
+# the packaged commands dupes and orphans, on a library of their own: book 3
 # a byte-for-byte copy of book 1, book 4's file gone, a stray file and an
 # empty folder
 sh "$src/mklib.sh" "$t/two" >/dev/null 2>&1
@@ -396,8 +397,10 @@ sqlite3 "$t/two/metadata.db" "INSERT INTO books(id, title, sort, path, last_modi
   (3, 'paper copy', 'paper copy', 'Copy/paper (3)', '2024-01-03 00:00:00+00:00'),
   (4, 'gone', 'gone', 'Copy/gone (4)', '2024-01-03 00:00:00+00:00');
   INSERT INTO data VALUES (3, 3, 'PDF', 0, 'paper - Copy'), (4, 4, 'EPUB', 0, 'gone - Copy');"
-dupes=$("$bin" -L "$t/two" run dupes 2>&1)
-orphans=$("$bin" -L "$t/two" run orphans 2>&1)
+echo 'require("cmd").dupes()' >"$t/dupes.lua"
+echo 'require("cmd").orphans()' >"$t/orphans.lua"
+dupes=$("$bin" -L "$t/two" run "$t/dupes.lua" 2>&1)
+orphans=$("$bin" -L "$t/two" run "$t/orphans.lua" 2>&1)
 
 # lsqlite3, built in: a database of the script's own, with lulibre's SQL
 # functions on its connection
@@ -452,7 +455,7 @@ contains "the categories calibre shows as trees, from its preferences" 'trees|["
 contains "tag-dots lists the tags it would rewrite" "    2  math/algebra  →  math.algebra" "$dots"
 contains "and with write, rewrites them as one operation" "stored|2|math.algebra" "$dotsw"
 contains "which it says can be undone" "as operation" "$dotsw"
-contains "every Lua file in lua/, scripts/ and examples/ compiles" "compiled|all" "$compiled"
+contains "every Lua file in lua/ and examples/ compiles" "compiled|all" "$compiled"
 contains "the sync folder's ebook files are books, named after their files; a copy of the library's is in the library" "synced|copy,My Notes|1" "$synced"
 contains "a file taken out of the sync folder is dropped at the next reading" "resynced|copy" "$synced"
 contains "with expose_modules, a packaged module's internal functions are in its table" "exposed|table|function" "$exposed"

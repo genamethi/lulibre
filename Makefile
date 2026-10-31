@@ -12,7 +12,7 @@ SRC  := $(filter-out src/setup/%,$(wildcard src/*.c src/*/*.c))
 # libraries carried as their authors wrote them (vendor/*/README.md)
 VENDOR := vendor/lsqlite3/lsqlite3.c
 OBJ  := $(SRC:%.c=build/%.o) $(VENDOR:%.c=build/%.o)
-LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
+LUA  := $(shell find lua -name '*.lua' 2>/dev/null)
 # the guides, which :help reads
 DOCS := $(wildcard docs/*.md)
 # everything but main(), for the C unit tests to link against
@@ -67,7 +67,7 @@ endif
 
 # Every build has a number (tools/build-number.sh): given here, when the
 # binary is linked, which is whenever anything it is made of has changed.
-# The Lua runtime and the bundled scripts count as part of it, so a change
+# The Lua runtime counts as part of it, so a change
 # to them is a new build too, though the C is the same.
 $(BIN): $(OBJ) $(LUA) tools/build-number.sh
 	@mkdir -p build

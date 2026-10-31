@@ -798,31 +798,11 @@ ASK(l_goto, "jump")
 
 /* ---- scripts ---- */
 
-/* Directories searched for scripts, in order; NULL-terminated, malloc'd. */
+/* Directories searched for scripts, in order; NULL-terminated, malloc'd:
+ * the user's own (lulibre's commands are modules in lua/, design 12). */
 static char **script_dirs(struct app *app) {
-  char **dirs = xcalloc(4, sizeof *dirs);
-  int n = 0;
-  dirs[n++] = xasprintf("%s/scripts", app->config_dir);
-  /* the bundled scripts of one runtime only, as for modules (lstate.c): a
-   * build tree's (build/lulibre -> ../scripts), LULIBRE_RUNTIME's (its lua/
-   * folder's sibling), or the installed ones */
-  const char *rt = getenv("LULIBRE_RUNTIME");
-  if (rt && rt[0]) dirs[n++] = xasprintf("%s/../scripts", rt);
-  char exe[4096];
-  ssize_t len = n == 1 ? readlink("/proc/self/exe", exe, sizeof exe - 1) : -1;
-  if (len > 0) {
-    exe[len] = '\0';
-    char *slash = strrchr(exe, '/');
-    if (slash) {
-      *slash = '\0';
-      char *dev = xasprintf("%s/../scripts", exe);
-      char *lua = xasprintf("%s/../lua", exe); /* a tree has both */
-      if (access(dev, R_OK) == 0 && access(lua, R_OK) == 0) dirs[n++] = dev;
-      else free(dev);
-      free(lua);
-    }
-  }
-  if (n == 1) dirs[n++] = xasprintf("%s/scripts", lstate_datadir());
+  char **dirs = xcalloc(2, sizeof *dirs);
+  dirs[0] = xasprintf("%s/scripts", app->config_dir);
   return dirs;
 }
 

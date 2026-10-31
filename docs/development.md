@@ -215,7 +215,6 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/cmd/        command-line front ends
     lua/            the modules written in Lua: expr, lex, iter, sql, wit, net, trust, exprman, cmd
     lua/lulib/      lulibre's internal modules (lulib._name): propose, ranking, sources, review, :lua, the prelude
-    scripts/        the scripts lulibre comes with (dupes, orphans)
     vendor/         libraries carried as their authors wrote them, built in (lsqlite3)
     test/  tools/
 
