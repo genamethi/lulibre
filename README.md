@@ -41,7 +41,8 @@ lulibre needs only to know where the library is: `-L DIR`,
 started on a terminal, it asks whether to open the library calibre opened
 last, then whether to send changes through calibre's content server when
 one answers at calibre's default address (with its user and password
-file), and adds each answer to init.lua:
+file). It keeps the answers in `~/.local/state/lulibre/asked`, under
+anything init.lua or `-o` sets. In init.lua:
 
 ```lua
 setman.set("path.library", "~/calibre-library")

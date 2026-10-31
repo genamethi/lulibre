@@ -69,6 +69,7 @@ static int finish(struct app *app, int rc) {
   curl_global_cleanup();
   free(app->config_dir);
   free(app->state_path);
+  free(app->answers_path);
   return rc;
 }
 

@@ -3,9 +3,9 @@
  * library, when calibre's settings name the one it opened last; then, that
  * taken, calibre's content server, when one answers where calibre puts it
  * by default, with its user and password file when it asks for them. Each
- * answer, yes or no, is added to init.lua and set at once, so it is asked
- * once. */
-#include <errno.h>
+ * answer, yes or no, is kept in lulibre's state folder (asked, beside the
+ * saved settings) as a layer just over the defaults: init.lua, -o and the
+ * saved state all lie over it, and it is asked once. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,30 +47,13 @@ static int yes(const char *question) {
   return y;
 }
 
-/* the setting, now and in init.lua */
+/* the answer, as the setting from now on (lulibre's state folder, asked) */
 static void remember(struct app *app, const char *name, const char *value) {
   char *err = NULL;
-  if (settings_set(app->settings, name, value, FROM_API, &err)) {
+  if (settings_keep_answer(app->settings, app->answers_path, name, value, &err)) {
     warnf("%s", err);
     free(err);
-    return;
   }
-  mkdir_p(app->config_dir);
-  char *path = xasprintf("%s/init.lua", app->config_dir);
-  FILE *f = fopen(path, "a");
-  if (!f) {
-    warnf("cannot add %s to %s: %s", name, path, errstr(errno));
-  } else {
-    fprintf(f, "setman.set(\"%s\", \"", name);
-    for (const char *p = value; *p; p++) {
-      if (*p == '"' || *p == '\\') fputc('\\', f);
-      fputc(*p, f);
-    }
-    fputs("\") -- asked when lulibre started\n", f);
-    fclose(f);
-    fprintf(stderr, "lulibre: %s added to %s\n", name, path);
-  }
-  free(path);
 }
 
 int first_library(struct app *app) {
@@ -84,7 +67,7 @@ int first_library(struct app *app) {
     free(q);
     free(dir);
   } else {
-    warnf("calibre opened %s last: lulibre -L '%s', or setman.set(\"path.library\", ...) in init.lua", lib, lib);
+    warnf("calibre opened %s last: lulibre -L '%s' opens it", lib, lib);
   }
   free(lib);
   return ok;

@@ -295,7 +295,7 @@ static void unescape(char *s) {
   *w = '\0';
 }
 
-int settings_load_state(struct settings *st, const char *path, char **err) {
+static int load(struct settings *st, const char *path, enum setting_origin from, char **err) {
   FILE *f = fopen(path, "r");
   if (!f) {
     if (errno == ENOENT) return 0;
@@ -312,13 +312,44 @@ int settings_load_state(struct settings *st, const char *path, char **err) {
     *eq = '\0';
     unescape(eq + 1);
     char *e = NULL;
-    if (settings_set(st, line, eq + 1, FROM_STATE, &e)) {
+    if (settings_set(st, line, eq + 1, from, &e)) {
       log_warn("%s: passed over: %s", path, e);
       free(e);
     }
   }
   free(line);
   fclose(f);
+  return 0;
+}
+
+int settings_load_state(struct settings *st, const char *path, char **err) {
+  return load(st, path, FROM_STATE, err);
+}
+
+int settings_load_answers(struct settings *st, const char *path, char **err) {
+  return load(st, path, FROM_ASKED, err);
+}
+
+int settings_keep_answer(struct settings *st, const char *path, const char *name, const char *value, char **err) {
+  if (settings_set(st, name, value, FROM_ASKED, err)) return -1;
+  char *dir = xstrdup(path), *slash = strrchr(dir, '/');
+  if (slash && slash != dir) {
+    *slash = '\0';
+    mkdir_p(dir);
+  }
+  free(dir);
+  FILE *f = fopen(path, "a");
+  if (!f) {
+    *err = xasprintf("%s: %s", path, errstr(errno));
+    return -1;
+  }
+  fprintf(f, "%s=", name);
+  put_escaped(f, value);
+  fputc('\n', f);
+  if (fclose(f)) {
+    *err = xasprintf("%s: %s", path, errstr(errno));
+    return -1;
+  }
   return 0;
 }
 

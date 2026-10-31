@@ -18,6 +18,7 @@ struct app {
   struct settings *settings; /* the store; read and changed on the main thread only */
   char *config_dir;          /* where init.lua is: fixed at start */
   char *state_path;          /* the saved settings: fixed at start */
+  char *answers_path;        /* the answers asked at the terminal, beside them */
   struct db db;
   int db_ready;
   struct library *library; /* calibre's library as a resource (library/library.h); the background thread's */
@@ -60,9 +61,10 @@ char *app_index_path(const struct app *app);
  * Dies with a message on failure: every command needs this to proceed. */
 void app_open_db(struct app *app);
 
-/* first.c: on a terminal, with nothing set, asked once and added to
- * init.lua: the library calibre opened last (1 when it was taken), then
- * calibre's content server where calibre puts it, when one answers. */
+/* first.c: on a terminal, with nothing set, asked once and kept in
+ * lulibre's state folder: the library calibre opened last (1 when it was
+ * taken), then calibre's content server where calibre puts it, when one
+ * answers. */
 int first_interactive(void);
 int first_library(struct app *app);
 void first_server(struct app *app);
