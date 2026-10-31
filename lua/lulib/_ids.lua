@@ -2,7 +2,7 @@
 --
 -- The file's own metadata first: only identifiers labelled as the work's
 -- own count there. Then the text up to its references or bibliography, what
--- follows being other works'. Those words alone on a line mean that only in
+-- follows being other works'. Such a word alone on a line means that only in
 -- the end of a document, from the share id_refs_from of its pages on: earlier
 -- they are a contents page's, a title's or a running head's. In the text an
 -- identifier is the file's own when:
@@ -37,7 +37,8 @@ end
 -- a heading alone on its line, numbered or not
 local blank = S " \t"
 local heading = S "\n\f" * blank ^ 0 * (R "09" ^ 1 * S ". " ^ 0) ^ -1
-  * (nocase "references" + nocase "bibliography" + nocase "bibliographie" + nocase "literatur")
+  * (nocase "references" + nocase "bibliography" + nocase "bibliographie" + nocase "literaturverzeichnis"
+     + nocase "literature" + nocase "literatur" + nocase "works cited" + nocase "bibliografia")
   * blank ^ 0 * S ":." ^ -1 * blank ^ 0 * #S "\n\f"
 local headings = Ct((Cp() * heading + 1) ^ 0)
 
@@ -212,38 +213,52 @@ function M.in_name(path)
   return id and { kind = "arxiv", value = id, own = true } or nil
 end
 
---- A file's identifiers, its metadata's first: kept once worked out.
+--- What finds a file's identifiers, in order: `{ name=, version=, key=,
+-- find = function(file, text, o) }`, each kept apart, so that one added or changed
+-- runs alone. find returns `{ {kind=, value=, own=, start=, stop=}, ... }`; text is
+-- the file's lulib._kept.reader, o the settings `{ top=, from= }`; key(o), what its
+-- answer depends on besides the file.
+--     table.insert(require("lulib._ids").finders, { name = "mine", find = function(file, text) ... end })
+M.finders = {
+  { name = "metadata", version = 1,
+    find = function(file) return M.in_metadata(txt.metadata(file.id)) end },
+  { name = "name", version = 1,
+    find = function(file) return { M.in_name(file.path) } end },
+  { name = "text", version = 2,
+    key = function(o) return o.top .. ":" .. o.from end,
+    find = function(file, text, o)
+      local t = text.get()
+      return t and M.in_text(t.text, o.top, file.pages, o.from) or {}
+    end },
+}
+
+--- A file's identifiers, by the finders, none twice; a finder runs only if it
+-- hasn't on this file as it is.
 -- @tparam table file a row of bookman.files
 -- @param k the file's lulib._kept
 -- @param text its lulib._kept.reader
 -- @tparam integer top the setting id_top
 -- @treturn {table,...} `{ kind=, value=, own=, start=, stop= }`
 function M.of(file, k, text, top)
-  local from <const> = setman.get("id_refs_from")
-  -- (what it is worked out by says which reading it is: "2", of this code)
-  local key = ("2:%d:%s"):format(top, from)
-  local list = k:get("ids", key)
-  if list then return list end
-  list = {}
-  local seen = {}
-  local function take(f)
-    local key = f.kind .. ":" .. f.value
-    if seen[key] then
-      seen[key].own = seen[key].own or f.own
-    else
-      seen[key] = f
-      list[#list + 1] = f
+  local o = { top = top, from = setman.get("id_refs_from") }
+  local list, seen = {}, {}
+  for _, finder in ipairs(M.finders) do
+    local key = ("%s:%s:%s"):format(finder.name, tostring(finder.version or ""), finder.key and finder.key(o) or "")
+    local found = k:get("ids", key)
+    if not found then
+      found = finder.find(file, text, o) or {}
+      k:put("ids", key, found)
+    end
+    for _, f in ipairs(found) do
+      local id = f.kind .. ":" .. f.value
+      if seen[id] then
+        seen[id].own = seen[id].own or f.own
+      else
+        seen[id] = f
+        list[#list + 1] = f
+      end
     end
   end
-  local meta = txt.metadata(file.id)
-  for _, f in ipairs(M.in_metadata(meta)) do take(f) end
-  local named_id = M.in_name(file.path)
-  if named_id then take(named_id) end
-  local t = text.get()
-  if t then
-    for _, f in ipairs(M.in_text(t.text, top, file.pages, from)) do take(f) end
-  end
-  k:put("ids", key, list)
   return list
 end
 

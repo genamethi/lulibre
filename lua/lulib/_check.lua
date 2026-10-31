@@ -13,6 +13,7 @@
 -- check_same.
 --
 -- @library lulib._check
+local expr = require "expr"
 local mesr = require "mesr"
 
 local M = {}
@@ -84,6 +85,107 @@ end
 function M.length(record_pages, file_pages, c)
   if not record_pages or not file_pages or file_pages <= 0 then return nil end
   return math.abs(record_pages - file_pages) <= c.pages * file_pages
+end
+
+-- a title's significant words, folded, in order, and as a set
+local function title_words(s)
+  local list, seen = {}, {}
+  for w in expr.fold(s or ""):gmatch("[%w]+") do
+    if not M.minor[w] and not seen[w] then
+      seen[w] = true
+      list[#list + 1] = w
+    end
+  end
+  return list, seen
+end
+
+-- family names, folded: of "Given Family", "Family, Given" and "G. Family"
+local function family_names(people)
+  local set, n = {}, 0
+  for name in ((people or "") .. " & "):gmatch("(.-) & ") do
+    local low = expr.fold(name)
+    local family = low:match("^([^,]+),") or low
+    local last
+    for w in family:gmatch("[%a][%a'%-]+") do last = w end
+    if last and not set[last] then
+      set[last] = true
+      n = n + 1
+    end
+  end
+  return set, n
+end
+
+-- how many letters apart two words are, at most 3
+local function apart(a, b)
+  if math.abs(#a - #b) > 2 then return 3 end
+  local prev = {}
+  for j = 0, #b do prev[j] = j end
+  for i = 1, #a do
+    local cur = { [0] = i }
+    for j = 1, #b do
+      cur[j] = math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a:byte(i) == b:byte(j) and 0 or 1))
+    end
+    prev = cur
+  end
+  return prev[#b]
+end
+
+-- Do two lists of people, "A & B", have somebody in common, by family names?
+-- nil when either has none. A name spelled a little differently is the same name.
+local function people_in_common(mine, theirs)
+  local fa, na = family_names(mine)
+  local fb, nb = family_names(theirs)
+  if na == 0 or nb == 0 then return nil end
+  for x in pairs(fa) do
+    if fb[x] then return true end
+    for y in pairs(fb) do
+      if #x >= 5 and #y >= 5 and apart(x, y) <= (math.min(#x, #y) >= 7 and 2 or 1) then return true end
+    end
+  end
+  return false
+end
+
+--- Whether two titles can be one work: the same significant words, or one the
+-- other plus a subtitle, and then only with four words or more. Also how many
+-- words the shorter has.
+-- @treturn boolean
+-- @treturn integer
+function M.titles_agree(mine, theirs)
+  local a, sa = title_words(mine)
+  local b, sb = title_words(theirs)
+  if #a == 0 or #b == 0 then return false, 0 end
+  local short, long, in_long = a, b, sb
+  if #b < #a then short, long, in_long = b, a, sa end
+  local same = #a == #b
+  for _, w in ipairs(short) do
+    if not in_long[w] then same = false end
+  end
+  local runs_on = false
+  if not same and #short >= 4 then
+    runs_on = true
+    for i, w in ipairs(short) do
+      if long[i] ~= w then runs_on = false end
+    end
+  end
+  return same or runs_on, #short
+end
+
+--- Whether a record a title search found is the same work. A search always
+-- returns something, and titles share words: they must agree (titles_agree). A
+-- short title belongs to many works, so under four words it counts only with an
+-- author in common. Both sides naming authors with none in common is another
+-- work, whatever the titles say.
+-- @tparam string mine
+-- @tparam string theirs
+-- @tparam[opt] string my_authors "A & B"
+-- @tparam[opt] string their_authors "A & B"
+-- @treturn boolean
+function M.title_match(mine, theirs, my_authors, their_authors)
+  local agree_titles, words = M.titles_agree(mine, theirs)
+  if not agree_titles then return false end
+  local agree = people_in_common(my_authors, their_authors)
+  if agree == false then return false end
+  return agree == true or words >= 4
 end
 
 --- An online record against the file: `{ score=, same=, length= }`, or nil

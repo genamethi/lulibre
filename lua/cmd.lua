@@ -106,9 +106,9 @@ end
 --- :enrich [filter]: ask the online services about the books, by their
 -- identifiers; each new answer posts "source_arrived", which proposes for
 -- the book again.
-function M.enrich(ids)
+function M.enrich(ids, o)
   local net = require "net"
-  local books, answers = tally(ids, net.enrich)
+  local books, answers = tally(ids, function(book) return net.enrich(book, o) end)
   print(("%d new answers for %d books"):format(answers, books))
 end
 
@@ -259,7 +259,10 @@ end, { desc = "[ls]  files a record names that are not on disk, files no record 
 cmdman.create("tags", function(c)
   if c.args == "ls" then say(tag_rows(M.tags { ls = true })) else M.tags { write = c.args == "write" } end
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
-cmdman.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers", complete = "filter" })
+cmdman.create("enrich", function(o)
+  local titles, rest = flagged(o, "titles")
+  M.enrich(M.books(rest), { titles = titles })
+end, { desc = "[titles] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
 cmdman.create("titlecase", function(o)
   local all, rest = flagged(o, "all")

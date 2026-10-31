@@ -248,7 +248,10 @@ value to value.
 ## Looking books up: `:enrich`
 
 `:enrich` asks the online services about the selected books, by their
-identifiers: Crossref by DOI, Open Library by ISBN, arXiv by arXiv number.
+identifiers: Crossref and OpenAlex by DOI, zbMATH by DOI or arXiv number, Open
+Library by ISBN, arXiv by arXiv number. `:enrich titles` also searches Crossref
+by title for books with no identifier to ask by; such a record has to agree with
+the book's title and authors as well as its pages, and never counts as a clear match.
 Each answer is kept in the index, and a kept answer is not asked for
 again. An answer is a source of agreement for the parses, and a parse of
 its own: it proposes, ranked beside the grammars'.

@@ -198,21 +198,25 @@ function own.grammars(book, k, text)
 end
 
 -- whether a grammar's values gain for being of what it was written for: a
--- publisher or series all found on the pages
-function own.group_hit(p, k, text)
+-- publisher or series the record has, or all found on the pages
+function own.group_hit(p, book, k, text)
   local g = exprman.grammars[p.grammar]
   local group = g and g.group
   if not group then return false end
+  for _, field in ipairs { "publisher", "series" } do
+    local now = wit.now(book, field)
+    if now and now ~= "" and mesr.cmp("publisher", group, now) ~= "differs" then return true end
+  end
   local found, words = check.count("publisher", group, k, text)
   return found ~= nil and words > 0 and found == words
 end
 
--- the records the pages bear out, if they all agree: such records make a
--- book's match clear; several of the same work agree
+-- the records by an identifier the pages bear out, if they all agree: such
+-- records make a book's match clear; several of the same work agree
 function own.clear(records, w)
   local borne = {}
   for _, r in ipairs(records) do
-    if r.check and r.check.same then borne[#borne + 1] = r end
+    if r.check and r.check.same and r.ident ~= "title" then borne[#borne + 1] = r end
   end
   for i = 2, #borne do
     local a, b = borne[1].fields.title, borne[i].fields.title
@@ -245,7 +249,7 @@ function own.once(book, w)
   local k <close> = kept.open(file and file.id, file and file.indexed)
   local text <close> = kept.reader(file)
   local parses = get("grammars")(book, k, text)
-  for _, p in ipairs(parses) do p.group_hit = get("group_hit")(p, k, text) end
+  for _, p in ipairs(parses) do p.group_hit = get("group_hit")(p, book, k, text) end
   local found = file and ids.of(file, k, text, w.top) or {}
 
   -- an online record is a parse too (design 39), ranked beside the
@@ -254,6 +258,11 @@ function own.once(book, w)
   for _, s in ipairs(sources.of(book, file, found)) do
     if s.kind == "online" then
       s.check = check.record(s, file or {}, k, text, w.check)
+      -- one found by its title must be the same work, by title and authors too
+      if s.ident == "title" and s.check then
+        s.check.same = s.check.same and s.fields.title
+          and check.title_match(wit.now(book, "title") or "", s.fields.title, wit.now(book, "authors"), s.fields.authors)
+      end
       records[#records + 1] = s
     end
     if s.kind == "record" and s.fields.title and not get("holds")("title", s.fields.title) then s.fields.title = nil end
@@ -267,7 +276,7 @@ function own.once(book, w)
     end
     local same = s.check and s.check.same
     parses[#parses + 1] = { grammar = s.name, fields = fields, online = true, failed = s.check and not same,
-                            strong = clear and same }
+                            strong = clear and same and s.ident ~= "title" }
   end
   for _, p in ipairs(get("id_parses")(found, records, w)) do parses[#parses + 1] = p end
 

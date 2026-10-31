@@ -362,8 +362,8 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `wit.current()` `wit.open(review)` `wit.new([name])` `wit.name(review, name)` `wit.discard(review)` `wit.reviews()` `wit.books([{review=, deep=}])` | the reviews |
 | `wit.prune([review])` | drops the proposals whose value the record now holds |
 | `lulib._propose.propose(book, w)` | waits: rank the book's values, reading only what was not kept, and keep them in the current review; `w` is `lulib._propose.settings()` |
-| `lulib._ids` | a file's identifiers, and which are its own: `in_text`, `in_metadata`, `in_name`, `of`, `book` |
-| `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `minor` |
+| `lulib._ids` | a file's identifiers, and which are its own: `in_text`, `in_metadata`, `in_name`, `of`, `book`; `finders`, what finds them, each kept apart: add yours and only it runs |
+| `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `title_match`, `titles_agree`, `minor` |
 | `lulib._kept` | what was worked out from a file, kept while the file is as it was read |
 | `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
 | `mesr.found(value, text [, skip])` | how many of value's words the text holds as whole words, then how many there are; skip, a table of folded words not to count |

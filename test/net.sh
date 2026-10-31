@@ -26,6 +26,10 @@ local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostr
 local canned = [=[{"message":{"title":["Notes on Additive Number Theory"],"author":[{"given":"Paul","family":"Erdős"}],"publisher":"Example Press","issued":{"date-parts":[[1996,5]]}}}]=]
 local asked = 0
 net.services.crossref.how.request = function(keys) asked = asked + 1; return { [keys[1]] = canned } end
+-- no other service is asked, here or anywhere: no record
+for name, s in pairs(net.services) do
+  if name ~= "crossref" then s.how.request = function(keys) return { [keys[1]] = false } end end
+end
 say("keys", net.keys(2)[1].service, net.keys(2)[1].key)
 say("enrich", net.enrich(2))
 say("kept", net.enrich(2), asked)
@@ -146,6 +150,34 @@ say("split", rewrites.list["split-authors"].value("Yuri Manin; Matilde Marcolli"
 local ca = require "lulib._capture"
 say("capture", (ca.capture({ 2 }, "title", "^(.-)$ => series"))[1].fields.series)
 say("clear", rewrites.clear("p,t", { 2 }), select(2, rewrites.clear("nope", { 2 })) ~= nil)
+-- the other services' readers on canned answers
+local z = net.services.zbmath.how.record('{"title":{"title":"Some Notes."},"contributors":{"authors":[{"name":"Tao, Terence"}]},"year":2006,"msc":[{"code":"11B30"}]}')
+say("zbmath", z.title, z.authors, z.pubdate, z.tags ~= nil)
+local oa = net.services.openalex.how.record('{"title":"Open Work","publication_date":"2001-02-03","authorships":[{"author":{"display_name":"A. Writer"}}],"primary_location":{"source":{"display_name":"J. Things"}}}')
+say("openalex", oa.title, oa.authors, oa.pubdate, oa.publisher)
+local art = net.services.crossref.how.record('{"message":{"type":"journal-article","title":["A Paper"],"subtitle":["And More"],"publisher":"JSTOR","container-title":["Annals of Mathematics"],"page":"10-29"}}')
+say("crossref article", art.title, art.publisher, art.series, art.pages)
+-- by title only with no identifier to ask by, only when asked, and a search's
+-- answer only if it is the same work
+local function by_title(k_) for _, k in ipairs(k_) do if k.ident == "title" then return true end end return false end
+say("no titles", by_title(net.keys(2, {}, {})), by_title(net.keys(2, {}, { titles = true })))
+local tcheck = require "lulib._check"
+say("title match", tcheck.title_match("Topics in Additive Combinatorics and Number Theory", "Topics in Additive Combinatorics and Number Theory"),
+    tcheck.title_match("An Introduction to the ipaddress module", "An Introduction to Module Theory"),
+    tcheck.title_match("Algebraic Geometry", "Algebraic Geometry"),
+    tcheck.title_match("Algebraic Geometry", "Algebraic Geometry", "Robin Hartshorne", "R. Hartshorne"),
+    tcheck.title_match("Topics in Additive Combinatorics", "Topics in Additive Combinatorics", "Terence Tao", "Someone Else"))
+-- a finder dropped in runs alone; the others are not run again
+local finders_ran = 0
+table.insert(ids.finders, { name = "mine", find = function() finders_ran = finders_ran + 1; return { { kind = "doi", value = "10.9999/mine", own = true } } end })
+txt.load = function(...) loads = loads + 1 return load(...) end
+local before = loads
+local got_mine = false
+for _, f in ipairs(ids.book(1)) do got_mine = got_mine or f.value == "10.9999/mine" end
+ids.book(1)
+txt.load = load
+say("finder", got_mine, finders_ran, loads - before)
+table.remove(ids.finders)
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -216,6 +248,12 @@ expect "titlecase: capitals only, unless all" "titlecase|On the Theory of Number
 expect "split-authors: several people in one, not one" "split|Yuri Manin & Matilde Marcolli|nil"
 expect "capture runs a pattern" "capture|Notes"
 expect "clear blanks what has a value" "clear|1|true"
+expect "zbMATH's record read" "zbmath|Some Notes|Terence Tao|2006|true"
+expect "OpenAlex's record read" "openalex|Open Work|A. Writer|2001-02-03|J. Things"
+expect "an article's publisher is its journal, not who registered it; a subtitle is joined" "crossref article|A Paper: And More|Annals of Mathematics|nil|20"
+expect "a book with an identifier is not asked about by title, asked or not" "no titles|false|false"
+expect "a title search: same words; not sharing some; short needs an author; other authors, another work" "title match|true|false|false|true|false"
+expect "a finder dropped in runs once and alone, reading no text" "finder|true|1|0"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "words found whole, across a broken line, small words not counted" "found|2|2"

@@ -49,6 +49,9 @@ function M.enrich(ids)
     title = ("look up %s"):format(plural(#ids, "book")), height = 0.6, label_width = 66,
     sections = {
       { title = "Ask", items = boxes },
+      { title = "And", items = {
+        { id = "titles", kind = "check", label = "search by title, for books with no identifier", value = false },
+      } },
       { title = "", items = {
         { id = "online", kind = "action", label = total > 0 and ("Ask, then review (%s)"):format(plural(total, "request"))
           or "Nothing to ask: review what is kept" },
@@ -60,8 +63,11 @@ function M.enrich(ids)
   if did == "online" then
     local chosen = {}
     for _, name in ipairs(names) do chosen[name] = v["s_" .. name] end
+    for _, name in ipairs(names) do
+      if net.services[name].how.ident == "title" then chosen[name] = v.titles end
+    end
     for _, book in ipairs(ids) do
-      for _, k in ipairs(net.keys(book)) do
+      for _, k in ipairs(net.keys(book, nil, { titles = v.titles })) do
         if chosen[k.service] then
           local _, fresh = net.ask(k.service, k.key)
           if fresh then evman.post("source_arrived", { book = book, service = k.service }) end
@@ -192,6 +198,7 @@ function M.propose_review(selected)
       } },
       { title = "What is asked", items = {
         { id = "online", kind = "check", label = "ask online services (arXiv, Crossref ...) for what is not yet kept", value = false },
+        { id = "titles", kind = "check", label = "  and Crossref by title, for books with no identifier", value = false },
       } },
       { title = "Which fields", items = fields },
       { title = "What is there already", items = {
@@ -231,7 +238,7 @@ function M.propose_review(selected)
     local net = require "net"
     for i, book in ipairs(ids) do
       uiman.progress(("asking %d/%d"):format(i, #ids))
-      for _, k in ipairs(net.keys(book)) do net.ask(k.service, k.key) end
+      for _, k in ipairs(net.keys(book, nil, { titles = v.titles })) do net.ask(k.service, k.key) end
     end
     uiman.progress(nil)
   end

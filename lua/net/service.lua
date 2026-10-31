@@ -20,13 +20,14 @@ M.FORGET = 30 * 86400
 --- Defines a service.
 -- @tparam string name
 -- @tparam table how `{ ident=, pace=, hold=, batch=, request=, record= }`:
--- ident, the identifier type it is asked by ("doi", "isbn", "arxiv");
+-- ident, the identifier type it is asked by ("doi", "isbn", "arxiv"), a list of
+-- them, or "title" for the book's folded title (net.keys);
 -- pace, the seconds between two requests; hold, the seconds it is left
 -- alone after it says it is asked too much; batch, the works one request
 -- asks about; request(keys, mail), which returns `{ [key] = answer }` (an answer
 -- is the service's text, false when it has no record), or nil, the reason,
 -- and true when the service asked to be left alone (with the seconds it
--- asked for); record(answer), the fields of the record: `{ title=,
+-- asked for); record(answer, key), the fields of the record: `{ title=,
 -- authors=, pubdate=, publisher=, series=, ... }`, as calibre names them
 function M.define(name, how)
   M.services[name] = { name = name, how = how, queue = {}, answers = {}, asking = {}, next_at = 0, held_until = 0 }
