@@ -20,6 +20,14 @@ function M.books(o, otherwise)
   return otherwise and bookman.ids(otherwise) or {}
 end
 
+--- The books a command over the library is for: the filter it was given, the
+-- selection if it says `selection`, else every book.
+function M.library(o)
+  local args = o.args or ""
+  if args == "selection" then return o.selection or {} end
+  return bookman.ids(args)
+end
+
 -- fn(book) for each book: how many books it gave a count above 0 for,
 -- and the sum of the counts
 local function tally(ids, fn)
@@ -277,13 +285,13 @@ cmdman.create("titlecase", function(o)
   M.titlecase(M.books(rest), { all = all })
 end, { desc = "[all] [filter]  propose titles in CAPITALS, or with all any title, in title case", complete = "filter" })
 cmdman.create("notation", function(o) M.notation(M.books(o)) end, { desc = "[filter]  propose titles with their mathematics in Unicode (SL₂(ℤ))", complete = "filter" })
-cmdman.create("split-authors", function(o) M.split_authors(M.books(o, "is:listauthor")) end, { desc = "[filter]  propose author lists where one author is several people", complete = "filter" })
-cmdman.create("normalize-tags", function(o) M.normalize_tags(M.books(o, "")) end, { desc = "[filter]  propose tags under their canonical names", complete = "filter" })
+cmdman.create("split-authors", function(o) M.split_authors((o.args or "") == "" and bookman.ids("is:listauthor") or M.library(o)) end, { desc = "[filter]  propose author lists where one author is several people", complete = "filter" })
+cmdman.create("normalize-tags", function(o) M.normalize_tags(M.library(o)) end, { desc = "[filter]  propose tags under their canonical names", complete = "filter" })
 cmdman.create("clear", function(o)
   local fields, rest = (o.args or ""):match("^(%S*)%s*(.*)$")
   M.clear(fields, M.books { args = rest, selection = o.selection })
 end, { desc = "FIELDS [filter]  propose blanking fields (title authors tags identifiers pubdate publisher series, or t a s i d p e)" })
-cmdman.create("junk", function(o) M.junk(M.books(o, "")) end, { desc = "[filter]  mark and list the books whose title or author is plainly not one", complete = "filter" })
+cmdman.create("junk", function(o) M.junk(M.library(o)) end, { desc = "[filter]  mark and list the books whose title or author is plainly not one", complete = "filter" })
 cmdman.create("capture", function(o) require("lulib._capture").open(o.selection or {}, (o.args or "") ~= "" and o.args or nil) end,
   { desc = "[pattern]  pull fields out of the selected books with a pattern, and propose them" })
 cmdman.create("sync", function(o)
@@ -522,7 +530,7 @@ cmdman.create("recheck", function(o)
   if mode == "ls" then return say(recheck.rows(recheck.find { ids = ids, since = since })) end
   recheck.open { ids = ids, since = since }
 end, { desc = "[ls] [since SNAP] [filter]  go back over what lulibre wrote, with each book's own file deciding; p proposes, w writes", complete = "filter" })
-cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
+cmdman.create("verify", function(o) M.verify(M.library(o)) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")
   local given = { args = deep and args or o.args, selection = o.selection }

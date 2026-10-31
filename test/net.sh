@@ -227,6 +227,7 @@ local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
 say("title score", check.title(0, 4, c), check.title(2, 4, c), check.title(4, 4, c))
 say("length", check.length(100, 110, c), check.length(100, 200, c), check.length(nil, 200, c))
+say("same identifier", require("mesr").cmp("identifier:arxiv", "math/0601054", "math/0601054v2"))
 say("found", require("mesr").found("The Theory of Numbers", "numbers and THEO-\nRY here", check.minor))
 say("found as printed", require("mesr").found("Université Chamseddine", "Universit´e\nChamseddine1,3†", check.minor))
 -- one work asked for by two tasks at once: asked once, both answered; a
@@ -310,6 +311,7 @@ expect "zbMATH's table gives a number" "zbmath links|123|123"
 expect "a file of no dataset isn't taken" "adopt|true|nil"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
+expect "an identifier compared with its own value is the same" "same identifier|equal"
 expect "words found whole, across a broken line, small words not counted" "found|2|2"
 expect "words as a page prints them: TeX's loose accents, figures and daggers glued on" "found as printed|2|2"
 case "$out" in *"proposal|authors"*) echo "FAIL  authors the record already has were proposed"; fails=$((fails + 1)) ;; *) echo "ok    authors the record already has are not proposed" ;; esac

@@ -262,7 +262,7 @@ function M.open(books, o)
   end
   uiman.list {
     title = title, screen = "review", follow = true,
-    columns = { { "", 1 }, { "Field", 10 }, "Record", "Proposed", { "Score", 5 }, { "From", 12 }, { "Sources", 20 } },
+    columns = { { "", 1 }, { "Field", 16 }, "Record", "Proposed", { "Score", 5 }, { "From", 12 }, { "Sources", 20 } },
     items = entries,
     row = function(e)
       if e.note then return { e.note, style = "note" } end

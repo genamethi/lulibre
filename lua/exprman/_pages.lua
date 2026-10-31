@@ -79,7 +79,9 @@ function M.read(t, book)
     return table.concat(out, " & ")
   end
 
-  for _, c in ipairs(layouts.read { id = book, texts = texts }) do add(c.field, c.value, c.confidence or 0.8) end
+  -- the first pages only: further on, a name stands in a list of references
+  local front = { table.unpack(texts, 1, M.leading) }
+  for _, c in ipairs(layouts.read { id = book, texts = front }) do add(c.field, c.value, c.confidence or 0.8) end
 
   local lab = titlepage.labelled(pages[1])
   if lab then
@@ -115,7 +117,7 @@ function M.read(t, book)
   add("pubdate", year and tostring(year), 0.75)
 
   -- the copyright line, on any page, when nothing surer gave a publisher
-  for _, text in ipairs(texts) do
+  for _, text in ipairs(front) do
     local holder, known = layouts.copyright_holder(text)
     if holder and known then
       add("publisher", holder, 0.7)

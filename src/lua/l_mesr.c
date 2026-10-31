@@ -74,14 +74,26 @@ static enum field_kind check_kind(lua_State *L, int idx) {
   return (enum field_kind)luaL_checkoption(L, idx, NULL, kinds);
 }
 
+/* identifier:TYPE takes values without their type: arguments 2 and 3 get it */
+static void typed_values(lua_State *L) {
+  const char *kind = luaL_checkstring(L, 1);
+  if (strncmp(kind, "identifier:", 11)) return;
+  for (int i = 2; i <= 3; i++) {
+    lua_pushfstring(L, "%s:%s", kind + 11, luaL_checkstring(L, i));
+    lua_replace(L, i);
+  }
+}
+
 static int l_score(lua_State *L) {
   enum field_kind kind = check_kind(L, 1);
+  typed_values(L);
   lua_pushnumber(L, similar(weights(L), kind, luaL_checkstring(L, 2), luaL_checkstring(L, 3)));
   return 1;
 }
 
 static int l_cmp(lua_State *L) {
   enum field_kind kind = check_kind(L, 1);
+  typed_values(L);
   const char *a = luaL_checkstring(L, 2), *b = luaL_checkstring(L, 3);
   const struct rarity *w = weights(L);
   double ab = similar(w, kind, a, b), ba = similar(w, kind, b, a);
