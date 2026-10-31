@@ -119,6 +119,21 @@ for l in (verso .. "\n"):gmatch("(.-)\n") do n = n + 1; verso_lines[n] = { text 
 local read = require("exprman._pages").read(setmetatable({ text = verso, line = function(_, i) return verso_lines[i] end },
   { __len = function() return n end }))
 say("verso", read.title, read.authors, read.publisher, read.pubdate, read.series, read.series_index)
+-- rewrites: value to value, under their names, surviving making proposals anew
+local rewrites = require "lulib._rewrites"
+rewrites.list.shout = { field = "publisher", value = function() return "SHOUT" end }
+say("rewrite none", rewrites.run("shout", { 1 }))
+rewrites.list.shout.field = "title"
+say("rewrite", rewrites.run("shout", { 1 }))
+propose.propose(1, propose.settings())
+local first
+for _, f in ipairs(wit.get(1)) do if f.field == "title" then first = f.alts[1] end end
+say("rewrite first", first.value, first.source, first.score)
+say("titlecase", rewrites.list.titlecase.value("ON THE THEORY OF NUMBERS", 1, {}), (rewrites.list.titlecase.value("Mixed Case", 1, {})))
+say("split", rewrites.list["split-authors"].value("Yuri Manin; Matilde Marcolli"), (rewrites.list["split-authors"].value("One Person")))
+local ca = require "lulib._capture"
+say("capture", (ca.capture({ 2 }, "title", "^(.-)$ => series"))[1].fields.series)
+say("clear", rewrites.clear("p,t", { 2 }), select(2, rewrites.clear("nope", { 2 })) ~= nil)
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -177,6 +192,13 @@ expect "the metadata's identifiers, an arXiv DOI as its number" "metadata|doi:10
 expect "a file named by an arXiv number" "named|1012.6008|nil"
 expect ":verify: the record's title and authors on the pages, its identifier not there" "verify|1|1|0|doi|absent|true"
 expect "a verso read: title, authors, publisher, year, series and number" "verso|SL2(R)|Serge Lang|Springer|1985|Graduate Texts in Mathematics|105"
+expect "a rewrite leaves a book whose field has no value" "rewrite none|0"
+expect "a rewrite proposes" "rewrite|1"
+expect "and comes first, after proposals are made anew" "rewrite first|SHOUT|shout|1"
+expect "titlecase: capitals only, unless all" "titlecase|On the Theory of Numbers|nil"
+expect "split-authors: several people in one, not one" "split|Yuri Manin & Matilde Marcolli|nil"
+expect "capture runs a pattern" "capture|Notes"
+expect "clear blanks what has a value" "clear|1|true"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "words found whole, across a broken line, small words not counted" "found|2|2"

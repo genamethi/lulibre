@@ -204,6 +204,25 @@ what was kept and reads only files not read before. It changes nothing, but
 `r` proposes for the book under the cursor, adding it to the current review, and
 `R` for every book listed. `z` lists the rest too.
 
+## Rewriting values
+
+These propose a value worked out from the value a field has, adding it to the
+current review, first among the field's values; they change nothing until the
+review writes them. With no filter, each works on the selection.
+
+| | |
+|---|---|
+| `:titlecase [all] [filter]` | titles in CAPITALS, or with `all` any title, in title case |
+| `:notation [filter]` | titles with their mathematics in Unicode: SL₂(ℤ), read from the title page where it has them |
+| `:split-authors [filter]` | one "author" that is several people, by default every such book |
+| `:normalize-tags [filter]` | tags under their canonical names, by default every book |
+| `:clear FIELDS [filter]` | blank fields: title authors tags identifiers pubdate publisher series, or t a s i d p e |
+| `:capture [pattern]` | pull fields out of the selected books with a pattern, `%author% - %title% (%year%)`, and propose them |
+
+`:junk [filter]` marks and lists the books whose title or author is plainly not one.
+`lulib._rewrites.list` holds the rewrites: yours is a field and a function from
+value to value.
+
 ## Looking books up: `:enrich`
 
 `:enrich` asks the online services about the selected books, by their

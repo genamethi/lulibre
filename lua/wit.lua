@@ -111,27 +111,56 @@ end
 function M.set(book, wits, review)
   review = review or M.current()
   transaction(function()
-    local marks = {}
-    for _, m in ipairs(run("SELECT field, value, source, score, decision, edited FROM wits"
-                           .. " WHERE review = ? AND book = ? AND decision IS NOT NULL", review, book)) do
-      marks[m.field .. "\0" .. m.value] = m
+    local marks, rewrites = {}, {}
+    for _, m in ipairs(run("SELECT field, value, source, score, decision, edited, op FROM wits"
+                           .. " WHERE review = ? AND book = ? AND (decision IS NOT NULL OR op IS NOT NULL) ORDER BY alt",
+                           review, book)) do
+      if m.op then rewrites[#rewrites + 1] = m
+      elseif m.decision then marks[m.field .. "\0" .. m.value] = m end
     end
     run("DELETE FROM wits WHERE review = ? AND book = ?", review, book)
     local alt = {}
     local function insert(w, m)
       alt[w.field] = (alt[w.field] or 0) + 1
       run("INSERT INTO wits(review, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts,"
-          .. " hidden, decision, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), ?, ?, ?)",
+          .. " hidden, decision, edited, op) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), ?, ?, ?, ?)",
           review, book, w.field, w.value, w.source, alt[w.field], w.score, joined(w.agree), joined(w.disagree),
-          w.file, w.start, w.stop, w.hidden and 1 or 0, m and m.decision, m and m.edited)
+          w.file, w.start, w.stop, w.hidden and 1 or 0, m and m.decision, m and m.edited, w.op)
+    end
+    local taken = {}
+    for _, m in ipairs(rewrites) do
+      insert(m, m)
+      taken[m.field .. "\0" .. m.value] = true
     end
     for _, w in ipairs(wits) do
       local key = w.field .. "\0" .. w.value
-      insert(w, marks[key])
-      marks[key] = nil
+      if not taken[key] then
+        insert(w, marks[key])
+        marks[key] = nil
+      end
     end
     for _, m in pairs(marks) do insert(m, m) end
   end)
+end
+
+--- Adds a rewrite of a book's field to a review, first among the field's
+-- values: `{ field=, value=, source= }`. Writing it sets the field to the value
+-- whatever the field is. Making the book's proposals anew leaves it. Returns
+-- true.
+-- @tparam integer book
+-- @tparam table w
+-- @tparam[opt] integer review the current one by default
+function M.add(book, w, review)
+  review = review or M.current()
+  transaction(function()
+    run("DELETE FROM wits WHERE review = ? AND book = ? AND field = ? AND value = ?", review, book, w.field, w.value)
+    local first = run("SELECT MIN(alt) AS alt FROM wits WHERE review = ? AND book = ? AND field = ?",
+                      review, book, w.field)[1].alt or 1
+    run("INSERT INTO wits(review, book, field, value, source, alt, score, ts, op)"
+        .. " VALUES (?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), 'set')",
+        review, book, w.field, w.value, w.source, first - 1)
+  end)
+  return true
 end
 
 --- A book's wits in a review, per field: the first-ranked and its
@@ -164,11 +193,11 @@ local function change(w, value)
   local field, kind = trust.field(w.field), w.field:match("^identifier:(.+)")
   local function written(v) return kind and v and kind .. ":" .. v or v end
   return { book = w.book, field = field, value = written(value), proposal = w.id, proposed = written(w.value),
-           source = w.source, op = (field == "identifiers" or field == "tags") and value and "add" or "set" }
+           source = w.source, op = w.op or (field == "identifiers" or field == "tags") and value and "add" or "set" }
 end
 
 local function row(id)
-  return run("SELECT id, review, book, field, value, source FROM wits WHERE id = ?", id)[1]
+  return run("SELECT id, review, book, field, value, source, op FROM wits WHERE id = ?", id)[1]
 end
 
 -- a mark on a wit, none left on the field's others
@@ -209,7 +238,7 @@ end
 -- @tparam[opt] integer review the current one by default
 function M.write(review)
   review = review or M.current()
-  local marked = run("SELECT id, book, field, value, source, decision, edited FROM wits"
+  local marked = run("SELECT id, book, field, value, source, decision, edited, op FROM wits"
                      .. " WHERE review = ? AND decision IS NOT NULL", review)
   if #marked == 0 then return 0, 0 end
   local changes = {}

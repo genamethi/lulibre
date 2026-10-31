@@ -45,6 +45,64 @@ function M.verify(ids)
   verify.open(ids)
 end
 
+-- a command's leading word, if it is that word, and the command with it gone
+local function flagged(o, word)
+  local args = o.args or ""
+  local rest = args:match("^" .. word .. "%s+(.*)$") or (args == word and "")
+  return rest ~= nil and rest ~= false and true or false, { args = rest or args, selection = o.selection }
+end
+
+-- a rewrite over the books; says how many proposals it made
+local function rewritten(name, ids, o)
+  local n = require("lulib._rewrites").run(name, ids, o)
+  uiman.notify(("%d proposal%s in the review: :review shows %s"):format(n, n == 1 and "" or "s", n == 1 and "it" or "them"))
+  return n
+end
+
+--- :titlecase [all] [filter]: titles in capitals, or with all any title, in
+-- title case, as proposals.
+function M.titlecase(ids, o) return rewritten("titlecase", ids, o) end
+--- :notation [filter]: titles with their mathematics in Unicode, as proposals.
+function M.notation(ids) return rewritten("notation", ids) end
+--- :split-authors [filter]: one "author" that is several people, as proposals.
+function M.split_authors(ids) return rewritten("split-authors", ids) end
+--- :normalize-tags [filter]: tags under their canonical name, as proposals.
+function M.normalize_tags(ids) return rewritten("normalize-tags", ids) end
+
+--- :clear FIELDS [filter]: blank fields, as proposals.
+function M.clear(fields, ids)
+  local n, err = require("lulib._rewrites").clear(fields, ids)
+  if not n then return uiman.notify(err, "error") end
+  uiman.notify(("%d proposal%s in the review"):format(n, n == 1 and "" or "s"))
+  return n
+end
+
+--- :junk [filter]: marks and lists the books whose title or authors are
+-- plainly not one (a file's name, a number, a program's name).
+function M.junk(ids)
+  local junk, names = require "lulib._junk", require "lulib._names"
+  uiman.exec("mark none")
+  local n = 0
+  for _, id in ipairs(ids) do
+    local title, authors = bookman.get(id, "title") or "", bookman.get(id, "authors") or ""
+    local bad = title == "" or junk.unlikely_title(title)
+    if not bad and authors ~= "" then
+      bad = true
+      for a in (authors .. " & "):gmatch("(.-) & ") do
+        if not (junk.author(a) or names.never(a) or a:find("%.%a%a%a?$") or a:find("%d%d")) then bad = false end
+      end
+    end
+    if bad then
+      uiman.mark(id, true)
+      n = n + 1
+    end
+  end
+  if n > 0 then uiman.filter("is:marked") end
+  uiman.notify(n == 0 and "no title or author of these books looks like junk"
+               or ("marked %d books whose title or author is not one; :propose proposes for them"):format(n))
+  return n
+end
+
 --- :enrich [filter]: ask the online services about the books, by their
 -- identifiers; each new answer posts "source_arrived", which proposes for
 -- the book again.
@@ -203,6 +261,20 @@ cmdman.create("tags", function(c)
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
+cmdman.create("titlecase", function(o)
+  local all, rest = flagged(o, "all")
+  M.titlecase(M.books(rest), { all = all })
+end, { desc = "[all] [filter]  propose titles in CAPITALS, or with all any title, in title case", complete = "filter" })
+cmdman.create("notation", function(o) M.notation(M.books(o)) end, { desc = "[filter]  propose titles with their mathematics in Unicode (SL₂(ℤ))", complete = "filter" })
+cmdman.create("split-authors", function(o) M.split_authors(M.books(o, "is:listauthor")) end, { desc = "[filter]  propose author lists where one author is several people", complete = "filter" })
+cmdman.create("normalize-tags", function(o) M.normalize_tags(M.books(o, "")) end, { desc = "[filter]  propose tags under their canonical names", complete = "filter" })
+cmdman.create("clear", function(o)
+  local fields, rest = (o.args or ""):match("^(%S*)%s*(.*)$")
+  M.clear(fields, M.books { args = rest, selection = o.selection })
+end, { desc = "FIELDS [filter]  propose blanking fields (title authors tags identifiers pubdate publisher series, or t a s i d p e)" })
+cmdman.create("junk", function(o) M.junk(M.books(o, "")) end, { desc = "[filter]  mark and list the books whose title or author is plainly not one", complete = "filter" })
+cmdman.create("capture", function(o) require("lulib._capture").open(o.selection or {}, (o.args or "") ~= "" and o.args or nil) end,
+  { desc = "[pattern]  pull fields out of the selected books with a pattern, and propose them" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

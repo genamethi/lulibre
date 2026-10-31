@@ -152,7 +152,7 @@ function M.cells(entry, current)
   local which = #entry.alts > 1 and (" (%d/%d)"):format(entry.i, #entry.alts) or ""
   local agree = alt.agree and ("agrees: " .. alt.agree) or (alt.disagree and ("differs: " .. alt.disagree) or "")
   local mark = alt.decision == "accept" and "+" or alt.decision == "reject" and "-" or ""
-  return { mark, entry.field, current or "", (alt.edited or alt.value) .. which, shown_score(alt.score), alt.source, agree }
+  return { mark, entry.field, current or "", ((alt.edited or alt.value) == "" and "(blank)" or alt.edited or alt.value) .. which, shown_score(alt.score), alt.source, agree }
 end
 
 --- Opens the view on the current review, and returns when it closes.

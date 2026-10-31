@@ -13,6 +13,8 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Added saved reviews: a review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `:review deep` shows what a review otherwise hides.
 - Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again.
 - Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
+- Added `:verify`, `:titlecase`, `:notation`, `:split-authors`, `:normalize-tags`, `:clear`, `:junk` and `:capture`, back from 0.2. The rewrites propose into the current review.
+- Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 

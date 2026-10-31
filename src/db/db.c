@@ -130,7 +130,8 @@ static const char custom_schema[] =
  * differ, comma-separated; start and stop, where in the file's text (its
  * txt) the value was found; review, the review it belongs to (wit.lua);
  * hidden, shown only by a deep review; decision ("accept" or "reject") and
- * edited, what the review has marked and not yet written. ---- */
+ * edited, what the review has marked and not yet written; op, set on a
+ * rewrite of the field (wit.add), which making proposals anew leaves. ---- */
 static const char wit_schema[] =
   "PRAGMA wit.journal_mode=WAL;"
   "CREATE TABLE IF NOT EXISTS wit.reviews(id INTEGER PRIMARY KEY, name TEXT, opened INTEGER NOT NULL DEFAULT 0);"
@@ -138,8 +139,10 @@ static const char wit_schema[] =
   " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
   " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
   " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
-  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT,"
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT, op TEXT,"
   " UNIQUE(review, book, field, alt));"
+  /* :capture's patterns kept under a name */
+  "CREATE TABLE IF NOT EXISTS wit.capture_rules(name TEXT PRIMARY KEY, source TEXT, spec TEXT);"
   /* what was worked out from a file, so that it is not worked out again
    * while the file is as it was read at stamp (lulib._kept) */
   "CREATE TABLE IF NOT EXISTS wit.kept("
@@ -153,7 +156,7 @@ static const char wit_before_reviews[] =
   " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
   " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
   " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
-  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT,"
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT, op TEXT,"
   " UNIQUE(review, book, field, alt));"
   "INSERT INTO wit.wits(id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts)"
   " SELECT id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts FROM wit.wits_old;"
@@ -162,11 +165,13 @@ static const char wit_before_reviews[] =
 static int wit_prepare(struct db *db, char **err) {
   if (db_exec(db, wit_schema, err)) return -1;
   sqlite3_stmt *st = NULL;
-  if (sqlite3_prepare_v2(db->h, "SELECT review FROM wit.wits LIMIT 0", -1, &st, NULL) == SQLITE_OK) {
-    sqlite3_finalize(st);
-    return 0;
-  }
-  return db_exec(db, wit_before_reviews, err);
+  if (sqlite3_prepare_v2(db->h, "SELECT review FROM wit.wits LIMIT 0", -1, &st, NULL) != SQLITE_OK)
+    return db_exec(db, wit_before_reviews, err);
+  sqlite3_finalize(st);
+  if (sqlite3_prepare_v2(db->h, "SELECT op FROM wit.wits LIMIT 0", -1, &st, NULL) != SQLITE_OK)
+    return db_exec(db, "ALTER TABLE wit.wits ADD COLUMN op TEXT;", err);
+  sqlite3_finalize(st);
+  return 0;
 }
 
 static char *side[3]; /* journal, custom, wit */
