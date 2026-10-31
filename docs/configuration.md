@@ -120,7 +120,7 @@ The colour names are `dim accent warn error ok cursor_bg cursor_bg_blur
 visual_bg mark title border bar_bg bar_fg on_accent`. `uiman.theme()` returns them
 with their values. The defaults assume a dark terminal.
 
-## Keys, commands, scripts
+## Keys and commands
 
 ```lua
 keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
@@ -191,7 +191,7 @@ end)
 
 | | |
 |---|---|
-| `~/.config/lulibre/` | `init.lua`, `lua/`, `scripts/`, `docs/` |
+| `~/.config/lulibre/` | `init.lua`, `lua/`, `docs/` |
 | `~/.config/lulibre/docs/`, `~/.local/share/lulibre/docs/` | guides of your own, Markdown files `:help` reads after lulibre's (and their folders'): each heading is a tag, and so is what a table's first column names in `code` (a command under a `Command` heading, a setting under `Setting`, a key under `Key`) |
 | `~/.local/state/lulibre/settings` | the saved settings, while `persistent` is true |
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library: what lulibre read from it and its files. A new version of its tables makes it again, keeping the sync folder's files |

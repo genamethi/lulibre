@@ -4,20 +4,20 @@ lulibre runs Lua 5.4 or 5.5. `~/.config/lulibre/init.lua` runs at start, as
 the first task. Empty, or missing, lulibre works the same: everything
 below is there without it.
 
-    :run NAME [args]            a script from ~/.config/lulibre/scripts
-    lulibre run FILE [args]     a script with no interface; print goes to stdout
+    :lua CODE                   Lua, as a task (dofile runs a file)
+    lulibre run FILE [args]     a Lua file with no interface; print goes to stdout
     :restart-scripts            a new Lua state; init.lua runs first, as at start
     :tasks   :cancel ID|all
 
 lulibre comes with these commands, which show what they find in a list
-(module functions of `cmd`: `require("cmd").dupes()` in a script, which
-`lulibre run` prints):
+(`ls` prints it). Each is a function of the module `cmd`, whose `{ ls = true }`
+returns what it found and shows nothing: `require("cmd").dupes { ls = true }`.
 
 | | |
 |---|---|
-| `dupes` | books whose files hold the same bytes: files of the same size hashed, grouped by hash. Changes nothing |
-| `orphans` | files a record names that are not on disk, files in the books' folders no record names, empty folders. Changes nothing |
-| `tag-dots [write]` | tags whose levels are split with "/", and each as calibre writes levels, with "."; with `write`, rewrites them, one operation `:undo` puts back |
+| `dupes [ls]` | books whose files hold the same bytes: files of the same size hashed, grouped by hash. Changes nothing |
+| `orphans [ls]` | files a record names that are not on disk, files in the books' folders no record names, empty folders. Changes nothing |
+| `tags [ls \| write]` | tags whose levels are split with "/", and each as calibre writes levels, with "."; with `write`, rewrites them, one operation `:undo` puts back |
 
 ## How scripts run
 

@@ -119,8 +119,7 @@ In the command line, a filter, a search, or a field of the edit form:
 | `Enter` · `Esc` | accept · cancel |
 
 The command line completes as you type: command names, then each command's
-arguments (`:set` setting names and their allowed values, `:run` script
-names, `:sort` keys, a filter for `:propose`), as the command says, a
+arguments (`:set` setting names and their allowed values, `:sort` keys, a filter for `:propose`), as the command says, a
 command made in Lua too (`complete`, [the API](api.md)). `&` and `/` complete the filter language (`au` →
 `author:`, `is:o` → `is:ocr`). History is kept between sessions,
 separately for commands, filters and searches.

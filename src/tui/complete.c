@@ -59,14 +59,6 @@ static void filter_word(const char *word, void *ud) {
   add_owned(ud, xstrdup(word), NULL);
 }
 
-static void add_script(const char *name, const char *dir, void *ud) {
-  add_owned(ud, xstrdup(name), NULL);
-}
-
-static void add_scripts(struct list *l, struct app *app) {
-  lapi_each_script(app, add_script, l);
-}
-
 static void add_options(struct list *l, const char *word, const struct settings *st) {
   const char *eq = strchr(word, '=');
   for (int i = 0; i < settings_count(st); i++) {
@@ -127,7 +119,6 @@ void complete_refresh(struct tui *t) {
     case COMPLETE_WORDS: add_words(&l, comp->words); break;
     case COMPLETE_FILTER: query_words(filter_word, &l); break;
     case COMPLETE_SETTING: add_options(&l, last, t->app->settings); break;
-    case COMPLETE_SCRIPT: add_scripts(&l, t->app); break;
     case COMPLETE_HELP: {
       char *words = guides_tags(t);
       add_words(&l, words);

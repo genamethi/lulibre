@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <lua.h>
 
@@ -11,20 +12,20 @@
 #include "lua/sched.h"
 
 static const char help[] =
-  "usage: lulibre run SCRIPT [args]\n\n"
-  "Run a Lua script without the interface. SCRIPT is a path, or the name of a\n"
-  "script in ~/.config/lulibre/scripts or the bundled ones. The script gets the\n"
-  "same `lulibre` API as inside the interface, minus the parts that need a\n"
-  "screen; print writes to standard output. Exit status is 1 if it fails.\n";
+  "usage: lulibre run FILE [args]\n\n"
+  "Run a Lua file without the interface. It gets the same API as inside the\n"
+  "interface, minus the parts that need a screen; print writes to standard\n"
+  "output. Exit status is 1 if it fails.\n";
 
 int cmd_run(struct app *app, int argc, char **argv) {
   if (argc < 2 || !strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
     fputs(help, argc < 2 ? stderr : stdout);
     return argc < 2 ? 2 : 0;
   }
-  char *path = lapi_find_script(app, argv[1]), *err = NULL;
-  if (!path) {
-    warnf("no script '%s'", argv[1]);
+  const char *path = argv[1];
+  char *err = NULL;
+  if (access(path, R_OK)) {
+    warnf("no file '%s'", path);
     return 1;
   }
   lua_State *L = app->L;
@@ -35,10 +36,8 @@ int cmd_run(struct app *app, int argc, char **argv) {
   if (!lapi_run_file(app, path, argc - 2, argv + 2, &err)) {
     warnf("%s", err);
     free(err);
-    free(path);
     return 1;
   }
-  free(path);
   /* returns once no task is running and nothing they started is pending */
   if (app->db_ready) library_resume(app->library);
   uv_run(app->loop, UV_RUN_DEFAULT);

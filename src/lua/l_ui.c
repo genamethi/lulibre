@@ -36,7 +36,6 @@
  *
  * This file also holds the ':' commands that exist because of Lua:
  * run, lua, messages, tasks, cancel. */
-#include <sys/stat.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -798,58 +797,6 @@ ASK(l_goto, "jump")
 
 /* ---- scripts ---- */
 
-/* Directories searched for scripts, in order; NULL-terminated, malloc'd:
- * the user's own (lulibre's commands are modules in lua/, design 12). */
-static char **script_dirs(struct app *app) {
-  char **dirs = xcalloc(2, sizeof *dirs);
-  dirs[0] = xasprintf("%s/scripts", app->config_dir);
-  return dirs;
-}
-
-static void free_dirs(char **dirs) {
-  for (char **d = dirs; *d; d++) free(*d);
-  free(dirs);
-}
-
-char *lapi_find_script(struct app *app, const char *name) {
-  if (strchr(name, '/')) return access(name, R_OK) == 0 ? xstrdup(name) : NULL;
-  char **dirs = script_dirs(app);
-  char *found = NULL;
-  size_t nl = strlen(name);
-  int has_ext = nl > 4 && !strcmp(name + nl - 4, ".lua");
-  for (char **d = dirs; *d && !found; d++) {
-    char *p = xasprintf("%s/%s%s", *d, name, has_ext ? "" : ".lua");
-    if (access(p, R_OK) == 0) found = p;
-    else free(p);
-  }
-  free_dirs(dirs);
-  if (!found && access(name, R_OK) == 0) found = xstrdup(name);
-  return found;
-}
-
-struct each_script {
-  void (*fn)(const char *name, const char *dir, void *ud);
-  const char *dir;
-  void *ud;
-};
-
-static int each_one(const char *path, const char *rel, const struct stat *st, void *ud) {
-  struct each_script *e = ud;
-  size_t n = strlen(rel);
-  if (S_ISREG(st->st_mode) && n > 4 && !strcmp(rel + n - 4, ".lua")) {
-    char *name = xstrndup(rel, n - 4);
-    e->fn(name, e->dir, e->ud);
-    free(name);
-  }
-  return 0;
-}
-
-void lapi_each_script(struct app *app, void (*fn)(const char *name, const char *dir, void *ud), void *ud) {
-  char **dirs = script_dirs(app);
-  for (char **d = dirs; *d; d++) path_walk(*d, 0, each_one, &(struct each_script){fn, *d, ud});
-  free_dirs(dirs);
-}
-
 int lapi_run_file(struct app *app, const char *path, int argc, char **argv, char **err) {
   lua_State *L = app->L;
   if (luaL_loadfile(L, path) != LUA_OK) {
@@ -1041,60 +988,6 @@ void lapi_unref(int ref) {
   u->ref = ref;
   u->gen = atomic_load(&generation);
   queue_post(LOOP_LUA, unref, u);
-}
-
-/* "path\0arg arg": load the script and start it */
-static void run_line(struct app *app, void *arg) {
-  char *path = arg, *args = path + strlen(path) + 1, *save = NULL;
-  char *argv[32];
-  int argc = 0;
-  for (char *a = strtok_r(args, " ", &save); a && argc < 32; a = strtok_r(NULL, " ", &save))
-    argv[argc++] = a;
-  char *err = NULL;
-  if (!lapi_run_file(app, path, argc, argv, &err)) {
-    lapi_report(app, 1, err);
-    free(err);
-  }
-  free(path);
-}
-
-/* "name arg arg": the script is looked up here, on the interface thread,
- * which owns the options that say where scripts are */
-static void run_named(struct tui *t, const char *line) {
-  while (*line == ' ') line++;
-  size_t nl = strcspn(line, " ");
-  char *name = xstrndup(line, nl);
-  char *path = *name ? lapi_find_script(t->app, name) : NULL;
-  if (!path) {
-    tui_msg(t, 1, "no script named '%s' (see :run with no argument)", name);
-  } else {
-    const char *args = line + nl;
-    size_t pl = strlen(path), al = strlen(args);
-    char *msg = xmalloc(pl + al + 2);
-    memcpy(msg, path, pl + 1);
-    memcpy(msg + pl + 1, args, al + 1);
-    queue_post(LOOP_LUA, run_line, msg);
-  }
-  free(path);
-  free(name);
-}
-
-static void pick_script(const char *name, const char *dir, void *ud) {
-  picker_add(ud, 0, name, dir);
-}
-
-static void run_picked(struct tui *t, sqlite3_int64 id, const char *text, void *ud) {
-  run_named(t, text);
-}
-
-static void c_run(struct tui *t, const char *args) {
-  if (*args) {
-    run_named(t, args);
-    return;
-  }
-  struct picker *p = picker_new(t, "scripts", run_picked, NULL);
-  lapi_each_script(t->app, pick_script, p);
-  picker_open(t, p);
 }
 
 /* :lua CODE: lulib._eval.run(CODE) as a task */
@@ -1373,12 +1266,10 @@ void l_ui_open(lua_State *L) {
   lua_pushcfunction(L, l_print);
   lua_setglobal(L, "print");
 
-  command_register("run", c_run, "[script [args]]  run a Lua script; no argument lists them");
   command_register("lua", c_lua, "code  run a line of Lua and show what it returns");
   command_register("messages", c_messages, "the log so far, in a pager");
   command_register("console", c_console, "[focus]  show or hide the log console");
   command_register("tasks", c_tasks, "scripts that are running");
   command_register("cancel", c_cancel, "ID | all  stop a running script");
-  command_set_complete("run", COMPLETE_SCRIPT, NULL);
   command_set_complete("console", COMPLETE_WORDS, "focus");
 }

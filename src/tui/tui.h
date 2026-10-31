@@ -604,7 +604,6 @@ enum complete_kind {
   COMPLETE_FILTER,  /* the filter language */
   COMPLETE_SETTING, /* setting names, then name=choice */
   COMPLETE_COMMAND, /* command names */
-  COMPLETE_SCRIPT,  /* the scripts :run finds */
   COMPLETE_LUA,     /* a Lua function, asked by message (lapi_complete) */
   COMPLETE_HELP,    /* the guides' tags (:help) */
 };

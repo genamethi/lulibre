@@ -177,7 +177,7 @@ hb=$(grammar handbook-of-algebra "24|Quantum Groups" "12|A. Author" "10|HANDBOOK
 sp=$(grammar stacks-project "24|MORPHISMS OF SCHEMES" "12|01QZ" "10|Contents")
 
 # subjects at calibre's ".": the filters, calibre's list of the categories
-# it shows as trees, and tag-dots, which rewrites "/" as "." (through a
+# it shows as trees, and :tags, which rewrites "/" as "." (through a
 # store in calibredb's place)
 sh "$src/mklib.sh" "$t/tags" >/dev/null 2>&1
 sqlite3 "$t/tags/metadata.db" "DELETE FROM tags; DELETE FROM books_tags_link;
@@ -195,7 +195,7 @@ print("trees|" .. sql.run(db, "SELECT value FROM meta WHERE key = 'calibre_hiera
 db:close()
 LUA
 levels=$("$bin" -L "$t/tags" run "$t/levels.lua" 2>&1)
-echo 'require("cmd").tag_dots((...) == "write")' >"$t/dots.lua"
+echo 'require("cmd").tags { write = (...) == "write" }' >"$t/dots.lua"
 dots=$("$bin" -L "$t/tags" run "$t/dots.lua" 2>&1)
 printf 'require("store").calibre = function(book, f) print("stored|" .. book .. "|" .. f.tags) return true end\n' >"$cfg/init.lua"
 dotsw=$("$bin" -L "$t/tags" run "$t/dots.lua" write 2>&1)
@@ -399,6 +399,13 @@ sqlite3 "$t/two/metadata.db" "INSERT INTO books(id, title, sort, path, last_modi
   INSERT INTO data VALUES (3, 3, 'PDF', 0, 'paper - Copy'), (4, 4, 'EPUB', 0, 'gone - Copy');"
 echo 'require("cmd").dupes()' >"$t/dupes.lua"
 echo 'require("cmd").orphans()' >"$t/orphans.lua"
+cat >"$t/ls.lua" <<'LUA'
+local cmd = require "cmd"
+local groups, nfiles = cmd.dupes { ls = true }
+local found = cmd.orphans { ls = true }
+print("ls|" .. #groups .. "|" .. nfiles .. "|" .. #found.gone .. "|" .. #found.strays .. "|" .. #found.empty .. "|" .. #cmd.tags { ls = true })
+LUA
+ls=$("$bin" -L "$t/two" run "$t/ls.lua" 2>&1)
 dupes=$("$bin" -L "$t/two" run "$t/dupes.lua" 2>&1)
 orphans=$("$bin" -L "$t/two" run "$t/orphans.lua" 2>&1)
 
@@ -452,7 +459,7 @@ contains "the Handbook of Algebra grammar: the volume from the page's foot, the 
 contains "the Stacks project grammar: the chapter, and its number from the reading order" "stacks-project|Morphisms of Schemes|The Stacks Project|-|-|The Stacks Project|29" "$sp"
 contains "subject: whole levels; tag:=. the tag or inside it; tag:=.. a level; never part of one" "levels|1|1|1|1|" "$levels"
 contains "the categories calibre shows as trees, from its preferences" 'trees|["tags", "#genre"]' "$levels"
-contains "tag-dots lists the tags it would rewrite" "    2  math/algebra  →  math.algebra" "$dots"
+contains ":tags lists the tags it would rewrite" "    2  math/algebra  →  math.algebra" "$dots"
 contains "and with write, rewrites them as one operation" "stored|2|math.algebra" "$dotsw"
 contains "which it says can be undone" "as operation" "$dotsw"
 contains "every Lua file in lua/ and examples/ compiles" "compiled|all" "$compiled"
@@ -517,6 +524,7 @@ contains "lex.arxiv: the number without its version, and the class" "arxiv|1012.
 contains "and the old form; never without the label" "arxiv old|math/0601054|nil" "$lx"
 contains "lsqlite3 opens a database of the script's own, with lulibre's SQL functions" "sql|Paul Erdős|paul erdos" "$sql"
 contains "and ends" "polite|done" "$busy"
+contains "ls gives what each found, and shows nothing" "ls|1|3|1|1|1|0" "$ls"
 contains "dupes: files of the same bytes, a group" "468 bytes  2 copies" "$dupes"
 contains "with each book" "    3  paper copy" "$dupes"
 contains "orphans: a file a record names, not on disk" "    4  Copy/gone (4)/gone - Copy.epub" "$orphans"

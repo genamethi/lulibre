@@ -60,10 +60,8 @@ of a page.
 What is missing across the library, and what reading the files came to,
 each line with the filter behind it.
 .TP
-.BR run " \fIscript\fR [\fIargs\fR]"
-Run a Lua script without the interface: a path, or the name of a script in
-the configuration directory's
-.IR scripts/ .
+.BR run " \fIfile\fR [\fIargs\fR]"
+Run a Lua file without the interface.
 .SH OPTIONS
 .TP
 .BI \-L " dir"
@@ -114,10 +112,9 @@ negates.
 .TP
 .I ~/.config/lulibre/init.lua
 Plain Lua, run at startup as the first task; lulibre never writes into
-it, and lulibre-setup writes one only where there is none. Scripts of your own go in
-.I scripts/
-beside it, modules in
-.IR lua/ .
+it, and lulibre-setup writes one only where there is none. Modules of your own go in
+.I lua/
+beside it.
 .TP
 .I ~/.local/state/lulibre/settings
 The saved settings, read and written while the setting

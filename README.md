@@ -98,10 +98,9 @@ In the interface:
 - **Fix one thing on many books.** Mark them, `e`, `Enter` on *tags*, type
   `+math/topology, -misc`, `w`.
 
-A script is Lua:
+Anything else is Lua, in init.lua, a module of yours, or typed at `:lua`:
 
 ```lua
--- ~/.config/lulibre/scripts/no-date.lua  —  :run no-date
 for _, book in ipairs(require("bookman").books("no:date has:doi")) do
   print(book.id, book.title, book.idents.doi)
 end

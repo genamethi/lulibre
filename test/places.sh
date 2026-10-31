@@ -27,9 +27,6 @@ cat >"$t/config/lulibre/docs/more/mine.md" <<'MD'
 
 Plums are kept [with the keys](keys.md#the-leader-key).
 MD
-# a script :run finds, by completion and in its picker
-mkdir -p "$t/config/lulibre/scripts"
-echo 'uiman.notify("quince ran")' >"$t/config/lulibre/scripts/quince.lua"
 cat >"$t/config/lulibre/init.lua" <<'LUA'
 for _, kind in ipairs { "band", "column", "over", "tiled", "float", "overlay" } do
   scrnman.create("p" .. kind, { place = { kind = kind }, actions = { { "hello", "h", "say hello" } }, hint = { "hello" } })
@@ -246,16 +243,6 @@ sleep 0.3
 $T send-keys -t s ":set pages" Enter
 sleep 0.3
 check "the change holds outside the tab" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'pages=9'"
-$T send-keys -t s ":run qui" Tab
-sleep 0.4
-check ":run completes a script's name" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':run quince'"
-$T send-keys -t s Escape
-sleep 0.2
-$T send-keys -t s ":run" Enter
-sleep 0.4
-$T send-keys -t s q u i n Enter
-wait_for "quince ran" || true
-check "and :run alone picks one, which runs" sh -c "$T capture-pane -p -t s | grep -q 'quince ran'"
 $T send-keys -t s ":help plu" Tab
 sleep 0.4
 check "Tab completes a tag" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':help Plums'"
