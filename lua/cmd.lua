@@ -303,6 +303,59 @@ end, { desc = "DIR  take a folder as the sync folder for now, to bring its ebook
 cmdman.create("change", function(o) require("lulib._dialogs").change(M.books(o)) end, { desc = "[filter]  one change to every selected book" })
 cmdman.create("enrich-dialog", function(o) require("lulib._dialogs").enrich(M.books(o)) end, { desc = "[filter]  say what :enrich would ask, choose the services, then review", complete = "filter" })
 cmdman.create("propose-review", function(o) require("lulib._dialogs").propose_review(M.books(o)) end, { desc = "a dialog for a whole round: which books, what to ask, which fields, then review" })
+cmdman.create("browse", function(o) require("lulib._browse").open((o.args or "") ~= "" and o.args or nil) end,
+  { desc = "[author | subject | series | publisher | year | format]  the library as a tree", complete = { "author", "subject", "series", "publisher", "year", "format" } })
+cmdman.create("yank", function(o)
+  local what = (o.args or "") ~= "" and o.args or "title"
+  if what ~= "title" and what ~= "path" then return uiman.notify("yank path | title", "error") end
+  local out = {}
+  for _, id in ipairs(o.selection or {}) do
+    if what == "path" then
+      local f = (bookman.files(id) or {})[1]
+      if f then out[#out + 1] = f.path end
+    else
+      out[#out + 1] = bookman.get(id, "title") or ""
+    end
+  end
+  if uiman.clipboard(table.concat(out, "\n")) then
+    uiman.notify(("copied %s for %d book%s"):format(what, #out, #out == 1 and "" or "s"))
+  else
+    uiman.notify("could not reach the terminal to copy", "error")
+  end
+end, { desc = "path | title  copy for the selection to the clipboard", complete = { "path", "title" } })
+cmdman.create("addpages", function(o)
+  local id, page = (o.args or ""):match("^(%-?%d+)%s+(%d+)$")
+  if not id then return uiman.notify("addpages BOOK PAGE", "error") end
+  uiman.progress(("reading book %s as far as page %s"):format(id, page))
+  local r, err = utils.index { filter = (tonumber(id) < 0 and "in:sync " or "") .. "id:" .. math.abs(tonumber(id)),
+                               pages = tonumber(page), force = true }
+  uiman.progress(nil)
+  if not r then return uiman.notify(err, "error") end
+  uiman.notify(r.failed and r.failed > 0 and "the file could not be read" or ("read as far as page %s"):format(page))
+end, { desc = "BOOK PAGE  read a file as far as that page (the preview's a does it for the page being shown)" })
+cmdman.create("features", function()
+  local features = {
+    { "calibredb", "calibredb", "writing to the library" },
+    { "calibre-server", "calibre-server", "the content server, through which writes reach an open library" },
+    { "tesseract", "tesseract", "OCR: reading files with no text (the setting ocr)" },
+    { "systemctl", "systemctl", ":units, lulibre's systemd units around the content server" },
+    { "xdg-open", "xdg-open", "opening files in other programs" },
+  }
+  local out = {}
+  for _, f in ipairs(features) do
+    local found
+    for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
+      local h = io.open(dir .. "/" .. f[2])
+      if h then
+        h:close()
+        found = true
+        break
+      end
+    end
+    out[#out + 1] = ("%-15s %-10s %s"):format(f[1], found and "installed" or "missing", f[3])
+  end
+  uiman.pager("features and the programs they need", table.concat(out, "\n"))
+end, { desc = "the features that need programs of their own: installed or not" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

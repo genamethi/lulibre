@@ -185,6 +185,13 @@ keys("w", 0.8)        # the first action
 keys(":demoverify\r", 1.5)
 keys("z", 0.4)
 keys("q", 0.6)
+keys(":browse author\r", 1)
+keys("j", 0.5)        # narrows the list to the author
+keys("f", 0.5)
+keys("q", 0.6)
+keys(":lua uiman.filter('')\r", 0.4)
+keys(":features\r", 0.6)
+keys("q", 0.4)
 keys(":lua uiman.jump(1)\r", 0.6)
 keys(":edit\r", 1)  # the edit form on book 1, a form that writes on w
 keys("e", 0.4)       # the title
