@@ -41,8 +41,10 @@ M.grammars = {}
 -- @tparam string name
 -- @param pattern an LPeg pattern capturing a table of fields (`field`); or a
 -- function given the text and the book (`fn(t, book)`), returning fields as
--- values, or as `{ value=, start=, stop= }`: a value found in the text as it
--- stands takes its place there
+-- values, or as `{ value=, start=, stop=, how=, sure=, also= }`: how, what reading gave
+-- it, shown as where it came from; sure, how sure that is, 0 to 1; also, other values
+-- for the field in the same form. A value found in the text as it stands takes its
+-- place there
 -- @tparam[opt] string group what the grammar was written for: an author, a
 -- publisher, a series
 -- @param[opt] version change it when you change the pattern
@@ -86,16 +88,21 @@ function M.parse(t, book, names)
       fields = pattern(t, book)
       for field, f in pairs(fields or {}) do
         if type(f) ~= "table" then
-          f = tostring(f)
-          local start, stop = text:find(f, 1, true)
-          fields[field] = { value = f, start = start, stop = stop }
+          f = { value = tostring(f) }
+          fields[field] = f
+        end
+        for _, one in ipairs { f, table.unpack(f.also or {}) } do
+          if not one.start then one.start, one.stop = text:find(one.value, 1, true) end
         end
       end
     else
       fields = lpeg.match(pattern, text, 1, t, book)
     end
     if type(fields) == "table" and next(fields) then
-      for _, f in pairs(fields) do f.value = M.clean(f.value) end
+      for _, f in pairs(fields) do
+        f.value = M.clean(f.value)
+        for _, other in ipairs(f.also or {}) do other.value = M.clean(other.value) end
+      end
       parses[#parses + 1] = { grammar = name, fields = fields }
     end
   end

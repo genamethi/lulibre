@@ -52,22 +52,31 @@ function M.book(book, c, top)
   for kind, value in pairs(b.idents or {}) do
     local canon = mesr.canonical(kind, value) or value
     local is = here[kind .. ":" .. canon]
-    out.idents[#out.idents + 1] = { kind = kind, value = value,
-                                    where = is and "own" or is == false and "mentioned" or "absent" }
+    local where = is and "own" or is == false and "mentioned" or nil
+    if not where then
+      local key = "place\0" .. kind .. ":" .. canon .. "\0" .. top
+      where = k:get("ids", key)
+      if not where then
+        where = ids.place(kind, canon, text.get().text, top, file.pages, setman.get("id_refs_from"))
+        k:put("ids", key, where)
+      end
+    end
+    out.idents[#out.idents + 1] = { kind = kind, value = value, where = where }
   end
   table.sort(out.idents, function(a, z) return a.kind < z.kind end)
   return out
 end
 
 --- Whether a book's pages leave something of its record unborne: a title or
--- authors below check_same or none of whose words are there, an identifier
--- not its file's own, or a file that can't say.
+-- authors below check_same or none of whose words are there, an identifier that
+-- stands only among the file's references, or a file that can't say. An identifier
+-- not found says nothing: only the first pages are read, and many don't print it.
 function M.doubtful(v, c)
   if v.unread then return true end
   if v.title and (v.title.score or 0) < c.same then return true end
   if v.authors and v.authors.words and v.authors.words > 0 and v.authors.found == 0 then return true end
   for _, i in ipairs(v.idents or {}) do
-    if i.where ~= "own" then return true end
+    if i.where == "cited" then return true end
   end
   return false
 end

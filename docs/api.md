@@ -372,7 +372,7 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `net.service.ask_all(name, keys [, fn])` | waits: a service asked about many works at once |
 | `net.service.define` `how.available` `how.covers` `how.identifies` | a service that can be absent; one answering for another, asked first; one that gives only an identifier |
 | `lulib._datasets`, `net.datasets` | the databases on this machine: `list`, `status`, `fetch`, `adopt`, `lines_with`, `arxiv_titles` |
-| `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
+| `lulib._rank`, `trust`, `lulib._sources` | what each value scores: how sure its reading is, agreement with the sources, and the record of review decisions on where it came from |
 | `mesr.found(value, text [, skip])` | how many of value's words the text holds as whole words, then how many there are; skip, a table of folded words not to count |
 | `mesr.cmp(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
 

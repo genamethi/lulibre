@@ -11,8 +11,8 @@
 -- that is the file's own, and all such records agree, its values score by
 -- how much of them is on the pages (score_identified up to 1), and for the
 -- fields it fills the other parses' values are kept but not shown. Any other
--- value scores by its parse's rank (lulib._rank), plus rank_on_page if it is
--- on the pages.
+-- value scores by lulib._rank, on its own: nothing about one field's value
+-- lends anything to another's.
 --
 -- A collective proposal takes no span of text for two fields: a field's
 -- first value comes from the best-ranked parse whose span for it no other
@@ -46,13 +46,13 @@ local own, get = require "lulib._expose" (M) -- internal functions (expose_modul
 function M.settings()
   local coverage <const>, agreement <const>, weight <const>, after <const>, near <const>, same <const> =
     setman.get("rank_coverage", "rank_agreement", "rank_track", "track_after", "similar_near", "similar_same")
-  local identified <const>, own_id <const>, other_id <const>, on_page <const>, group <const> =
-    setman.get("score_identified", "score_own_id", "score_other_id", "rank_on_page", "rank_group")
+  local identified <const>, own_id <const>, other_id <const>, group <const> =
+    setman.get("score_identified", "score_own_id", "score_other_id", "rank_group")
   local min <const>, over <const>, values <const>, top <const> =
     setman.get("propose_min", "propose_over", "propose_values", "id_top")
   return { coverage = coverage, agreement = agreement, track = weight, near = near, same = same,
            records = trust.records(after, near, same), decided = trust.decided(), check = check.settings(),
-           identified = identified, own_id = own_id, other_id = other_id, on_page = on_page, group = group,
+           identified = identified, own_id = own_id, other_id = other_id, group = group,
            min = min, over = over, values = values, top = top }
 end
 
@@ -81,19 +81,31 @@ function own.overlaps(a, b)
   return a.start ~= nil and b.start ~= nil and a.start <= b.stop and b.start <= a.stop
 end
 
--- a value's score: fixed for an identifier; by how much is on the pages for
--- a strong record's; else its parse's, more if on the pages or if the book
--- is of what the grammar was written for
-function own.value_score(p, f, w)
-  if f.fixed then return f.fixed end
-  local share = f.share or (p.online and 0 or 1)
-  if p.strong then return w.identified + (1 - w.identified) * share end
-  return math.min(1, p.score + w.on_page * share + (p.group_hit and w.group or 0))
+-- how sure a value's reading is: as its grammar says; for an online record, how
+-- much of it is on the pages
+function own.sure(p, f, w)
+  local sure = f.sure or rank.grammar_sure
+  if p.online then sure = 0.5 + 0.5 * (f.share or 0) end
+  if p.group_hit then sure = sure + w.group end
+  return math.min(1, sure)
 end
 
--- the values to rank: each parse's, best first, those of a record the pages
--- do not bear out last, those a strong record outranks before them
-function own.candidates(ranked, w, decided)
+-- what a value scores, and who agrees: fixed for an identifier; for a strong record's,
+-- by how much of it is on the pages; else by lulib._rank
+function own.value_score(p, field, f, value, srcs, w)
+  local name = f.how or p.grammar
+  if f.fixed then return f.fixed, nil, nil, name end
+  if p.strong then
+    local agree, disagree = select(2, rank.agreement(name, field, value, srcs, w))
+    return w.identified + (1 - w.identified) * (f.share or 0), agree, disagree, name
+  end
+  local score, agree, disagree = rank.value(name, field, value, get("sure")(p, f, w), srcs, w)
+  return score, agree, disagree, name
+end
+
+-- the values to rank: every value of each parse, the best first, those of a record
+-- the pages do not bear out last, those a strong record outranks before them
+function own.candidates(ranked, srcs, w, decided)
   local filled = {}
   for _, p in ipairs(ranked) do
     if p.strong then
@@ -101,21 +113,26 @@ function own.candidates(ranked, w, decided)
     end
   end
   local out = {}
+  local function add(p, field, f)
+    local value = M.normalize(field, f.value)
+    local wanted = not w.only or w.only[field] or (w.only.identifiers and field:find("^identifier:"))
+    if wanted and value ~= "" and not (decided[field] and decided[field][value]) then
+      local score, agree, disagree, name = get("value_score")(p, field, f, value, srcs, w)
+      out[#out + 1] = { parse = p, field = field, f = f, value = value, score = score, agree = agree, disagree = disagree,
+                        name = name, failed = p.failed, weak = filled[field] and not p.strong and not f.fixed }
+    end
+  end
   for _, p in ipairs(ranked) do
     for field, f in pairs(p.fields) do
-      local value = M.normalize(field, f.value)
-      local wanted = not w.only or w.only[field] or (w.only.identifiers and field:find("^identifier:"))
-      if wanted and value ~= "" and not (decided[field] and decided[field][value]) then
-        out[#out + 1] = { parse = p, field = field, f = f, value = value, score = get("value_score")(p, f, w),
-                          failed = p.failed, weak = filled[field] and not p.strong and not f.fixed }
-      end
+      add(p, field, f)
+      for _, other in ipairs(f.also or {}) do add(p, field, other) end
     end
   end
   local function level(c) return c.failed and 2 or c.weak and 1 or 0 end
   table.sort(out, function(a, b)
     if level(a) ~= level(b) then return level(a) < level(b) end
     if a.score ~= b.score then return a.score > b.score end
-    if a.parse.grammar ~= b.parse.grammar then return a.parse.grammar < b.parse.grammar end
+    if a.name ~= b.name then return a.name < b.name end
     if a.field ~= b.field then return a.field < b.field end
     return a.value < b.value
   end)
@@ -128,12 +145,11 @@ end
 function M.rows(ranked, srcs, w, decided)
   local rows, taken = {}, {}
   local function alt_of(c)
-    local p, f = c.parse, c.f
-    return { value = c.value, source = p.grammar, score = c.score, start = f.start, stop = f.stop,
-             agree = (p.agree or {})[c.field], disagree = (p.disagree or {})[c.field],
-             hide = c.failed or c.weak }
+    local f = c.f
+    return { value = c.value, source = c.name, score = c.score, start = f.start, stop = f.stop,
+             agree = c.agree, disagree = c.disagree, hide = c.failed or c.weak }
   end
-  local cands = get("candidates")(ranked, w, decided or {})
+  local cands = get("candidates")(ranked, srcs, w, decided or {})
   for _, c in ipairs(cands) do
     local field, f = c.field, c.f
     local list = rows[field]
@@ -280,7 +296,7 @@ function own.once(book, w)
   end
   for _, p in ipairs(get("id_parses")(found, records, w)) do parses[#parses + 1] = p end
 
-  local rows = M.rows(rank.order(parses, srcs, w), srcs, w, w.decided and w.decided[book])
+  local rows = M.rows(parses, srcs, w, w.decided and w.decided[book])
   local wits, n = {}, 0
   for field, list in pairs(rows) do
     local shown = false

@@ -132,6 +132,12 @@ local verify = require "lulib._verify"
 local c0 = require("lulib._check").settings()
 local v1 = verify.book(2, c0, 4000)
 say("verify", v1.title.found, v1.title.words, v1.authors.found, v1.idents[1].kind, v1.idents[1].where, verify.doubtful(v1, c0))
+say("verify cited", verify.doubtful({ title = { score = 1 }, idents = { { where = "cited" } } }, c0), verify.doubtful({ title = { score = 1 }, idents = { { where = "absent" } } }, c0))
+-- a score is one value's: a weak reading isn't lifted by the others agreeing
+local rank = require "lulib._rank"
+local rw = { coverage = 45, agreement = 35, track = 20, near = 0.7, same = 0.95, records = {} }
+local srcs = { { name = "record", kind = "record", fields = { title = "A Title" } } }
+say("rank", rank.value("x", "series", "Some Series", 0.8, srcs, rw), rank.value("x", "title", "A Title", 0.7, srcs, rw) > 0.8, rank.value("x", "title", "Quite Different Words", 0.7, srcs, rw) < 0.5)
 -- the pages grammar on a book's verso
 local verso = "Graduate Texts in Mathematics 105\nSerge Lang\nSL2(R)\n\nSpringer\n© 1985 Springer-Verlag New York, Inc.\n"
   .. "Library of Congress Cataloging in Publication Data\nLang, Serge\nSL2(R).\n(Graduate texts in mathematics ; 105)\n"
@@ -140,7 +146,13 @@ local verso_lines, n = {}, 0
 for l in (verso .. "\n"):gmatch("(.-)\n") do n = n + 1; verso_lines[n] = { text = l, page = 1, n = n, size = l:find("SL2") and 20 or 10 } end
 local read = require("exprman._pages").read(setmetatable({ text = verso, line = function(_, i) return verso_lines[i] end },
   { __len = function() return n end }))
-say("verso", read.title, read.authors, read.publisher, read.pubdate, read.series, read.series_index)
+say("verso", read.title.value, read.authors.value, read.publisher.value, read.pubdate.value, read.series.value, read.series_index.value)
+say("verso how", read.series.how, read.pubdate.how, read.series.sure)
+local heading = "Vector Calculus\nVelocity Versus Speed\nThe velocity of a body differs from its speed, and versus is what the versus of velocity is.\n"
+local h_lines, hn = {}, 0
+for l in heading:gmatch("(.-)\n") do hn = hn + 1; h_lines[hn] = { text = l, page = 1, n = hn, size = hn == 1 and 20 or 10 } end
+local hr = require("exprman._pages").read(setmetatable({ text = heading, line = function(_, i) return h_lines[i] end }, { __len = function() return hn end }))
+say("heading as author", hr.title and hr.title.value, hr.authors and hr.authors.value)
 -- rewrites: value to value, under their names, surviving making proposals anew
 local rewrites = require "lulib._rewrites"
 rewrites.list.shout = { field = "publisher", value = function() return "SHOUT" end }
@@ -303,7 +315,11 @@ expect "one further on with none is not" "arxiv cited|arxiv:1012.6008:false"
 expect "an ISSN never is" "issn|issn:0012-7094:false"
 expect "the metadata's identifiers, an arXiv DOI as its number" "metadata|doi:10.1000/meta,arxiv:1012.6008"
 expect "a file named by an arXiv number" "named|1012.6008|nil"
-expect ":verify: the record's title and authors on the pages, its identifier not there" "verify|1|1|0|doi|absent|true"
+expect ":verify: the record's title on the pages, its identifier not there" "verify|1|1|0|doi|absent|"
+expect ":verify doubts an identifier only among the references, not one not found" "verify cited|true|false"
+expect "a value with nothing to go by scores what its reading is sure of; agreeing lifts it, disagreeing lowers it; another field's says nothing" "rank|0.8|true|true"
+expect "each value says which reading gave it, and how sure" "verso how|cataloguing data|cataloguing data|0.9"
+expect "a heading set like a name is no author" "heading as author|Vector Calculus|nil"
 expect "a verso read: title, authors, publisher, year, series and number" "verso|SL2(R)|Serge Lang|Springer|1985|Graduate Texts in Mathematics|105"
 expect "a rewrite leaves a book whose field has no value" "rewrite none|0"
 expect "a rewrite proposes" "rewrite|1"

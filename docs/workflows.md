@@ -134,12 +134,13 @@ copyright lines, series and journal headings, and the title page by its lines' r
 grammars written for an author, a publisher or a series are added in Lua (see [the
 Lua API](api.md)).
 
-The parses of a book are ranked: by the fields each fills (title and
-authors count most), by how far its values agree with the book's sources
-(the record, the file's own metadata, the online answers kept for it), and
-by its record of review decisions once the journal holds a hundred of them.
-The settings `rank_coverage`, `rank_agreement` and `rank_track` weigh the
-three, and a value on the file's pages gains `rank_on_page`.
+A value is scored on its own, from how sure the reading that gave it is, whether
+the book's sources (the record, the file's own metadata, the online answers kept for
+it) agree with that value, and the record of review decisions on where it came from,
+once the journal holds a hundred of them. The settings `rank_coverage`, `rank_agreement`
+and `rank_track` weigh the three, and the last two count only where they have something
+to say. Review's From column names the reading: title page, by-line, cover sheet,
+cataloguing data, copyright line.
 
 What is worked out from a file is kept: what each grammar finds, the file's
 identifiers, how much of a value is on its pages. A new online answer or a
@@ -200,7 +201,8 @@ field's value as it stands now.
 
 `:verify` lists the books whose pages leave something of the record unborne: a
 title scoring under `check_same`, authors none of whose names are there, an
-identifier that is not the file's own, or a file that can't be read. It goes by
+identifier that stands only among the file's references, or a file that can't be read.
+An identifier not found says nothing: only the first pages are read. It goes by
 what was kept and reads only files not read before. It changes nothing, but
 `r` proposes for the book under the cursor, adding it to the current review, and
 `R` for every book listed. `z` lists the rest too.

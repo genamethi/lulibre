@@ -1,10 +1,15 @@
---- Ranks a book's parses (design 16, 21, 39; ranking section).
+--- What each value scores (design 16, 21, 39; ranking section). A score belongs to
+-- one value of one field, from three things, weighed by the settings rank_coverage,
+-- rank_agreement and rank_track:
 --
--- A parse is a grammar's, or an online record's. Its score is coverage,
--- agreement and track record, weighed by the settings rank_coverage,
--- rank_agreement and rank_track. Agreement compares a parse's fields with
--- the sources by mesr; a parse does not count agreement with
--- itself, nor with a record value it wrote (circular agreement).
+-- - how sure its reading is: `sure` on the value, as its grammar says, or
+--   `grammar_sure`; an online record's by how much of it is on the pages;
+-- - whether the sources agree with this value, by mesr. A value does not count
+--   agreement with itself, nor with a record value it wrote (circular agreement);
+-- - the record of decisions on what it came from, for this field.
+--
+-- The last two count only where they have something to say: with no source holding
+-- the field, and no record of decisions yet, a value scores what its reading is sure of.
 --
 -- @library lulib._rank
 local mesr = require "mesr"
@@ -13,67 +18,56 @@ local trust = require "trust"
 
 local M = {}
 
---- What filling a field is worth: title and authors the majority,
--- publisher, series and pubdate about equal.
-M.coverage_weight = { title = 0.3, authors = 0.3, publisher = 0.4 / 3, series = 0.4 / 3, pubdate = 0.4 / 3 }
+--- How sure a grammar's value is when the grammar doesn't say.
+M.grammar_sure = 0.75
 
---- A parse's coverage, 0 to 1.
-function M.coverage(parse)
-  local c = 0
-  for field in pairs(parse.fields) do c = c + (M.coverage_weight[field] or 0) end
-  return c
-end
-
---- A parse's agreement with the sources, 0 to 1 (0.5 when no source holds
--- any of its fields), and per field the sources that agree and disagree.
--- @tparam table parse `{ grammar=, fields= }`
+--- This value's agreement with the sources, 0 to 1, nil when no source holds the
+-- field; and the sources that agree and disagree.
+-- @tparam string name what the value came from
+-- @tparam string field
+-- @tparam string value
 -- @tparam {table,...} srcs lulib._sources.of's
 -- @tparam table w `{ near=, same= }`
-function M.agreement(parse, srcs, w)
-  local num, den, agree, disagree = 0, 0, {}, {}
-  for field, f in pairs(parse.fields) do
-    local wf = M.coverage_weight[field] or 0.05
-    for _, src in ipairs(srcs) do
-      local v = src.fields[field]
-      local own = src.name == parse.grammar or (src.from and src.from[field] == parse.grammar)
-      if v and v ~= "" and not own then
-        local ws = sources.weight[src.kind] or 1
-        local like, ab, ba = mesr.cmp(field, f.value, v, w.near, w.same)
-        num = num + wf * ws * (ab + ba) / 2
-        den = den + wf * ws
-        local into = like == "differs" and disagree or agree
-        into[field] = into[field] or {}
-        table.insert(into[field], src.name)
+function M.agreement(name, field, value, srcs, w)
+  local num, den, agree, disagree = 0, 0, nil, nil
+  for _, src in ipairs(srcs) do
+    local v = src.fields[field]
+    local own = src.name == name or (src.from and src.from[field] == name)
+    if v and v ~= "" and not own then
+      local ws = sources.weight[src.kind] or 1
+      local like, ab, ba = mesr.cmp(field, value, v, w.near, w.same)
+      num = num + ws * (ab + ba) / 2
+      den = den + ws
+      if like == "differs" then
+        disagree = disagree or {}
+        table.insert(disagree, src.name)
+      else
+        agree = agree or {}
+        table.insert(agree, src.name)
       end
     end
   end
-  return den > 0 and num / den or 0.5, agree, disagree
+  return den > 0 and num / den or nil, agree, disagree
 end
 
---- The parses, best first, each with `score=`, `agree=` and `disagree=`
--- (per field, the names of the sources).
--- @tparam {table,...} parses
+--- A value's score, and the sources that agree and disagree with it.
+-- @tparam string name what it came from
+-- @tparam string field
+-- @tparam string value
+-- @tparam number sure how sure its reading is, 0 to 1
 -- @tparam {table,...} srcs lulib._sources.of's
--- @tparam table w `{ coverage=, agreement=, track=, records=, near=, same= }`; records:
--- trust.records()
-function M.order(parses, srcs, w)
-  local total = w.coverage + w.agreement + w.track
-  for _, p in ipairs(parses) do
-    local agreement
-    agreement, p.agree, p.disagree = M.agreement(p, srcs, w)
-    local record, n = 0, 0
-    for field in pairs(p.fields) do
-      record = record + trust.record(w.records, p.grammar, field)
-      n = n + 1
-    end
-    record = n > 0 and record / n or trust.prior
-    p.score = (w.coverage * M.coverage(p) + w.agreement * agreement + w.track * record) / total
+-- @tparam table w `{ coverage=, agreement=, track=, records=, near=, same= }`
+function M.value(name, field, value, sure, srcs, w)
+  local sum, weight = w.coverage * sure, w.coverage
+  local agreement, agree, disagree = M.agreement(name, field, value, srcs, w)
+  if agreement then
+    sum, weight = sum + w.agreement * agreement, weight + w.agreement
   end
-  table.sort(parses, function(a, b)
-    if a.score ~= b.score then return a.score > b.score end
-    return a.grammar < b.grammar
-  end)
-  return parses
+  local records = w.records[name]
+  if records and records[trust.field(field)] then
+    sum, weight = sum + w.track * records[trust.field(field)], weight + w.track
+  end
+  return weight > 0 and sum / weight or sure, agree, disagree
 end
 
 return M
