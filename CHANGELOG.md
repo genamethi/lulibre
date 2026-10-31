@@ -27,6 +27,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Added `:recheck`, which goes back over what lulibre wrote with each book's file deciding.
 - Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Books from the sync folder are added as many at once as changes run.
 - Added `server_stop` and `server_start`, back from 0.2, which `:offline restart` uses before a systemd unit.
+- Changed `:datasets` and `:enrich` to read a hypergraph of arXiv (`arxiv.json`, `arxiv.zip`) when arXiv's own snapshot isn't there.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 

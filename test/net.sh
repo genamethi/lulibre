@@ -93,6 +93,12 @@ local function own_of(text)
   return table.concat(t, ",")
 end
 local pad = string.rep("words on a page ", 20) .. "\n"
+do
+  local t = {}
+  for _, f in ipairs(ids.in_text("DOI 10.1007/978-0-8176-8253-8_1\n", 100, 300, 0.8)) do t[#t + 1] = f.value end
+  for _, f in ipairs(ids.in_text("DOI 10.1007/978-0-8176-8253-8_1\n", 100, 20, 0.8)) do t[#t + 1] = f.value end
+  say("chapter doi", table.concat(t, ","))
+end
 say("isbn label", own_of(pad .. "ISBN 0-387-90040-3\n"))
 say("isbn bare", own_of(pad .. "0-387-90040-3\n"))
 say("isbn-13 e", own_of(pad .. "e-ISBN-13: 978-0-387-90040-7\n"))
@@ -203,6 +209,18 @@ local ol = require("net.service").ask("openlibrary-dump", "9780387900407")
 local of = net.services["openlibrary-dump"].how.record(ol)
 say("dump read", of.title, of.authors, of.publisher, of.pubdate, of.series, of.series_index)
 say("by statement", net.services.openlibrary.how.record('{"ISBN:1":{"title":"A Course","by_statement":"[by] J.-P. Serre."}}').authors)
+-- a hypergraph of arXiv, when that's what is here
+do
+  local hyper = '{\n  "metadata": {},\n  "network-type": "undirected",\n  "edges": [\n    {\n      "attrs": {\n        "title": "Hyper Paper",\n        "categories": [\n          "math.NT"\n        ]\n      },\n      "edge": "1111.2222"\n    },\n    {\n      "attrs": {\n        "title": "Other",\n        "categories": []\n      },\n      "edge": "3333.4444"\n    }\n  ],\n  "incidences": [\n    {\n      "edge": "1111.2222",\n      "node": "A. Writer"\n    },\n    {\n      "edge": "3333.4444",\n      "node": "B. Other"\n    }\n  ]\n}\n'
+  local snapshot = dir .. "/arxiv-metadata-oai-snapshot.json"
+  os.rename(snapshot, snapshot .. ".away")
+  write("arxiv.json", hyper)
+  local got = require("net.service").ask("arxiv-snapshot", "1111.2222")
+  local hf = got and nd.arxiv_fields(got) or {}
+  say("hypergraph", hf.title, hf.authors, hf.tags ~= nil, datasets.status(datasets.get("arxiv")).here)
+  os.remove(dir .. "/arxiv.json")
+  os.rename(snapshot .. ".away", snapshot)
+end
 -- what a dataset has, the service it covers isn't asked about
 local keys_of, online = net.keys, {}
 net.keys = function() return { { service = "arxiv-snapshot", key = "2201.00001", ident = "arxiv" },
@@ -265,6 +283,7 @@ expect "a propose asked for while one runs returns at once" "while running|nil|n
 expect "and the one running goes once more" "runs|2"
 expect "ranking again reads no text" "read again|0"
 expect "a record the pages do not bear out is shown only by a deep review" "borne out not|true|true"
+expect "a chapter's DOI in a whole book is the book's; a chapter's own stays" "chapter doi|10.1007/978-0-8176-8253-8,10.1007/978-0-8176-8253-8_1"
 expect "a labelled ISBN is the file's own" "isbn label|isbn:9780387900407:true"
 expect "an unlabelled one is not" "isbn bare|isbn:9780387900407:false"
 expect "nor is an e-ISBN's label missed" "isbn-13 e|isbn:9780387900407:true"
@@ -303,6 +322,7 @@ expect "a dataset not here isn't asked" "dataset absent|false|not on this machin
 expect "arXiv's snapshot read" "snapshot read|A Note on Sieve Methods|T. Tao|2022-01-03|true"
 expect "and found by grep; a key it lacks is no record" "grep finds|true|false"
 expect "Open Library's dump, through gzip, its author by key" "dump read|Dumped Book|Robin Hartshorne|Springer|1994-03-03|Graduate Texts in Mathematics|52"
+expect "a hypergraph of arXiv is read too" "hypergraph|Hyper Paper|A. Writer|true|true"
 expect "what a dataset has isn't asked of the service it covers" "covered|2201.00002"
 expect "a paper found by its title" "by title|2201.00001"
 expect "an edition with no authors says who in words" "by statement|J.-P. Serre"

@@ -49,7 +49,10 @@ function M.arxiv_fields(line)
   if type(j) ~= "table" or type(j.title) ~= "string" then return nil end
   local detex = require "lulib._detex"
   local names = {}
-  for _, a in ipairs(type(j.authors_parsed) == "table" and j.authors_parsed or {}) do
+  for _, name in ipairs(type(j.author_names) == "table" and j.author_names or {}) do
+    if type(name) == "string" and name ~= "" then names[#names + 1] = detex.plain(stringx.strip(name)) end
+  end
+  for _, a in ipairs(#names == 0 and type(j.authors_parsed) == "table" and j.authors_parsed or {}) do
     if type(a) == "table" and type(a[1]) == "string" then
       -- { family, given, suffix }
       local name = stringx.strip((((type(a[2]) == "string" and a[2] or "") .. " " .. a[1] .. " " .. (type(a[3]) == "string" and a[3] or "")):gsub("%s+", " ")))
@@ -72,16 +75,95 @@ function M.arxiv_fields(line)
   }
 end
 
+--- arXiv's records on this machine: its own snapshot, or else a hypergraph of it,
+-- `arxiv.json`, as a file or in `arxiv.zip`: title, authors in no order and classes,
+-- but no DOI and no day of submission.
+function M.arxiv_path()
+  return datasets().path("arxiv-metadata-oai-snapshot.json") or datasets().path("arxiv.json") or datasets().path("arxiv.zip")
+end
+
+-- A hypergraph of arXiv: one JSON document over many lines, each paper an "edge" and
+-- each author of each paper an "incidence". Read in pieces of whole records, looking
+-- only for the numbers wanted; those found come out as a line of the snapshot would.
+--   "edges": [ { "attrs": { "title": ..., "categories": ["math.NT"], "date": "2020-08-28" }, "edge": "2002.08172" }, ...
+--   "incidences": [ { "edge": "2002.08172", "node": "A. N. Other" }, ...
+local function scan_hypergraph(f, want)
+  local papers, authors = {}, {}
+  local carry, in_authors = "", false
+  while true do
+    local chunk = f:read(1 << 23)
+    local buf = chunk and (carry .. chunk) or carry
+    local cut = #buf
+    if chunk then
+      -- up to where the last whole record ends; the rest waits for the next piece
+      local from, last = math.max(1, #buf - (1 << 18)), nil
+      while true do
+        local at = buf:find("\n    {\n", from, true)
+        if not at then break end
+        last, from = at, at + 1
+      end
+      cut = last or 0
+    end
+    local part = buf:sub(1, cut)
+    carry = buf:sub(cut + 1)
+    local turns = part:find('\n  "incidences": [', 1, true)
+    if not in_authors then
+      local prev = 1
+      while true do
+        local a, e, raw = part:find('\n      "edge": "([^"\n]+)"\n', prev)
+        if not a then break end
+        if want[raw] then
+          local slice = part:sub(prev, e - 1)
+          local open = slice:find("    {\n", 1, true)
+          local obj = open and json.decode(slice:sub(open) .. "}")
+          if type(obj) == "table" and type(obj.attrs) == "table" and type(obj.attrs.title) == "string" then papers[raw] = obj.attrs end
+        end
+        prev = e
+      end
+    end
+    if in_authors or turns then
+      -- millions of these, a few of them wanted: the name is read only for those
+      for raw, at in part:gmatch('\n      "edge": "([^"\n]+)",()') do
+        if want[raw] then
+          local node = part:match('^\n      "node": "([^\n]*)"\n', at)
+          if node then
+            authors[raw] = authors[raw] or {}
+            table.insert(authors[raw], json.decode('"' .. node .. '"') or node)
+          end
+        end
+      end
+    end
+    in_authors = in_authors or turns ~= nil
+    taskman.yield()
+    if not chunk then break end
+  end
+  local out = {}
+  for id, attrs in pairs(papers) do
+    local classes = type(attrs.categories) == "table" and table.concat(attrs.categories, " ") or attrs.categories
+    out[id] = json.encode { id = id, title = attrs.title, categories = classes, author_names = authors[id] or {} }
+  end
+  return out
+end
+
 service.define("arxiv-snapshot", {
   ident = "arxiv", covers = "arxiv", pace = 0, hold = 0, batch = 100000,
-  available = function() return datasets().path("arxiv-metadata-oai-snapshot.json") ~= nil end,
+  available = function() return M.arxiv_path() ~= nil end,
   request = function(keys)
+    local path = M.arxiv_path()
     local strings, want = {}, {}
     for i, key in ipairs(keys) do
       strings[i] = '"id":"' .. key .. '"'
       want[key] = true
     end
-    local lines, whole = M.lines_with(datasets().path("arxiv-metadata-oai-snapshot.json"), strings)
+    if not path:find("arxiv%-metadata") then
+      local f = path:match("%.zip$") and io.popen("unzip -p '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null", "r") or io.open(path, "r")
+      if not f then return nil, "cannot read " .. path end
+      local ok, out = pcall(scan_hypergraph, f, want)
+      f:close()
+      if not ok then return nil, tostring(out) end
+      return out
+    end
+    local lines, whole = M.lines_with(path, strings)
     if not lines then return nil, whole end
     local out = {}
     for _, line in ipairs(lines) do
@@ -261,7 +343,7 @@ function M.arxiv_titles(ids)
   local kept = require "lulib._kept"
   local wit = require "wit"
   local path = datasets().path("arxiv-metadata-oai-snapshot.json")
-  if not path then return uiman.notify("no arXiv snapshot on this machine: :datasets fetches one", "error") end
+  if not path then return uiman.notify("no arXiv snapshot, one record a line, on this machine: :datasets fetches one", "error") end
   local books, wanted, n = {}, {}, 0
   for _, id in ipairs(ids) do
     local b = bookman.get(id)

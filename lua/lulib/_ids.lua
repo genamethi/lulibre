@@ -55,6 +55,9 @@ local function share_at(text, pos, pages)
   return page / pages
 end
 
+--- How many pages make a file more than a chapter.
+M.CHAPTER_PAGES = 60
+
 --- Where a text's references begin, or nil: the first such heading from the
 -- share `from` of the document on.
 -- @tparam string text
@@ -111,6 +114,9 @@ function M.in_text(text, top, pages, from)
   for _, f in ipairs(expr.match(text, scan) or {}) do
     if f.start < stop_at then
       arxiv_doi(f)
+      -- a chapter's DOI in a whole book stands for the book's: 10.1007/978-0-8176-8253-8_1
+      local book_doi = f.kind == "doi" and pages and pages >= M.CHAPTER_PAGES and f.value:match("^(10%.1007/978[%-%dxX]+)_%d+$")
+      if book_doi then f.value = book_doi end
       if f.kind == "isbn" then f.own = f.labelled
       elseif f.kind == "doi" then f.own = f.start <= top or (f.labelled and begins_line(text, f.start))
       elseif f.kind == "arxiv" then f.own = f.start <= top or f.class ~= nil

@@ -137,6 +137,16 @@ and paste it with `<C-v>`.
 | `u` | `undo` | put the last change back |
 | `1` … `9` | `source N` | the bar's tab with that number |
 | `gl` | `source library` | back to the library |
+| `gb` | `beside` | the sync folder's files in a column beside the library |
+| `gt` | `browse` | the library as a tree beside the list |
+| `gd` | `dupes` | books whose files hold the same bytes: keep one, remove the rest |
+| `go` | `orphans` | records with no file, files with no record, broken links |
+| `gz` | `snapshots` | the snapshots, and what going back to each would do |
+| `yy` · `yp` | `yank title` · `yank path` | copy the selection's titles or paths |
+| `<Leader>pr` | `propose-review` | a dialog for a whole round: which books, what to ask, which fields |
+| `<Leader>e` | `enrich-dialog` | what would be asked of whom, which services, then review |
+| `<Leader>c` | `change` | one change to every selected book |
+| `<Leader>s` | `sync` | a dialog on the selected waiting files |
 | `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
 
 The bar's tabs are the library, the sync folder once one is set, and

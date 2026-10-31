@@ -16,7 +16,9 @@ M.list = {
     size = "1.7 GB to fetch, 5.6 GB on disk",
     from = "Kaggle (Cornell-University/arxiv), through pixi; needs a Kaggle account",
     renewed = 7,
-    files = { { name = "arxiv-metadata-oai-snapshot.json", kaggle = "Cornell-University/arxiv", known = { "^arxiv%-metadata.*%.json$" } } },
+    files = { { name = "arxiv-metadata-oai-snapshot.json", kaggle = "Cornell-University/arxiv", known = { "^arxiv%-metadata.*%.json$" } },
+              { name = "arxiv.json", optional = true, known = { "^arxiv%.json$" } },
+              { name = "arxiv.zip", optional = true, known = { "^arxiv%.zip$" } } },
   },
   {
     name = "openlibrary", title = "Open Library's editions and authors",
@@ -62,17 +64,21 @@ end
 -- here, every file is; age, the oldest file's, in days.
 function M.status(ds)
   local st = { here = true, bytes = 0, age = nil, missing = {} }
+  local any_optional = false
   for _, f in ipairs(ds.files) do
     local s = luv.fs_stat(M.dir() .. "/" .. f.name)
     if s then
       st.bytes = st.bytes + s.size
       local age = (os.time() - s.mtime.sec) / 86400
       if not st.age or age > st.age then st.age = age end
-    else
+      any_optional = any_optional or f.optional
+    elseif not f.optional then
       st.here = false
       st.missing[#st.missing + 1] = f.name
     end
   end
+  -- a dataset that stands by another file of its own is here
+  if any_optional then st.here, st.missing = true, {} end
   return st
 end
 
@@ -171,7 +177,7 @@ function M.fetch(ds, o)
   luv.fs_mkdir(M.dir(), 493)
   for _, f in ipairs(ds.files) do
     local s = luv.fs_stat(M.dir() .. "/" .. f.name)
-    local fresh = s and not o.force and (not ds.renewed or (os.time() - s.mtime.sec) / 86400 < ds.renewed)
+    local fresh = f.optional or s and not o.force and (not ds.renewed or (os.time() - s.mtime.sec) / 86400 < ds.renewed)
     if not fresh then
       local to, why = (f.kaggle and fetch_kaggle or fetch_url)(f, o)
       if not to then return nil, why end
