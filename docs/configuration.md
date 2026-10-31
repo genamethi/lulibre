@@ -78,8 +78,8 @@ removed.
 | `path.log` | | also append the log to this file |
 | `path.crash` | | where a crash's report goes; by default `~/.local/state/lulibre/crash.log` |
 | `jobs` | `0` | worker threads; 0 is one per core |
-| `pages` | `6` | the first pages of each file read into the index |
-| `ocr` | `never` | `auto`: OCR the files whose text is not usable; `always`: every file |
+| `pages` | `10` | the first pages of each file read into the index |
+| `ocr` | `auto` | `never`: no OCR; `auto`: OCR the files whose text is not usable; `always`: every file |
 | `ocr_pages` `ocr_lang` | `3` `eng` | the pages OCR reads, and tesseract's language |
 | `auto_index` | `auto` | `auto` · `ask` · `never`: read new or changed files when the interface starts |
 | `mouse` | `true` | clicks select, the wheel scrolls |
