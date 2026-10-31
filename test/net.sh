@@ -98,6 +98,18 @@ say("doi label", own_of(pad .. "DOI 10.1000/abc\n"))
 say("doi scan", own_of(pad .. "d0i: 10.1000/abc\n"))
 say("doi cited", own_of(pad .. "as in doi:10.1000/abc\n"))
 say("after refs", own_of(pad .. "ISBN 0-387-90040-3\nReferences\n[1] ISBN 978-3-16-148410-0 doi:10.1000/x\n"))
+-- the words on an early page are no references
+local function found_in(text, pages)
+  local t = {}
+  for _, f in ipairs(ids.in_text(text, 100, pages, 0.8)) do t[#t + 1] = f.kind .. ":" .. tostring(f.own) end
+  return #t > 0 and table.concat(t, ",") or "none"
+end
+local isbn_line = "ISBN 0-387-90040-3\n"
+say("refs contents", found_in("Title\n\fContents\nReferences\n245\nIndex\n\f" .. pad .. isbn_line, 300))
+say("refs title", found_in("Handbook\nReferences\nA. Author\n\f" .. pad .. isbn_line, 300))
+say("refs at the end", found_in(pad .. "\f" .. pad .. "\nReferences\n[1] " .. isbn_line, 2))
+say("refs one page", found_in("A\nReferences\nB\n" .. pad .. isbn_line, 1))
+say("refs early and at the end", found_in("A\nReferences\nB\n\f" .. pad .. "\fC\nBibliography\n[1] " .. isbn_line, 3))
 say("arxiv stamp", own_of(pad .. "arXiv:1012.6008v1 [math.CO] 29 Dec\n"))
 say("arxiv cited", own_of(pad .. "see arXiv:1012.6008\n"))
 say("issn", own_of("ISSN 0012-7094\n"))
@@ -185,6 +197,11 @@ expect "one beginning a line with its label is" "doi label|doi:10.1000/abc:true"
 expect "as a scan may read the label" "doi scan|doi:10.1000/abc:true"
 expect "one with words before it is cited" "doi cited|doi:10.1000/abc:false"
 expect "nothing after the references counts" "after refs|isbn:9780387900407:true"
+expect "References on a contents page cuts nothing" "refs contents|isbn:true"
+expect "nor in a title" "refs title|isbn:true"
+expect "at a document's end it does" "refs at the end|none"
+expect "in a document of one page, by how far into its text" "refs one page|isbn:true"
+expect "an early one doesn't hide the real one" "refs early and at the end|none"
 expect "an arXiv number with its margin stamp is the file's own" "arxiv stamp|arxiv:1012.6008:true"
 expect "one further on with none is not" "arxiv cited|arxiv:1012.6008:false"
 expect "an ISSN never is" "issn|issn:0012-7094:false"

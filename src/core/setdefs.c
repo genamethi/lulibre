@@ -87,6 +87,9 @@ const struct setting_def setting_defs[S_COUNT] = {
                         "values a review shows per field; a deep review shows them all"},
   [S_ID_TOP] = {"id_top", SETTING_INT, 0, "4000", NULL,
                 "a DOI or arXiv number this many bytes into a file's text or less is the file's own"},
+  [S_ID_REFS_FROM] = {"id_refs_from", SETTING_NUM, 0, "0.8", NULL,
+                       "how far through a document (0 to 1) References or Bibliography alone on a line "
+                       "is taken for its references, after which identifiers are other works'"},
   [S_REVIEW_PRUNE] = {"review_prune", SETTING_BOOL, 0, "false", NULL,
                       "a review drops proposals whose value the record now holds, as it opens and as records change"},
   [S_NEVER_TITLES] = {"never_titles", SETTING_STR, 0, "", NULL,

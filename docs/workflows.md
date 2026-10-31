@@ -146,7 +146,8 @@ identifiers, how much of a value is on its pages. A new online answer or a
 changed setting only ranks again; nothing is read again until the file is.
 
 An identifier is taken as the file's own if its metadata says so, or, before
-any references or bibliography, if an ISBN has its label, or a DOI or arXiv
+any references or bibliography (those words alone on a line, from `id_refs_from`
+of the way through the document on), if an ISBN has its label, or a DOI or arXiv
 number is near the top (`id_top`), or a DOI begins a line with its label, or
 an arXiv number has its margin stamp. An online record is compared with the
 pages before it counts: its title scores `min(1, check_title_k * found / words

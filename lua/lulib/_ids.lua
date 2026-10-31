@@ -2,8 +2,10 @@
 --
 -- The file's own metadata first: only identifiers labelled as the work's
 -- own count there. Then the text up to its references or bibliography, what
--- follows being other works'. In the text an identifier is the file's own
--- when:
+-- follows being other works'. Those words alone on a line mean that only in
+-- the end of a document, from the share id_refs_from of its pages on: earlier
+-- they are a contents page's, a title's or a running head's. In the text an
+-- identifier is the file's own when:
 --
 -- - an ISBN has its label before it;
 -- - a DOI is in the first `id_top` bytes, or begins a line with its label;
@@ -36,11 +38,34 @@ end
 local blank = S " \t"
 local heading = S "\n\f" * blank ^ 0 * (R "09" ^ 1 * S ". " ^ 0) ^ -1
   * (nocase "references" + nocase "bibliography" + nocase "bibliographie" + nocase "literatur")
-  * blank ^ 0 * S ":." ^ -1 * blank ^ 0 * S "\n\f"
+  * blank ^ 0 * S ":." ^ -1 * blank ^ 0 * #S "\n\f"
+local headings = Ct((Cp() * heading + 1) ^ 0)
 
---- Where a text's references begin, or nil.
-function M.references(text)
-  return (expr.find(text, heading))
+-- how far through the document a position of its text is, 0 to 1: how far
+-- its page reaches, so that references that begin at the top of a short
+-- paper's last page count; in a document of one page, by the bytes
+local function share_at(text, pos, pages)
+  if pages <= 1 then return (pos - 1) / math.max(1, #text) end
+  local page, stop = 1, text:find("\f", 1, true)
+  while stop and stop < pos do
+    page = page + 1
+    stop = text:find("\f", stop + 1, true)
+  end
+  return page / pages
+end
+
+--- Where a text's references begin, or nil: the first such heading from the
+-- share `from` of the document on.
+-- @tparam string text
+-- @tparam[opt] integer pages the document's pages, of which the text may hold
+-- only the first; by default those the text holds
+-- @tparam[opt] number from the setting id_refs_from
+function M.references(text, pages, from)
+  if not pages or pages <= 0 then pages = select(2, text:gsub("\f", "")) + 1 end
+  for _, pos in ipairs(expr.match(text, headings) or {}) do
+    if share_at(text, pos + 1, pages) >= (from or 0.8) then return pos end
+  end
+  return nil
 end
 
 -- a capture's number and class under their names
@@ -77,8 +102,10 @@ end
 -- start=, stop=, own= }`.
 -- @tparam string text
 -- @tparam integer top the setting id_top
-function M.in_text(text, top)
-  local stop_at = M.references(text) or math.huge
+-- @tparam[opt] integer pages the document's pages
+-- @tparam[opt] number from the setting id_refs_from
+function M.in_text(text, top, pages, from)
+  local stop_at = M.references(text, pages, from) or math.huge
   local out, seen = {}, {}
   for _, f in ipairs(expr.match(text, scan) or {}) do
     if f.start < stop_at then
@@ -192,7 +219,10 @@ end
 -- @tparam integer top the setting id_top
 -- @treturn {table,...} `{ kind=, value=, own=, start=, stop= }`
 function M.of(file, k, text, top)
-  local list = k:get("ids", "")
+  local from <const> = setman.get("id_refs_from")
+  -- (what it is worked out by says which reading it is: "2", of this code)
+  local key = ("2:%d:%s"):format(top, from)
+  local list = k:get("ids", key)
   if list then return list end
   list = {}
   local seen = {}
@@ -211,9 +241,9 @@ function M.of(file, k, text, top)
   if named_id then take(named_id) end
   local t = text.get()
   if t then
-    for _, f in ipairs(M.in_text(t.text, top)) do take(f) end
+    for _, f in ipairs(M.in_text(t.text, top, file.pages, from)) do take(f) end
   end
-  k:put("ids", "", list)
+  k:put("ids", key, list)
   return list
 end
 
