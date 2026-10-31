@@ -155,6 +155,7 @@ function M.dupes(o)
   end
   table.sort(groups, function(a, b) return a.size * (#a.files - 1) > b.size * (#b.files - 1) end)
   if o and o.ls then return groups, #files end
+  if not lulib.headless then return require("lulib._dupes").open(groups) end
   local rows = dupe_rows(groups, #files)
   uiman.list { title = "dupes", help = rows[#rows][1], follow = true, items = rows }
 end
@@ -207,6 +208,12 @@ function M.orphans(o)
   local found = { gone = iter(named):diff(on_disk, path):totable(), strays = iter(on_disk):diff(named, path):totable(),
     empty = empty, root = root }
   if o and o.ls then return found end
+  if o and o.write then
+    local orphans = require "lulib._orphans"
+    local out = orphans.apply(orphans.scan())
+    return uiman.notify(orphans.summary(out), #out.failed > 0 and "error" or nil)
+  end
+  if not lulib.headless then return require("lulib._orphans").open() end
   uiman.list { title = "orphans", follow = true, items = orphan_rows(found) }
 end
 
@@ -254,8 +261,8 @@ cmdman.create("dupes", function(c)
   if c.args == "ls" then say(dupe_rows(M.dupes { ls = true })) else M.dupes() end
 end, { desc = "[ls]  books whose files hold the same bytes; ls prints them; changes nothing", complete = { "ls" } })
 cmdman.create("orphans", function(c)
-  if c.args == "ls" then say(orphan_rows(M.orphans { ls = true })) else M.orphans() end
-end, { desc = "[ls]  files a record names that are not on disk, files no record names, empty folders; ls prints them", complete = { "ls" } })
+  if c.args == "ls" then say(orphan_rows(M.orphans { ls = true })) else M.orphans { write = c.args == "write" } end
+end, { desc = "[ls | write]  files a record names that are not on disk, files no record names, links, empty folders; ls prints them; write does what is suggested", complete = { "ls", "write" } })
 cmdman.create("tags", function(c)
   if c.args == "ls" then say(tag_rows(M.tags { ls = true })) else M.tags { write = c.args == "write" } end
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
@@ -359,6 +366,54 @@ cmdman.create("features", function()
   end
   uiman.pager("features and the programs they need", table.concat(out, "\n"))
 end, { desc = "the features that need programs of their own: installed or not" })
+cmdman.create("remove", function(o)
+  local ids = M.books(o)
+  if #ids == 0 then return end
+  local what = #ids == 1 and ("book %d, %s,"):format(ids[1], bookman.get(ids[1], "title") or "?") or ("%d books"):format(#ids)
+  local answer = uiman.input { prompt = ("remove %s from calibre? to its recycle bin (y/N) "):format(what) }
+  if not (answer and answer:lower():sub(1, 1) == "y") then return end
+  local n, err = require("lulib._remove").remove(ids)
+  for _, id in ipairs(ids) do uiman.mark(id, false) end
+  uiman.notify(err and ("removed %d, then: %s"):format(n, err) or ("removed %d book%s: :undo puts them back"):format(n, n == 1 and "" or "s"),
+               err and "error" or nil)
+end, { desc = "[filter]  remove the selected books from calibre, to its recycle bin; :undo puts them back", complete = "filter" })
+cmdman.create("restore-removed", function(o)
+  local new, why = require("lulib._remove").restore(tonumber(o.args))
+  uiman.notify(why and ("%d back, then: %s"):format(#new, why) or ("%d book%s back"):format(#new, #new == 1 and "" or "s"),
+               why and "error" or nil)
+end, { desc = "BATCH  bring back the books a batch removed (what :undo does for it)" })
+cmdman.create("embed", function(o)
+  local ids = M.books(o)
+  if #ids == 0 then return end
+  local answer = uiman.input { prompt = ("write calibre's metadata into the files of %d book%s? this rewrites the files (y/N) "):format(#ids, #ids == 1 and "" or "s") }
+  if not (answer and answer:lower():sub(1, 1) == "y") then return end
+  local args = { "embed_metadata" }
+  for _, id in ipairs(ids) do args[#args + 1] = tostring(id) end
+  uiman.progress("embedding")
+  local b, printed = require("store").command(args, { label = "embed", when = "any" })
+  uiman.progress(nil)
+  if b then require("store").reload() end
+  uiman.notify(b and ("metadata embedded in %d book%s"):format(#ids, #ids == 1 and "" or "s") or tostring(printed), not b and "error" or nil)
+end, { desc = "[filter]  write calibre's metadata into the selected books' own files (PDF, EPUB)", complete = "filter" })
+cmdman.create("columns", function(o) require("lulib._columns").run(o.args or "") end,
+  { desc = "[push | remove]  calibre columns for lulibre's own fields, #partof, #part and #parts; push copies lulibre's values into them", complete = { "push", "remove" } })
+cmdman.create("offline", function(o)
+  local offline = require "lulib._offline"
+  local verb, rest = (o.args or ""):match("^(%a*)%s*(.*)$")
+  if verb == "cancel" then
+    local batch, err = offline.cancel(tonumber(rest) or 0)
+    return uiman.notify(batch and ("job %s cancelled"):format(rest) or tostring(err), not batch and "error" or nil)
+  elseif verb == "retry" then
+    return uiman.notify(("%d tried again"):format(offline.retry()))
+  elseif verb == "restart" then
+    local left, why = offline.restart()
+    return uiman.notify(left and (left == 0 and "done, and the server started again" or ("%d still wait"):format(left)) or why, not left and "error" or nil)
+  end
+  local rows = offline.rows()
+  if #rows == 0 then rows[1] = { "", "", "", "nothing waits for the library to be closed", "", "" } end
+  uiman.list { title = "waiting for nothing to hold the library", items = rows,
+               columns = { { "Job", 6 }, { "State", 8 }, { "Since", 16 }, { "What", -1 }, { "Runs", -2 }, { "Why", -2 } } }
+end, { desc = "[cancel JOB | retry | restart]  the changes waiting for nothing to hold the library; restart stops the content server for them", complete = { "cancel", "retry", "restart" } })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

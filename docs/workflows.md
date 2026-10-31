@@ -262,6 +262,17 @@ and a service that says it is asked too much is left alone for a while.
 Nothing is asked but on command. `contact_email`, when set, goes with each
 request; some services answer faster for it.
 
+## Looking after the library
+
+| | |
+|---|---|
+| `:remove [filter]` | remove the selected books from calibre, to its recycle bin; `:undo` puts them back, under new ids |
+| `:dupes`, `gd` | books whose files hold the same bytes: keep one of each (`Space`), skip a group (`s`), remove the rest (`D`). What the others knew is proposed for the one kept |
+| `:orphans`, `go` | records with no file, files with no record, broken links in your own folders, empty folders. `Space` says what to do about a row, `w` does it; `:orphans write` does what is suggested. Files taken out go to `orphans/` beside the index |
+| `:embed [filter]` | write calibre's metadata into the selected books' own files |
+| `:columns [push \| remove]` | calibre columns for `#partof`, `#part` and `#parts`; `push` copies lulibre's values into them |
+| `:offline [cancel JOB \| retry \| restart]` | what waits for nothing to hold the library. `restart` stops the content server by its systemd unit, and starts it again once they're done |
+
 ## Changes, and who has the library
 
 calibre lets one program at a time have a library open. lulibre watches

@@ -16,6 +16,10 @@
  *     command's batch back, which store.undo and :undo then run
  *   store.drop(book, held [, batch])   a staged file to the path held, its
  *     record kept for undo: the batch, or nil and why
+ *   store.note(batch, book, field, old, new [, label])  a row of the journal for
+ *     a change made some way of lulibre's own: the batch (0 or nil for a new one)
+ *   store.mark_undone(batch)           the batch's rows are undone
+ *   store.cancel(batch)                a queued batch out of the queue
  *   store.undo(batch)                  puts a batch's old values back
  *   store.holder()                     "none" | "server" | "program" | "other"
  *   store.reload()                     calibre's records read again (l_db.c)
@@ -51,6 +55,10 @@ struct msg {
   long long drop;     /* a staged file to take out of the folder */
   char *held;         /* to here */
   int set_undo;       /* argv is what puts join back */
+  int cancel;         /* join is to come out of the queue */
+  int mark_undone;    /* join's rows are undone */
+  char *note_field, *note_old, *note_new; /* a row of the journal for note_book */
+  long long note_book;
   char *output;       /* what a command printed */
   struct op_settings set; /* from the lua_State's copy, as the call was made */
   /* the answer */
@@ -72,6 +80,9 @@ static void msg_free(struct msg *m) {
   free(m->argv);
   free(m->label);
   free(m->held);
+  free(m->note_field);
+  free(m->note_old);
+  free(m->note_new);
   free(m->output);
   free(m->err);
   free((char *)m->set.server);
@@ -126,6 +137,17 @@ static void submit(struct app *app, void *arg) { /* the background thread */
   } else if (m->set_undo) {
     rc = library_command_undo(app->library, m->join, (const char *const *)m->argv, &err);
     if (!rc) done(m->join, OP_APPLIED, NULL, m);
+  } else if (m->cancel) {
+    rc = library_cancel(app->library, m->join, &err);
+    if (!rc) done(m->join, OP_APPLIED, NULL, m);
+  } else if (m->mark_undone) {
+    library_mark_undone(app->library, m->join);
+    rc = 0;
+    done(m->join, OP_APPLIED, NULL, m);
+  } else if (m->note_field) {
+    long long batch = library_note(app->library, m->join, m->note_book, m->note_field, m->note_old, m->note_new, m->label);
+    rc = 0;
+    done(batch, OP_APPLIED, NULL, m);
   } else if (m->drop) {
     long long batch = library_drop(app->library, m->drop, m->held, m->join, &err);
     rc = batch ? 0 : -1;
@@ -247,6 +269,40 @@ static int l_command_undo(lua_State *L) {
   return to_library(L, m);
 }
 
+static int l_note(lua_State *L) {
+  lua_Integer batch = luaL_optinteger(L, 1, 0);
+  lua_Integer book = luaL_checkinteger(L, 2);
+  const char *field = luaL_checkstring(L, 3), *old = luaL_optstring(L, 4, ""), *new = luaL_optstring(L, 5, "");
+  const char *label = luaL_optstring(L, 6, NULL);
+  sched_require_task(L);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->join = batch;
+  m->note_book = book;
+  m->note_field = xstrdup(field);
+  m->note_old = xstrdup(old);
+  m->note_new = xstrdup(new);
+  m->label = label ? xstrdup(label) : NULL;
+  return to_library(L, m);
+}
+
+static int l_mark_undone(lua_State *L) {
+  lua_Integer batch = luaL_checkinteger(L, 1);
+  sched_require_task(L);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->join = batch;
+  m->mark_undone = 1;
+  return to_library(L, m);
+}
+
+static int l_cancel(lua_State *L) {
+  lua_Integer batch = luaL_checkinteger(L, 1);
+  sched_require_task(L);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->join = batch;
+  m->cancel = 1;
+  return to_library(L, m);
+}
+
 static int l_drop(lua_State *L) {
   lua_Integer book = luaL_checkinteger(L, 1);
   const char *held = luaL_checkstring(L, 2);
@@ -340,7 +396,7 @@ void lapi_store_write(struct store_req *q) {
 
 int luaopen_store(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"apply", l_apply}, {"command", l_command}, {"command_undo", l_command_undo}, {"drop", l_drop}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
+    {"apply", l_apply}, {"command", l_command}, {"command_undo", l_command_undo}, {"drop", l_drop}, {"note", l_note}, {"mark_undone", l_mark_undone}, {"cancel", l_cancel}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
     {NULL, NULL},
   };
   luaL_newlib(L, fns);

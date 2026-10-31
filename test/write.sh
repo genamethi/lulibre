@@ -133,6 +133,57 @@ say("sync drop", d.dropped, #d.failed, sync.staged(b) == nil, io.open(path) == n
 say("sync undrop", store.undo(d.batch) ~= nil, io.open(path) ~= nil, sync.staged(b) and sync.staged(b).title)
 LUA
 
+cat > "$t/remove.lua" <<'LUA'
+local remove = require "lulib._remove"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+-- a book removed, its record kept, and :undo's way back
+local ids = bookman.ids('title:"Book To Remove"')
+local n, err, batch = remove.remove(ids)
+say("removed", n, err, #bookman.ids('title:"Book To Remove"'))
+say("restored", store.undo(batch) ~= nil)
+store.reload()
+local back = bookman.ids('title:"Book To Remove"')
+say("back", #back, bookman.get(back[1], "tags"), back[1] ~= ids[1])
+-- what orphans finds, and does
+local orphans = require "lulib._orphans"
+local found = orphans.scan()
+say("orphans", #found.strays, found.strays[1] and found.strays[1].action, found.strays[1] and found.strays[1].rel:match("[^/]+$"))
+for _, s in ipairs(found.strays) do s.action = "move" end
+local out = orphans.apply(found)
+say("orphans moved", out.moved, #out.failed, io.open(found.strays[1].path) == nil, out.holding ~= nil)
+-- the columns, made once nothing holds the library
+local columns = require "lulib._columns"
+local offline = require "lulib._offline"
+columns.run("")
+for _ = 1, 150 do
+  taskman.sleep(100)
+  if #offline.jobs() == 0 then break end
+end
+store.reload()
+local db = require("sql").open(setman.get("path.indexdb"), require("lsqlite3").OPEN_READONLY)
+say("columns", #require("sql").run(db, "SELECT label FROM cal_columns WHERE label IN ('partof','part','parts')"), #offline.jobs())
+db:close()
+store.apply({ { book = back[1], field = "#partof", value = "A Whole" } })
+say("push", columns.push("partof"))
+LUA
+
+cat > "$t/queued.lua" <<'LUA'
+local offline = require "lulib._offline"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+-- a command that needs the library closed waits while the server holds it
+local done
+taskman.spawn(function() done = { store.command({ "add_custom_column", "waiting", "Waiting", "text" }, { label = "the column #waiting" }) } end)
+taskman.sleep(500)
+local jobs = offline.jobs()
+say("offline waits", #jobs, jobs[1] and jobs[1].state, jobs[1] and jobs[1].label)
+say("offline cancel", offline.cancel(jobs[1].batch) ~= nil, #offline.jobs())
+taskman.sleep(200)
+say("offline answered", done and done[1], done and done[2])
+LUA
+
 cat > "$t/inside.sh" <<'IN'
 #!/bin/sh
 # inside the namespace: $1 the folder, $2 the binary, $3 a PDF
@@ -181,6 +232,10 @@ mkdir -p "$t/inbox"
 { cat "$pdf"; echo "% one"; } > "$t/inbox/one.pdf"
 { cat "$pdf"; echo "% another"; } > "$t/inbox/two.pdf"
 "$bin" -L "$t/lib" -o "path.sync=$t/inbox" run "$t/sync.lua" 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Book To Remove" --authors "Some Writer" --tags kept >/dev/null 2>&1
+for f in "$t"/lib/*/*/*.pdf; do stray=$(dirname "$f"); done
+echo "stray bytes" > "$stray/stray.pdf"
+"$bin" -L "$t/lib" run "$t/remove.lua" 2>&1
 rm -f "$t"/data/lulibre/*.journal.db
 ip link set lo up 2>/dev/null || true
 calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
@@ -194,6 +249,7 @@ sleep 1
 mkdir -p "$t/copy" && cp -a "$t/lib" "$t/copy/lib"
 echo 'print("copy holder|" .. require("store").holder())' > "$t/holder.lua"
 "$bin" -L "$t/copy/lib" -o server=http://127.0.0.1:8099 run "$t/holder.lua" 2>&1
+"$bin" -L "$t/lib" -o server=http://127.0.0.1:8099 run "$t/queued.lua" 2>&1
 kill $pid; wait $pid 2>/dev/null || true
 IN
 
@@ -224,6 +280,16 @@ expect "the record has the one, not the other, and the wits are gone" "decided|T
 expect "writing in one review leaves another's proposals" "other kept|Another Title"
 expect "a rejection changes nothing but is kept" "rejection|review|authors|true|front"
 expect "a discarded review's proposals go" "discarded|1|0"
+expect "a book removed" "removed|1|nil|0"
+expect "and undo brings it back" "restored|true"
+expect "under a new id, its record with it" "back|1|kept|true"
+expect "orphans finds a file with no record" "orphans|1|keep|stray.pdf"
+expect "and moves it out of the library" "orphans moved|1|0|true|true"
+expect "the columns are made once nothing holds the library" "columns|3|0"
+expect "and lulibre's values copied into them" "push|1"
+expect "a command that needs the library closed waits while the server holds it" "offline waits|1|waiting|the column #waiting"
+expect "and can be cancelled" "offline cancel|true|0"
+expect "whoever waited for it is told" "offline answered|nil|cancelled"
 expect "the sync folder's files are waiting" "sync waiting|2"
 expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
 expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"

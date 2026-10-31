@@ -144,9 +144,9 @@ function M.set(book, wits, review)
 end
 
 --- Adds a rewrite of a book's field to a review, first among the field's
--- values: `{ field=, value=, source= }`. Writing it sets the field to the value
--- whatever the field is. Making the book's proposals anew leaves it. Returns
--- true.
+-- values: `{ field=, value=, source=, op= }`. Writing it sets the field to the
+-- value whatever the field is, or with op "add" adds to it. Making the book's
+-- proposals anew leaves it. Returns true.
 -- @tparam integer book
 -- @tparam table w
 -- @tparam[opt] integer review the current one by default
@@ -157,8 +157,8 @@ function M.add(book, w, review)
     local first = run("SELECT MIN(alt) AS alt FROM wits WHERE review = ? AND book = ? AND field = ?",
                       review, book, w.field)[1].alt or 1
     run("INSERT INTO wits(review, book, field, value, source, alt, score, ts, op)"
-        .. " VALUES (?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), 'set')",
-        review, book, w.field, w.value, w.source, first - 1)
+        .. " VALUES (?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), ?)",
+        review, book, w.field, w.value, w.source, first - 1, w.op or "set")
   end)
   return true
 end

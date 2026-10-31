@@ -7,6 +7,7 @@
 require "exprman._front"
 require "exprman._pages"
 require "cmd"
+require "lulib._remove"
 require "lulib._uiman"
 require "units"
 require "lulib._config"

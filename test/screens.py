@@ -192,6 +192,10 @@ keys("q", 0.6)
 keys(":lua uiman.filter('')\r", 0.4)
 keys(":features\r", 0.6)
 keys("q", 0.4)
+keys(":offline\r", 0.6)
+keys("q", 0.4)
+keys(":orphans\r", 1)  # none here: it says so and opens nothing
+keys(":dupes\r", 1)
 keys(":lua uiman.jump(1)\r", 0.6)
 keys(":edit\r", 1)  # the edit form on book 1, a form that writes on w
 keys("e", 0.4)       # the title

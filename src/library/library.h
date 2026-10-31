@@ -103,6 +103,17 @@ int library_undo(struct library *lib, long long batch, const struct op_settings 
  * in the batch. */
 int library_command_undo(struct library *lib, long long batch, const char *const *argv, char **err);
 
+/* A row of the journal for a change lulibre made some way of its own, which
+ * only the code that made it can put back, in batch or a new one: the batch. */
+long long library_note(struct library *lib, long long batch, long long book, const char *field, const char *old,
+                       const char *new, const char *label);
+
+/* The batch's applied rows are undone. */
+void library_mark_undone(struct library *lib, long long batch);
+
+/* Takes a batch out of the queue if it hasn't begun. Returns 0, or -1 with *err. */
+int library_cancel(struct library *lib, long long batch, char **err);
+
 /* Takes a staged file (book, below 0) out of the sync folder, to the path
  * held, as a change of the journal that undo puts back, its record too, in
  * batch, or a new one. Returns the batch, or 0 with *err. */

@@ -1069,6 +1069,60 @@ int library_command_undo(struct library *lib, long long batch, const char *const
   return rc;
 }
 
+long long library_note(struct library *lib, long long batch, long long book, const char *field, const char *old,
+                       const char *new, const char *label) {
+  struct db *db = lib->app->wdb;
+  if (!batch) batch = next_batch(db);
+  journal_add(db, batch, label, NEED_ANY, "lua", OP_APPLIED, book, field, old, new, NULL, NULL, 0);
+  return batch;
+}
+
+void library_mark_undone(struct library *lib, long long batch) {
+  sqlite3_stmt *st;
+  char *err = NULL;
+  if (db_prepare(lib->app->wdb, "UPDATE history.journal SET state = ?1 WHERE batch = ?2 AND state = ?3", &st, &err)) {
+    free(err);
+    return;
+  }
+  sqlite3_bind_int(st, 1, OP_UNDONE);
+  sqlite3_bind_int64(st, 2, batch);
+  sqlite3_bind_int(st, 3, OP_APPLIED);
+  sqlite3_step(st);
+  sqlite3_finalize(st);
+}
+
+int library_cancel(struct library *lib, long long batch, char **err) {
+  struct batch *found = NULL, **p = &lib->head, *prev = NULL;
+  for (; *p; prev = *p, p = &(*p)->next_batch) {
+    if ((*p)->id == batch) {
+      found = *p;
+      if (found->running || found->done_books || found->next) {
+        *err = xasprintf("batch %lld has begun", batch);
+        return -1;
+      }
+      *p = found->next_batch;
+      if (lib->tail == found) lib->tail = prev;
+      break;
+    }
+  }
+  sqlite3_stmt *st;
+  if (db_prepare(lib->app->wdb,
+                 "UPDATE history.journal SET state = ?1, error = 'cancelled' WHERE batch = ?2 AND state IN (?3, ?4)",
+                 &st, err))
+    return -1;
+  sqlite3_bind_int(st, 1, OP_UNDONE);
+  sqlite3_bind_int64(st, 2, batch);
+  sqlite3_bind_int(st, 3, OP_QUEUED);
+  sqlite3_bind_int(st, 4, OP_FAILED);
+  sqlite3_step(st);
+  sqlite3_finalize(st);
+  if (found) {
+    if (found->done) found->done(found->id, OP_FAILED, "cancelled", found->ud);
+    batch_free(found);
+  }
+  return 0;
+}
+
 /* rename, or across filesystems a copy and then a delete */
 static int move_file(const char *from, const char *to) {
   char *dir = xstrdup(to), *slash = strrchr(dir, '/');
@@ -1240,7 +1294,7 @@ int library_undo(struct library *lib, long long batch, const struct op_settings 
     return 0;
   }
   if (db_prepare(db,
-                 "SELECT book, field, old, label FROM history.journal WHERE batch = ? AND state = ? AND field IS NOT NULL AND field <> '(dropped)'"
+                 "SELECT book, field, old, label FROM history.journal WHERE batch = ? AND state = ? AND field IS NOT NULL AND field NOT LIKE '(%'"
                  " AND NOT EXISTS(SELECT 1 FROM history.journal u WHERE u.batch = journal.batch AND u.undo_argv IS NOT NULL)"
                  " ORDER BY id DESC",
                  &st, err))
