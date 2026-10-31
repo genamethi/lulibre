@@ -65,7 +65,7 @@ function M.keys(book, found, o)
   for name, s in pairs(service.services) do
     local kinds = type(s.how.ident) == "table" and s.how.ident or { s.how.ident }
     local seen = {}
-    for _, kind in ipairs(kinds) do
+    for _, kind in ipairs((not s.how.available or s.how.available()) and kinds or {}) do
       for _, value in ipairs(idents[kind] or {}) do
         local key = mesr.canonical(kind, value)
         if key and not seen[key] then
@@ -102,7 +102,8 @@ function M.records(book, found)
         local pages = fields.pages
         fields.pages = nil
         if next(fields) then
-          out[#out + 1] = { service = k.service, key = k.key, ident = k.ident, fields = fields, pages = pages }
+          out[#out + 1] = { service = k.service, key = k.key, ident = k.ident, fields = fields, pages = pages,
+                            identifies = service.services[k.service].how.identifies }
         end
       end
     end
@@ -115,17 +116,83 @@ end
 -- @tparam integer book
 -- @tparam[opt] table o `{ titles = true }`: by its title too, if it has no identifier
 function M.enrich(book, o)
-  local n = 0
-  for _, k in ipairs(M.keys(book, nil, o)) do
-    local answer, fresh = M.ask(k.service, k.key)
-    if answer and fresh then
-      n = n + 1
-      evman.post("source_arrived", { book = book, service = k.service })
+  return select(2, M.enrich_many({ book }, o))
+end
+
+--- Asks about many books at once, so that a service takes as few requests as it
+-- can, and a dataset on this machine (a service with `covers`) is read once. What
+-- a dataset has, the service it covers isn't asked. Every service goes at its own
+-- pace; waits for all. Posts "source_arrived" for each new answer.
+-- @tparam {integer,...} ids
+-- @tparam[opt] table o `{ titles=, offline=, services= }`: offline, only what's on
+-- this machine; services, only these, as a set of names
+-- @treturn integer how many books had a new answer
+-- @treturn integer how many new answers
+function M.enrich_many(ids, o)
+  o = o or {}
+  local wanted, of = {}, {} -- per service, its keys, and per key the books
+  for _, book in ipairs(ids) do
+    for _, k in ipairs(M.keys(book, nil, o)) do
+      if not o.services or o.services[k.service] then
+        wanted[k.service] = wanted[k.service] or {}
+        table.insert(wanted[k.service], k.key)
+        of[k.service] = of[k.service] or {}
+        of[k.service][k.key] = of[k.service][k.key] or {}
+        table.insert(of[k.service][k.key], book)
+      end
     end
   end
-  return n
+  local books, answers = {}, 0
+  local function arrived(name)
+    return function(key, answer)
+      if answer then
+        answers = answers + 1
+        for _, book in ipairs(of[name][key] or {}) do
+          books[book] = true
+          evman.post("source_arrived", { book = book, service = name })
+        end
+      end
+    end
+  end
+  -- what's on this machine first: what it has needs no asking
+  local covered = {}
+  for name, keys in pairs(wanted) do
+    local how = service.services[name].how
+    if how.covers then
+      service.ask_all(name, keys, arrived(name))
+      for _, key in ipairs(keys) do
+        if service.kept(name, key) then
+          covered[how.covers] = covered[how.covers] or {}
+          covered[how.covers][key] = true
+        end
+      end
+    end
+  end
+  if not o.offline then
+    local running = 0
+    local me = taskman.self()
+    for name, keys in pairs(wanted) do
+      if not service.services[name].how.covers then
+        local left = {}
+        for _, key in ipairs(keys) do
+          if not (covered[name] and covered[name][key]) then left[#left + 1] = key end
+        end
+        running = running + 1
+        taskman.spawn(function()
+          service.ask_all(name, left, arrived(name))
+          running = running - 1
+          taskman.wake(me)
+        end)
+      end
+    end
+    while running > 0 do taskman.sleep() end
+  end
+  local n = 0
+  for _ in pairs(books) do n = n + 1 end
+  return n, answers
 end
 
 require "net.services"
+require "net.datasets"
 
 return M

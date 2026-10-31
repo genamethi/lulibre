@@ -252,6 +252,14 @@ identifiers: Crossref and OpenAlex by DOI, zbMATH by DOI or arXiv number, Open
 Library by ISBN, arXiv by arXiv number. `:enrich titles` also searches Crossref
 by title for books with no identifier to ask by; such a record has to agree with
 the book's title and authors as well as its pages, and never counts as a clear match.
+
+Databases kept on this machine answer without asking anybody, and what one of them
+has isn't asked of the service: arXiv's snapshot, Open Library's dumps, zbMATH's
+links to arXiv. `:datasets` is a dialog that says what is here and fetches what you
+tick; `:datasets list`, `:datasets fetch NAME... [force]`, and `:datasets add FILE...`,
+for a file fetched some other way, are the same by hand. `:enrich offline` asks
+nobody. `:arxiv-titles [filter]` looks for the books' titles in arXiv's snapshot and
+proposes the number of a paper their pages bear out.
 Each answer is kept in the index, and a kept answer is not asked for
 again. An answer is a source of agreement for the parses, and a parse of
 its own: it proposes, ranked beside the grammars'.

@@ -62,9 +62,12 @@ function M.kept(name, key)
   return row.answer
 end
 
+--- Keeps an answer, as though the service had given it.
 local function keep(name, key, answer)
   run("INSERT OR REPLACE INTO answers(service, key, answer, ts) VALUES (?, ?, ?, ?)", name, key, answer or "", now())
 end
+
+M.keep = keep
 
 local serve
 
@@ -148,6 +151,45 @@ function M.ask(name, key)
   s.asking[key] = nil
   if a[1] == nil then return nil, a[2] end
   return a[1], true
+end
+
+--- Asks a service about many works at once, so that they go in as few requests
+-- as it takes; waits for all. fn(key, answer) is called for each answer that is
+-- new, as it comes, and fn(key, nil, why) for each that fails.
+-- @tparam string name
+-- @tparam {string,...} keys
+-- @tparam[opt] function fn
+function M.ask_all(name, keys, fn)
+  local s = M.services[name]
+  if not s then return nil, "no service is called " .. name end
+  local pending = {}
+  for _, key in ipairs(keys) do
+    if M.kept(name, key) == nil and not pending[key] then
+      if not s.asking[key] then
+        s.asking[key] = {}
+        s.answers[key] = nil
+        table.insert(s.queue, key)
+      end
+      table.insert(s.asking[key], taskman.self())
+      pending[key] = true
+    end
+  end
+  if not next(pending) then return true end
+  start(s)
+  while next(pending) do
+    taskman.sleep()
+    for key in pairs(pending) do
+      local a = s.answers[key]
+      if a then
+        pending[key] = nil
+        s.asking[key] = nil
+        if fn then
+          if a[1] == nil then fn(key, nil, a[2]) else fn(key, a[1]) end
+        end
+      end
+    end
+  end
+  return true
 end
 
 return M

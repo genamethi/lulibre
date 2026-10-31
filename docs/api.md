@@ -367,6 +367,10 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `lulib._ids` | a file's identifiers, and which are its own: `in_text`, `in_metadata`, `in_name`, `of`, `book`; `finders`, what finds them, each kept apart: add yours and only it runs |
 | `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `title_match`, `titles_agree`, `minor` |
 | `lulib._kept` | what was worked out from a file, kept while the file is as it was read |
+| `net.enrich_many(ids [, {titles=, offline=, services=}])` | waits: ask about many books at once, in as few requests as each service takes |
+| `net.service.ask_all(name, keys [, fn])` | waits: a service asked about many works at once |
+| `net.service.define` `how.available` `how.covers` `how.identifies` | a service that can be absent; one answering for another, asked first; one that gives only an identifier |
+| `lulib._datasets`, `net.datasets` | the databases on this machine: `list`, `status`, `fetch`, `adopt`, `lines_with`, `arxiv_titles` |
 | `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
 | `mesr.found(value, text [, skip])` | how many of value's words the text holds as whole words, then how many there are; skip, a table of folded words not to count |
 | `mesr.cmp(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |

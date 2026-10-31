@@ -66,14 +66,7 @@ function M.enrich(ids)
     for _, name in ipairs(names) do
       if net.services[name].how.ident == "title" then chosen[name] = v.titles end
     end
-    for _, book in ipairs(ids) do
-      for _, k in ipairs(net.keys(book, nil, { titles = v.titles })) do
-        if chosen[k.service] then
-          local _, fresh = net.ask(k.service, k.key)
-          if fresh then evman.post("source_arrived", { book = book, service = k.service }) end
-        end
-      end
-    end
+    net.enrich_many(ids, { titles = v.titles, services = chosen })
   end
   local w <const> = propose.settings()
   for _, book in ipairs(ids) do propose.propose(book, w) end
@@ -178,6 +171,43 @@ function M.sync(ids)
   end
 end
 
+--- Shows the databases lulibre can keep on this machine and which are here, and
+-- lets you choose which to fetch now.
+function M.datasets()
+  local datasets = require "lulib._datasets"
+  local items = {}
+  for _, ds in ipairs(datasets.list) do
+    local st = datasets.status(ds)
+    local stale = ds.renewed and st.here and st.age > ds.renewed
+    -- nothing is ticked to begin with but what has gone stale: these are large, and yours to ask for
+    items[#items + 1] = { id = ds.name, kind = "check", value = stale or false, label = ("%-12s %s"):format(ds.name, ds.title),
+                          hint = datasets.state(ds) }
+    items[#items + 1] = { kind = "note", label = ds.useful }
+    items[#items + 1] = { kind = "note", label = ("%s; from %s."):format(ds.size, ds.from) }
+  end
+  local did, v = uiman.form {
+    title = "databases for looking books up without asking anybody", height = 0.6, label_width = 54,
+    sections = {
+      { title = ("Kept in %s"):format(datasets.dir()), items = items },
+      { title = "", items = {
+        { id = "fetch", kind = "action", label = "Fetch the ticked ones", hint = "a dataset on this machine and up to date is left alone" },
+        { id = "force", kind = "action", label = "Fetch them even if fresh" },
+      } },
+    },
+  }
+  if not did then return end
+  local done, failed = 0, {}
+  for _, ds in ipairs(datasets.list) do
+    if v[ds.name] then
+      local ok, why = datasets.fetch(ds, { force = did == "force", say = function(text) uiman.progress(text) end })
+      uiman.progress(nil)
+      if ok then done = done + 1 else failed[#failed + 1] = why end
+    end
+  end
+  if #failed > 0 then return uiman.notify(failed[1], "error") end
+  uiman.notify(done > 0 and ("%d fetched or already up to date: :enrich reads them before it asks anybody"):format(done) or "nothing was ticked")
+end
+
 local FIELDS = { { "title", "title" }, { "authors", "authors" }, { "tags", "subject" }, { "pubdate", "date" },
                  { "publisher", "publisher" }, { "series", "series" }, { "identifiers", "identifiers" } }
 
@@ -236,10 +266,8 @@ function M.propose_review(selected)
   if v.fresh then w.decided = {} end
   if v.online then
     local net = require "net"
-    for i, book in ipairs(ids) do
-      uiman.progress(("asking %d/%d"):format(i, #ids))
-      for _, k in ipairs(net.keys(book, nil, { titles = v.titles })) do net.ask(k.service, k.key) end
-    end
+    uiman.progress(("asking about %d books"):format(#ids))
+    net.enrich_many(ids, { titles = v.titles })
     uiman.progress(nil)
   end
   local fields_n = 0

@@ -26,9 +26,9 @@ local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostr
 local canned = [=[{"message":{"title":["Notes on Additive Number Theory"],"author":[{"given":"Paul","family":"Erdős"}],"publisher":"Example Press","issued":{"date-parts":[[1996,5]]}}}]=]
 local asked = 0
 net.services.crossref.how.request = function(keys) asked = asked + 1; return { [keys[1]] = canned } end
--- no other service is asked, here or anywhere: no record
+-- no other online service is asked, here or anywhere: no record
 for name, s in pairs(net.services) do
-  if name ~= "crossref" then s.how.request = function(keys) return { [keys[1]] = false } end end
+  if name ~= "crossref" and not s.how.available then s.how.request = function(keys) return { [keys[1]] = false } end end
 end
 say("keys", net.keys(2)[1].service, net.keys(2)[1].key)
 say("enrich", net.enrich(2))
@@ -178,6 +178,49 @@ ids.book(1)
 txt.load = load
 say("finder", got_mine, finders_ran, loads - before)
 table.remove(ids.finders)
+-- datasets: services that answer from a file, covering the service they stand for,
+-- found by grep; arXiv's snapshot, Open Library's dumps, zbMATH's links
+local datasets = require "lulib._datasets"
+local nd = require "net.datasets"
+local dir = datasets.dir()
+local function write(name, text) local f = assert(io.open(dir .. "/" .. name, "w")); f:write(text); f:close() end
+say("dataset absent", net.services["arxiv-snapshot"].how.available(), datasets.state(datasets.get("arxiv")))
+local snap_line = [=[{"id":"2201.00001","title":"A Note on\n  Sieve Methods","authors":"T. Tao","authors_parsed":[["Tao","T.",""]],"categories":"math.NT","versions":[{"version":"v1","created":"Mon, 3 Jan 2022 19:18:42 GMT"}]}]=]
+write("arxiv-metadata-oai-snapshot.json", '{"id":"9999.00001","title":"Other","authors":"X"}\n' .. snap_line .. "\n")
+local af = nd.arxiv_fields(snap_line)
+say("snapshot read", af.title, af.authors, af.pubdate, af.tags ~= nil)
+say("dataset here", net.services["arxiv-snapshot"].how.available())
+local online_asked = 0
+net.services.arxiv.how.request = function(keys) online_asked = online_asked + #keys; return { [keys[1]] = false } end
+local ans = require("net.service").ask("arxiv-snapshot", "2201.00001")
+say("grep finds", ans == snap_line, require("net.service").ask("arxiv-snapshot", "2201.99999"))
+local gz = dir .. "/ol_dump_editions_latest.txt.gz"
+local ed = [=[/type/edition	/books/OL1M	3	2010-01-01	{"title":"Dumped Book","isbn_13":["9780387900407"],"authors":[{"key":"/authors/OL1A"}],"publishers":["Springer"],"publish_date":"March 3, 1994","series":["Graduate texts in mathematics ; 52"]}]=]
+local au = [=[/type/author	/authors/OL1A	1	2010-01-01	{"name":"Hartshorne, Robin."}]=]
+local h = io.popen('gzip -c > "' .. gz .. '"', "w"); h:write(ed, "\n"); h:close()
+h = io.popen('gzip -c > "' .. dir .. '/ol_dump_authors_latest.txt.gz"', "w"); h:write(au, "\n"); h:close()
+local ol = require("net.service").ask("openlibrary-dump", "9780387900407")
+local of = net.services["openlibrary-dump"].how.record(ol)
+say("dump read", of.title, of.authors, of.publisher, of.pubdate, of.series, of.series_index)
+-- what a dataset has, the service it covers isn't asked about
+local keys_of, online = net.keys, {}
+net.keys = function() return { { service = "arxiv-snapshot", key = "2201.00001", ident = "arxiv" },
+                               { service = "arxiv", key = "2201.00001", ident = "arxiv" },
+                               { service = "arxiv", key = "2201.00002", ident = "arxiv" } } end
+net.services.arxiv.how.request = function(keys) for _, k in ipairs(keys) do online[#online + 1] = k end return { [keys[1]] = false } end
+net.enrich_many({ 1 })
+net.keys = keys_of
+say("covered", table.concat(online, ","))
+local titles = nd.by_title(dir .. "/arxiv-metadata-oai-snapshot.json", { [nd.title_key("A Note on Sieve Methods")] = true })
+say("by title", titles[nd.title_key("a note on  sieve methods")][1])
+-- a fetch of a file by curl, from this machine; a file brought in by other means
+local srcf = dir .. "/source.csv"
+write("source.csv", "123,https://arxiv.org/pdf/2201.00001.pdf\n")
+local zb = datasets.get("zbmath")
+local fetched, why = datasets.fetch(zb, { url = "file://" .. srcf, say = function() end })
+say("fetched", fetched, why, datasets.status(zb).here)
+say("zbmath links", require("net.service").ask("zbmath-links", "2201.00001"), net.services["zbmath-links"].how.record("123")["identifier:zbl"])
+say("adopt", datasets.adopt(srcf) == nil, (datasets.adopt(dir .. "/nothing")))
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -254,6 +297,15 @@ expect "an article's publisher is its journal, not who registered it; a subtitle
 expect "a book with an identifier is not asked about by title, asked or not" "no titles|false|false"
 expect "a title search: same words; not sharing some; short needs an author; other authors, another work" "title match|true|false|false|true|false"
 expect "a finder dropped in runs once and alone, reading no text" "finder|true|1|0"
+expect "a dataset not here isn't asked" "dataset absent|false|not on this machine"
+expect "arXiv's snapshot read" "snapshot read|A Note on Sieve Methods|T. Tao|2022-01-03|true"
+expect "and found by grep; a key it lacks is no record" "grep finds|true|false"
+expect "Open Library's dump, through gzip, its author by key" "dump read|Dumped Book|Robin Hartshorne|Springer|1994-03-03|Graduate Texts in Mathematics|52"
+expect "what a dataset has isn't asked of the service it covers" "covered|2201.00002"
+expect "a paper found by its title" "by title|2201.00001"
+expect "a dataset fetched" "fetched|true|nil|true"
+expect "zbMATH's table gives a number" "zbmath links|123|123"
+expect "a file of no dataset isn't taken" "adopt|true|nil"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "words found whole, across a broken line, small words not counted" "found|2|2"

@@ -108,7 +108,7 @@ end
 -- the book again.
 function M.enrich(ids, o)
   local net = require "net"
-  local books, answers = tally(ids, function(book) return net.enrich(book, o) end)
+  local books, answers = net.enrich_many(ids, o)
   print(("%d new answers for %d books"):format(answers, books))
 end
 
@@ -268,8 +268,9 @@ cmdman.create("tags", function(c)
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o)
   local titles, rest = flagged(o, "titles")
-  M.enrich(M.books(rest), { titles = titles })
-end, { desc = "[titles] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
+  local offline, rest2 = flagged(rest, "offline")
+  M.enrich(M.books(rest2), { titles = titles, offline = offline })
+end, { desc = "[titles] [offline] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
 cmdman.create("titlecase", function(o)
   local all, rest = flagged(o, "all")
@@ -468,6 +469,40 @@ cmdman.create("snapshot", function(o)
   end
 end, { desc = "[take] NAME | list | plan SNAP | rollback SNAP | retire SNAP | unretire SNAP | import FILE [NAME]; exact, unsync, fields: how to go back", complete = { "take", "list", "plan", "rollback", "retire", "unretire", "import", "exact", "unsync", "fields", "all" } })
 cmdman.create("rollback", function(o) uiman.exec("snapshot rollback " .. (o.args or "")) end, { desc = "SNAP [exact | unsync | fields]  put the library back to a snapshot (shows what it will do, then asks)" })
+cmdman.create("datasets", function(o)
+  local datasets = require "lulib._datasets"
+  local verb, rest = (o.args or ""):match("^(%a*)%s*(.*)$")
+  if verb == "list" then
+    local out = {}
+    for _, ds in ipairs(datasets.list) do
+      out[#out + 1] = ("%-12s %s  [%s]\n    %s\n    %s; from %s."):format(ds.name, ds.title, datasets.state(ds), ds.useful, ds.size, ds.from)
+    end
+    return uiman.pager("datasets, kept in " .. datasets.dir(), table.concat(out, "\n\n"))
+  elseif verb == "fetch" then
+    local force = false
+    for name in rest:gmatch("%S+") do
+      if name == "force" then force = true end
+    end
+    for name in rest:gmatch("%S+") do
+      if name ~= "force" then
+        local ds = datasets.get(name)
+        if not ds then return uiman.notify("no dataset is called " .. name, "error") end
+        local ok, why = datasets.fetch(ds, { force = force, say = uiman.notify })
+        if not ok then return uiman.notify(why, "error") end
+      end
+    end
+    return
+  elseif verb == "add" then
+    for file in rest:gmatch("%S+") do
+      local ds, name = datasets.adopt(file)
+      if not ds then return uiman.notify(name, "error") end
+      uiman.notify(("%s is %s's %s now"):format(file, ds.name, name))
+    end
+    return
+  end
+  require("lulib._dialogs").datasets()
+end, { desc = "[list | fetch NAME... [force] | add FILE...]  databases for looking books up on this machine. Alone, a dialog", complete = { "list", "fetch", "add" } })
+cmdman.create("arxiv-titles", function(o) require("net.datasets").arxiv_titles(M.books(o)) end, { desc = "[filter]  find books' arXiv numbers by their titles in arXiv's snapshot on this machine, as proposals", complete = "filter" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

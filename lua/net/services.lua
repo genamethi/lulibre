@@ -15,6 +15,7 @@ local json = require "dkjson"
 local stringx = require "pl.stringx"
 
 local function net() return require "net" end
+local M_openlibrary_fields
 
 local function encode(s)
   return (s:gsub("[^%w%-%._~/]", function(c) return ("%%%02X"):format(c:byte()) end))
@@ -188,6 +189,65 @@ service.define("openalex", {
   end,
 })
 
+local MONTHS = { january = 1, february = 2, march = 3, april = 4, may = 5, june = 6, july = 7, august = 8,
+                 september = 9, october = 10, november = 11, december = 12 }
+
+-- An Open Library book, from its API's answer or a dump's, as fields. A title with
+-- the series under it after a blank line, or in a bracket after it, has the series
+-- taken out; a catalogue's "Cohen, Henri." is Henri Cohen.
+M_openlibrary_fields = function(b)
+  local series, series_index
+  local title = type(b.title) == "string" and stringx.strip(b.title) or nil
+  local under
+  if title then
+    local head, rest = title:match("^(.-)%s*\r?\n%s*\r?\n%s*(.+)$")
+    if head and head:find("%a") then title, under = head, rest:gsub("%s+", " ") end
+    title = title:gsub("%s+", " ")
+    local shorter, bracket = title:match("^(.-)%s*%(([^()]+)%)$")
+    if shorter and #shorter >= 3 and bracket:find("%a") then
+      title = shorter
+      local name, number = bracket:match("^(.-)%s*[;,]?%s*[vVnNoO.#]*%s*(%d+)$")
+      series, series_index = name and #name > 3 and name or bracket, name and #name > 3 and number or nil
+    end
+    if type(b.subtitle) == "string" and b.subtitle:find("%S") then title = title .. ": " .. stringx.strip((b.subtitle:gsub("%s+", " "))) end
+    title = require("lulib._titlecase").numerals(title)
+  end
+  local noted = type(b.series) == "table" and b.series[1]
+  local apart = type(noted) == "string" and type(b.series[2]) == "string" and b.series[2]:match("^%s*[vVnN]%a*%.?%s*%d+%s*$")
+  if apart then noted = noted .. " " .. apart end
+  if type(noted) ~= "string" and under and under:find("%a") then noted = under end
+  if not series and type(noted) == "string" and noted:find("%a") then
+    local name, number = noted:match("^(.-)%s*[;,:]?%s*%-*%s*[vVnNoO.#]*%s*(%d+)%s*$")
+    if not (name and #name > 3) then name, number = noted:gsub("[%s;,:%-]+$", ""), nil end
+    series, series_index = require("lulib._titlecase").apply(stringx.strip(name)), number
+  end
+  local names = {}
+  for _, a in ipairs(type(b.authors) == "table" and b.authors or {}) do
+    if type(a.name) == "string" then names[#names + 1] = forename_first((a.name:gsub("(%l%l)%.$", "%1"))) end
+  end
+  local pub = type(b.publishers) == "table" and b.publishers[1]
+  local date
+  if type(b.publish_date) == "string" then
+    local year = b.publish_date:match("%f[%d](%d%d%d%d)%f[%D]")
+    local month, day = b.publish_date:match("^(%a+)%s+(%d+),")
+    date = year
+    if year and month and MONTHS[month:lower()] then date = ("%s-%02d-%02d"):format(year, MONTHS[month:lower()], tonumber(day)) end
+  end
+  local class, tag = type(b.classifications) == "table" and b.classifications or {}, nil
+  local taxonomy = require "lulib._taxonomy"
+  for _, lcc in ipairs(type(class.lc_classifications) == "table" and class.lc_classifications or {}) do
+    tag = tag or taxonomy.from_lcc(lcc)
+  end
+  for _, dewey in ipairs(type(class.dewey_decimal_class) == "table" and class.dewey_decimal_class or {}) do
+    tag = tag or taxonomy.from_dewey(dewey)
+  end
+  return {
+    title = title, authors = #names > 0 and table.concat(names, " & ") or nil,
+    publisher = type(pub) == "table" and pub.name or nil, pubdate = date, series = series, series_index = series_index,
+    tags = tag, pages = tonumber(b.number_of_pages),
+  }
+end
+
 service.define("openlibrary", {
   ident = "isbn", pace = 2, hold = 300, batch = 1,
   request = function(keys, mail)
@@ -201,17 +261,7 @@ service.define("openlibrary", {
   end,
   record = function(answer)
     local _, b = next(json.decode(answer) or {})
-    b = b or {}
-    local authors = {}
-    for _, a in ipairs(b.authors or {}) do authors[#authors + 1] = a.name end
-    local year = b.publish_date and b.publish_date:match("%d%d%d%d")
-    return {
-      title = b.title and (b.subtitle and (b.title .. ": " .. b.subtitle) or b.title),
-      authors = #authors > 0 and table.concat(authors, " & ") or nil,
-      publisher = b.publishers and b.publishers[1] and b.publishers[1].name,
-      pubdate = year,
-      pages = tonumber(b.number_of_pages),
-    }
+    return M_openlibrary_fields(b or {})
   end,
 })
 
@@ -219,6 +269,9 @@ local function xml_text(s)
   return stringx.strip((s:gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&quot;", '"'):gsub("&apos;", "'"):gsub("&amp;", "&")
     :gsub("%s+", " ")))
 end
+
+--- What a dump's reader needs of the readers here.
+service.openlibrary_fields = function(b) return M_openlibrary_fields(b) end
 
 service.define("arxiv", {
   ident = "arxiv", pace = 5, hold = 1800, batch = 40,
@@ -238,10 +291,14 @@ service.define("arxiv", {
   record = function(answer)
     local authors = {}
     for name in answer:gmatch("<author>%s*<name>(.-)</name>") do authors[#authors + 1] = xml_text(name) end
+    local detex = require "lulib._detex"
+    for i, name in ipairs(authors) do authors[i] = detex.plain(name) end
+    local class = answer:match('<arxiv:primary_category[^>]-term="([^"]+)"')
     return {
-      title = xml_text(answer:match("<title>(.-)</title>") or ""),
+      title = (detex.plain(xml_text(answer:match("<title>(.-)</title>") or ""))),
       authors = #authors > 0 and table.concat(authors, " & ") or nil,
-      pubdate = answer:match("<published>(%d%d%d%d)"),
+      pubdate = answer:match("<published>(%d%d%d%d%-%d%d%-%d%d)") or answer:match("<published>(%d%d%d%d)"),
+      tags = class and require("lulib._taxonomy").from_arxiv(class) or nil,
       pages = tonumber(answer:match("<arxiv:comment[^>]*>.-(%d+)%s+pages")),
     }
   end,

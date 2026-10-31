@@ -38,7 +38,8 @@ function M.of(book, file, found)
     out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = file.title, authors = file.author } }
   end
   for _, r in ipairs(require("net").records(book, found)) do
-    out[#out + 1] = { name = r.service, kind = "online", fields = r.fields, key = r.key, ident = r.ident, pages = r.pages }
+    out[#out + 1] = { name = r.service, kind = "online", fields = r.fields, key = r.key, ident = r.ident, pages = r.pages,
+                            identifies = r.identifies }
   end
   return out
 end

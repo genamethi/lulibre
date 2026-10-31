@@ -257,7 +257,7 @@ function own.once(book, w)
   local srcs, records = {}, {}
   for _, s in ipairs(sources.of(book, file, found)) do
     if s.kind == "online" then
-      s.check = check.record(s, file or {}, k, text, w.check)
+      if not s.identifies then s.check = check.record(s, file or {}, k, text, w.check) end
       -- one found by its title must be the same work, by title and authors too
       if s.ident == "title" and s.check then
         s.check.same = s.check.same and s.fields.title
@@ -272,7 +272,7 @@ function own.once(book, w)
   for _, s in ipairs(records) do
     local fields = {}
     for field, value in pairs(s.fields) do
-      fields[field] = { value = value, share = check.share(field, value, k, text) }
+      fields[field] = { value = value, share = check.share(field, value, k, text), fixed = s.identifies and w.own_id or nil }
     end
     local same = s.check and s.check.same
     parses[#parses + 1] = { grammar = s.name, fields = fields, online = true, failed = s.check and not same,
@@ -322,8 +322,11 @@ function M.propose(book, w)
 end
 
 -- an answer arriving re-ranks the book (design 42)
+local arrived, arrived_at
 evman.add("source_arrived", function(ev)
-  M.propose(ev.book, M.settings())
+  -- (many answers come in a run; what proposing goes by is taken every few seconds)
+  if not arrived or os.time() - arrived_at > 5 then arrived, arrived_at = M.settings(), os.time() end
+  M.propose(ev.book, arrived)
 end)
 
 return M

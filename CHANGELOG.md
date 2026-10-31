@@ -23,6 +23,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Changed `:dupes` and `:orphans` to screens that can act: remove the rest, re-attach, move out, repair links. `ls` still prints.
 - Changed the journal to log what changes in calibre outside lulibre, whenever lulibre reads calibre's records.
 - Added `:history`, and snapshots: `:snapshot`, `:snapshots`, `:rollback`.
+- Added datasets on this machine: `:datasets`, `:enrich offline`, `:arxiv-titles`. What a dataset has isn't asked of the service.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 
