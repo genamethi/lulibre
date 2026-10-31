@@ -257,6 +257,22 @@ do
   local text, keys = require("lulib._bib").export({ 2 })
   say("bib", keys[1], text:find("@", 1, true) ~= nil, text:find("Erd", 1, true) ~= nil)
 end
+-- a grammar for a group runs only for a book of it, and is surer there
+do
+  local expr_ = require "expr"
+  local em = require "exprman"
+  local ran = {}
+  em.add("for-notes", function() ran.notes = true; return { series = { value = "Mine", sure = 0.7 } } end, "Lecture notes")
+  em.add("for-none", function() ran.none = true; return { series = { value = "Never" } } end, "Nobody Press")
+  propose.propose(2, propose.settings())
+  local got
+  for _, f in ipairs(wit.get(2)) do if f.field == "series" then got = f.alts[1] end end
+  say("group", ran.notes, ran.none, got and got.value, got and ("%.2f"):format(got.score))
+  em.remove("for-notes")
+  em.remove("for-none")
+  propose.propose(2, propose.settings())
+  local _ = expr_
+end
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -351,6 +367,7 @@ expect "a dataset fetched" "fetched|true|nil|true"
 expect "zbMATH's table gives a number" "zbmath links|123|123"
 expect "a file of no dataset isn't taken" "adopt|true|nil"
 expect "yank's BibTeX: a key of surname, year and a word that says something, and an entry" "bib|erdos1996|true|true"
+expect "a grammar for a group runs only for a book of it, and is surer there" "group|true|nil|Mine|0.80"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "an identifier compared with its own value is the same" "same identifier|equal"

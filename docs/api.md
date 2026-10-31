@@ -328,8 +328,10 @@ name in `exprman`: `exprman.add(name, pattern [, group [, version]])`,
 `exprman.remove(name)`, `exprman.names()`, and `exprman.parse(t [, book [,
 names]])`, every grammar's parse of a text, or the named ones'. What a grammar
 finds in a file is kept until the file is read again or the grammar's
-`version` changes: change it when you change the pattern. A book the text
-shows to be of `group` raises its grammar's values by `rank_group`. `exprman.field(name, patt)` captures a field's value with its
+`version` changes: change it when you change the pattern. A grammar with a
+`group` runs only for a book that is of it: the record, an online record or another
+grammar has that publisher, series or author, or its words are on the pages. What it
+finds there is surer, by `rank_group`. `exprman.field(name, patt)` captures a field's value with its
 positions: what `patt` captures, or what it matches when it captures
 nothing (`expr.P "KEITH CONRAD" / "Keith Conrad"`). A grammar's pattern
 gets the text and the book as LPeg's extra arguments (`expr.Carg(1)`,
@@ -372,6 +374,7 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `net.service.ask_all(name, keys [, fn])` | waits: a service asked about many works at once |
 | `net.service.define` `how.available` `how.covers` `how.identifies` | a service that can be absent; one answering for another, asked first; one that gives only an identifier |
 | `lulib._datasets`, `net.datasets` | the databases on this machine: `list`, `status`, `fetch`, `adopt`, `lines_with`, `arxiv_titles` |
+| `uiman.again(command, {args=, selection=})` | runs a command made in Lua so that it may open a second copy of a screen already open (`:new`) |
 | `lulib._rank`, `trust`, `lulib._sources` | what each value scores: how sure its reading is, agreement with the sources, and the record of review decisions on where it came from |
 | `mesr.found(value, text [, skip])` | how many of value's words the text holds as whole words, then how many there are; skip, a table of folded words not to count |
 | `mesr.cmp(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |

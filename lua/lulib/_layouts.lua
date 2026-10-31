@@ -30,7 +30,7 @@
 -- - `confidence`: how far the layout is trusted (0.8 by default).
 --
 -- Add your own layouts in ~/.config/lulibre/init.lua or a module it
--- requires. `:run candidates` shows what every layout reads from the book
+-- requires. `lulib._layouts.read` shows what every layout reads from the book
 -- under the cursor.
 --
 -- @library lulib._layouts
@@ -254,6 +254,11 @@ local function labelled_cip(block, text)
   return out
 end
 
+-- dashes a scan or a font gives the block for its hyphens: the middle dot
+-- (·), the hyphen and non-breaking hyphen (U+2010, U+2011), the en and em
+-- dashes; read as "-", so "Steen, Lynn A 1941·" is a main entry with its dates
+local DASHES = { "\194\183", "\226\128\144", "\226\128\145", "\226\128\147", "\226\128\148" }
+
 --- Reads the cataloguing block that the Library of Congress (or the
 -- British or German national library) supplies for the back of a title page:
 --
@@ -269,11 +274,6 @@ end
 -- form used since 2015 is read too.
 -- @tparam string text a page's text
 -- @treturn table
--- dashes a scan or a font gives the block for its hyphens: the middle dot
--- (·), the hyphen and non-breaking hyphen (U+2010, U+2011), the en and em
--- dashes; read as "-", so "Steen, Lynn A 1941·" is a main entry with its dates
-local DASHES = { "\194\183", "\226\128\144", "\226\128\145", "\226\128\147", "\226\128\148" }
-
 function M.cip(text)
   for _, d in ipairs(DASHES) do text = text:gsub(d, "-") end
   local at = text:lower():find("cataloging%s*%-?%s*in%s*%-?%s*publication") or text:find("CIP%-?%s*Einheitsaufnahme")

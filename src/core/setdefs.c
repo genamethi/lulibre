@@ -76,7 +76,7 @@ const struct setting_def setting_defs[S_COUNT] = {
   [S_SCORE_OTHER_ID] = {"score_other_id", SETTING_NUM, 0, "0.3", NULL,
                         "what an identifier the file only mentions scores"},
   [S_RANK_GROUP] = {"rank_group", SETTING_NUM, 0, "0.1", NULL,
-                    "how much surer a grammar's values are when the book is of the publisher or series it was written for"},
+                    "how much surer the values are of a grammar written for a publisher, series or author, as it runs only for books of it"},
   [S_PROPOSE_MIN] = {"propose_min", SETTING_NUM, 0, "0.6", NULL,
                      "values scoring less are kept but shown only by a deep review"},
   [S_PROPOSE_OVER] = {"propose_over", SETTING_NUM, 0, "0.95", NULL,

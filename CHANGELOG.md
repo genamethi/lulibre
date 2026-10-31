@@ -8,27 +8,24 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 
 \* 0.4.0-pre-alpha includes every change made for 0.3.0, which was not released.
 
-- Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
-- Changed review to mark and write separately. `a`, `e` and `r` only mark; `w` writes what is marked as one batch.
-- Added saved reviews: a review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `:review deep` shows what a review otherwise hides.
-- Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again.
+- Added saved reviews. A review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `a`, `e` and `r` only mark; `w` writes what is marked as one batch; `:review deep` shows what a review otherwise hides.
+- Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again. Each value is scored on its own, and review names the reading it came from.
 - Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
-- Added `:verify` (with `written` and `junk`), `:rewrite` (`titlecase`, `notation`, `authors`, `tags`, `levels`, `clear`) and `:capture`. The rewrites propose into the current review.
-- Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings.
-- Added `:sync` (with `beside` and a folder), `:change`, `:enrich -i` and `:propose -i`. `y` in a review writes and adds its sync folder files.
-- Changed `store.command` to say when it may run and to give back what the command printed. `store.command_undo` and `store.drop` are new, and `uiman.form` takes `sections` for a dialog.
-- Fixed `store.command` crashing lulibre when the command had run.
-- Added zbMATH and OpenAlex as sources, and `:enrich titles`, which searches Crossref by title for books with no identifier.
-- Added `:remove`, with undo from calibre's recycle bin; `:embed`; `:columns`; and `:offline`, which lists, cancels, retries and restarts for what waits for the library.
-- Changed `:dupes` and `:orphans` to screens that can act: remove the rest, re-attach, move out, repair links. `ls` still prints.
-- Changed the journal to log what changes in calibre outside lulibre, whenever lulibre reads calibre's records.
-- Added `:history`, and snapshots: `:snapshot`, `:rollback`.
+- Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings, and made `front` an example.
+- Changed a grammar with a group to run only for books of that group.
+- Added zbMATH and OpenAlex as sources, and `:enrich titles`, which looks by title for books with no identifier.
 - Added datasets on this machine: `:datasets`, `:enrich offline`. What a dataset has isn't asked of the service.
-- Added `:verify written`, which goes back over what lulibre wrote with each book's file deciding.
-- Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Books from the sync folder are added as many at once as changes run.
-- Added `server_stop` and `server_start`, back from 0.2, which `:offline restart` uses before a systemd unit.
-- Changed `:datasets` and `:enrich` to read a hypergraph of arXiv (`arxiv.json`, `arxiv.zip`) when arXiv's own snapshot isn't there.
-- Added `yb` and `yk`: BibTeX and cite keys for the selection. Added `:new`: one of each screen is open at a time, and `:new COMMAND` opens another.
+- Added `:verify` (with `written` and `junk`), `:rewrite` (`titlecase`, `notation`, `authors`, `tags`, `levels`, `clear`) and `:capture`.
+- Added `:sync` (with `beside` and a folder), `:change`, `:enrich -i` and `:propose -i`. `y` in a review writes and adds its sync folder files.
+- Added `:remove`, with undo from calibre's recycle bin; `:embed`; `:columns`; and `:offline`, which lists, cancels, retries and restarts for what waits for the library.
+- Changed `:dupes` and `:orphans` to screens that can act. `ls` still prints.
+- Changed the journal to log what changes in calibre outside lulibre. Added `:history`, `:snapshot` and `:rollback`.
+- Added `yb` and `yk`, `:browse`, and the Configuration tab with `:config`, `:units` and `server_stop` and `server_start`.
+- Added `:new`: one of each screen is open at a time, and `:new COMMAND` opens another.
+- Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Added `store.drop` and `store.set_aside`. `store.command` says when it may run and gives back what the command printed. `uiman.form` takes `sections` for a dialog.
+- Fixed `store.command` crashing lulibre when the command had run.
+- Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
+- Changed a start with no library set to ask on a terminal, for that run. Answers are not kept.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 

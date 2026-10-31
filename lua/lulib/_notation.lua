@@ -4,7 +4,7 @@
 --
 -- - the book's own pages. The PDF reader marks up a line's mathematics as
 --   TeX, from the fonts and from each character's size and height
---   (`COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$`; lulibre.lines gives
+--   (`COMPACT SUBGROUPS OF $GL_{n}(\mathbf{Q}_{p})$`; a text's lines give
 --   the TeX as math=). `title` turns the marked-up line into the title.
 -- - TeX in a record's title, as arXiv gives it (`On $\mathbb{Z}_p$-extensions`).
 --   `render` converts it.

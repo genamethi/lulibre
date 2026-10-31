@@ -189,42 +189,65 @@ function M.rows(ranked, srcs, w, decided)
   return rows
 end
 
--- what the grammars find in the book's file: each grammar's kept, per its
--- version; those not yet run on it are run now
-function own.grammars(book, k, text)
-  local parses, missing = {}, {}
-  for _, name in ipairs(exprman.names()) do
-    local key = name .. "\0" .. tostring(exprman.grammars[name].version or "")
-    local p = k:get("parse", key)
-    if p == nil then missing[#missing + 1] = { name = name, key = key }
-    elseif p then parses[#parses + 1] = p end
+-- Whether a book is of what a grammar was written for: the publisher, series or
+-- author the record, an online record or another grammar has says so, or all the
+-- words of it are on the pages. A grammar with a group runs only for such a book, and
+-- what it finds there is surer (rank_group).
+function own.of_group(group, book, values, srcs, k, text)
+  local function says(value)
+    return value and value ~= "" and mesr.cmp("publisher", group, value) ~= "differs"
   end
-  local t = #missing > 0 and text.get()
-  if t then
-    local names = {}
-    for i, m in ipairs(missing) do names[i] = m.name end
-    local by = {}
-    for _, p in ipairs(exprman.parse(t, book, names)) do by[p.grammar] = p end
-    for _, m in ipairs(missing) do
-      k:put("parse", m.key, by[m.name] or false)
-      parses[#parses + 1] = by[m.name]
-    end
+  for _, s in ipairs(srcs) do
+    if says(s.fields.publisher) or says(s.fields.series) or says(s.fields.authors) then return true end
   end
-  return parses
-end
-
--- whether a grammar's values gain for being of what it was written for: a
--- publisher or series the record has, or all found on the pages
-function own.group_hit(p, book, k, text)
-  local g = exprman.grammars[p.grammar]
-  local group = g and g.group
-  if not group then return false end
-  for _, field in ipairs { "publisher", "series" } do
-    local now = wit.now(book, field)
-    if now and now ~= "" and mesr.cmp("publisher", group, now) ~= "differs" then return true end
-  end
+  if says(values.publisher) or says(values.series) then return true end
   local found, words = check.count("publisher", group, k, text)
   return found ~= nil and words > 0 and found == words
+end
+
+-- what the grammars find in the book's file: each grammar's kept, per its
+-- version; those not yet run on it are run now. Those without a group come first:
+-- what they read can say which of the others the book is for.
+function own.grammars(book, srcs, k, text)
+  local parses, values = {}, {}
+  local function run(names)
+    local missing = {}
+    for _, name in ipairs(names) do
+      local key = name .. "\0" .. tostring(exprman.grammars[name].version or "")
+      local p = k:get("parse", key)
+      if p == nil then missing[#missing + 1] = { name = name, key = key }
+      elseif p then parses[#parses + 1] = p end
+    end
+    local t = #missing > 0 and text.get()
+    if t then
+      local list = {}
+      for i, m in ipairs(missing) do list[i] = m.name end
+      local by = {}
+      for _, p in ipairs(exprman.parse(t, book, list)) do by[p.grammar] = p end
+      for _, m in ipairs(missing) do
+        k:put("parse", m.key, by[m.name] or false)
+        parses[#parses + 1] = by[m.name]
+      end
+    end
+  end
+  local plain, grouped = {}, {}
+  for _, name in ipairs(exprman.names()) do
+    table.insert(exprman.grammars[name].group and grouped or plain, name)
+  end
+  run(plain)
+  for _, p in ipairs(parses) do
+    for _, field in ipairs { "publisher", "series" } do
+      if p.fields[field] and not values[field] then values[field] = p.fields[field].value end
+    end
+  end
+  local chosen = {}
+  for _, name in ipairs(grouped) do
+    if get("of_group")(exprman.grammars[name].group, book, values, srcs, k, text) then chosen[#chosen + 1] = name end
+  end
+  local before = #parses
+  run(chosen)
+  for i = before + 1, #parses do parses[i].group_hit = true end
+  return parses
 end
 
 -- the records by an identifier the pages bear out, if they all agree: such
@@ -264,8 +287,6 @@ function own.once(book, w)
   local file = kept.file_of(book)
   local k <close> = kept.open(file and file.id, file and file.indexed)
   local text <close> = kept.reader(file)
-  local parses = get("grammars")(book, k, text)
-  for _, p in ipairs(parses) do p.group_hit = get("group_hit")(p, book, k, text) end
   local found = file and ids.of(file, k, text, w.top) or {}
 
   -- an online record is a parse too (design 39), ranked beside the
@@ -284,6 +305,7 @@ function own.once(book, w)
     if s.kind == "record" and s.fields.title and not get("holds")("title", s.fields.title) then s.fields.title = nil end
     if not (s.check and not s.check.same) then srcs[#srcs + 1] = s end
   end
+  local parses = get("grammars")(book, srcs, k, text)
   local clear = get("clear")(records, w)
   for _, s in ipairs(records) do
     local fields = {}

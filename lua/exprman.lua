@@ -46,7 +46,9 @@ M.grammars = {}
 -- for the field in the same form. A value found in the text as it stands takes its
 -- place there
 -- @tparam[opt] string group what the grammar was written for: an author, a
--- publisher, a series
+-- publisher, a series. It runs only for a book that says so: the record, an online
+-- record or another grammar has it, or its words are on the pages. What it finds
+-- there is surer, by the setting rank_group
 -- @param[opt] version change it when you change the pattern
 function M.add(name, pattern, group, version)
   M.grammars[name] = { pattern = pattern, group = group, version = version }

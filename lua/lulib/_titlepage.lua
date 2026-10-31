@@ -11,7 +11,7 @@
 -- @library lulib._titlepage
 -- @usage
 -- local titlepage = require "lulib._titlepage"
--- local got = titlepage.classify(lulibre.lines(12, 1))
+-- local got = titlepage.classify(lines) -- the lines of a page: txt's `t:line(i)`
 -- print(got.title, table.concat(got.authors, " & "))
 -- titlepage.byline("by A. Name")   --> "A. Name"
 local expr = require "expr"
@@ -138,7 +138,7 @@ function M.byline(text)
 end
 
 --- Reads a title page's lines by their roles.
--- @tparam {table,...} lines as `lulibre.lines(id)` gives them
+-- @tparam {table,...} lines as txt's `t:line(i)` gives them
 -- @treturn table `{ arxiv=, class=, subject=, title=, authors={...}, subject_source=, byline=,
 -- name_first= }`. `byline` is true if a "by" line named the authors, which is the page's
 -- own statement. `name_first` is true if the page starts with the author's name and has
@@ -523,7 +523,7 @@ end
 --    Journal
 --    Coyote Papers
 --
--- @tparam {table|string,...} lines a page's lines, from `lulibre.lines` or as text
+-- @tparam {table|string,...} lines a page's lines, from txt's `t:line(i)` or as text
 -- @treturn table|nil nil if the page has no author label. Otherwise `{ title=, authors=, year=,
 -- source=, publisher=, journal=, url=, jstor=, labels= }` with what was found. `labels` counts
 -- the labelled lines, which shows how reliable the result is.

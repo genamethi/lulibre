@@ -62,6 +62,116 @@ each line with the filter behind it.
 .TP
 .BR run " \fIfile\fR [\fIargs\fR]"
 Run a Lua file without the interface.
+.TP
+.B offline
+Read calibre's records again and make the changes waiting for nothing to hold
+the library, then end: what lulibre's systemd unit runs before calibre's content
+server starts.
+.SH COMMANDS IN THE INTERFACE
+Typed after
+.BR : .
+With no filter, those about books take the selection, unless noted.
+.SS Proposing and looking up
+.TP
+.BR propose " [" \-i "] [\fIfilter\fR]"
+Propose values from the files, from what was kept if the files have not changed.
+.B \-i
+asks which books, what to ask and which fields first.
+.TP
+.BR review " [" deep "] [\fIfilter\fR | " selection ]
+The current review: accept, edit or reject, which only mark, then write.
+.B deep
+shows what a review otherwise hides. Reviews are saved, named, reopened and discarded here.
+.TP
+.BR enrich " [" \-i " | " titles " | " offline "] [\fIfilter\fR]"
+Ask the online services and datasets about the books, by their identifiers.
+.B titles
+also looks by title for books with none;
+.B offline
+asks only what is on this machine.
+.TP
+.BR datasets " [" list " | " fetch " \fIname\fR... [" force "] | " add " \fIfile\fR...]"
+Databases for looking books up on this machine. Alone, a dialog.
+.SS Checking and rewriting
+.TP
+.BR verify " [" written " [" ls "] [" since " \fIsnap\fR] | " junk "] [\fIfilter\fR]"
+The records held against their files, by default every book.
+.B written
+goes over what lulibre wrote, with each book's file deciding;
+.B junk
+marks titles and authors plainly not one.
+.TP
+.BR rewrite " " titlecase " [" all "] | " notation " | " authors " | " tags " | " levels " [" ls " | " write "] | " clear " \fIfields\fR, then [\fIfilter\fR]"
+Propose values worked out from those a field has, in the current review.
+.TP
+.BR capture " [\fIpattern\fR]"
+Pull fields out of the selected books with a pattern, and propose them.
+.TP
+.BR change " [\fIfilter\fR]"
+One change to every selected book.
+.SS The sync folder
+.TP
+.BR sync " [" add " | " move " | " drop "] [\fIfilter\fR] | " beside " | \fIdir\fR"
+Add the waiting files to the library, add them and take them out of the folder, or
+take them out without adding them; show them beside the library; or take
+.I dir
+as the sync folder for now. Alone, a dialog.
+.SS Looking after the library
+.TP
+.BR remove " [\fIfilter\fR]"
+Remove books from calibre, to its recycle bin.
+.TP
+.BR dupes " [" ls ]
+Books whose files hold the same bytes: keep one, remove the rest.
+.TP
+.BR orphans " [" ls " | " write ]
+Records with no file, files with no record, broken links, empty folders.
+.TP
+.BR embed " [\fIfilter\fR]"
+Write calibre's metadata into the books' own files.
+.TP
+.BR columns " [" push " | " remove ]
+calibre columns for lulibre's own fields.
+.TP
+.BR offline " [" cancel " \fIjob\fR | " retry " | " restart ]
+The changes waiting for nothing to hold the library.
+.TP
+.BR index " [" force " | \fIbook page\fR]"
+Read new or changed files, or one file as far as a page.
+.TP
+.BR units " [" apply ]
+lulibre's systemd units around calibre's content server.
+.SS History
+.TP
+.BR history
+What lulibre changed, and what changed outside it, newest first.
+.TP
+.BR undo " [\fIn\fR]"
+Put the last change back, or batch
+.IR n .
+.TP
+.BR snapshot " [" take "] [\fIname\fR] | " list " | " plan " \fIsnap\fR | " retire " \fIsnap\fR | " unretire " \fIsnap\fR | " import " \fIfile\fR [\fIname\fR]"
+A snapshot is a position in the journal. Alone, the list.
+.TP
+.BR rollback " \fIsnap\fR [" exact " | " unsync " | " fields ]
+Put the library back to a snapshot, after showing what that would do and asking.
+.SS Moving around
+.TP
+.BR browse " [" author " | " subject " | " series " | " publisher " | " year " | " format ]
+The library as a tree beside the list.
+.TP
+.BR yank " " bib " | " key " | " path " | " title
+Copy for the selection to the clipboard.
+.TP
+.BR config
+Every setting, and the programs lulibre's features need.
+.TP
+.BR new " \fIcommand\fR [\fIargs\fR]"
+One of each screen is open at a time: a screen opened again goes to the open one. This
+opens another.
+.PP
+.B :help
+lists the rest, with the keys.
 .SH OPTIONS
 .TP
 .BI \-L " dir"
@@ -124,8 +234,17 @@ is true.
 .I ~/.local/share/lulibre/
 The index (one file for each library) and beside it its journal
 .RI ( <index>.journal.db :
-every change, where its value came from) and custom fields
-.RI ( <index>.custom.db ).
+every change, where its value came from, and the snapshots), custom fields
+.RI ( <index>.custom.db ),
+and reviews
+.RI ( <index>.wit.db :
+their proposals and marks, and what was worked out from each file). Also the online
+answers kept
+.RI ( net.db ),
+the datasets, and files taken out of the sync folder
+.RI ( dropped/ )
+or the library
+.RI ( orphans/ ).
 .SH ENVIRONMENT
 .TP
 .B LULIBRE_LIBRARY
