@@ -62,4 +62,4 @@ exprman.add("stacks-project", expr.Ct(exprman.field("title", caps / title_case) 
     fields["#partof"] = { value = "The Stacks Project" }
     fields["#part"] = book and part(book, fields.title.value) or nil
     return fields
-  end, "The Stacks Project")
+  end) -- no group: most chapters never print the project's name in their first pages

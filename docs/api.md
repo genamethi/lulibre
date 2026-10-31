@@ -331,7 +331,8 @@ finds in a file is kept until the file is read again or the grammar's
 `version` changes: change it when you change the pattern. A grammar with a
 `group` runs only for a book that is of it: the record, an online record or another
 grammar has that publisher, series or author, or its words are on the pages. What it
-finds there is surer, by `rank_group`. `exprman.field(name, patt)` captures a field's value with its
+finds there is surer, by `rank_group`. Leave the group out when the pattern itself is
+the test and the books may not name what they belong to. `exprman.field(name, patt)` captures a field's value with its
 positions: what `patt` captures, or what it matches when it captures
 nothing (`expr.P "KEITH CONRAD" / "Keith Conrad"`). A grammar's pattern
 gets the text and the book as LPeg's extra arguments (`expr.Carg(1)`,
