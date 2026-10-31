@@ -519,6 +519,43 @@ contains "with each book" "    3  paper copy" "$dupes"
 contains "orphans: a file a record names, not on disk" "    4  Copy/gone (4)/gone - Copy.epub" "$orphans"
 contains "a file no record names" "files no record names: 1" "$orphans"
 contains "an empty folder" "Empty/x (9)" "$orphans"
+# settings made in Lua: in init.lua, given on the command line before they
+# are made, listed and described as lulibre's are
+mkdir -p "$t/made/lulibre"
+cat >"$t/made/lulibre/init.lua" <<'LUA'
+setman.create("mine.colour", { default = "red", choices = { "red", "blue" }, help = "a colour of mine" })
+setman.create("mine.count", { default = 3, help = "how many" })
+LUA
+cat >"$t/made.lua" <<'LUA'
+local function say(...) local t = {} for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end print(table.concat(t, "|")) end
+local i = setman.info("mine.colour")
+say("made", setman.get("mine.colour"), lulib.opt.mine.colour, i.from, i.default, i.choices[2], i.help, i.made, i.type)
+say("made count", setman.get("mine.count"), math.type(setman.get("mine.count")), setman.info("mine.count").type)
+say("made refused", (pcall(setman.set, "mine.colour", "green")))
+setman.set("mine.count", 9)
+say("made set", setman.get("mine.count"))
+say("own not made", (pcall(setman.create, "pages", {})), select(2, pcall(setman.create, "pages", {})):match("lulibre's own") ~= nil)
+local names = table.concat(setman.ls(), " ")
+say("ls", names:match("^path%.library") ~= nil, names:match("mine%.colour") ~= nil)
+say("lulibre's info", setman.info("pages").from, setman.info("pages").made, setman.info("nothing"))
+setman.create("mine.colour", { default = "red", choices = { "red", "blue", "green" }, help = "made again" })
+say("made again", setman.get("mine.colour"), setman.info("mine.colour").help)
+LUA
+made=$(XDG_CONFIG_HOME="$t/made" "$bin" -L "$t/lib" -o mine.colour=blue -o typo=1 run "$t/made.lua" 2>&1)
+contains "a setting made in init.lua takes the command line's value given before it was made" "made|blue|blue|command line|red|blue|a colour of mine|true|string" "$made"
+contains "its type from its default" "made count|3|integer|integer" "$made"
+contains "a value outside its choices is refused" "made refused|false" "$made"
+contains "and set as any other" "made set|9" "$made"
+contains "lulibre's own are not made again" "own not made|false|true" "$made"
+contains "setman.ls names lulibre's and the made" "ls|true|true" "$made"
+contains "setman.info describes lulibre's too" "lulibre's info|default|false|nil" "$made"
+contains "made again: its value kept, its definition new" "made again|blue|made again" "$made"
+contains "a value for a name nothing makes is said, and lulibre goes on" "typo=1 (the command line): no setting is called typo" "$made"
+echo 'print("kept|" .. setman.get("mine.count"))' >"$t/kept.lua"
+XDG_CONFIG_HOME="$t/made" XDG_STATE_HOME="$t/made-state" "$bin" -L "$t/lib" -o persistent=true run "$t/made.lua" >/dev/null 2>&1
+kept=$(XDG_CONFIG_HOME="$t/made" XDG_STATE_HOME="$t/made-state" "$bin" -L "$t/lib" -o persistent=true run "$t/kept.lua" 2>&1)
+contains "a made setting's value is kept in the saved state, and read when it is made again" "kept|9" "$kept"
+
 # an empty init.lua, no -L, nobody at a terminal: calibre's last library is
 # named, not opened (test/first.py asks on a terminal)
 mkdir -p "$t/blank/lulibre" "$t/blank/calibre" "$t/elsewhere"

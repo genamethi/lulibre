@@ -99,6 +99,21 @@ starts, lies under the command line; a set after that replaces the command
 line's value. [Configuration](configuration.md) lists the settings and
 their precedence.
 
+    setman.create("mine.colour", { default = "red", choices = { "red", "blue" }, help = "a colour of mine" })
+    setman.info("mine.colour")   -- {name=, type=, default=, choices=, help=, value=, from=, made=}
+    setman.ls()                  -- every setting's name, lulibre's first
+
+`create` makes a setting of the script's own, which `get`, `set`,
+`lulib.opt`, `:set`, its completion and the saved state know as they know
+lulibre's (`-o help` lists lulibre's alone). `type` is `string`, `path`,
+`integer`, `number` or `boolean`, by default as the default is.
+`lulibre -o mine.colour=blue` gives it a value before it is made: one
+made in init.lua or a packaged module, as lulibre starts, takes it, and a
+value for a name nothing has made by then is said and dropped. Made again
+under its name (`:restart-scripts`), its definition is replaced and its
+value stays when it is still one. `info` says where the value comes from:
+`default`, `saved`, `set` (init.lua, a script, `:set`) or `command line`.
+
 ## Events: evman
 
     local id = evman.add("records_changed", function(ev, ...) ... end, ...)

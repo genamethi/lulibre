@@ -38,6 +38,7 @@ end
 keymap.set("pband", "y", "hello", { desc = "greet the row" })
 keymap.set("console", "c", "clear", { hidden = true })
 scrnman.set("console", { hint = { "close" } })
+setman.create("mine.colour", { default = "red", choices = { "red", "blue" }, help = "a colour of mine" })
 scrnman.set("pager", { hint = {} })
 scrnman.create("ptab", { title = "Tabbed", tab = true })
 cmdman.create("ptab", function() uiman.list { title = "P-tab", screen = "ptab", items = { "row" } } end)
@@ -204,6 +205,21 @@ wait_for "help: keys" || true
 check "and its links lead into the guides" sh -c "$T capture-pane -p -t s | sed -n 3p | grep -q 'THE LEADER KEY'"
 $T send-keys -t s q
 sleep 0.3
+$T send-keys -t s ":set" Enter
+wait_for "SETTINGS" || true
+$T send-keys -t s G
+sleep 0.3
+check ":set alone lists the settings, those made in Lua under their own heading" sh -c "$T capture-pane -p -t s | grep -A2 'MADE IN LUA' | grep -q 'mine.colour'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":set mine.col" Tab
+sleep 0.4
+check ":set completes a setting made in Lua" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':set mine.colour='"
+$T send-keys -t s "b" Tab Enter
+sleep 0.4
+$T send-keys -t s ":set mine.colour" Enter
+sleep 0.4
+check "and its choices; :set changes it" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'mine.colour=blue'"
 $T send-keys -t s ":run qui" Tab
 sleep 0.4
 check ":run completes a script's name" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':run quince'"

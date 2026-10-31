@@ -419,16 +419,42 @@ static void c_reload(struct tui *t, const char *args) {
   tui_mirror(t, 2, 1); /* asked for: every book, not only those calibre marked changed */
 }
 
+/* :set alone: every setting, lulibre's and those made in Lua, its value
+ * and where it comes from, with what it is */
+static void set_list(struct tui *t) {
+  static const char *const from[] = {[FROM_DEFAULT] = "", [FROM_STATE] = "  (saved)", [FROM_API] = "  (set)",
+                                     [FROM_CLI] = "  (command line)"};
+  struct settings *st = t->app->settings;
+  sbuf out = SBUF_INIT;
+  for (int pass = 0; pass < 2; pass++) {
+    sb_puts(&out, pass ? "\nMADE IN LUA   setman.create(name, {type=, default=, choices=, help=})\n" : "SETTINGS   :set name=value\n");
+    for (int i = 0; i < settings_count(st); i++) {
+      const struct setting_def *d = settings_def(st, i);
+      if (!!(d->flags & SETTING_MADE) != pass || d->flags & SETTING_CLI_ONLY) continue;
+      char *v = settings_format(d, settings_value(st, i));
+      sb_printf(&out, "  %-20s %s%s\n      %s%s%s%s\n", d->name, *v ? v : "\"\"", from[settings_origin(st, i)], d->help,
+                d->choices ? " (" : "", d->choices ? d->choices : "", d->choices ? ")" : "");
+      free(v);
+    }
+  }
+  tui_pager_folded(t, "settings", out.s, -1);
+  sb_free(&out);
+}
+
 static void c_set(struct tui *t, const char *args) {
   const char *eq = strchr(args, '=');
   char *err = NULL;
+  if (!*args) {
+    set_list(t);
+    return;
+  }
   if (!eq) {
     int i = settings_find(t->app->settings, args);
     if (i < 0) {
       tui_msg(t, 1, "no setting is called %s", args);
       return;
     }
-    char *v = settings_format(&setting_defs[i], settings_value(t->app->settings, i));
+    char *v = settings_format(settings_def(t->app->settings, i), settings_value(t->app->settings, i));
     tui_msg(t, 0, "%s=%s", args, v);
     free(v);
     return;
@@ -690,7 +716,7 @@ void commands_builtin(void) {
   command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
                    "[library | sync | SCREEN]  the bar's tabs: the calibre library or the sync folder in the list, or a tab screen");
-  command_register("set", c_set, "name[=value]  show or change an option");
+  command_register("set", c_set, "[name[=value]]  show or change a setting; alone, every setting");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "[TOPIC]  the keys, by where they work; or the guides, where they speak of TOPIC");
   command_register("help-plain", c_help_plain, "keys and commands as one long page");

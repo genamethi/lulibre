@@ -83,6 +83,7 @@ static void setting_arrived(struct app *app, void *arg) {
 
 void work_setting_changed(struct app *app, int def) {
   if (!app->wdb) return; /* no copy yet: work_open takes the values then */
+  if (def >= S_COUNT) return; /* one made in Lua: nothing here reads it */
   struct changed *c = xcalloc(1, sizeof *c);
   c->def = def;
   c->v = copy_of(app->settings, def);

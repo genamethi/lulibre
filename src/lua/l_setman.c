@@ -11,6 +11,10 @@
  *                             line's value
  *   setman.save()             write the saved state now (only while the
  *                             setting persistent is true)
+ *   setman.create(name, spec) a setting of the script's own (l_create)
+ *   setman.info(name)         a setting's definition, value and where the
+ *                             value comes from
+ *   setman.ls()               every setting's name
  *   lulib.opt                 the settings as a table, as vim.opt: a name
  *                             read is get, a name assigned is set,
  *                             path.library and the like as written; any
@@ -49,15 +53,34 @@ static const char COPY[] = "lulibre.settings";
 
 struct setman_change {
   int def;
+  enum setting_type type;
+  enum setting_origin from;
   unsigned long seq; /* the last set the store had taken */
   union setting_value v;
 };
 
-/* The Lua thread's: the number of the last set, and per setting the
- * number of its last set; while init.lua starts, and per setting whether
- * the command line holds it (so a set there does not show in the copy). */
-static unsigned long seq, pending[S_COUNT];
-static int starting, held[S_COUNT];
+/* The Lua thread's: every setting the copy has, lulibre's first, then
+ * those made in Lua (setman.create), in the store's order; per setting the
+ * number of its last set, whether the command line holds it (so a set
+ * while init.lua starts does not show in the copy) and where its value
+ * comes from. Kept across :restart-scripts, as the store keeps them. */
+struct known {
+  struct setting_def d; /* a made one's strings are its own */
+  unsigned long pending;
+  int held;
+  enum setting_origin from;
+};
+static struct known *K;
+static int nK;
+/* values given for names no setting has yet, as the store held them when
+ * the copy was filled: what setman.create finds for its name at start */
+static struct {
+  char *name, *text;
+  enum setting_origin from;
+} *early;
+static int nearly;
+static unsigned long seq;
+static int starting;
 /* The main thread's: the number of the last set the store took. */
 static unsigned long taken;
 
@@ -86,8 +109,8 @@ static void push_value(lua_State *L, const struct setting_def *d, const union se
 /* Writes the value into the copy. */
 static void put(lua_State *L, int def, const union setting_value *v) {
   lua_getfield(L, LUA_REGISTRYINDEX, COPY);
-  push_value(L, &setting_defs[def], v);
-  lua_setfield(L, -2, setting_defs[def].name);
+  push_value(L, &K[def].d, v);
+  lua_setfield(L, -2, K[def].d.name);
   lua_pop(L, 1);
 }
 
@@ -112,19 +135,54 @@ static void push_module(lua_State *L, int a) {
 }
 
 static int find(const char *name) {
-  for (int i = 0; i < S_COUNT; i++)
-    if (!strcmp(setting_defs[i].name, name)) return i;
+  for (int i = 0; i < nK; i++)
+    if (!strcmp(K[i].d.name, name)) return i;
   return -1;
 }
 
+static void def_copy(struct setting_def *to, const struct setting_def *d) {
+  *to = *d;
+  if (!(d->flags & SETTING_MADE)) return;
+  to->name = xstrdup(d->name);
+  to->dflt = xstrdup(d->dflt);
+  to->choices = d->choices ? xstrdup(d->choices) : NULL;
+  to->help = xstrdup(d->help);
+}
+
+static void def_drop(struct setting_def *d) {
+  if (!(d->flags & SETTING_MADE)) return;
+  free((char *)d->name);
+  free((char *)d->dflt);
+  free((char *)d->choices);
+  free((char *)d->help);
+}
+
+/* on the main thread, with no Lua thread running: the store is read */
 void l_setman_fill(lua_State *L, const struct settings *st) {
-  lua_createtable(L, 0, S_COUNT);
-  lua_setfield(L, LUA_REGISTRYINDEX, COPY);
-  for (int i = 0; i < S_COUNT; i++) {
-    put(L, i, settings_value(st, i));
-    held[i] = settings_origin(st, i) == FROM_CLI;
+  for (int i = 0; i < nK; i++) def_drop(&K[i].d);
+  for (int i = 0; i < nearly; i++) {
+    free(early[i].name);
+    free(early[i].text);
   }
-  memset(pending, 0, sizeof pending);
+  nK = settings_count(st);
+  K = xrealloc(K, (size_t)nK * sizeof *K);
+  lua_createtable(L, 0, nK);
+  lua_setfield(L, LUA_REGISTRYINDEX, COPY);
+  for (int i = 0; i < nK; i++) {
+    def_copy(&K[i].d, settings_def(st, i));
+    K[i].pending = 0;
+    K[i].from = settings_origin(st, i);
+    K[i].held = K[i].from == FROM_CLI;
+    put(L, i, settings_value(st, i));
+  }
+  const char *name, *text;
+  enum setting_origin from;
+  for (nearly = 0; settings_held(st, nearly, &name, &text, &from);) {
+    early = xrealloc(early, (size_t)(nearly + 1) * sizeof *early);
+    early[nearly].name = xstrdup(name);
+    early[nearly].text = xstrdup(text);
+    early[nearly++].from = from;
+  }
 }
 
 void l_setman_starting(int on) {
@@ -133,20 +191,26 @@ void l_setman_starting(int on) {
 
 struct setman_change *setman_change_new(const struct settings *st, int def) {
   struct setman_change *c = xcalloc(1, sizeof *c);
+  const struct setting_def *d = settings_def(st, def);
   c->def = def;
+  c->type = d->type;
+  c->from = settings_origin(st, def);
   c->seq = taken;
   c->v = *settings_value(st, def);
-  if (is_text(&setting_defs[def])) c->v.s = xstrdup(c->v.s);
+  if (is_text(d)) c->v.s = xstrdup(c->v.s);
   return c;
 }
 
 void l_setman_changed(struct app *app, void *arg) {
   struct setman_change *c = arg;
-  if (app->L && c->seq >= pending[c->def]) {
-    put(app->L, c->def, &c->v);
-    if (c->def == S_MOD_TREE) lstate_paths(app->L);
+  if (app->L && c->def < nK && K[c->def].d.type == c->type) {
+    K[c->def].from = c->from;
+    if (c->seq >= K[c->def].pending) {
+      put(app->L, c->def, &c->v);
+      if (c->def == S_MOD_TREE) lstate_paths(app->L);
+    }
   }
-  if (is_text(&setting_defs[c->def])) free(c->v.s);
+  if (c->type == SETTING_STR || c->type == SETTING_PATH) free(c->v.s);
   free(c);
 }
 
@@ -162,7 +226,7 @@ struct to_store {
 static void store_change(struct app *app, void *arg) {
   struct to_store *m = arg;
   taken = m->seq;
-  const char *name = setting_defs[m->def].name;
+  const char *name = settings_def(app->settings, m->def)->name;
   char *err = NULL;
   int rc = !m->starting ? settings_change(app->settings, name, m->text, &err)
            : m->text    ? settings_set(app->settings, name, m->text, FROM_API, &err)
@@ -173,6 +237,17 @@ static void store_change(struct app *app, void *arg) {
   }
   free(m->text);
   free(m);
+}
+
+static void store_define(struct app *app, void *arg) {
+  struct setting_def *d = arg;
+  char *err = NULL;
+  if (settings_define(app->settings, d, &err) < 0) {
+    log_warn("setman.create: %s", err);
+    free(err);
+  }
+  def_drop(d);
+  free(d);
 }
 
 static void store_save(struct app *app, void *arg) {
@@ -239,7 +314,7 @@ static int l_set(lua_State *L) {
   }
   int def = find(name);
   if (def < 0) return luaL_error(L, "no setting is called %s", name);
-  const struct setting_def *d = &setting_defs[def];
+  const struct setting_def *d = &K[def].d;
   if (d->flags & SETTING_CLI_ONLY) return luaL_error(L, "%s is set only on the command line", name);
   struct to_store *m = xcalloc(1, sizeof *m);
   m->def = def;
@@ -259,12 +334,15 @@ static int l_set(lua_State *L) {
       return lua_error(L);
     }
     m->text = xstrdup(text);
-    if (!(starting && held[def])) put(L, def, &v);
+    if (!(starting && K[def].held)) {
+      put(L, def, &v);
+      K[def].from = FROM_API;
+    }
     if (def == S_MOD_TREE) lstate_paths(L); /* the next require already searches it */
     if (is_text(d)) free(v.s);
   }
   m->starting = starting;
-  m->seq = pending[def] = ++seq;
+  m->seq = K[def].pending = ++seq;
   queue_post(LOOP_UI, store_change, m);
   return 0;
 }
@@ -294,8 +372,8 @@ static int call_at(lua_State *L, lua_CFunction f, int nargs, int nres) {
 static int known(const char *name) {
   if (find(name) >= 0 || alias(name) >= 0) return 1;
   size_t n = strlen(name);
-  for (int i = 0; i < S_COUNT; i++)
-    if (!strncmp(setting_defs[i].name, name, n) && setting_defs[i].name[n] == '.') return 2;
+  for (int i = 0; i < nK; i++)
+    if (!strncmp(K[i].d.name, name, n) && K[i].d.name[n] == '.') return 2;
   for (size_t i = 0; i < NALIASES; i++)
     if (!strncmp(aliases[i][0], name, n) && aliases[i][0][n] == '.') return 2;
   return 0;
@@ -349,13 +427,187 @@ void l_setman_push_opt(lua_State *L) {
   push_part(L, "");
 }
 
+/* ---- settings made in Lua ---- */
+
+static const char *const type_names[] = {[SETTING_STR] = "string", [SETTING_INT] = "integer",
+                                         [SETTING_BOOL] = "boolean", [SETTING_NUM] = "number",
+                                         [SETTING_PATH] = "path"};
+static const char *const origin_names[] = {[FROM_DEFAULT] = "default", [FROM_STATE] = "saved", [FROM_API] = "set",
+                                           [FROM_CLI] = "command line"};
+
+/* setman.create(name, {type=, default=, choices=, help=}): a setting of the
+ * script's own, which setman, lulib.opt, :set, -o and the saved state know
+ * as they know lulibre's. type: string (by default, or as the default
+ * is), path, integer, number, boolean. Made again under its name, its
+ * definition is replaced and its value stays when it is still one. */
+static int l_create(lua_State *L) {
+  const char *name = luaL_checkstring(L, 1);
+  luaL_argcheck(L, *name && !strpbrk(name, " =\t\n"), 1, "a setting's name is one word, without =");
+  luaL_checktype(L, 2, LUA_TTABLE);
+  int i = find(name);
+  if (alias(name) >= 0 || (i >= 0 && !(K[i].d.flags & SETTING_MADE)))
+    return luaL_error(L, "%s is one of lulibre's own settings", name);
+  struct setting_def d = {name, SETTING_STR, SETTING_MADE, "", NULL, ""};
+  lua_getfield(L, 2, "default");
+  lua_getfield(L, 2, "type");
+  if (lua_isstring(L, -1)) {
+    int t = -1;
+    for (int k = 0; k < (int)ARRAY_LEN(type_names); k++)
+      if (!strcmp(type_names[k], lua_tostring(L, -1))) t = k;
+    if (t < 0) return luaL_error(L, "type: string, path, integer, number or boolean");
+    d.type = t;
+  } else if (lua_isboolean(L, 3)) {
+    d.type = SETTING_BOOL;
+  } else if (lua_isinteger(L, 3)) {
+    d.type = SETTING_INT;
+  } else if (lua_type(L, 3) == LUA_TNUMBER) {
+    d.type = SETTING_NUM;
+  }
+  if (!lua_isnil(L, 3)) d.dflt = luaL_tolstring(L, 3, NULL); /* stays on the stack */
+  else d.dflt = d.type == SETTING_BOOL ? "false" : d.type == SETTING_INT || d.type == SETTING_NUM ? "0" : "";
+  lua_getfield(L, 2, "help");
+  if (!lua_isnil(L, -1)) d.help = luaL_checkstring(L, -1);
+  lua_getfield(L, 2, "choices");
+  sbuf choices = SBUF_INIT;
+  if (lua_istable(L, -1)) {
+    for (lua_Integer k = 1; k <= (lua_Integer)lua_rawlen(L, -1); k++) {
+      lua_rawgeti(L, -1, k);
+      sb_printf(&choices, "%s%s", k > 1 ? "|" : "", luaL_tolstring(L, -1, NULL));
+      lua_pop(L, 2);
+    }
+    d.choices = choices.s ? choices.s : "";
+  } else if (!lua_isnil(L, -1)) {
+    sb_free(&choices);
+    return luaL_error(L, "choices: a list of the values it takes");
+  }
+  union setting_value v;
+  char *err = NULL;
+  if (settings_parse(&d, d.dflt, &v, &err)) {
+    sb_free(&choices);
+    lua_pushfstring(L, "the default of %s", err);
+    free(err);
+    return lua_error(L);
+  }
+  if (is_text(&d)) free(v.s);
+  /* the copy: as it was when it is still a value, else what the command
+   * line (or the saved state) gave for it before it was made, else the
+   * default; a value that is none of it is the store's to refuse */
+  const char *now = d.dflt;
+  enum setting_origin from = FROM_DEFAULT;
+  if (i < 0) { /* the command line's, else the saved state's while it counts */
+    int persist = find("persistent");
+    lua_getfield(L, LUA_REGISTRYINDEX, COPY);
+    lua_getfield(L, -1, "persistent");
+    int saved = persist >= 0 && lua_toboolean(L, -1);
+    lua_pop(L, 2);
+    for (int k = 0; k < nearly; k++) {
+      if (strcmp(early[k].name, name) || from == FROM_CLI) continue;
+      if (early[k].from == FROM_CLI || (early[k].from == FROM_STATE && saved)) now = early[k].text, from = early[k].from;
+    }
+  } else {
+    lua_getfield(L, LUA_REGISTRYINDEX, COPY);
+    lua_getfield(L, -1, name);
+    const char *was = luaL_tolstring(L, -1, NULL);
+    if (!settings_parse(&d, was, &v, &err)) {
+      if (is_text(&d)) free(v.s);
+      now = was;
+      from = K[i].from;
+    }
+    free(err);
+    err = NULL;
+  }
+  if (i < 0) {
+    K = xrealloc(K, (size_t)(nK + 1) * sizeof *K);
+    i = nK++;
+  } else {
+    def_drop(&K[i].d);
+  }
+  def_copy(&K[i].d, &d);
+  if (settings_parse(&d, now, &v, &err)) { /* given before, and no value of it: the store says so */
+    free(err);
+    err = NULL;
+    settings_parse(&d, d.dflt, &v, &err);
+    from = FROM_DEFAULT;
+  }
+  K[i].pending = 0;
+  K[i].from = from;
+  K[i].held = from == FROM_CLI;
+  put(L, i, &v);
+  if (is_text(&d)) free(v.s);
+  struct setting_def *m = xcalloc(1, sizeof *m);
+  def_copy(m, &d);
+  sb_free(&choices);
+  queue_post(LOOP_UI, store_define, m);
+  return 0;
+}
+
+/* setman.ls(): every setting's name, lulibre's first */
+static int l_ls(lua_State *L) {
+  lua_createtable(L, nK, 0);
+  for (int i = 0; i < nK; i++) {
+    lua_pushstring(L, K[i].d.name);
+    lua_rawseti(L, -2, i + 1);
+  }
+  return 1;
+}
+
+/* setman.info(name): {name=, type=, default=, choices=, help=, value=,
+ * from=, made=}; from: default, saved, set (init.lua, a script, :set) or
+ * command line; made: made in Lua. nil and why for no such setting. */
+static int l_info(lua_State *L) {
+  const char *name = luaL_checkstring(L, 1);
+  int i = find(name);
+  if (i < 0) {
+    lua_pushnil(L);
+    lua_pushfstring(L, "no setting is called %s", name);
+    return 2;
+  }
+  const struct setting_def *d = &K[i].d;
+  lua_createtable(L, 0, 8);
+  lua_pushstring(L, d->name);
+  lua_setfield(L, -2, "name");
+  lua_pushstring(L, type_names[d->type]);
+  lua_setfield(L, -2, "type");
+  union setting_value v;
+  char *err = NULL;
+  if (!settings_parse(d, d->dflt, &v, &err)) {
+    push_value(L, d, &v);
+    lua_setfield(L, -2, "default");
+    if (is_text(d)) free(v.s);
+  }
+  free(err);
+  if (d->choices) {
+    lua_newtable(L);
+    int k = 0;
+    for (const char *c = d->choices; *c;) {
+      size_t n = strcspn(c, "|");
+      lua_pushlstring(L, c, n);
+      lua_rawseti(L, -2, ++k);
+      c += n + (c[n] == '|');
+    }
+    lua_setfield(L, -2, "choices");
+  }
+  lua_pushstring(L, d->help ? d->help : "");
+  lua_setfield(L, -2, "help");
+  lua_getfield(L, LUA_REGISTRYINDEX, COPY);
+  lua_getfield(L, -1, name);
+  lua_setfield(L, -3, "value");
+  lua_pop(L, 1);
+  lua_pushstring(L, origin_names[K[i].from]);
+  lua_setfield(L, -2, "from");
+  lua_pushboolean(L, (d->flags & SETTING_MADE) != 0);
+  lua_setfield(L, -2, "made");
+  return 1;
+}
+
 static int l_save(lua_State *L) {
   queue_post(LOOP_UI, store_save, NULL);
   return 0;
 }
 
 int luaopen_setman(lua_State *L) {
-  static const luaL_Reg fns[] = {{"get", l_get}, {"set", l_set}, {"save", l_save}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"get", l_get},   {"set", l_set}, {"save", l_save}, {"create", l_create},
+                                 {"info", l_info}, {"ls", l_ls},   {NULL, NULL}};
   luaL_newlib(L, fns);
   return 1;
 }

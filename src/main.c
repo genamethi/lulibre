@@ -135,6 +135,14 @@ int main(int argc, char **argv) {
   if (!clean) lstate_run_init(&app);
   /* the changes init.lua made reach the store before C reads it */
   queue_drain(LOOP_UI);
+  /* a value given for a setting nothing has made by now is said, and dropped */
+  char *unmade = settings_unmade(app.settings);
+  for (char *p = unmade; p && *p;) {
+    size_t n = strcspn(p, "\n");
+    warnf("%.*s", (int)n, p);
+    p += n + (p[n] == '\n');
+  }
+  free(unmade);
   {
     const char *env = getenv("LULIBRE_LOG");
     const char *file = env && env[0] ? env : app_str(&app, S_LOG_FILE);

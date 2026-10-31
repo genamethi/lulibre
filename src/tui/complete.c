@@ -67,20 +67,19 @@ static void add_scripts(struct list *l, struct app *app) {
   lapi_each_script(app, add_script, l);
 }
 
-static void add_options(struct list *l, const char *word) {
-  const struct setting_def *o = setting_defs;
+static void add_options(struct list *l, const char *word, const struct settings *st) {
   const char *eq = strchr(word, '=');
-  for (size_t i = 0; i < S_COUNT; i++) {
-    if (o[i].flags & SETTING_CLI_ONLY) continue;
-    if (eq && o[i].choices && strlen(o[i].name) == (size_t)(eq - word) &&
-        !strncmp(o[i].name, word, (size_t)(eq - word))) {
-      for (const char *p = o[i].choices; *p;) { /* name=choice for each allowed value */
+  for (int i = 0; i < settings_count(st); i++) {
+    const struct setting_def *o = settings_def(st, i);
+    if (o->flags & SETTING_CLI_ONLY) continue;
+    if (eq && o->choices && strlen(o->name) == (size_t)(eq - word) && !strncmp(o->name, word, (size_t)(eq - word))) {
+      for (const char *p = o->choices; *p;) { /* name=choice for each allowed value */
         size_t len = strcspn(p, "|");
-        add_owned(l, xasprintf("%s=%.*s", o[i].name, (int)len, p), NULL);
+        add_owned(l, xasprintf("%s=%.*s", o->name, (int)len, p), NULL);
         p += len + (p[len] == '|');
       }
     } else if (!eq) {
-      add_owned(l, xasprintf("%s=", o[i].name), o[i].help);
+      add_owned(l, xasprintf("%s=", o->name), o->help);
     }
   }
 }
@@ -127,7 +126,7 @@ void complete_refresh(struct tui *t) {
     switch (comp->kind) {
     case COMPLETE_WORDS: add_words(&l, comp->words); break;
     case COMPLETE_FILTER: query_words(filter_word, &l); break;
-    case COMPLETE_SETTING: add_options(&l, last); break;
+    case COMPLETE_SETTING: add_options(&l, last, t->app->settings); break;
     case COMPLETE_SCRIPT: add_scripts(&l, t->app); break;
     case COMPLETE_HELP: {
       char *words = guides_tags(t);

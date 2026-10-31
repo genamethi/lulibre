@@ -23,6 +23,7 @@ enum setting_origin { FROM_DEFAULT, FROM_STATE, FROM_API, FROM_CLI, ORIGINS };
 enum setting_flags {
   SETTING_CLI_ONLY = 1 << 0, /* locates init.lua or the state: command line only, never saved */
   SETTING_PERSIST = 1 << 1,  /* the persistence setting (a bool): never saved */
+  SETTING_MADE = 1 << 2,     /* made at run time (settings_define): its strings are the store's */
 };
 
 struct setting_def {
@@ -48,6 +49,19 @@ typedef void settings_watch_fn(struct settings *st, int def, void *ud);
 
 /* Dies when a default is not a value of its own definition. */
 struct settings *settings_new(const struct setting_def *defs, int ndefs);
+/* A setting made while lulibre runs (setman.create): after the others, its
+ * strings copied. Made again under its name, its definition is replaced
+ * and the values its layers hold that are still values of it stay. A value
+ * given before it was made (the command line, the saved state) goes into
+ * its layer now. Its index, or -1 and *err (one of lulibre's own). */
+int settings_define(struct settings *st, const struct setting_def *d, char **err);
+/* The values given for names no setting has (settings_set holds them, from
+ * the command line and the saved state), as "name=value" lines with where
+ * each came from, and forgotten: what nothing made by the end of init.lua.
+ * NULL for none; malloc'd. */
+char *settings_unmade(struct settings *st);
+/* The k-th value held for a name no setting has yet: 0 past the last. */
+int settings_held(const struct settings *st, int k, const char **name, const char **text, enum setting_origin *from);
 void settings_free(struct settings *st);
 void settings_watch(struct settings *st, settings_watch_fn *fn, void *ud);
 
@@ -62,7 +76,9 @@ const union setting_value *settings_value(const struct settings *st, int def);
 
 /* All return 0 on success; on failure *err is a malloc'd message. */
 
-/* Validates text and puts it in layer `from` (not FROM_DEFAULT). */
+/* Validates text and puts it in layer `from` (not FROM_DEFAULT). A name no
+ * setting has, from the command line or the saved state, is held until a
+ * setting of that name is made (settings_define), and is no error. */
 int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from, char **err);
 /* Empties layer `from`: the layer below shows through. */
 int settings_unset(struct settings *st, const char *name, enum setting_origin from, char **err);

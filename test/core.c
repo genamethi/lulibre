@@ -225,6 +225,36 @@ static void test_settings_state(void) {
   get_s_done();
 }
 
+static void test_settings_made(void) {
+  char *err = NULL;
+  struct settings *st = settings_new(defs, NDEFS);
+  ok(set(st, "later", "5", FROM_CLI) == 0 && settings_find(st, "later") < 0,
+     "a name no setting has, from the command line: held, no error");
+  ok(set(st, "later", "5", FROM_API) != 0, "but refused from the API");
+  struct setting_def later = {"later", SETTING_INT, 0, "2", NULL, "made at run time"};
+  int i = settings_define(st, &later, &err);
+  ok(i >= NDEFS && get_i(st, "later") == 5 && settings_origin(st, i) == FROM_CLI,
+     "made, it is a setting after the others, with the value held for it");
+  set(st, "later", "7", FROM_API);
+  struct setting_def again = {"later", SETTING_STR, 0, "a", NULL, "made again"};
+  ok(settings_define(st, &again, &err) == i && !strcmp(get_s(st, "later"), "5") &&
+     !strcmp(settings_def(st, i)->help, "made again"), "made again: the same setting, its values kept");
+  struct setting_def own = {"count", SETTING_INT, 0, "1", NULL, ""};
+  ok(settings_define(st, &own, &err) < 0, "lulibre's own are not made again");
+  free(err);
+  err = NULL;
+  struct setting_def bad = {"odd", SETTING_INT, 0, "x", NULL, ""};
+  ok(settings_define(st, &bad, &err) < 0, "nor one whose default is no value of it");
+  free(err);
+  set(st, "typo", "1", FROM_CLI);
+  char *left = settings_unmade(st);
+  ok(left && strstr(left, "typo=1 (the command line): no setting is called typo"), "what nothing made is said");
+  free(left);
+  ok(settings_unmade(st) == NULL, "once");
+  settings_free(st);
+  get_s_done();
+}
+
 /* ---- the queue ---- */
 
 /* An inbox alone does not keep its loop running; in the program other
@@ -628,6 +658,7 @@ int main(void) {
   test_settings_values();
   test_settings_layers();
   test_settings_state();
+  test_settings_made();
   test_queue();
   test_events();
   test_evman();

@@ -16,9 +16,14 @@ script, replaces the command line's value.
 
     lulibre -o help           the settings, their values and what they do
     lulibre -o name=value     a setting for this run
+    :set                      every setting, its value and where it is set
     :set name                 a setting's value; :set name=value changes it
     lulibre --clean           start without init.lua
     lulibre -C DIR            another configuration folder (or $LULIBRE_CONFIG_DIR)
+
+A name no setting has, given with `-o` or in the saved state, is held
+while init.lua starts, for a setting a script makes (`setman.create`,
+[the API](api.md)); one nothing made is said, and lulibre goes on.
 
 `~/.config/lulibre/init.lua` is plain Lua. lulibre never writes into it;
 lulibre-setup writes one only where there is none.

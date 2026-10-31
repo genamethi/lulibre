@@ -14,9 +14,16 @@ struct entry {
   union setting_value v;
 };
 
+struct held { /* a value for a name no setting has yet */
+  char *name, *text;
+  enum setting_origin from;
+};
+
 struct settings {
-  const struct setting_def *defs;
-  int n;
+  struct setting_def *defs; /* lulibre's, then those made at run time */
+  int n, cap;
+  struct held *held;
+  int nheld;
   struct entry *e;
   int persist; /* the persistence setting's index, or -1 */
   settings_watch_fn *watch;
@@ -137,8 +144,9 @@ static void settle_all(struct settings *st) {
 
 struct settings *settings_new(const struct setting_def *defs, int ndefs) {
   struct settings *st = xcalloc(1, sizeof *st);
-  st->defs = defs;
-  st->n = ndefs;
+  st->defs = xcalloc((size_t)ndefs, sizeof *st->defs);
+  memcpy(st->defs, defs, (size_t)ndefs * sizeof *defs);
+  st->n = st->cap = ndefs;
   st->e = xcalloc(ndefs, sizeof *st->e);
   st->persist = -1;
   for (int i = 0; i < ndefs; i++) {
@@ -150,12 +158,27 @@ struct settings *settings_new(const struct setting_def *defs, int ndefs) {
   return st;
 }
 
+static void def_free(struct setting_def *d) {
+  if (!(d->flags & SETTING_MADE)) return;
+  free((char *)d->name);
+  free((char *)d->dflt);
+  free((char *)d->choices);
+  free((char *)d->help);
+}
+
 void settings_free(struct settings *st) {
   if (!st) return;
   for (int i = 0; i < st->n; i++) {
     if (is_text(st->defs[i].type)) free(st->e[i].v.s);
     for (int o = 0; o < ORIGINS; o++) free(st->e[i].layer[o]);
+    def_free(&st->defs[i]);
   }
+  for (int i = 0; i < st->nheld; i++) {
+    free(st->held[i].name);
+    free(st->held[i].text);
+  }
+  free(st->held);
+  free(st->defs);
   free(st->e);
   free(st);
 }
@@ -211,6 +234,17 @@ static int layer_for(const struct settings *st, const char *name, enum setting_o
 }
 
 int settings_set(struct settings *st, const char *name, const char *text, enum setting_origin from, char **err) {
+  if ((from == FROM_CLI || from == FROM_STATE) && settings_find(st, name) < 0) {
+    for (int k = 0; k < st->nheld; k++) /* a later value of the same name and layer replaces it */
+      if (st->held[k].from == from && !strcmp(st->held[k].name, name)) {
+        free(st->held[k].text);
+        st->held[k].text = xstrdup(text);
+        return 0;
+      }
+    st->held = xrealloc(st->held, (size_t)(st->nheld + 1) * sizeof *st->held);
+    st->held[st->nheld++] = (struct held){xstrdup(name), xstrdup(text), from};
+    return 0;
+  }
   int i = layer_for(st, name, from, err);
   if (i < 0) return -1;
   union setting_value v;
@@ -246,6 +280,90 @@ int settings_change(struct settings *st, const char *name, const char *text, cha
   if (text) st->e[i].layer[FROM_API] = xstrdup(text);
   settle_all(st);
   return 0;
+}
+
+int settings_define(struct settings *st, const struct setting_def *d, char **err) {
+  union setting_value v;
+  struct setting_def made = {xstrdup(d->name), d->type, SETTING_MADE, xstrdup(d->dflt ? d->dflt : ""),
+                             d->choices ? xstrdup(d->choices) : NULL, xstrdup(d->help ? d->help : "")};
+  if (settings_parse(&made, made.dflt, &v, err)) {
+    def_free(&made);
+    return -1;
+  }
+  int i = settings_find(st, d->name);
+  if (i >= 0 && !(st->defs[i].flags & SETTING_MADE)) {
+    def_free(&made);
+    if (is_text(d->type)) free(v.s);
+    *err = xasprintf("%s is one of lulibre's own settings", d->name);
+    return -1;
+  }
+  if (i < 0) {
+    if (st->n == st->cap) {
+      st->cap *= 2;
+      st->defs = xrealloc(st->defs, (size_t)st->cap * sizeof *st->defs);
+      st->e = xrealloc(st->e, (size_t)st->cap * sizeof *st->e);
+    }
+    i = st->n++;
+    memset(&st->e[i], 0, sizeof st->e[i]);
+    st->e[i].v = v;
+  } else { /* made again: the layers that are still values of it stay */
+    if (is_text(st->defs[i].type)) free(st->e[i].v.s);
+    st->e[i].v = v;
+    def_free(&st->defs[i]);
+  }
+  st->defs[i] = made;
+  free(st->e[i].layer[FROM_DEFAULT]);
+  st->e[i].layer[FROM_DEFAULT] = xstrdup(made.dflt);
+  for (int o = FROM_DEFAULT + 1; o < ORIGINS; o++) {
+    union setting_value w;
+    char *bad = NULL;
+    if (!st->e[i].layer[o] || !settings_parse(&made, st->e[i].layer[o], &w, &bad)) {
+      if (st->e[i].layer[o] && is_text(made.type)) free(w.s);
+      continue;
+    }
+    log_warn("%s: passed over: %s", d->name, bad);
+    free(bad);
+    free(st->e[i].layer[o]);
+    st->e[i].layer[o] = NULL;
+  }
+  for (int k = 0; k < st->nheld;) { /* given before it was made */
+    struct held h = st->held[k];
+    if (strcmp(h.name, d->name)) {
+      k++;
+      continue;
+    }
+    st->held[k] = st->held[--st->nheld];
+    char *bad = NULL;
+    if (settings_set(st, h.name, h.text, h.from, &bad)) {
+      log_warn("%s=%s: passed over: %s", h.name, h.text, bad);
+      free(bad);
+    }
+    free(h.name);
+    free(h.text);
+  }
+  settle_all(st);
+  return i;
+}
+
+int settings_held(const struct settings *st, int k, const char **name, const char **text, enum setting_origin *from) {
+  if (k < 0 || k >= st->nheld) return 0;
+  *name = st->held[k].name;
+  *text = st->held[k].text;
+  *from = st->held[k].from;
+  return 1;
+}
+
+char *settings_unmade(struct settings *st) {
+  if (!st->nheld) return NULL;
+  sbuf out = SBUF_INIT;
+  for (int k = 0; k < st->nheld; k++) {
+    sb_printf(&out, "%s%s=%s (%s): no setting is called %s", k ? "\n" : "", st->held[k].name, st->held[k].text,
+              st->held[k].from == FROM_CLI ? "the command line" : "the saved state", st->held[k].name);
+    free(st->held[k].name);
+    free(st->held[k].text);
+  }
+  st->nheld = 0;
+  return sb_take(&out);
 }
 
 char *settings_format(const struct setting_def *d, const union setting_value *v) {
