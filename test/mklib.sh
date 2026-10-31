@@ -51,6 +51,6 @@ endobj
 trailer<</Root 1 0 R/Size 6>>
 %%EOF
 PDF
-printf 'Lecture notes on additive number theory\nSecond line\n' \
+printf 'Lecture notes on additive number theory\nSecond line\nThese are notes taken at a course of lectures given over one winter, and they cover the basic results of the subject with a number of worked examples and exercises for the reader, along with notes on what to read next.\n' \
   > "$lib/Paul Erdos/Notes (2)/Notes - Paul Erdos.txt"
 

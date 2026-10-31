@@ -6,7 +6,8 @@
 -- again. A record's score is its title's on the pages, plus what its
 -- authors found there add; with a page count too far from the file's it is
 -- not the book, whatever its score. A record with no page count, or a file
--- with none, is not judged by it.
+-- with none, is not judged by it; a file whose text can't be read judges
+-- nothing.
 --
 -- The settings: check_title_k, check_title_base, check_authors, check_pages,
 -- check_same.
@@ -86,7 +87,7 @@ function M.length(record_pages, file_pages, c)
 end
 
 --- An online record against the file: `{ score=, same=, length= }`, or nil
--- when the file has no text to compare it with.
+-- when the file has no text it can compare it with.
 -- @tparam table r `{ fields=, pages= }`
 -- @tparam table file a row of bookman.files
 -- @param kept the file's lulib._kept
@@ -96,6 +97,7 @@ function M.record(r, file, kept, text, c)
   if not r.fields.title then
     return { score = 0, same = false }
   end
+  if file.usable == false then return nil end
   local found, words = M.count("title", r.fields.title, kept, text)
   if not found then return nil end
   local score = M.title(found, words, c)

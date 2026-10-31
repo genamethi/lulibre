@@ -75,35 +75,44 @@ static void tokenize(enum field_kind kind, const char *s, struct tokens *ts) {
 
 /* ---- a value's words in a text ---- */
 
-static int token_cmp(const void *a, const void *b) {
-  return strcmp(*(char *const *)a, *(char *const *)b);
-}
-
-/* The text's words sorted: a word broken at a line's end is joined first. */
-static void text_words(const char *text, struct tokens *ts) {
+/* The words of s as a page has them: folded; a word broken at a line's end
+ * whole; the accents TeX leaves beside their letter ("Universit´e") dropped;
+ * punctuation and symbols (U+2000 on: daggers, dashes, arrows) and figures glued
+ * to a name ("Chamseddine1,3") apart. */
+static void page_words(const char *s, struct tokens *ts) {
   sbuf f = SBUF_INIT;
-  fold_utf8(&f, text, strlen(text));
+  fold_utf8(&f, s, strlen(s));
   char *p = f.s ? f.s : (char[]){0}, *o = p;
   for (const char *r = p; *r; r++) {
-    if (r[0] == '-' && r[1] == '\n' && r > p && word_char((unsigned char)r[-1]) && word_char((unsigned char)r[2])) r++;
-    else *o++ = *r;
+    unsigned char c = (unsigned char)r[0], d = (unsigned char)r[1];
+    if (c == '-' && d == '\n' && r > p && word_char((unsigned char)r[-1]) && word_char((unsigned char)r[2])) r++;
+    else if (c == '`') continue;
+    else if ((c == 0xC2 && (d == 0xB4 || d == 0xA8 || d == 0xB8)) || (c == 0xCB && (d == 0x86 || d == 0x9C || d == 0x99))) r++;
+    else if (c == 0xC2 && d >= 0x80) { r++; *o++ = ' '; }
+    else if (c == 0xE2 && d && r[2]) { r += 2; *o++ = ' '; }
+    else *o++ = (char)c;
   }
   *o = 0;
   for (const char *w = p; *w;) {
     while (*w && !word_char((unsigned char)*w)) w++;
     const char *start = w;
-    while (*w && word_char((unsigned char)*w)) w++;
+    int digits = isdigit((unsigned char)*w);
+    while (*w && word_char((unsigned char)*w) && !!isdigit((unsigned char)*w) == !!digits) w++;
     add(ts, start, (size_t)(w - start));
   }
   sb_free(&f);
-  if (ts->n) qsort(ts->t, (size_t)ts->n, sizeof *ts->t, token_cmp);
+}
+
+static int token_cmp(const void *a, const void *b) {
+  return strcmp(*(char *const *)a, *(char *const *)b);
 }
 
 void words_found(const char *value, const char *text, int (*skip)(const char *word, void *ud), void *ud,
                  int *found, int *nwords) {
   struct tokens v = {0}, t = {0};
-  words(value, &v);
-  text_words(text, &t);
+  page_words(value, &v);
+  page_words(text, &t);
+  if (t.n) qsort(t.t, (size_t)t.n, sizeof *t.t, token_cmp);
   *found = *nwords = 0;
   for (int i = 0; i < v.n; i++) {
     if (skip && skip(v.t[i], ud)) continue;

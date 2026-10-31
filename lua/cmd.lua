@@ -7,6 +7,7 @@ local bookman = require "bookman"
 local iter = require "iter"
 local propose = require "lulib._propose"
 local review = require "lulib._review"
+local verify = require "lulib._verify"
 
 local M = {}
 
@@ -37,6 +38,11 @@ end
 -- books; deep shows what it otherwise doesn't.
 function M.review(ids, o)
   review.open(ids, o)
+end
+
+--- :verify [filter]: the books' records held against their files.
+function M.verify(ids)
+  verify.open(ids)
 end
 
 --- :enrich [filter]: ask the online services about the books, by their
@@ -197,6 +203,7 @@ cmdman.create("tags", function(c)
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
+cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")
   local given = { args = deep and args or o.args, selection = o.selection }

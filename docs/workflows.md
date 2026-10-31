@@ -195,6 +195,15 @@ Every decision, rejections too, goes into the journal with the parse that made
 the proposal: that is what a parse's record is measured from, against each
 field's value as it stands now.
 
+## Holding the records against the files: `:verify`
+
+`:verify` lists the books whose pages leave something of the record unborne: a
+title scoring under `check_same`, authors none of whose names are there, an
+identifier that is not the file's own, or a file that can't be read. It goes by
+what was kept and reads only files not read before. It changes nothing, but
+`r` proposes for the book under the cursor, adding it to the current review, and
+`R` for every book listed. `z` lists the rest too.
+
 ## Looking books up: `:enrich`
 
 `:enrich` asks the online services about the selected books, by their
