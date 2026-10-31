@@ -2,11 +2,6 @@
 
 Rules for working on lulibre, and facts about calibre measured for it.
 
-The maintainer's standing instructions (how to work with the maintainer,
-the names already decided, what never to touch) are in
-`/media/servd/staging/lulibre-scratch/working-rules.md`: read it at the
-start of every session.
-
 ## A library is the motivation, not the work
 
 A calibre library's problems show what the program cannot do yet: a title
