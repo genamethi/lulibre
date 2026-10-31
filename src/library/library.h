@@ -113,4 +113,8 @@ void lapi_store_write(struct store_req *req);
  * text is read. status: its exit status; out: what it printed. malloc'd. */
 char *library_failure(int status, const char *out, const char *server);
 
+/* prefs.c: the library calibre opened last, when calibre's settings name
+ * one that is there; NULL otherwise. malloc'd. */
+char *calibre_library_path(void);
+
 #endif

@@ -73,7 +73,9 @@ The calibre library. Otherwise the setting
 .IR init.lua ,
 or the saved state), else
 .BR LULIBRE_LIBRARY ,
-else the current directory.
+else the current directory when it is a library, else the library calibre
+opened last (calibre's
+.IR global.py.json ).
 .TP
 .BI \-o " name=value"
 A setting for this run. It lies over what

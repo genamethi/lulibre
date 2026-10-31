@@ -196,6 +196,18 @@ void path_walk(const char *dir, int depth, path_walk_fn *fn, void *ud) {
   walk(dir, "", depth, fn, ud);
 }
 
+char *file_read(const char *path, size_t *len) {
+  FILE *f = fopen(path, "r");
+  if (!f) return NULL;
+  sbuf s = SBUF_INIT;
+  char buf[8192];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof buf, f)) > 0) sb_putn(&s, buf, n);
+  fclose(f);
+  if (len) *len = s.len;
+  return s.s ? sb_take(&s) : xstrdup("");
+}
+
 const char *path_ext(const char *p) {
   const char *slash = strrchr(p, '/');
   const char *dot = strrchr(slash ? slash : p, '.');

@@ -33,7 +33,7 @@ static void usage(FILE *f) {
              "With no command, lulibre opens the interactive interface (? for help).\n\n");
   for (size_t i = 0; i < ARRAY_LEN(commands); i++)
     fprintf(f, "  %-8s %s\n", commands[i].name, commands[i].summary);
-  fprintf(f, "\n  -L DIR          calibre library (else path.library, $LULIBRE_LIBRARY, or .)\n"
+  fprintf(f, "\n  -L DIR          calibre library (else path.library, $LULIBRE_LIBRARY, ., or calibre's last)\n"
              "  -o name=value   a setting; `lulibre -o help` lists them\n"
              "  -C DIR          configuration directory: init.lua, lua/\n"
              "                  (else $LULIBRE_CONFIG_DIR, else ~/.config/lulibre)\n"

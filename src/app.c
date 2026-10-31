@@ -110,9 +110,13 @@ void app_open_db(struct app *app) {
   char *err = NULL;
   if (!app_str(app, S_LIBRARY)[0]) {
     const char *env = getenv("LULIBRE_LIBRARY");
+    char *calibre = NULL;
     if (env && env[0]) settings_set(app->settings, "path.library", env, FROM_CLI, &err);
     else if (access("metadata.db", R_OK) == 0) settings_set(app->settings, "path.library", ".", FROM_CLI, &err);
-    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or setman.set(\"path.library\", DIR) in init.lua");
+    else if ((calibre = calibre_library_path())) settings_set(app->settings, "path.library", calibre, FROM_CLI, &err);
+    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or setman.set(\"path.library\", DIR) in init.lua"
+             " (calibre's settings name none that is there)");
+    free(calibre);
   }
   const char *library = app_str(app, S_LIBRARY);
   char *real = realpath(library, NULL);

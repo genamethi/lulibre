@@ -62,7 +62,7 @@ removed.
 
 | Setting | Default | |
 |---|---|---|
-| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, or else the current directory |
+| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library, else the library calibre opened last (`library_path` in calibre's `global.py.json`) |
 | `path.indexdb` | | the index database; by default `<library's name>-<hash>.db` under `~/.local/share/lulibre/` |
 | `path.journaldb` `path.customdb` `path.witdb` | | the journal of changes, your own `#fields`, the wits waiting for review; by default beside the index, `<index>.journal.db` and so on |
 | `path.netdb` | | the online answers, for every library; by default `~/.local/share/lulibre/net.db` |

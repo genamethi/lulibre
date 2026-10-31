@@ -44,22 +44,10 @@ static struct gfile *files;
 static struct gtag *tags;
 static int nfiles, ntags;
 
-static char *slurp(const char *path, size_t *len) {
-  FILE *f = fopen(path, "r");
-  if (!f) return NULL;
-  sbuf s = SBUF_INIT;
-  char buf[8192];
-  size_t n;
-  while ((n = fread(buf, 1, sizeof buf, f)) > 0) sb_putn(&s, buf, n);
-  fclose(f);
-  *len = s.len;
-  return s.s ? sb_take(&s) : xstrdup("");
-}
-
 /* a guide as the pager shows it; 0 when it cannot be read */
 static int render(const char *path, struct rich *r) {
   size_t len;
-  char *text = slurp(path, &len);
+  char *text = file_read(path, &len);
   if (!text) return 0;
   md_render(text, len, PAGER_WIDTH, r);
   free(text);
@@ -362,7 +350,7 @@ static int mentions(struct tui *t, const char *topic) {
   sb_printf(&out.text, "NO GUIDE HAS A TAG FOR '%s'; THESE LINES MENTION IT\n", topic);
   for (int f = 0; f < nfiles && found < 200; f++) {
     size_t n;
-    char *source = slurp(files[f].path, &n);
+    char *source = file_read(files[f].path, &n);
     if (!source) continue;
     struct rich r;
     md_render(source, n, PAGER_WIDTH, &r);

@@ -36,8 +36,9 @@ At run time:
 
     make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
 
-lulibre needs only to know where the library is: `-L DIR`,
-`$LULIBRE_LIBRARY`, or in `~/.config/lulibre/init.lua`:
+lulibre needs only to know where the library is. With nothing said, it is
+the library calibre opened last; else `-L DIR`, `$LULIBRE_LIBRARY`, or in
+`~/.config/lulibre/init.lua`:
 
 ```lua
 setman.set("path.library", "~/calibre-library")
