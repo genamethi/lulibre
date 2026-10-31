@@ -173,11 +173,6 @@ static void test_settings_layers(void) {
   set(st, "persistent", "false", FROM_API);
   ok(get_i(st, "count") == 3, "persistence off again: down to the default");
   ok(set(st, "persistent", "true", FROM_STATE) != 0, "persistence is not taken from the state");
-  set(st, "count", "6", FROM_ASKED);
-  ok(get_i(st, "count") == 6 && settings_origin(st, count) == FROM_ASKED,
-     "an answer asked at start counts, persistence off, over the default");
-  set(st, "count", "2", FROM_API);
-  ok(get_i(st, "count") == 2, "and under the Lua API");
   settings_free(st);
 }
 

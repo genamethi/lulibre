@@ -48,14 +48,6 @@ void app_settings(struct app *app, const char *confdir, const char *library, con
     app->state_path = xasprintf("%s/settings", state);
     free(state);
   }
-  char *slash = strrchr(app->state_path, '/');
-  app->answers_path = slash ? xasprintf("%.*s/asked", (int)(slash - app->state_path), app->state_path)
-                            : xstrdup("asked");
-  if (settings_load_answers(app->settings, app->answers_path, &err)) {
-    warnf("%s", err);
-    free(err);
-    err = NULL;
-  }
   if (settings_load_state(app->settings, app->state_path, &err)) {
     warnf("%s", err);
     free(err);

@@ -1,12 +1,13 @@
 """The questions lulibre asks on a terminal when no library is set: the
-library calibre opened last, then calibre's content server where calibre
-puts it (one of the test's own, asking for a password), its user and its
-password file, each kept in lulibre's state folder (never init.lua) and
-asked once, init.lua lying over them; and no library when the answer is
-no. Inside a private network namespace (unshare -rn).
+library calibre opened last, then calibre's content server when one runs
+(one of the test's own, found among the processes, its port from its
+socket, asking for a password), its user and its password file. The
+answers hold for the run: nothing is kept, and they are asked again. Inside
+private process and network namespaces, where the only calibre-server is
+the test's.
 
-  unshare -rn python3 -I test/first.py BIN"""
-import http.server, os, pty, select, shutil, subprocess, sys, tempfile, threading, time
+  unshare -rnpf --mount-proc python3 -I test/first.py BIN"""
+import os, pty, select, shutil, subprocess, sys, tempfile, time
 
 bin_ = os.path.abspath(sys.argv[1])
 here = os.path.dirname(os.path.abspath(__file__))
@@ -14,24 +15,16 @@ subprocess.run(["ip", "link", "set", "lo", "up"], capture_output=True)
 t = tempfile.mkdtemp()
 subprocess.run(["sh", os.path.join(here, "mklib.sh"), os.path.join(t, "lib")], capture_output=True, check=True)
 
-
-class Asks(http.server.BaseHTTPRequestHandler):  # a content server that asks for a password
-    def do_GET(self):
-        self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Digest realm="calibre"')
-        self.end_headers()
-
-    def log_message(self, *a):
-        pass
-
-
-server = http.server.HTTPServer(("127.0.0.1", 8080), Asks)
-threading.Thread(target=server.serve_forever, daemon=True).start()
+# a calibre-server: a script of that name that listens, given --enable-auth
+with open(t + "/calibre-server", "w") as f:
+    f.write("import socket, time\ns = socket.socket()\ns.bind(('127.0.0.1', 8099))\ns.listen()\ntime.sleep(60)\n")
+server = subprocess.Popen([sys.executable, "-I", t + "/calibre-server", "--enable-auth", t + "/lib"])
+time.sleep(0.5)
 
 
 def run(cfg, answers):
     """lulibre stats on a terminal, each answer typed when its question shows; what it printed"""
-    env = dict(os.environ, XDG_CONFIG_HOME=cfg, XDG_DATA_HOME=t + "/data", XDG_STATE_HOME=cfg + "/state")
+    env = dict(os.environ, XDG_CONFIG_HOME=cfg, XDG_DATA_HOME=t + "/data", XDG_STATE_HOME=t + "/state")
     env.pop("LULIBRE_LIBRARY", None)
     pid, fd = pty.fork()
     if pid == 0:
@@ -78,26 +71,16 @@ def check(what, ok, more=""):
 
 yes = config("yes")
 first = run(yes, [("(y|N)", "y"), ("(y|N)", "y"), ("]:", "tester"), ("]:", "")])
-kept = open(yes + "/state/lulibre/asked").read() if os.path.exists(yes + "/state/lulibre/asked") else ""
 check("no library set: asked whether to open calibre's last", "Library not set. Open %s/lib" % t in first, first)
 check("taken, it opens", "books" in first, first)
-check("the content server where calibre puts it, asking for a password: asked", "asks for a password" in first, first)
-check("each answer is kept in lulibre's state folder", "path.library=%s/lib\n" % t in kept and
-      "server=http://127.0.0.1:8080\n" in kept and "user=tester\n" in kept and
-      "path.password=%s/calibre/password-file\n" % yes in kept, kept)
-check("and init.lua is not written", not os.path.exists(yes + "/lulibre/init.lua"))
-again = run(yes, [])
-check("asked once", "(y|N)" not in again and "books" in again, again)
-with open(yes + "/lulibre/init.lua", "w") as f:
-    f.write('setman.set("path.library", "%s/elsewhere")\n' % t)
-over = run(yes, [])
-check("init.lua lies over an answer", "%s/elsewhere: no such directory" % t in over, over)
-
-no = config("no")
-said = run(no, [("(y|N)", "n")])
-check("no: no library, and nothing kept", "no library" in said and not os.path.exists(no + "/state/lulibre/asked"), said)
-
-server.shutdown()
+check("the content server that runs: asked, with the port it listens on and its password",
+      "http://127.0.0.1:8099, asking for a password" in first and "user [" in first and
+      "file holding its password [%s/calibre/password-file]" % yes in first, first)
+check("nothing is kept: no init.lua, no saved settings", not os.path.exists(yes + "/lulibre/init.lua") and
+      not os.path.exists(t + "/state/lulibre/settings"))
+again = run(yes, [("(y|N)", "n")])
+check("so the next start asks again", "Library not set" in again and "no library" in again, again)
+server.kill()
 shutil.rmtree(t)
 if fails:
     sys.exit(1)

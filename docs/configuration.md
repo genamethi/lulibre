@@ -62,7 +62,7 @@ removed.
 
 | Setting | Default | |
 |---|---|---|
-| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library; else, on a terminal, lulibre asks whether to open the library calibre opened last (`library_path` in calibre's `global.py.json`), then about calibre's content server when one answers at `http://127.0.0.1:8080`; the answers are kept in `asked` beside the saved settings (`~/.local/state/lulibre/asked`), under init.lua, `-o` and the saved state |
+| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library; else, on a terminal, lulibre asks whether to open the library calibre opened last (`library_path` in calibre's `global.py.json`), then about calibre's content server when one is running (found among the processes, with the port it listens on); the answers hold for that run |
 | `path.indexdb` | | the index database; by default `<library's name>-<hash>.db` under `~/.local/share/lulibre/` |
 | `path.journaldb` `path.customdb` `path.witdb` | | the journal of changes, your own `#fields`, the wits waiting for review; by default beside the index, `<index>.journal.db` and so on |
 | `path.netdb` | | the online answers, for every library; by default `~/.local/share/lulibre/net.db` |

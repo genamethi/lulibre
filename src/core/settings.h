@@ -18,9 +18,7 @@
 
 enum setting_type { SETTING_STR, SETTING_INT, SETTING_BOOL, SETTING_NUM, SETTING_PATH };
 
-/* FROM_ASKED: an answer given at the terminal when nothing was set (first.c),
- * kept in lulibre's state folder; it lies over the default alone */
-enum setting_origin { FROM_DEFAULT, FROM_ASKED, FROM_STATE, FROM_API, FROM_CLI, ORIGINS };
+enum setting_origin { FROM_DEFAULT, FROM_STATE, FROM_API, FROM_CLI, ORIGINS };
 
 enum setting_flags {
   SETTING_CLI_ONLY = 1 << 0, /* locates init.lua or the state: command line only, never saved */
@@ -90,10 +88,5 @@ int settings_get(const struct settings *st, const char *name, union setting_valu
  * longer valid, is passed over with a warning. */
 int settings_load_state(struct settings *st, const char *path, char **err);
 int settings_save_state(const struct settings *st, const char *path, char **err);
-/* The answers (asked, beside the saved state): read at start into the
- * asked layer, which always counts; settings_keep_answer puts one in that
- * layer and adds it to the file. */
-int settings_load_answers(struct settings *st, const char *path, char **err);
-int settings_keep_answer(struct settings *st, const char *path, const char *name, const char *value, char **err);
 
 #endif

@@ -118,5 +118,9 @@ char *library_failure(int status, const char *out, const char *server);
  * otherwise). malloc'd. */
 char *calibre_config_dir(void);
 char *calibre_library_path(void);
+/* calibre's content server, running: its process (0 for none; one with
+ * library, a real path, among its arguments first), its address and
+ * whether it asks for a password. *url malloc'd. */
+int calibre_server_find(const char *library, char **url, int *auth);
 
 #endif
