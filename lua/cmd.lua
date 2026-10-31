@@ -360,8 +360,7 @@ cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[fil
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")
   local given = { args = deep and args or o.args, selection = o.selection }
-  local filtered = (given.args or "") ~= "" or (o.selection and #o.selection > 0)
-  M.review(filtered and M.books(given) or nil, { deep = deep ~= nil })
-end, { desc = "[deep] [filter]  the books' proposals: accept, edit, reject", complete = "filter" })
+  M.review((given.args or "") ~= "" and M.books(given) or nil, { deep = deep ~= nil })
+end, { desc = "[deep] [filter | selection]  the current review, or its proposals for those books: accept, edit, reject, then write", complete = "filter" })
 
 return M

@@ -16,6 +16,8 @@
 --
 -- @library lulib._review
 local bookman = require "bookman"
+local check = require "lulib._check"
+local kept = require "lulib._kept"
 local propose = require "lulib._propose"
 local wit = require "wit"
 
@@ -54,6 +56,7 @@ own.screen = {
     { "prune", "p", "drop what the record now holds" },
   },
   hint = { "accept", "edit", "reject", "next", "write", "deep", "recall" },
+  views = { about = { kind = "band", size = 0.3 } }, -- what is known of the row's value
 }
 -- those that are about the review and not a row
 own.whole = { write = true, sync = true, deep = true, name = true, recall = true, fresh = true, discard = true, add = true,
@@ -162,6 +165,39 @@ function own.label(r)
   return ("%s  (%d book%s, %d marked)"):format(r.name or ("review " .. r.id), r.books, r.books == 1 and "" or "s", r.marked)
 end
 
+-- how much of a value is on the book's file's pages, as words
+function own.on_pages(book, field, value)
+  local file = kept.file_of(book)
+  if not file then return "no file" end
+  if file.usable == false then return "its text can't be read" end
+  local k <close> = kept.open(file.id, file.indexed)
+  local text <close> = kept.reader(file)
+  local found, words = check.count(field, value, k, text)
+  if not found then return "no text" end
+  return ("%d of %d word%s found"):format(found, words, words == 1 and "" or "s")
+end
+
+--- What the band under the list says of a row: the value in view, what the
+-- record has, where it came from, what the pages say, and the other values.
+-- @treturn {table,...} rows of `{ label, text, style= }`
+function M.about(e)
+  if not e.alts then return { { "", e.head or e.note or "" } } end
+  local alt = e.alts[e.i]
+  local value = alt.edited or alt.value
+  local rows = {
+    { e.field, value == "" and "(blank)" or value, style = "head" },
+    { "now", wit.now(e.book, e.field) or "" },
+    { "from", ("%s   %s%s"):format(alt.source, shown_score(alt.score), alt.hidden == 1 and "   (a review doesn't show it)" or "") },
+    { "the pages", get("on_pages")(e.book, e.field, value) },
+  }
+  if alt.agree then rows[#rows + 1] = { "agrees", alt.agree } end
+  if alt.disagree then rows[#rows + 1] = { "differs", alt.disagree } end
+  for i, other in ipairs(e.alts) do
+    if i ~= e.i then rows[#rows + 1] = { i == 1 and "first" or "also", ("%s   %s   %s"):format(other.value, shown_score(other.score), other.source) } end
+  end
+  return rows
+end
+
 --- A row's cells: the mark, field, the record's value, the alternative in
 -- view (and which of how many), its score, where it came from and what
 -- agrees.
@@ -183,8 +219,9 @@ function M.open(books, o)
   -- per book with wits, a heading and a row per field
   local function entries()
     local out = {}
-    for _, book in ipairs(view.filter or wit.books { deep = view.deep }) do
-      local fields = wit.get(book, { deep = view.deep })
+    local all, books = wit.all { deep = view.deep }
+    for _, book in ipairs(view.filter or books) do
+      local fields = all[book] or {}
       if #fields > 0 then
         local title = bookman.get(book, "title")
         out[#out + 1] = { book = book, head = title and title ~= "" and title or ("book " .. book) }
@@ -235,6 +272,7 @@ function M.open(books, o)
       return r
     end,
     actions = actions,
+    band = { view = "about", title = "the row under the cursor", rows = function(e) return M.about(e) end },
     refresh = {
       proposed = false,
       records_changed = function()

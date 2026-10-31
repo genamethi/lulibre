@@ -14,20 +14,8 @@ local C, Cmt, Carg, R, S = expr.C, expr.Cmt, expr.Carg, expr.R, expr.S
 
 -- a line with no lower case
 local caps = (1 - R "az" - S "\n\f") ^ 1
-local small = { a = true, an = true, ["and"] = true, ["for"] = true, ["in"] = true, of = true, on = true,
-                the = true, to = true }
 
--- "ÉTALE MORPHISMS OF SCHEMES" as "Étale Morphisms of Schemes"
-local function title_case(s)
-  local first = true
-  return (expr.lower(s):gsub("[%w\128-\255]+", function(w)
-    local keep = small[w] and not first
-    first = false
-    if keep then return w end
-    local head = w:match("^[\192-\255][\128-\191]*") or w:sub(1, 1)
-    return expr.upper(head) .. w:sub(#head + 1)
-  end))
-end
+local title_case = require("lulib._titlecase").apply
 
 -- the line after the name: the tag, "Contents", or the copyright
 local second = Cmt(C(expr.line), function(_, pos, l)

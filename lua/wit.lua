@@ -163,6 +163,31 @@ function M.add(book, w, review)
   return true
 end
 
+--- Every book's wits in a review at once, per book, as `get` gives them for
+-- each: `{ [book] = { {field=, alts=}, ... } }`, and the books in the order they
+-- came.
+-- @tparam[opt] table o `{ review=, deep= }`
+function M.all(o)
+  o = o or {}
+  local out, by = {}, {}
+  for _, row in ipairs(run("SELECT id, book, field, value, source, score, agree, disagree, start, stop, hidden, decision, edited"
+                           .. " FROM wits WHERE review = ? AND (? OR NOT hidden OR decision IS NOT NULL)"
+                           .. " ORDER BY book, field, alt", o.review or M.current(), o.deep and 1 or 0)) do
+    if not out[row.book] then
+      out[row.book] = {}
+      by[row.book] = {}
+    end
+    local f = by[row.book][row.field]
+    if not f then
+      f = { field = row.field, alts = {} }
+      by[row.book][row.field] = f
+      table.insert(out[row.book], f)
+    end
+    f.alts[#f.alts + 1] = row
+  end
+  return out, M.books(o)
+end
+
 --- A book's wits in a review, per field: the first-ranked and its
 -- alternatives. Those a review doesn't show are left out, unless `deep`.
 -- @tparam integer book

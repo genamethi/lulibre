@@ -51,6 +51,8 @@ end
 -- actions: `{ [action] = function(item, i) }`, what one of the screen's
 -- actions does to the item under the cursor, whose error (raised, or nil
 -- and why) is shown;
+-- band: `{ view=, title=, columns=, rows = function(item, i) }`, a view of the
+-- screen (scrnman.create's views) that says more of the item under the cursor;
 -- refresh: event kinds that read the items again, as a list, or
 -- `{ [kind] = function(ev) }` to run first. Without the interface
 -- (lulibre run), the rows are printed, their cells two spaces apart.
@@ -77,7 +79,20 @@ function M.list(o)
     spec.columns = {}
     for c = 1, n do spec.columns[c] = "" end
   end
+  if o.band then spec.moves = true end
   local p <close> = uiman.panel(spec)
+  -- a view of the screen that says more of the item under the cursor
+  local band <close> = o.band and uiman.panel {
+    title = o.band.title or "", screen = o.screen, view = o.band.view, focus = false,
+    columns = o.band.columns or { { "", 12 }, { "", 0 } },
+    rows = items[1] ~= nil and o.band.rows(items[1], 1) or {},
+  } or nil
+  local function about(i)
+    if band and items[i] ~= nil then
+      local ok, r = pcall(o.band.rows, items[i], i)
+      band:rows(ok and r or { { "", tostring(r), style = "error" } })
+    end
+  end
   local ids = {}
   local _ <close> = setmetatable({}, { __close = function() for _, id in ipairs(ids) do evman.rm(id) end end })
   for k, v in pairs(o.refresh or {}) do
@@ -92,11 +107,14 @@ function M.list(o)
   while true do
     local action, i, value = p:wait()
     if not action then break end
-    local fn = (o.actions or {})[action]
-    if fn and items[i] ~= nil then get("act")(fn, items[i], i, value) end
-    items = get("read")(o.items)
-    p:rows(rows())
-    if type(title) == "function" then p:title(title()) end
+    if action ~= "<Move>" then
+      local fn = (o.actions or {})[action]
+      if fn and items[i] ~= nil then get("act")(fn, items[i], i, value) end
+      items = get("read")(o.items)
+      p:rows(rows())
+      if type(title) == "function" then p:title(title()) end
+    end
+    about(i or p:cursor() or 1)
   end
 end
 
