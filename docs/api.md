@@ -333,7 +333,10 @@ lulibre's own is `"#name"`. `examples/grammars/` has three grammars
 written for groups of books. expr's line predicates test the line at the current position:
 `expr.largest`, `expr.bold`, `expr.block` (a paragraph's first line),
 `expr.page(n)`, `expr.near_top(share)`, and `expr.where(test)` for one of
-yours. The packaged grammar is `front` (`exprman._front`).
+yours. The packaged grammars are `front` (`exprman._front`) and `pages`
+(`exprman._pages`), a file's first pages read by their layouts: cover sheets,
+cataloguing blocks, copyright lines, series, journals, the title page. A grammar
+can also be a function, `fn(t, book)`, returning fields.
 
 A **wit** is a value for a book's field, with the source that gave it,
 kept until a review writes or rejects it. `:propose` makes them from the

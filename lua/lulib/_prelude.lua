@@ -5,6 +5,7 @@
 --
 -- @library lulib._prelude
 require "exprman._front"
+require "exprman._pages"
 require "cmd"
 require "lulib._uiman"
 require "units"

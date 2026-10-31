@@ -154,6 +154,30 @@ function M.in_metadata(text)
   return out
 end
 
+--- Reads arXiv's margin stamp, "arXiv:1012.6008v1 [math.CO] 29 Dec 2010":
+-- the number and the class, or nil.
+function M.arxiv_stamp(text)
+  local id, class = text:match("arXiv:%s*(%S-)%s*%[([%w%.%-]+)%]")
+  if not id then return nil end
+  return (id:gsub("v%d+$", "")), class
+end
+
+--- The year an arXiv number was given: 1012.6008 gives 2010, math/0601054
+-- gives 2006.
+function M.arxiv_year(id)
+  local yy = id:match("^(%d%d)%d%d%.") or id:match("/(%d%d)%d%d%d%d%d$")
+  if not yy then return nil end
+  yy = tonumber(yy)
+  return yy >= 91 and 1900 + yy or 2000 + yy
+end
+
+--- The two-digit MSC area of a "Mathematics Subject Classification" footnote.
+function M.msc(text)
+  local i = text:find("[Ss]ubject%s+[Cc]lassif") or text:find("MSC%s*%d*%s*[:%(]")
+  if not i then return nil end
+  return text:sub(i, i + 160):match("(%d%d)%u%d%d")
+end
+
 --- A file named only by an arXiv number: that number, or nil.
 function M.in_name(path)
   local stem = (path or ""):gsub("^.*/", ""):gsub("%.%w+$", "")

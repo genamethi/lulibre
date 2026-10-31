@@ -110,6 +110,15 @@ local verify = require "lulib._verify"
 local c0 = require("lulib._check").settings()
 local v1 = verify.book(2, c0, 4000)
 say("verify", v1.title.found, v1.title.words, v1.authors.found, v1.idents[1].kind, v1.idents[1].where, verify.doubtful(v1, c0))
+-- the pages grammar on a book's verso
+local verso = "Graduate Texts in Mathematics 105\nSerge Lang\nSL2(R)\n\nSpringer\n© 1985 Springer-Verlag New York, Inc.\n"
+  .. "Library of Congress Cataloging in Publication Data\nLang, Serge\nSL2(R).\n(Graduate texts in mathematics ; 105)\n"
+  .. "1. Lie groups. I. Title. II. Series.\nQA387.L35 1985 512'.55 84-22162\nISBN 0-387-96198-4"
+local verso_lines, n = {}, 0
+for l in (verso .. "\n"):gmatch("(.-)\n") do n = n + 1; verso_lines[n] = { text = l, page = 1, n = n, size = l:find("SL2") and 20 or 10 } end
+local read = require("exprman._pages").read(setmetatable({ text = verso, line = function(_, i) return verso_lines[i] end },
+  { __len = function() return n end }))
+say("verso", read.title, read.authors, read.publisher, read.pubdate, read.series, read.series_index)
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -167,6 +176,7 @@ expect "an ISSN never is" "issn|issn:0012-7094:false"
 expect "the metadata's identifiers, an arXiv DOI as its number" "metadata|doi:10.1000/meta,arxiv:1012.6008"
 expect "a file named by an arXiv number" "named|1012.6008|nil"
 expect ":verify: the record's title and authors on the pages, its identifier not there" "verify|1|1|0|doi|absent|true"
+expect "a verso read: title, authors, publisher, year, series and number" "verso|SL2(R)|Serge Lang|Springer|1985|Graduate Texts in Mathematics|105"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "words found whole, across a broken line, small words not counted" "found|2|2"

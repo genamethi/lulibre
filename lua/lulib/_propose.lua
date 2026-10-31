@@ -29,6 +29,7 @@
 local check = require "lulib._check"
 local exprman = require "exprman"
 local ids = require "lulib._ids"
+local junk = require "lulib._junk"
 local kept = require "lulib._kept"
 local mesr = require "mesr"
 local rank = require "lulib._rank"
@@ -68,6 +69,13 @@ function M.normalize(field, value)
   return table.concat(names, " & ")
 end
 
+-- a title the record has that is no title, a file's name say, is no value to
+-- keep: a proposal fills it, it does not replace it
+function own.holds(field, value)
+  if value == nil or value == "" then return false end
+  return not (field == "title" and (junk.title(value) or junk.unlikely_title(value)))
+end
+
 -- an online record's fields have no span: they take none
 function own.overlaps(a, b)
   return a.start ~= nil and b.start ~= nil and a.start <= b.stop and b.start <= a.stop
@@ -78,7 +86,7 @@ end
 -- is of what the grammar was written for
 function own.value_score(p, f, w)
   if f.fixed then return f.fixed end
-  local share = f.start and 1 or f.share or 0
+  local share = f.share or (p.online and 0 or 1)
   if p.strong then return w.identified + (1 - w.identified) * share end
   return math.min(1, p.score + w.on_page * share + (p.group_hit and w.group or 0))
 end
@@ -155,7 +163,7 @@ function M.rows(ranked, srcs, w, decided)
     if now and mesr.cmp(field, list[1].value, now, w.near, w.same) == "equal" then
       rows[field] = nil
     else
-      local need = now and w.over or w.min
+      local need = get("holds")(field, now) and w.over or w.min
       for i, a in ipairs(list) do
         a.hidden = a.hide or i > w.values or (a.score or 0) < need
       end
@@ -247,6 +255,7 @@ function own.once(book, w)
       s.check = check.record(s, file or {}, k, text, w.check)
       records[#records + 1] = s
     end
+    if s.kind == "record" and s.fields.title and not get("holds")("title", s.fields.title) then s.fields.title = nil end
     if not (s.check and not s.check.same) then srcs[#srcs + 1] = s end
   end
   local clear = get("clear")(records, w)
@@ -256,7 +265,8 @@ function own.once(book, w)
       fields[field] = { value = value, share = check.share(field, value, k, text) }
     end
     local same = s.check and s.check.same
-    parses[#parses + 1] = { grammar = s.name, fields = fields, failed = s.check and not same, strong = clear and same }
+    parses[#parses + 1] = { grammar = s.name, fields = fields, online = true, failed = s.check and not same,
+                            strong = clear and same }
   end
   for _, p in ipairs(get("id_parses")(found, records, w)) do parses[#parses + 1] = p end
 

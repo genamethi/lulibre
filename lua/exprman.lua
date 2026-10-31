@@ -39,7 +39,10 @@ M.grammars = {}
 --- Adds a grammar, or replaces the one of that name. What it finds in a file
 -- is kept (lulib._kept) until the file is read again or `version` changes.
 -- @tparam string name
--- @param pattern an LPeg pattern capturing a table of fields (`field`)
+-- @param pattern an LPeg pattern capturing a table of fields (`field`); or a
+-- function given the text and the book (`fn(t, book)`), returning fields as
+-- values, or as `{ value=, start=, stop= }`: a value found in the text as it
+-- stands takes its place there
 -- @tparam[opt] string group what the grammar was written for: an author, a
 -- publisher, a series
 -- @param[opt] version change it when you change the pattern
@@ -78,7 +81,19 @@ end
 function M.parse(t, book, names)
   local parses, text = {}, t.text
   for _, name in ipairs(names or M.names()) do
-    local fields = lpeg.match(M.grammars[name].pattern, text, 1, t, book)
+    local pattern, fields = M.grammars[name].pattern, nil
+    if type(pattern) == "function" then
+      fields = pattern(t, book)
+      for field, f in pairs(fields or {}) do
+        if type(f) ~= "table" then
+          f = tostring(f)
+          local start, stop = text:find(f, 1, true)
+          fields[field] = { value = f, start = start, stop = stop }
+        end
+      end
+    else
+      fields = lpeg.match(pattern, text, 1, t, book)
+    end
     if type(fields) == "table" and next(fields) then
       for _, f in pairs(fields) do f.value = M.clean(f.value) end
       parses[#parses + 1] = { grammar = name, fields = fields }

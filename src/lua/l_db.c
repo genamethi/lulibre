@@ -240,6 +240,11 @@ static int l_tags(lua_State *L) {
   return counted(L, "SELECT name, n_books FROM tags WHERE id > 0 ORDER BY n_books DESC, name");
 }
 
+static int l_series(lua_State *L) {
+  return counted(L, "SELECT series, COUNT(*) AS n FROM books WHERE series IS NOT NULL AND series != ''"
+                    " GROUP BY series ORDER BY n DESC, series");
+}
+
 /* store.reload(): calibre's records read again by the library, on a
  * worker; the task waits for it (the list follows EV_RECORDS_CHANGED) */
 struct reload_msg {
@@ -286,7 +291,7 @@ int l_db_reload(lua_State *L) {
 int luaopen_bookman(lua_State *L) {
   static const luaL_Reg fns[] = {
     {"ids", l_ids},         {"books", l_books}, {"get", l_get}, {"count", l_count},
-    {"authors", l_authors}, {"tags", l_tags},   {"files", l_doc_files}, {NULL, NULL},
+    {"authors", l_authors}, {"tags", l_tags}, {"series", l_series},   {"files", l_doc_files}, {NULL, NULL},
   };
   luaL_newlib(L, fns);
   return 1;
