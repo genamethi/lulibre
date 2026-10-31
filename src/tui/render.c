@@ -246,9 +246,9 @@ static void draw_tabs(struct tui *t) {
   }
   char hint[200];
   if (open >= 0 || t->rows.source)
-    snprintf(hint, sizeof hint, "%s back to the library", key_hint("source library"));
+    snprintf(hint, sizeof hint, "%s back to the library", key_hint("source 1"));
   else if (sync)
-    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("source sync"));
+    snprintf(hint, sizeof hint, "%s shows what is waiting in the sync folder", key_hint("source 2"));
   else
     hint[0] = '\0';
   int hw = dr_width(hint, strlen(hint));

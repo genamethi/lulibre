@@ -241,7 +241,8 @@ static void on_key(struct tui *t, const struct ncinput *ni) {
     tui_dirty(t);
     return;
   }
-  const struct binding *b = keymap_feed(t->km, t->mode, key);
+  unsigned view = t->mode != MODE_NORMAL ? 0 : t->focus->cls == &view_list ? MODE_LIST : t->focus->cls == &view_preview ? MODE_PREVIEW : 0;
+  const struct binding *b = keymap_feed(t->km, t->mode | view, key);
   if (b && b->lua_ref) { /* a Lua function: a task, named after its keys */
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);

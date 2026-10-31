@@ -24,7 +24,7 @@ local M = {}
 local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
 -- the options uiman.panel takes as they are
-local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen", "form" }
+local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen", "form", "view" }
 
 -- items: a list, an iter, or a function giving either, read again each time
 function own.read(items)

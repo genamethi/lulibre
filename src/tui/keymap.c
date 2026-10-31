@@ -215,7 +215,8 @@ const struct binding *keymap_feed(struct keymap *km, unsigned mode, uint32_t key
       const struct binding *b = &km->b[i];
       if (!(b->modes & mode) || b->nkeys < km->npending) continue;
       if (!keys_match(km, b->keys, km->pending, km->npending)) continue;
-      if (b->nkeys == km->npending) exact = b;
+      /* one of a view's goes before the global one on the same keys */
+      if (b->nkeys == km->npending) exact = !exact || (b->modes & (MODE_LIST | MODE_PREVIEW)) || !(exact->modes & (MODE_LIST | MODE_PREVIEW)) ? b : exact;
       else longer = 1;
     }
     if (exact && !longer) {
@@ -348,10 +349,17 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "<Leader><Space>", "mark none"},
     {MODE_NORMAL, "gr", "review"},
     {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
-    /* the bar's tabs: the library, the sync folder */
-    {MODE_NORMAL, "1", "source library"},
+    /* the bar's tabs, by the numbers they show */
+    {MODE_NORMAL, "1", "source 1"},
+    {MODE_NORMAL, "2", "source 2"},
+    {MODE_NORMAL, "3", "source 3"},
+    {MODE_NORMAL, "4", "source 4"},
+    {MODE_NORMAL, "5", "source 5"},
+    {MODE_NORMAL, "6", "source 6"},
+    {MODE_NORMAL, "7", "source 7"},
+    {MODE_NORMAL, "8", "source 8"},
+    {MODE_NORMAL, "9", "source 9"},
     {MODE_NORMAL, "gl", "source library"},
-    {MODE_NORMAL, "2", "source sync"},
     {MODE_NORMAL, "gS", "source sync"},
     {MODE_NORMAL, "u", "undo"},
     /* misc */

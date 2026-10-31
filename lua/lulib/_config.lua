@@ -23,6 +23,7 @@ M.screen = {
     { "changed", "c", "only the settings not at their default, or every one again" },
   },
   hint = { "cycle", "default", "changed" },
+  views = { about = { kind = "band", size = 0.3 } }, -- what the setting under the cursor does
 }
 scrnman.create("config", M.screen)
 
@@ -110,7 +111,7 @@ function M.open()
     columns = { { "Setting", 22 }, "Value", { "Set", 13 } }, rows = rows(),
   }
   open_now = p
-  local band <close> = uiman.panel { title = "the setting under the cursor", height = 0.3, focus = false,
+  local band <close> = uiman.panel { title = "the setting under the cursor", screen = "config", view = "about", focus = false,
     columns = { { "", 14 }, "" }, rows = {} }
   local function show(at)
     local i = list[at]

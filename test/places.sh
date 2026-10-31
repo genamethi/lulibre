@@ -35,6 +35,8 @@ end
 keymap.set("pband", "y", "hello", { desc = "greet the row" })
 keymap.set("console", "c", "clear", { hidden = true })
 scrnman.set("console", { hint = { "close" } })
+keymap.set("list", "Y", "echo in the list")
+keymap.set("preview", "Y", "echo in the preview")
 setman.create("mine.colour", { default = "red", choices = { "red", "blue" }, help = "a colour of mine" })
 scrnman.set("pager", { hint = {} })
 scrnman.create("ptab", { title = "Tabbed", tab = true })
@@ -243,6 +245,24 @@ sleep 0.3
 $T send-keys -t s ":set pages" Enter
 sleep 0.3
 check "the change holds outside the tab" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'pages=9'"
+# the bar's tabs by their numbers, a screen's view closing with it
+$T send-keys -t s 2
+wait_for "changes hold for this run" || true
+check "2 opens the bar's second tab, whichever it is" sh -c "$T capture-pane -p -t s | grep -q 'what it does'"
+$T send-keys -t s 1
+sleep 0.5
+check "1 goes back, and the screen's view closes with its main panel" sh -c "! $T capture-pane -p -t s | grep -q 'what it does'"
+# keys for one view
+$T send-keys -t s Y
+sleep 0.3
+check "keymap.set(\"list\", ...): a key for the list" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'in the list'"
+$T send-keys -t s ":focus next" Enter
+sleep 0.3
+$T send-keys -t s Y
+sleep 0.3
+check "keymap.set(\"preview\", ...): the same key for the preview" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'in the preview'"
+$T send-keys -t s ":focus next" Enter
+sleep 0.3
 $T send-keys -t s ":help plu" Tab
 sleep 0.4
 check "Tab completes a tag" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':help Plums'"
@@ -251,6 +271,18 @@ sleep 0.2
 $T send-keys -t s '`'
 sleep 0.4
 check "the console's bar shows the hint scrnman.set gave it" sh -c "$T capture-pane -p -t s | grep 'console' | grep -q 'q close' && ! $T capture-pane -p -t s | grep -q 'e errors'"
+$T send-keys -t s '`'
+sleep 0.3
+# the preview and the console where scrnman.set says
+$T send-keys -t s ":lua scrnman.set('preview', { place = { kind = 'band', size = 0.4 } })" Enter
+sleep 0.4
+set -- $(at "A Note on Sieve")
+check "the preview goes below the list when scrnman.set says" test "$1" -gt 15
+$T send-keys -t s ":lua scrnman.set('console', { place = { kind = 'float' } })" Enter
+sleep 0.3
+$T send-keys -t s '`'
+sleep 0.4
+check "the console opens where scrnman.set says" sh -c "$T capture-pane -p -t s | grep -q '╭'"
 $T send-keys -t s '`'
 sleep 0.3
 check "the bar has a tab for a tab screen" sh -c "$T capture-pane -p -t s | head -1 | grep -q 'Tabbed'"

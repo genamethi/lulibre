@@ -135,8 +135,9 @@ and paste it with `<C-v>`.
 | `e` | `edit` | the edit form for the selection: Enter or `e` types a field's value (`+a, -b` adds to a list and takes out of it), `x` drops a field's change, `w` writes them all (the place `form`) |
 | `gr` · `r` | `review` · `review selection` | the proposals of every book that has any, or of the selection: `a` accepts, `e` edits first, `r` rejects, Space shows the next alternative |
 | `u` | `undo` | put the last change back |
-| `1` `gl` | `source library` | back to the library |
-| `2` `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
+| `1` … `9` | `source N` | the bar's tab with that number |
+| `gl` | `source library` | back to the library |
+| `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
 
 The bar's tabs are the library, the sync folder once one is set, and
 each screen made with `tab = true` ([the API](api.md)); clicking one, or
@@ -212,6 +213,13 @@ actions, which `scrnman.set` changes; `hint = {}` shows none.
 A screen made in Lua is a place too (`scrnman.create`, [the API](api.md)):
 `review` (`accept` `edit` `reject` `next`) is lulibre's, and
 `keymap.set("review", "y", "accept")` rebinds one.
+
+`keymap.set("list", key, command or function)` and `keymap.set("preview",
+...)` bind a key for that view alone: while it has the focus, in normal
+mode, the key runs that, before a global binding of the same key.
+`scrnman.set("console", { place = { kind = "column" } })` says where the
+console opens, and `scrnman.set("preview", { place = { kind = "band", size =
+0.4 } })` moves the preview (`band`, `column` or `tiled`).
 
 A binding here is one key, or two in a row (`gg`). `?` lists every place
 with its actions and their keys. In a panel, the movement keys take

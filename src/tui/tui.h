@@ -87,6 +87,10 @@ enum mode {
   MODE_VISUAL = 2,
   MODE_PROMPT = 4, /* the bottom line is taking text: ':' or '/' */
   MODE_PICKER = 8,
+  /* keys for one view: while it has the focus, in normal mode, before the
+   * global ones (keymap.set("list", ...), keymap.set("preview", ...)) */
+  MODE_LIST = 16,
+  MODE_PREVIEW = 32,
 };
 
 #define KEYSEQ_MAX 4
@@ -154,7 +158,7 @@ void tui_setup(void);
 
 /* Keys that belong to a place: each place has named actions, and its code
  * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
-enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_FORM, KC_N };
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_FORM, KC_PREVIEW, KC_N };
 enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END, SA_TOP, SA_BOTTOM, SA_MARK, SA_LINE,
        SA_COPY, SA_LEAVE };
 enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE, PA_BACK };
@@ -183,14 +187,19 @@ int ctx_add(const char *name, const char *title, int n, const char *const *names
             const char *const *abouts, int nhint, const char *const *hint, char side, float size, int tab,
             char **err);
 void ctx_placement(int ctx, char *side, float *size);
+/* A view of a screen, beside its main one (scrnman.create's views): where it
+ * goes; 0 when the screen has no view of that name. */
+void ctx_add_view(int ctx, const char *name, char side, float size);
+int ctx_view(int ctx, const char *name, char *side, float *size);
 /* The i-th screen that is a tab of the bar: its place, name and title; -1 past the last. */
 int ctx_tab(int i, const char **name, const char **title);
 const char *ctx_name(int ctx);
 int ctx_is_tab(int ctx);
 void ctx_drop_lua(void); /* the screens' places go (:restart-scripts) */
-/* A place's or screen's title and hint line, changed (scrnman.set): title
- * NULL keeps it; nhint < 0 keeps the hint, 0 leaves none. */
-int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char **err);
+/* A place's or screen's title, hint line and where its view goes, changed
+ * (scrnman.set): title NULL keeps it; nhint < 0 keeps the hint, 0 leaves
+ * none; side 0 keeps the place. */
+int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char side, float size, char **err);
 const char *ctx_action_name(int ctx, int action); /* NULL for none */
 /* The hint line: the hint's actions with the keys now on them ("a accept   e
  * edit"); how many it has. */
@@ -420,6 +429,12 @@ struct node *wm_top(struct tui *t);
 /* A window beside the focused one (or the last window of the tree), which
  * is split for it; size is the new one's share. */
 struct node *wm_tile(struct tui *t, const struct view_class *cls, void *state, float size);
+/* A view where side says: over the list (m), floating (f), over every window
+ * (o), beside the focused window (t), else docked on the left (l) or along
+ * the bottom. */
+void wm_place(struct tui *t, const struct view_class *cls, void *state, float size, char side);
+/* The preview where scrnman.set put it: beside the list, below it or before it. */
+void wm_place_preview(struct tui *t);
 void wm_undock(struct tui *t, void *state);
 /* Give the docked window showing this state that share of the screen. */
 void wm_set_size(struct tui *t, void *state, float size);
@@ -506,6 +521,8 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys);
 /* The panel is a screen's (ctxkeys.c's place): a key bound to one of its
  * actions reaches the script as the action's name, other keys not at all. */
 void panel_set_place(struct panel *p, int place);
+/* The panel is a view of a screen beside its main panel, and closes with it. */
+void panel_set_view_of(struct panel *p, int place);
 int panel_place(const struct panel *p); /* -1 for none */
 void panel_set_pass(struct panel *p, const char *commands);
 int panel_passes(const struct panel *p, uint32_t key);

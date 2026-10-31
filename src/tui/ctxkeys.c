@@ -146,6 +146,8 @@ static const struct {
                  "left down up right mark line copy leave"},
   [KC_FORM] = {"form", "IN A FORM (the edit form, a script's form; a panel's keys too)", form_actions,
                (int)ARRAY_LEN(form_actions), "edit drop write"},
+  /* no actions: its keys are keymap.set("preview", ...)'s; here for where it goes */
+  [KC_PREVIEW] = {"preview", "THE PREVIEW", NULL, 0, ""},
 };
 
 /* Every place: lulibre's (copied from own[] on first use) and those made
@@ -162,6 +164,11 @@ struct place {
   char side;
   float size;
   int tab;
+  struct view_place { /* views of the screen beside its main one */
+    char *name, side;
+    float size;
+  } *views;
+  int nviews;
 };
 static struct place *ctxs;
 static int nctxs;
@@ -212,6 +219,8 @@ static void place_free(struct place *pl) {
   free(pl->hint);
   free(pl->name);
   free(pl->title);
+  for (int v = 0; v < pl->nviews; v++) free(pl->views[v].name);
+  free(pl->views);
   memset(pl, 0, sizeof *pl);
 }
 
@@ -345,13 +354,37 @@ int ctx_add(const char *name, const char *title, int n, const char *const *names
   return c;
 }
 
-int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char **err) {
+void ctx_add_view(int ctx, const char *name, char side, float size) {
+  struct place *pl = &ctxs[ctx];
+  pl->views = xrealloc(pl->views, (size_t)(pl->nviews + 1) * sizeof *pl->views);
+  pl->views[pl->nviews++] = (struct view_place){xstrdup(name), side, size};
+}
+
+int ctx_view(int ctx, const char *name, char *side, float *size) {
+  for (int v = 0; ctx >= 0 && ctx < nctxs && v < ctxs[ctx].nviews; v++)
+    if (!strcmp(ctxs[ctx].views[v].name, name)) {
+      *side = ctxs[ctx].views[v].side;
+      *size = ctxs[ctx].views[v].size;
+      return 1;
+    }
+  return 0;
+}
+
+int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char side, float size, char **err) {
   int c = ctx_named(name);
   if (c < 0) {
     *err = xasprintf("no screen or place is called %s", name);
     return -1;
   }
   struct place *pl = &ctxs[c];
+  if (side && c < KC_N && c != KC_CONSOLE && c != KC_PREVIEW) {
+    *err = xasprintf("%s is no window to place: the console and the preview are", name);
+    return -1;
+  }
+  if (side && c == KC_PREVIEW && !strchr("blt", side)) {
+    *err = xasprintf("the preview goes in a band, a column or tiled");
+    return -1;
+  }
   for (int h = 0; h < nhint; h++) {
     int found = 0;
     for (int a = 0; a < pl->n && !found; a++) found = !strcmp(hint[h], pl->actions[a].name);
@@ -364,6 +397,10 @@ int ctx_set(const char *name, const char *title, int nhint, const char *const *h
   if (title) {
     free(pl->title);
     pl->title = xstrdup(*title ? title : name);
+  }
+  if (side) {
+    pl->side = side;
+    pl->size = size;
   }
   return 0;
 }

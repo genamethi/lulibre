@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app.h"
+#include "core/queue.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -50,6 +52,7 @@ struct panel {
   char **names, **change; /* each field's name; its change in a staged form, NULL for none */
   int nfields, editing;   /* the row being typed, or -1 */
   uint32_t fpending;
+  int of_screen; /* a view of that screen's place beside its main panel, or -1 */
 };
 
 static void free_rows(struct panel *p) {
@@ -97,14 +100,8 @@ void panel_unref(struct panel *p) {
   free(p);
 }
 
-/* its window, where its side says: over the list (m), floating (f), over
- * every window (o), beside the focused window (t), else docked on the left
- * (l) or along the bottom */
 static void place_window(struct panel *p) {
-  if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
-  else if (p->side == 'f' || p->side == 'o') wm_float(p->t, &view_panel, p, p->size, p->side == 'o' ? FLOAT_FULL : FLOAT_BOX);
-  else if (p->side == 't') wm_tile(p->t, &view_panel, p, p->size);
-  else wm_dock(p->t, &view_panel, p, p->size, p->side);
+  wm_place(p->t, &view_panel, p, p->size, p->side);
 }
 
 struct panel *panel_open(struct tui *t, float size, char side) {
@@ -116,6 +113,7 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->help = xstrdup("");
   p->page = 10;
   p->place = -1;
+  p->of_screen = -1;
   p->editing = -1;
   p->size = size;
   p->side = side;
@@ -129,9 +127,26 @@ int panel_is_open(const struct panel *p) {
 
 static void form_typed(struct tui *t, const char *text, void *ud);
 
+/* a screen's main panel has gone: its views go too, a turn later, not in the
+ * middle of the window's closing */
+static void close_views(struct app *app, void *arg) {
+  int place = (int)(intptr_t)arg;
+  struct node *all[32];
+  int n = app->tui ? wm_leaves(app->tui, all, 32) : 0;
+  for (int i = 0; i < n; i++) {
+    struct panel *q = all[i]->cls == &view_panel ? all[i]->state : NULL;
+    if (q && q->of_screen == place) {
+      panel_close(q);
+      n = wm_leaves(app->tui, all, 32);
+      i = -1;
+    }
+  }
+}
+
 /* The panel is closed for good: say so, and drop the window's reference. */
 static void gone(struct panel *p) {
   p->open = 0;
+  if (p->place >= 0) queue_post(LOOP_UI, close_views, (void *)(intptr_t)p->place);
   if (p->editing >= 0 && p->t->input_cb == form_typed && p->t->input_ud == p) tui_input_cancel(p->t);
   if (p->t->screen_tab == p) {
     p->t->screen_tab = NULL;
@@ -228,6 +243,8 @@ int panel_passes(const struct panel *p, uint32_t key) {
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
   if (keymap_starts(p->t->km, MODE_NORMAL, key, "help")) return 1;
+  /* a tab of the bar: the bar's other tabs stay within reach */
+  if (p->t->screen_tab == p && keymap_starts(p->t->km, MODE_NORMAL, key, "source")) return 1;
   if (!p->pass || (!p->nown && p->place < 0)) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
 }
@@ -240,6 +257,10 @@ void panel_set_place(struct panel *p, int place) {
   p->place = place;
   p->ppending = 0;
   tui_dirty(p->t);
+}
+
+void panel_set_view_of(struct panel *p, int place) {
+  p->of_screen = place;
 }
 
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud) {

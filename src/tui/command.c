@@ -483,6 +483,12 @@ static void c_help_plain(struct tui *t, const char *args) {
 }
 
 static void c_source(struct tui *t, const char *args) {
+  if (*args >= '1' && *args <= '9' && !args[1]) { /* the tab with that number */
+    char cmd[128];
+    if (!tab_command(t, *args - '1', cmd, sizeof cmd)) tui_msg(t, 0, "the bar has no tab %s", args);
+    else c_source(t, cmd + strlen("source "));
+    return;
+  }
   int screen = *args && !arg_is(args, "sync") && !arg_is(args, "library") ? ctx_named(args) : -1;
   if (screen >= 0 && ctx_is_tab(screen)) {
     /* a tab screen: shown again if it is open, else its command opens it.
@@ -715,7 +721,7 @@ void commands_builtin(void) {
   command_register("index", c_index, "[force]  extract text from new or changed files");
   command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
-                   "[library | sync | SCREEN]  the bar's tabs: the calibre library or the sync folder in the list, or a tab screen");
+                   "[N | library | sync | SCREEN]  the bar's tabs: the tab numbered N, the calibre library or the sync folder in the list, or a tab screen");
   command_register("set", c_set, "[name[=value]]  show or change a setting; alone, every setting");
   command_register("echo", c_echo, "text  show a message");
   command_register("help", c_help, "[TOPIC]  the keys, by where they work; or the guides, where they speak of TOPIC");
@@ -790,18 +796,19 @@ static void command_help(struct tui *t, int plain) {
   sb_puts(h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
-    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL | MODE_LIST | MODE_PREVIEW)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
     sb_puts(h, "  ");
     help_link(&r, h->len, k.len,
               b->command ? xasprintf("%s\n:%.*s", k.s, (int)strcspn(b->command, " "), b->command) : xstrdup(k.s));
     sb_printf(h, "%-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
-              b->modes == MODE_VISUAL ? "   (while selecting)" : "");
+              b->modes == MODE_VISUAL ? "   (while selecting)" : b->modes == MODE_LIST ? "   (in the list)"
+              : b->modes == MODE_PREVIEW ? "   (in the preview)" : "");
     sb_free(&k);
   }
   for (int c = 0; c < ctx_count(); c++) {
-    int shown = 0;
+    int shown = !ctx_action_name(c, 1); /* one with no keys of its own, the preview */
     for (int k = 0; k < nfirst; k++) shown = shown || first[k] == c;
     if (shown) continue;
     sb_putc(h, '\n');

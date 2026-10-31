@@ -25,6 +25,9 @@
  *                                    -- bound to one of its actions reaches
  *                                    -- wait() as the action's name, and the
  *                                    -- bar shows its hint where no help is
+ *     view = "about",                -- one of the screen's views (scrnman.create's
+ *                                    -- views): placed as it says, closed with
+ *                                    -- the screen's main panel
  *     form = true,                   -- the rows are a form's fields, {label,
  *                                    -- value} each: the place form's edit asks
  *                                    -- for a field's value on the line, and
@@ -379,6 +382,14 @@ static int l_panel_ui(lua_State *L) {
   char side = 'b', screen_side = 0;
   float size, screen_size = 0;
   ctx_placement(place, &screen_side, &screen_size);
+  lua_getfield(L, 1, "view");
+  const char *view = lua_tostring(L, -1);
+  if (view && !ctx_view(place, view, &screen_side, &screen_size)) {
+    on_event(NULL, NULL, 0, NULL, (void *)(intptr_t)id); /* closed at once */
+    return luaL_error(L, "the screen has no view called %s (scrnman.create's views)", view);
+  }
+  int is_view = view != NULL;
+  lua_pop(L, 1);
   lua_getfield(L, 1, "side");
   if (lua_isstring(L, -1)) {
     const char *s = lua_tostring(L, -1);
@@ -395,7 +406,7 @@ static int l_panel_ui(lua_State *L) {
   lua_getfield(L, 1, "focus");
   int keep_focus = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
   lua_getfield(L, 1, "screen_tab");
-  int screen_tab = lua_toboolean(L, -1) || ctx_is_tab(place);
+  int screen_tab = lua_toboolean(L, -1) || (ctx_is_tab(place) && !is_view);
   lua_pop(L, 2);
   struct node *was = t->focus;
   struct panel *p = panel_open(t, size, side);
@@ -403,7 +414,8 @@ static int l_panel_ui(lua_State *L) {
   if (keep_focus && was) t->focus = was;
   panel_on_event(p, on_event, (void *)(intptr_t)id);
   if (screen_tab) panel_set_screen_tab(p);
-  if (place >= 0) panel_set_place(p, place);
+  if (is_view) panel_set_view_of(p, place);
+  else if (place >= 0) panel_set_place(p, place);
 
   lua_getfield(L, 1, "title");
   if (lua_isstring(L, -1)) panel_set_title(p, lua_tostring(L, -1));

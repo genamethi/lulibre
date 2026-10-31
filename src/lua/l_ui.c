@@ -198,6 +198,8 @@ static int l_map_ui(lua_State *L) {
   for (const char *m = modes; *m; m++) {
     if (*m == 'n') mask |= MODE_NORMAL;
     else if (*m == 'v') mask |= MODE_VISUAL;
+    else if (*m == 'l') mask |= MODE_LIST;
+    else if (*m == 'p') mask |= MODE_PREVIEW;
     else return luaL_argerror(L, 1, "modes are \"n\" (normal), \"v\" (selecting) or \"nv\"");
   }
   int hidden = lua_isboolean(L, 4) && !lua_toboolean(L, 4);
@@ -234,11 +236,12 @@ static int l_maps_ui(lua_State *L) {
   int n = 0;
   for (int i = 0; i < tui_keymap.n; i++) {
     const struct binding *b = &tui_keymap.b[i];
-    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL))) continue; /* replaced by a later binding */
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL | MODE_LIST | MODE_PREVIEW))) continue; /* replaced by a later binding */
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
     lua_createtable(L, 0, 3);
-    lua_pushstring(L, b->modes & MODE_NORMAL ? (b->modes & MODE_VISUAL ? "nv" : "n") : "v");
+    lua_pushstring(L, b->modes & MODE_LIST ? "list" : b->modes & MODE_PREVIEW ? "preview"
+                      : b->modes & MODE_NORMAL ? (b->modes & MODE_VISUAL ? "nv" : "n") : "v");
     lua_setfield(L, -2, "modes");
     lua_pushstring(L, k.s);
     lua_setfield(L, -2, "keys");
@@ -1039,10 +1042,13 @@ static void c_console(struct tui *t, const char *args) {
   if (open && open->cls == &view_console) {
     /* not through t->focus: the focused node may be the one whose place the
      * console's sibling takes, and would be freed under a saved pointer */
-    wm_close_leaf(t, open);
+    wm_undock(t, open->state);
   } else {
     struct node *was = t->focus;
-    wm_dock(t, &view_console, view_console.create(t), 0.3f, 'b');
+    char side;
+    float size;
+    ctx_placement(KC_CONSOLE, &side, &size); /* scrnman.set */
+    wm_place(t, &view_console, view_console.create(t), size > 0 ? size : 0.3f, side ? side : 'b');
     if (!strcmp(args, "focus")) return;
     t->focus = was;
   }
@@ -1138,8 +1144,21 @@ static int is_place(lua_State *L, int idx) {
   return lua_type(L, idx) == LUA_TSTRING && strspn(lua_tostring(L, idx), "nv") != strlen(lua_tostring(L, idx));
 }
 
+/* "list" and "preview" are no places of actions: their keys run commands and
+ * functions as the global ones do, while that view has the focus. As the
+ * letter l_map_ui takes; 0 for anything else. */
+static int view_mode(lua_State *L, int idx) {
+  const char *m = lua_type(L, idx) == LUA_TSTRING ? lua_tostring(L, idx) : "";
+  if (!strcmp(m, "list")) lua_pushliteral(L, "l");
+  else if (!strcmp(m, "preview")) lua_pushliteral(L, "p");
+  else return 0;
+  lua_replace(L, idx);
+  return 1;
+}
+
 static int keymap_set(lua_State *L) {
-  if (is_place(L, 1)) { /* a place's key: one of its actions */
+  int view = view_mode(L, 1);
+  if (!view && is_place(L, 1)) { /* a place's key: one of its actions */
     luaL_checkstring(L, 2);
     luaL_checkstring(L, 3);
     /* opts {desc=, hidden=}: what ? says the action does, or that it leaves it out */
@@ -1151,7 +1170,7 @@ static int keymap_set(lua_State *L) {
     lua_settop(L, 5);
     return ui_send(L, l_place_map_ui, "keymap.set");
   }
-  modes_of(L, 1);
+  if (!view) modes_of(L, 1);
   luaL_checkstring(L, 2);
   uint32_t keys[KEYSEQ_MAX];
   if (!key_parse(lua_tostring(L, 2), keys)) return luaL_argerror(L, 2, "not a key sequence (\"gr\", \"<C-w>v\", \"<Space>\")");
@@ -1174,20 +1193,22 @@ static int keymap_set(lua_State *L) {
 
 static int keymap_del_ui(lua_State *L) {
   const char *modes = luaL_checkstring(L, 1);
-  unsigned mask = (strchr(modes, 'n') ? MODE_NORMAL : 0) | (strchr(modes, 'v') ? MODE_VISUAL : 0);
+  unsigned mask = (strchr(modes, 'n') ? MODE_NORMAL : 0) | (strchr(modes, 'v') ? MODE_VISUAL : 0) |
+                  (strchr(modes, 'l') ? MODE_LIST : 0) | (strchr(modes, 'p') ? MODE_PREVIEW : 0);
   if (keymap_unbind(&tui_keymap, mask, luaL_checkstring(L, 2)) > 0)
     return luaL_error(L, "nothing is bound to %s", lua_tostring(L, 2));
   return 0;
 }
 
 static int keymap_del(lua_State *L) {
-  if (is_place(L, 1)) {
+  int view = view_mode(L, 1);
+  if (!view && is_place(L, 1)) {
     luaL_checkstring(L, 2);
     lua_settop(L, 2);
     lua_pushliteral(L, "");
     return ui_send(L, l_place_map_ui, "keymap.del");
   }
-  modes_of(L, 1);
+  if (!view) modes_of(L, 1);
   luaL_checkstring(L, 2);
   lua_settop(L, 2);
   return ui_send(L, keymap_del_ui, "keymap.del");

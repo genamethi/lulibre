@@ -43,6 +43,7 @@ void wm_init(struct tui *t) {
   root->a->parent = root->b->parent = root;
   t->root = root;
   t->focus = root->a;
+  wm_place_preview(t); /* as init.lua said */
 }
 
 void wm_free(struct tui *t) {
@@ -409,6 +410,30 @@ struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *sta
 }
 
 /* Close the window showing this state, if there is one. */
+void wm_place(struct tui *t, const struct view_class *cls, void *state, float size, char side) {
+  if (side == 'm') wm_over_list(t, cls, state);
+  else if (side == 'f' || side == 'o') wm_float(t, cls, state, size, side == 'o' ? FLOAT_FULL : FLOAT_BOX);
+  else if (side == 't') wm_tile(t, cls, state, size);
+  else wm_dock(t, cls, state, size, side);
+}
+
+void wm_place_preview(struct tui *t) {
+  char side;
+  float size;
+  ctx_placement(KC_PREVIEW, &side, &size);
+  struct node *n = side ? wm_find(t, &view_preview) : NULL, *p = n ? n->parent : NULL;
+  if (!p) return;
+  int before = side == 'l';
+  if ((p->a == n) != before) {
+    struct node *other = p->a == n ? p->b : p->a;
+    p->a = before ? n : other;
+    p->b = before ? other : n;
+  }
+  p->split = side == 'b' ? 'h' : 'v';
+  if (size > 0) p->ratio = before ? size : 1 - size;
+  tui_dirty(t);
+}
+
 void wm_undock(struct tui *t, void *state) {
   struct node *stack[64];
   int n = 0;
