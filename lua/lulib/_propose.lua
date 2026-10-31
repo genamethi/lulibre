@@ -318,6 +318,7 @@ function M.propose(book, w)
     n = get("once")(book, w)
   until running[book] ~= "again"
   evman.post("proposed", { book = book })
+  taskman.yield() -- what was kept takes no waiting: the other tasks get a turn
   return n
 end
 

@@ -36,25 +36,16 @@ local function holding_path(path)
   return ("%s/dropped/%s/%s"):format(data, os.date("%Y%m%d-%H%M%S"), rel)
 end
 
--- calibredb add's arguments for a staged book
-local function add_args(book, path)
+-- a staged book as store.add takes it
+local function add_item(book, path)
   local b = bookman.get(book)
-  local args = { "add", "--duplicates" } -- lulibre has compared the bytes itself
-  local function opt(flag, value)
-    if value and value ~= "" then
-      args[#args + 1] = flag
-      args[#args + 1] = tostring(value)
-    end
+  local came = { from = path }
+  for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "languages", "identifiers" } do
+    came[field] = bookman.get(book, field) or ""
   end
-  opt("--title", bookman.get(book, "title"))
-  opt("--authors", bookman.get(book, "authors"))
-  opt("--tags", bookman.get(book, "tags"))
-  local series = bookman.get(book, "series")
-  opt("--series", series)
-  if series and series ~= "" then opt("--series-index", bookman.get(book, "series_index")) end
-  for kind, value in pairs(b and b.idents or {}) do opt("--identifier", kind .. ":" .. value) end
-  args[#args + 1] = path
-  return args
+  return { path = path, title = came.title, authors = came.authors, tags = came.tags, series = came.series,
+           series_index = came.series ~= "" and came.series_index or nil,
+           identifiers = b and b.idents, record = json.encode(came) }
 end
 
 -- proposals and fields of its own go with a file into the library
@@ -73,52 +64,51 @@ end
 function M.add(ids, o)
   o = o or {}
   local out = { added = 0, held = 0, removed = 0, failed = {} }
-  local added, later, batch = {}, {}, nil
+  local items, jobs, held = {}, {}, {}
   for _, book in ipairs(ids) do
     local row = book < 0 and staged_row(book)
     if row then
-      local into = row.twin
-      if into then
+      if row.twin then
+        held[#held + 1] = { book = book, row = row, into = row.twin }
         out.held = out.held + 1
       else
-        local b, printed = store.command(add_args(book, row.path), { label = "sync: add", when = "any", batch = batch })
-        local id = b and tonumber((printed or ""):match("Added book ids:%s*(%d+)"))
-        if id then
-          batch = b
-          into = id
-          added[#added + 1] = id
-          local came = { from = row.path }
-          for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "languages", "identifiers" } do
-            came[field] = bookman.get(book, field) or ""
-          end
-          store.note(batch, id, "(added)", row.path, json.encode(came), "sync: add")
-          out.added = out.added + 1
-          for _, field in ipairs { "pubdate", "publisher" } do
-            local value = bookman.get(book, field)
-            if value and value ~= "" then later[#later + 1] = { book = id, field = field, value = value } end
-          end
-        else
-          out.failed[#out.failed + 1] = (row.path:gsub("^.*/", "")) .. ": " .. tostring(printed or "calibredb add failed")
-        end
-      end
-      if into then
-        follow(book, into)
-        if o.remove then
-          local d, why = store.drop(book, holding_path(row.path), batch)
-          if d then
-            batch = batch or d
-            out.removed = out.removed + 1
-          else
-            out.failed[#out.failed + 1] = why
-          end
-        end
+        items[#items + 1] = add_item(book, row.path)
+        jobs[#items] = { book = book, row = row }
       end
     end
   end
-  if #added > 0 then
-    store.command_undo(batch, { "remove", table.concat(added, ",") })
+  local batch
+  if #items > 0 then
+    local new, why, b = store.add(items, "sync: add")
+    batch = b
+    local later = {}
+    for i, job in ipairs(jobs) do
+      if new[i] then
+        job.into = new[i]
+        out.added = out.added + 1
+        for _, field in ipairs { "pubdate", "publisher" } do
+          local value = bookman.get(job.book, field)
+          if value and value ~= "" then later[#later + 1] = { book = new[i], field = field, value = value } end
+        end
+        held[#held + 1] = job
+      else
+        out.failed[#out.failed + 1] = (job.row.path:gsub("^.*/", "")) .. ": " .. tostring(why)
+      end
+    end
     store.reload()
     if #later > 0 then store.apply(later, "sync", batch) end
+  end
+  for _, job in ipairs(held) do
+    follow(job.book, job.into)
+    if o.remove then
+      local d, why = store.drop(job.book, holding_path(job.row.path), batch)
+      if d then
+        batch = batch or d
+        out.removed = out.removed + 1
+      else
+        out.failed[#out.failed + 1] = why
+      end
+    end
   end
   out.batch = batch
   return out

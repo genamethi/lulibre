@@ -217,10 +217,11 @@ The index itself is the file `setman.get("path.indexdb")`, and the journal
     store.undo(batch)                  -- waits
     store.command({ "add_custom_column", "partof", "Part of", "text" })  -- waits
     local batch, printed = store.command({ "add", "file.pdf" }, { when = "any", label = "add" })
-    store.command_undo(batch, { "remove", "12" })          -- what store.undo and :undo run for it
+    store.add({ { path = "file.pdf", title = "A Title", authors = "A & B" } })   -- waits: the ids, why if any failed, the batch; :undo takes them back out
+    store.remove({ 12, 13 })                               -- waits: to calibre's recycle bin, one process; :undo brings them back
     store.drop(-3, "/somewhere/held.pdf")                  -- a sync folder's file out of the folder; undo brings it back
-    store.note(batch, book, field, old, new [, label])     -- a row of the journal for a change made a way of your own
-    store.mark_undone(batch)  store.cancel(batch)          -- its rows undone; a queued batch out of the queue
+    store.set_aside(path, to)                              -- a file moved, which undo puts back
+    store.cancel(batch)                                    -- a queued batch out of the queue
     store.holder()                     -- "none" | "server" | "program" | "other"
     store.reload()                     -- waits: calibre's records read again, when calibre has changed them
 
@@ -338,8 +339,8 @@ lulibre's own is `"#name"`. `examples/grammars/` has three grammars
 written for groups of books. expr's line predicates test the line at the current position:
 `expr.largest`, `expr.bold`, `expr.block` (a paragraph's first line),
 `expr.page(n)`, `expr.near_top(share)`, and `expr.where(test)` for one of
-yours. The packaged grammars are `front` (`exprman._front`) and `pages`
-(`exprman._pages`), a file's first pages read by their layouts: cover sheets,
+yours. The packaged grammar is `pages` (`exprman._pages`), a file's first pages
+read by their layouts: cover sheets,
 cataloguing blocks, copyright lines, series, journals, the title page. A grammar
 can also be a function, `fn(t, book)`, returning fields.
 

@@ -1,8 +1,8 @@
---- The packaged grammar: a front page's title and authors, from the
+--- An example: a front page's title and authors, from the
 -- layout alone. Grammars written for a group of books (an author, a
 -- publisher, a series) are added the same way, with exprman.add.
 --
--- @library exprman._front
+-- @library front
 local expr = require "expr"
 local exprman = require "exprman"
 

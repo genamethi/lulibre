@@ -87,6 +87,11 @@ const struct setting_def setting_defs[S_COUNT] = {
                         "values a review shows per field; a deep review shows them all"},
   [S_ID_TOP] = {"id_top", SETTING_INT, 0, "4000", NULL,
                 "a DOI or arXiv number this many bytes into a file's text or less is the file's own"},
+  [S_SERVER_STOP] = {"server_stop", SETTING_STR, 0, "", NULL,
+                     "shell command that stops the content server, for the changes calibre makes only while "
+                     "it is stopped; empty: :offline restart uses its systemd unit, if it has one"},
+  [S_SERVER_START] = {"server_start", SETTING_STR, 0, "", NULL,
+                      "shell command that starts the content server again"},
   [S_ID_REFS_FROM] = {"id_refs_from", SETTING_NUM, 0, "0.8", NULL,
                        "how far through a document (0 to 1) References or Bibliography alone on a line "
                        "is taken for its references, after which identifiers are other works'"},

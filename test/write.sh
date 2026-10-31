@@ -125,6 +125,11 @@ say("sync added", #added, bookman.get(id, "title"), bookman.get(id, "publisher")
 say("sync undo", store.undo(out.batch) ~= nil)
 store.reload()
 say("sync undone", #bookman.ids("title:\"A Waiting Book\" in:library"))
+do
+  local j = require("sql").open(setman.get("path.journaldb"), require("lsqlite3").OPEN_READONLY)
+  say("undo not outside", #require("sql").run(j, "SELECT 1 FROM journal WHERE store = 'outside' AND field = '(removed)'"))
+  j:close()
+end
 -- dropped, the file gone and its record with it; undone, both back
 store.apply({ { book = b, field = "title", value = "A Dropped Book" } })
 local path = sync.staged(b).path
@@ -140,8 +145,8 @@ local store = require "store"
 local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
 -- a book removed, its record kept, and :undo's way back
 local ids = bookman.ids('title:"Book To Remove"')
-local n, err, batch = remove.remove(ids)
-say("removed", n, err, #bookman.ids('title:"Book To Remove"'))
+local batch, err = store.remove(ids)
+say("removed", batch ~= nil, err, #bookman.ids('title:"Book To Remove"'))
 say("restored", store.undo(batch) ~= nil)
 store.reload()
 local back = bookman.ids('title:"Book To Remove"')
@@ -195,7 +200,7 @@ say("snap outside", p2.kept.outside, #p2.changes, #p3.changes)
 -- a book removed since
 local s3 = snapshots.take("third")
 local remove = require "lulib._remove"
-remove.remove({ book })
+store.remove({ book })
 local back = snapshots.rollback(s3)
 store.reload()
 say("snap restored", #back.restored, #bookman.ids('title:"Title Now"'))
@@ -367,7 +372,7 @@ expect "the record has the one, not the other, and the wits are gone" "decided|T
 expect "writing in one review leaves another's proposals" "other kept|Another Title"
 expect "a rejection changes nothing but is kept" "rejection|review|authors|true|front"
 expect "a discarded review's proposals go" "discarded|1|0"
-expect "a book removed" "removed|1|nil|0"
+expect "a book removed" "removed|true|nil|0"
 expect "and undo brings it back" "restored|true"
 expect "under a new id, its record with it" "back|1|kept|true"
 expect "orphans finds a file with no record" "orphans|1|keep|stray.pdf"
@@ -397,6 +402,7 @@ expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
 expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"
 expect "undo takes it back out" "sync undo|true"
 expect "of the library" "sync undone|0"
+expect "and that isn't logged as a change made outside" "undo not outside|0"
 expect "dropped, the file leaves the folder and the list" "sync drop|1|0|true|true"
 expect "undo brings it back, with its record" "sync undrop|true|true|A Dropped Book"
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"

@@ -4,7 +4,6 @@
 -- live change like any other, under the command line's value.
 --
 -- @library lulib._prelude
-require "exprman._front"
 require "exprman._pages"
 require "cmd"
 require "lulib._remove"

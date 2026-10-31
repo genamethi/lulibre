@@ -129,10 +129,10 @@ A proposal comes from a **parse**: a grammar's reading of the file, or an
 online record. A grammar is a pattern over the text that knows where a
 kind of book states its title, authors, publisher or year: the largest
 lines at the top of the first page, the bold line after the series name.
-lulibre comes with one, `front`, which takes a first page's largest lines
-as the title and the line after as the authors; grammars written for an
-author, a publisher or a series are added in Lua (see [the Lua
-API](api.md)).
+lulibre comes with one, `pages`, which reads cover sheets, cataloguing blocks,
+copyright lines, series and journal headings, and the title page by its lines' roles;
+grammars written for an author, a publisher or a series are added in Lua (see [the
+Lua API](api.md)).
 
 The parses of a book are ranked: by the fields each fills (title and
 authors count most), by how far its values agree with the book's sources
@@ -309,7 +309,7 @@ such as one kept from before lulibre.
 | `:orphans`, `go` | records with no file, files with no record, broken links in your own folders, empty folders. `Space` says what to do about a row, `w` does it; `:orphans write` does what is suggested. Files taken out go to `orphans/` beside the index |
 | `:embed [filter]` | write calibre's metadata into the selected books' own files |
 | `:columns [push \| remove]` | calibre columns for `#partof`, `#part` and `#parts`; `push` copies lulibre's values into them |
-| `:offline [cancel JOB \| retry \| restart]` | what waits for nothing to hold the library. `restart` stops the content server by its systemd unit, and starts it again once they're done |
+| `:offline [cancel JOB \| retry \| restart]` | what waits for nothing to hold the library. `restart` stops the content server, by `server_stop` and `server_start` or else its systemd unit, and starts it again once they're done |
 
 ## Changes, and who has the library
 

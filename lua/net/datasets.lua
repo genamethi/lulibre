@@ -129,7 +129,7 @@ service.define("openlibrary-dump", {
     for _, line in ipairs(lines) do
       local e = json.decode(line:match("\t({.*})%s*$") or "")
       if type(e) == "table" and type(e.title) == "string" then
-        local score = (type(e.authors) == "table" and #e.authors > 0 and 4 or 0) + (type(e.lc_classifications) == "table" and 2 or 0)
+        local score = (type(e.authors) == "table" and #e.authors > 0 and 4 or type(e.by_statement) == "string" and 3 or 0) + (type(e.lc_classifications) == "table" and 2 or 0)
           + (type(e.publishers) == "table" and 1 or 0) + (type(e.publish_date) == "string" and 1 or 0) + (type(e.series) == "table" and 1 or 0)
         for _, field in ipairs { "isbn_13", "isbn_10" } do
           for _, written in ipairs(type(e[field]) == "table" and e[field] or {}) do
@@ -168,6 +168,7 @@ service.define("openlibrary-dump", {
       end
       local record = {
         title = (type(e.title_prefix) == "string" and e.title_prefix or "") .. e.title, subtitle = e.subtitle, publish_date = e.publish_date,
+        by_statement = e.by_statement,
         number_of_pages = e.number_of_pages, series = e.series,
         classifications = { lc_classifications = e.lc_classifications, dewey_decimal_class = e.dewey_decimal_class },
       }

@@ -231,25 +231,6 @@ function M.counts(found)
   return n
 end
 
--- A file out of the library into the holding folder, keeping its path below the
--- library so it can be put back by hand.
-local function set_aside(path, rel, holding)
-  local to = holding .. "/" .. rel
-  local at = ""
-  for part in to:match("^(.*)/[^/]*$"):gmatch("[^/]+") do
-    at = at .. "/" .. part
-    luv.fs_mkdir(at, 493)
-  end
-  local ok, err = luv.fs_rename(path, to)
-  if not ok then -- another filesystem: copy, then delete
-    ok, err = luv.fs_copyfile(path, to)
-    if ok then ok, err = luv.fs_unlink(path) end
-  end
-  if not ok then return nil, err end
-  luv.fs_rmdir(path:match("^(.*)/[^/]*$")) -- only succeeds if that left it empty
-  return to
-end
-
 --- Carries out the chosen actions, and waits.
 -- @tparam table found `scan`'s, with the actions chosen
 -- @treturn table `{ reattached=, removed=, moved=, added=, relinked=, unlinked=, failed = { "what: why", ... }, holding= }`
@@ -260,10 +241,18 @@ function M.apply(found)
     return out
   end
   local holding = ("%s/orphans/%s"):format(setman.get("path.indexdb"):gsub("/[^/]*$", ""), os.date("%Y%m%d-%H%M%S"))
+  -- a file out of the library, keeping its path below it; undo puts it back
+  local batch
   local function aside(s)
-    local to, err = set_aside(s.path, s.rel, holding)
-    if to then out.holding = holding else table.insert(out.failed, s.rel .. ": " .. tostring(err)) end
-    return to
+    local b, err = store.set_aside(s.path, holding .. "/" .. s.rel, batch, "orphans")
+    if not b then
+      table.insert(out.failed, s.rel .. ": " .. tostring(err))
+      return nil
+    end
+    batch = b
+    out.holding = holding
+    luv.fs_rmdir(s.path:match("^(.*)/[^/]*$")) -- only succeeds if that left it empty
+    return true
   end
   local remove = {}
   for _, r in ipairs(found.records) do
@@ -283,15 +272,13 @@ function M.apply(found)
   for _, s in ipairs(found.strays) do
     if s.action == "add" then
       uiman.progress("adding " .. s.rel)
-      local b, printed = store.command({ "add", "--duplicates", s.path }, { label = "orphans", when = "any" })
-      local id = b and tonumber((printed or ""):match("Added book ids:%s*(%d+)"))
-      if id then
-        store.note(b, id, "(added)", s.path, "", "orphans")
-        store.command_undo(b, { "remove", tostring(id) })
+      local ids, why, b = store.add({ { path = s.path } }, "orphans", batch)
+      if ids[1] then
+        batch = b
         out.added = out.added + 1
         aside(s)
       else
-        table.insert(out.failed, s.rel .. ": " .. tostring(printed))
+        table.insert(out.failed, s.rel .. ": " .. tostring(why))
       end
     elseif s.action == "move" then
       if aside(s) then out.moved = out.moved + 1 end
@@ -308,9 +295,8 @@ function M.apply(found)
   end
   uiman.progress(nil)
   if #remove > 0 then
-    local n, err = require("lulib._remove").remove(remove, { label = "orphans" })
-    out.removed = n
-    if err then table.insert(out.failed, err) end
+    local b, err = store.remove(remove, "orphans", batch)
+    if b then out.removed = #remove else table.insert(out.failed, err) end
   elseif out.reattached + out.added > 0 then
     store.reload()
   end

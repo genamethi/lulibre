@@ -32,6 +32,10 @@ struct book_job {
   char **fields, **values;
   long long *rows;
   int n;
+  /* a book being added, in place of changes: book is 0 */
+  char **args;
+  char *from, *record, *label;
+  long long restores;
 };
 
 struct batch {
@@ -49,6 +53,7 @@ struct batch {
   long long undoes;
   int embedding;
   char **output; /* a command's output goes here */
+  long long *added; /* the ids of the books it added go here */
   library_done *done;
   void *ud;
   struct library *lib;
@@ -387,6 +392,49 @@ struct run {
 
 enum { RUN_EMBED = -1, RUN_COMMAND = -2 };
 
+/* A book was added: the journal has it under its id, and what it brings back is
+ * back. */
+static void added_book(struct library *lib, struct batch *b, struct book_job *j, int i, long long id) {
+  struct db *db = lib->app->wdb;
+  if (b->added) b->added[i] = id;
+  if (j->restores) {
+    char *was = xasprintf("%lld", j->restores);
+    journal_add(db, b->id, j->label, NEED_ANY, "lua", OP_APPLIED, id, "(restored)", was, j->record ? j->record : "", NULL, NULL, 0);
+    free(was);
+    sqlite3_stmt *st;
+    char *e = NULL;
+    if (!db_prepare(db, "UPDATE history.journal SET state = ?, new = ? WHERE book = ? AND field = '(removed)' AND state = ?", &st, &e)) {
+      char *now = xasprintf("restored as book %lld", id);
+      sqlite3_bind_int(st, 1, OP_UNDONE);
+      sqlite3_bind_text(st, 2, now, -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int64(st, 3, j->restores);
+      sqlite3_bind_int(st, 4, OP_APPLIED);
+      sqlite3_step(st);
+      sqlite3_finalize(st);
+      free(now);
+    }
+    free(e);
+  } else {
+    journal_add(db, b->id, j->label, NEED_ANY, "lua", OP_APPLIED, id, "(added)", j->from ? j->from : "", j->record ? j->record : "", NULL, NULL, 0);
+  }
+}
+
+/* A removal has run: its books' rows say how it went. */
+static void removals_ran(struct library *lib, struct batch *b, const char *err) {
+  sqlite3_stmt *st;
+  char *e = NULL;
+  if (db_prepare(lib->app->wdb, "UPDATE history.journal SET state = ?, error = ? WHERE batch = ? AND field = '(removed)' AND state = ?", &st, &e)) {
+    free(e);
+    return;
+  }
+  sqlite3_bind_int(st, 1, err ? OP_FAILED : OP_APPLIED);
+  if (err) sqlite3_bind_text(st, 2, err, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_int64(st, 3, b->id);
+  sqlite3_bind_int(st, 4, OP_QUEUED);
+  sqlite3_step(st);
+  sqlite3_finalize(st);
+}
+
 /* The run's outcome, into the journal and the batch. */
 static void ran(struct run *r) {
   struct library *lib = r->lib;
@@ -397,11 +445,18 @@ static void ran(struct run *r) {
   r->lua_err = NULL;
   if (r->book >= 0) {
     struct book_job *j = &b->books[r->book];
+    if (j->args && !err) {
+      const char *said = r->text.s ? strstr(r->text.s, "Added book ids:") : NULL;
+      long long id = said ? strtoll(said + 15, NULL, 10) : 0;
+      if (id) added_book(lib, b, j, r->book, id);
+      else err = xstrdup("calibredb add gave no id");
+    }
     for (int i = 0; i < j->n; i++) row_state(lib, j->rows[i], err ? OP_FAILED : OP_APPLIED, err);
     if (!err) b->applied++;
     b->done_books++;
   } else if (r->book == RUN_COMMAND) {
     row_state(lib, b->argv_row, err ? OP_FAILED : OP_APPLIED, err);
+    removals_ran(lib, b, err);
     if (!err) b->applied++;
     b->done_books = b->nbooks;
     if (b->output) *b->output = xstrdup(r->text.s ? r->text.s : "");
@@ -558,6 +613,10 @@ static void start_lua_store(struct library *lib, struct batch *b, int i) {
 /* calibredb set_metadata ID --field f:v ... */
 static void start_book(struct library *lib, struct batch *b, int i) {
   struct book_job *j = &b->books[i];
+  if (j->args) {
+    spawn(lib, b, i, j->args);
+    return;
+  }
   if (registry_lua(REG_STORE)) {
     start_lua_store(lib, b, i);
     return;
@@ -636,6 +695,12 @@ static void batch_free(struct batch *b) {
     free(j->fields);
     free(j->values);
     free(j->rows);
+    if (j->args)
+      for (char **a = j->args; *a; a++) free(*a);
+    free(j->args);
+    free(j->from);
+    free(j->record);
+    free(j->label);
   }
   free(b->books);
   if (b->argv)
@@ -716,6 +781,7 @@ static struct event *changed_event(const struct reload *r) {
     if (w->fn != batch_reloaded) continue;
     const struct batch *b = w->ud;
     for (int i = 0; b->books && i < b->nbooks; i++) {
+      if (b->books[i].args) continue;
       add_id(ev, b->books[i].book);
       for (int k = 0; k < b->books[i].n; k++) add_field(ev, b->books[i].fields[k]);
     }
@@ -801,6 +867,21 @@ static void batch_done(struct batch *b) {
 static void batch_reloaded(int rc, const char *err, void *ud) {
   struct batch *b = ud;
   if (rc >= 0 && b->embedding == 2) embedded(b->lib, b);
+  if (rc >= 0 && b->argv && !strcmp(b->argv[0], "remove") && !b->undoes) {
+    /* what calibre was asked to remove and still has wasn't removed */
+    sqlite3_stmt *st;
+    char *e = NULL;
+    if (!db_prepare(b->lib->app->wdb,
+                    "UPDATE history.journal SET state = ?1, error = 'still in calibre after the command' WHERE batch = ?2"
+                    " AND field = '(removed)' AND state = ?3 AND EXISTS(SELECT 1 FROM books x WHERE x.id = journal.book)", &st, &e)) {
+      sqlite3_bind_int(st, 1, OP_FAILED);
+      sqlite3_bind_int64(st, 2, b->id);
+      sqlite3_bind_int(st, 3, OP_APPLIED);
+      sqlite3_step(st);
+      sqlite3_finalize(st);
+    }
+    free(e);
+  }
   batch_done(b);
 }
 
@@ -838,7 +919,7 @@ static void finish_batch(struct library *lib, struct batch *b) {
       free(err);
     }
   }
-  if (b->applied && (!b->argv || b->undoes)) library_reload(lib, 1, batch_reloaded, b);
+  if (b->applied && (!b->argv || b->undoes || !strcmp(b->argv[0], "remove"))) library_reload(lib, 1, batch_reloaded, b);
   else batch_done(b);
 }
 
@@ -1052,27 +1133,6 @@ int library_submit(struct library *lib, const struct operation *op, library_done
   return 0;
 }
 
-int library_command_undo(struct library *lib, long long batch, const char *const *argv, char **err) {
-  sbuf joined = SBUF_INIT;
-  for (int i = 0; argv[i]; i++) {
-    if (i) sb_putc(&joined, '\t');
-    sb_puts(&joined, argv[i]);
-  }
-  sqlite3_stmt *st;
-  int rc = db_prepare(lib->app->wdb,
-                      "UPDATE history.journal SET undo_argv = ? WHERE id ="
-                      " (SELECT max(id) FROM history.journal WHERE batch = ? AND argv IS NOT NULL)",
-                      &st, err);
-  if (!rc) {
-    sqlite3_bind_text(st, 1, joined.s ? joined.s : "", -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(st, 2, batch);
-    sqlite3_step(st);
-    sqlite3_finalize(st);
-  }
-  sb_free(&joined);
-  return rc;
-}
-
 /* a whole book as the journal keeps it */
 static char *book_json(struct db *db, const char *table, long long id) {
   char *sql = xasprintf("SELECT json_object('title', title, 'authors', authors, 'tags', tags, 'series', series,"
@@ -1111,6 +1171,35 @@ static int journal_says(struct db *db, long long book, const char *field, const 
   return yes;
 }
 
+/* Whether books are being added: until calibredb says, their ids aren't known. */
+static int adds_running(struct db *db) {
+  sqlite3_stmt *st;
+  char *err = NULL;
+  int yes = 0;
+  if (db_prepare(db, "SELECT EXISTS(SELECT 1 FROM history.journal WHERE state IN (0, 1) AND argv LIKE 'add' || char(9) || '%')", &st, &err)) {
+    free(err);
+    return 0;
+  }
+  if (sqlite3_step(st) == SQLITE_ROW) yes = sqlite3_column_int(st, 0);
+  sqlite3_finalize(st);
+  return yes;
+}
+
+/* Whether undo took this book back out. */
+static int journal_undone_add(struct db *db, long long book) {
+  sqlite3_stmt *st;
+  char *err = NULL;
+  int yes = 0;
+  if (db_prepare(db, "SELECT EXISTS(SELECT 1 FROM history.journal WHERE book = ? AND state = 4 AND field IN ('(added)', '(restored)'))", &st, &err)) {
+    free(err);
+    return 0;
+  }
+  sqlite3_bind_int64(st, 1, book);
+  if (sqlite3_step(st) == SQLITE_ROW) yes = sqlite3_column_int(st, 0);
+  sqlite3_finalize(st);
+  return yes;
+}
+
 void library_log_outside(struct db *db) {
   static const char *const fields[] = {"title", "authors", "tags", "series", "series_index", "publisher", "pubdate",
                                        "languages", "identifiers", NULL};
@@ -1139,13 +1228,13 @@ void library_log_outside(struct db *db) {
     long long id = sqlite3_column_int64(st, 0);
     int before = sqlite3_column_int(st, 1), now = sqlite3_column_int(st, 2);
     if (!before && now) {
-      if (!journal_says(db, id, "(added)", NULL) && !journal_says(db, id, "(restored)", NULL)) {
+      if (!adds_running(db) && !journal_says(db, id, "(added)", NULL) && !journal_says(db, id, "(restored)", NULL)) {
         char *j = book_json(db, "books", id);
         OUTSIDE(id, "(added)", "", j);
         free(j);
       }
     } else if (before && !now) {
-      if (!journal_says(db, id, "(removed)", NULL)) {
+      if (!journal_says(db, id, "(removed)", NULL) && !journal_undone_add(db, id)) {
         char *j = book_json(db, "temp.mirror_prev", id);
         OUTSIDE(id, "(removed)", j, "");
         free(j);
@@ -1175,26 +1264,75 @@ void library_log_outside(struct db *db) {
   if (db_exec(db, "COMMIT", &err)) free(err);
 }
 
-long long library_note(struct library *lib, long long batch, long long book, const char *field, const char *old,
-                       const char *new, const char *label) {
+int library_add(struct library *lib, const struct add_item *items, int n, const char *label, long long batch,
+                const struct op_settings *set, long long *added, library_done *done, void *ud) {
   struct db *db = lib->app->wdb;
-  if (!batch) batch = next_batch(db);
-  journal_add(db, batch, label, NEED_ANY, "lua", OP_APPLIED, book, field, old, new, NULL, NULL, 0);
-  return batch;
+  struct batch *b = batch_new(lib, NEED_ANY, set, done, ud);
+  b->embed = 0; /* a new book's file is as calibre made it */
+  b->id = batch ? batch : next_batch(db);
+  b->added = added;
+  b->books = xcalloc((size_t)n + 1, sizeof *b->books);
+  b->nbooks = n;
+  for (int i = 0; i < n; i++) {
+    struct book_job *j = &b->books[i];
+    int na = 0;
+    while (items[i].args[na]) na++;
+    j->args = xcalloc((size_t)na + 2, sizeof *j->args);
+    j->args[0] = xstrdup("add");
+    sbuf joined = SBUF_INIT;
+    sb_puts(&joined, "add");
+    for (int k = 0; k < na; k++) {
+      j->args[k + 1] = xstrdup(items[i].args[k]);
+      sb_putc(&joined, '\t');
+      sb_puts(&joined, items[i].args[k]);
+    }
+    j->from = items[i].from ? xstrdup(items[i].from) : NULL;
+    j->record = items[i].record ? xstrdup(items[i].record) : NULL;
+    j->label = label ? xstrdup(label) : NULL;
+    j->restores = items[i].restores;
+    j->n = 1;
+    j->fields = xcalloc(1, sizeof *j->fields);
+    j->values = xcalloc(1, sizeof *j->values);
+    j->fields[0] = xstrdup("(add)");
+    j->values[0] = xstrdup("");
+    j->rows = xcalloc(1, sizeof *j->rows);
+    j->rows[0] = journal_add(db, b->id, label, NEED_ANY, "calibre", OP_QUEUED, 0, NULL, NULL, NULL, joined.s, NULL, 0);
+    sb_free(&joined);
+  }
+  enqueue(lib, b);
+  return 0;
 }
 
-void library_mark_undone(struct library *lib, long long batch) {
-  sqlite3_stmt *st;
-  char *err = NULL;
-  if (db_prepare(lib->app->wdb, "UPDATE history.journal SET state = ?1 WHERE batch = ?2 AND state = ?3", &st, &err)) {
-    free(err);
-    return;
+int library_remove(struct library *lib, const long long *ids, int n, const char *label, long long batch,
+                   const struct op_settings *set, library_done *done, void *ud, char **err) {
+  struct db *db = lib->app->wdb;
+  struct batch *b = batch_new(lib, NEED_ANY, set, done, ud);
+  b->id = batch ? batch : next_batch(db);
+  sbuf list = SBUF_INIT, joined = SBUF_INIT;
+  if (db_exec(db, "BEGIN IMMEDIATE", err)) {
+    batch_free(b);
+    return -1;
   }
-  sqlite3_bind_int(st, 1, OP_UNDONE);
-  sqlite3_bind_int64(st, 2, batch);
-  sqlite3_bind_int(st, 3, OP_APPLIED);
-  sqlite3_step(st);
-  sqlite3_finalize(st);
+  /* first: a reading of calibre's records meanwhile takes them for lulibre's */
+  for (int i = 0; i < n; i++) {
+    char *record = book_json(db, "books", ids[i]);
+    journal_add(db, b->id, label, NEED_ANY, "lua", OP_QUEUED, ids[i], "(removed)", record, "", NULL, NULL, 0);
+    free(record);
+    sb_printf(&list, "%s%lld", i ? "," : "", ids[i]);
+  }
+  sb_puts(&joined, "remove\t");
+  sb_puts(&joined, list.s ? list.s : "");
+  b->argv = xcalloc(3, sizeof *b->argv);
+  b->argv[0] = xstrdup("remove");
+  b->argv[1] = xstrdup(list.s ? list.s : "");
+  b->argv_row = journal_add(db, b->id, label, NEED_ANY, "calibre", OP_QUEUED, 0, NULL, NULL, NULL, joined.s, NULL, 0);
+  sb_free(&list);
+  sb_free(&joined);
+  char *e = NULL;
+  if (db_exec(db, "COMMIT", &e)) free(e);
+  b->nbooks = 1;
+  enqueue(lib, b);
+  return 0;
 }
 
 int library_cancel(struct library *lib, long long batch, char **err) {
@@ -1247,6 +1385,17 @@ static int move_file(const char *from, const char *to) {
     return -1;
   }
   return unlink(from);
+}
+
+long long library_set_aside(struct library *lib, const char *path, const char *to, long long batch, const char *label, char **err) {
+  struct db *db = lib->app->wdb;
+  if (move_file(path, to)) {
+    *err = xasprintf("%s: %s", path, errstr(errno));
+    return 0;
+  }
+  if (!batch) batch = next_batch(db);
+  journal_add(db, batch, label, NEED_ANY, "lua", OP_APPLIED, 0, "(moved)", path, to, NULL, NULL, 0);
+  return batch;
 }
 
 long long library_drop(struct library *lib, long long book, const char *held, long long batch, char **err) {
@@ -1345,31 +1494,48 @@ static int undo_dropped(struct library *lib, long long batch, char **err) {
   return n;
 }
 
-/* The command that puts a batch back, as an argument list (malloc'd), or NULL. */
+/* The files a batch moved aside, back where they were. */
+static int undo_moved(struct library *lib, long long batch, char **err) {
+  sqlite3_stmt *st;
+  char *e = NULL;
+  if (db_prepare(lib->app->wdb, "SELECT id, old, new FROM history.journal WHERE batch = ? AND state = ? AND field = '(moved)'", &st, &e)) {
+    free(e);
+    return 0;
+  }
+  sqlite3_bind_int64(st, 1, batch);
+  sqlite3_bind_int(st, 2, OP_APPLIED);
+  int n = 0;
+  while (sqlite3_step(st) == SQLITE_ROW) {
+    const char *path = (const char *)sqlite3_column_text(st, 1), *held = (const char *)sqlite3_column_text(st, 2);
+    if (access(path, F_OK) == 0 || move_file(held, path)) {
+      if (!*err) *err = xasprintf("%s stays in %s", path, held);
+      continue;
+    }
+    row_state(lib, sqlite3_column_int64(st, 0), OP_UNDONE, NULL);
+    n++;
+  }
+  sqlite3_finalize(st);
+  return n;
+}
+
+/* The command that puts a batch back when it added books: removing them; an
+ * argument list (malloc'd), or NULL. */
 static char **undo_command(struct library *lib, long long batch) {
   sqlite3_stmt *st;
   char *e = NULL;
   char **argv = NULL;
   if (db_prepare(lib->app->wdb,
-                 "SELECT undo_argv FROM history.journal WHERE batch = ? AND state = ? AND undo_argv IS NOT NULL"
-                 " ORDER BY id DESC LIMIT 1", &st, &e)) {
+                 "SELECT group_concat(book, ',') FROM history.journal WHERE batch = ? AND state = ?"
+                 " AND field IN ('(added)', '(restored)')", &st, &e)) {
     free(e);
     return NULL;
   }
   sqlite3_bind_int64(st, 1, batch);
   sqlite3_bind_int(st, 2, OP_APPLIED);
-  if (sqlite3_step(st) == SQLITE_ROW) {
-    const char *joined = (const char *)sqlite3_column_text(st, 0);
-    int n = 1;
-    for (const char *p = joined; *p; p++) n += *p == '\t';
-    argv = xcalloc((size_t)n + 1, sizeof *argv);
-    n = 0;
-    for (const char *p = joined;;) {
-      const char *q = strchr(p, '\t');
-      argv[n++] = q ? xstrndup(p, (size_t)(q - p)) : xstrdup(p);
-      if (!q) break;
-      p = q + 1;
-    }
+  if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_text(st, 0)) {
+    argv = xcalloc(3, sizeof *argv);
+    argv[0] = xstrdup("remove");
+    argv[1] = xstrdup((const char *)sqlite3_column_text(st, 0));
   }
   sqlite3_finalize(st);
   return argv;
@@ -1380,7 +1546,7 @@ int library_undo(struct library *lib, long long batch, const struct op_settings 
   struct db *db = lib->app->wdb;
   sqlite3_stmt *st;
   char *drop_err = NULL;
-  int dropped = undo_dropped(lib, batch, &drop_err);
+  int dropped = undo_dropped(lib, batch, &drop_err) + undo_moved(lib, batch, &drop_err);
   char **command = undo_command(lib, batch);
   if (command) {
     struct batch *b = batch_new(lib, NEED_ANY, set, done, ud);
@@ -1401,7 +1567,6 @@ int library_undo(struct library *lib, long long batch, const struct op_settings 
   }
   if (db_prepare(db,
                  "SELECT book, field, old, label FROM history.journal WHERE batch = ? AND state = ? AND field IS NOT NULL AND field NOT LIKE '(%'"
-                 " AND NOT EXISTS(SELECT 1 FROM history.journal u WHERE u.batch = journal.batch AND u.undo_argv IS NOT NULL)"
                  " ORDER BY id DESC",
                  &st, err))
     return -1;

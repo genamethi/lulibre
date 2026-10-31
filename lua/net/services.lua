@@ -225,6 +225,14 @@ M_openlibrary_fields = function(b)
   for _, a in ipairs(type(b.authors) == "table" and b.authors or {}) do
     if type(a.name) == "string" then names[#names + 1] = forename_first((a.name:gsub("(%l%l)%.$", "%1"))) end
   end
+  -- an edition with no authors of its own often says so in words: "[by] J.-P. Serre."
+  if #names == 0 and type(b.by_statement) == "string" then
+    local said = b.by_statement:gsub("^%s*%[?[Bb]y%]?%s+", ""):gsub("[%.,;%s]+$", "")
+    local nm = require "lulib._names"
+    for _, person in ipairs(nm.split(said)) do
+      if not nm.never(person) then names[#names + 1] = nm.titlecase(person) end
+    end
+  end
   local pub = type(b.publishers) == "table" and b.publishers[1]
   local date
   if type(b.publish_date) == "string" then

@@ -46,35 +46,38 @@ function M.retry()
   return n
 end
 
---- Stops the content server by its systemd unit, waits for the jobs to be done,
--- and starts it again. Returns how many are left, or nil and why it can't.
-function M.restart()
-  local server = require("units").find()[1]
-  if not server then return nil, "no systemd unit runs calibre's content server here: stop the server, and they run" end
-  local function systemctl(verb)
-    local a = { "systemctl" }
-    if server.user then a[#a + 1] = "--user" end
-    a[#a + 1] = verb
-    a[#a + 1] = server.name
-    return utils.exec(a, { timeout = 60000 })
-  end
-  systemctl("stop")
-  local waited = 0
-  while waited < 120 do
-    local left = 0
-    for _, j in ipairs(M.jobs()) do
-      if j.state ~= "failed" then left = left + 1 end
-    end
-    if left == 0 then break end
-    taskman.sleep(500)
-    waited = waited + 0.5
-  end
-  systemctl("start")
+-- how many still wait to run
+local function waiting()
   local left = 0
   for _, j in ipairs(M.jobs()) do
     if j.state ~= "failed" then left = left + 1 end
   end
   return left
+end
+
+--- Stops the content server, waits for the jobs to be done, and starts it again:
+-- by the settings server_stop and server_start, or else by its systemd unit. Returns
+-- how many are left, or nil and why it can't.
+function M.restart()
+  local stop, start = setman.get("server_stop"), setman.get("server_start")
+  if stop == "" or start == "" then
+    local server = require("units").find()[1]
+    if not server then
+      return nil, "no way to stop calibre's content server: set server_stop and server_start, or stop it and they run"
+    end
+    local verb = "systemctl " .. (server.user and "--user " or "")
+    stop, start = verb .. "stop '" .. server.name .. "'", verb .. "start '" .. server.name .. "'"
+  end
+  local r, err = utils.exec({ "sh", "-c", stop }, { timeout = 120000 })
+  if not r or r.code ~= 0 then return nil, ("%s: %s"):format(stop, r and r.stderr or tostring(err)) end
+  local waited = 0
+  while waited < 120 and waiting() > 0 do
+    taskman.sleep(500)
+    waited = waited + 0.5
+  end
+  r, err = utils.exec({ "sh", "-c", start }, { timeout = 120000 })
+  if not r or r.code ~= 0 then return nil, ("%s: %s"):format(start, r and r.stderr or tostring(err)) end
+  return waiting()
 end
 
 --- The jobs as rows of a list.

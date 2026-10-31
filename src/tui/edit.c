@@ -206,7 +206,7 @@ static void c_undo(struct tui *t, const char *args) {
   char *err = NULL;
   long long batch = 0;
   if (db_prepare(&t->app->db,
-                 "SELECT max(batch) FROM history.journal WHERE state = 2 AND undoes IS NULL AND (field IS NOT NULL OR undo_argv IS NOT NULL) AND store NOT IN ('review', 'outside')",
+                 "SELECT max(batch) FROM history.journal WHERE state = 2 AND undoes IS NULL AND field IS NOT NULL AND store NOT IN ('review', 'outside')",
                  &st, &err) == 0) {
     if (sqlite3_step(st) == SQLITE_ROW) batch = sqlite3_column_int64(st, 0);
     sqlite3_finalize(st);

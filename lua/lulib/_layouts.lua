@@ -412,6 +412,19 @@ local function copyright_year(text)
   return nil
 end
 
+-- where a line of a page begins with a name, or a bracket or label before it: not
+-- inside a longer name ("Communications on Pure and Applied Mathematics")
+local function starts_a_line(low, name)
+  local from = 1
+  while true do
+    local a, b = low:find(name, from, true)
+    if not a then return nil end
+    local before = low:sub(1, a - 1):match("([^\n]*)$")
+    if before:match("^[%s%(%[]*$") or before:match("series[%s:]*$") then return a, b end
+    from = b + 1
+  end
+end
+
 -- A book's series page or title-page verso: the series' name with the
 -- volume's number after it, and the year in the copyright line. Any series
 -- in M.series is known (add to it for more: { name, publisher }).
@@ -421,7 +434,7 @@ M.add {
     for _, text in ipairs(doc.texts or {}) do
       local low = text:lower()
       for _, s in ipairs(M.series) do
-        if low:find(s[1]:lower(), 1, true) then return text end
+        if starts_a_line(low, s[1]:lower()) then return text end
       end
     end
   end,
@@ -431,7 +444,7 @@ M.add {
     -- may be advertised further down)
     local first
     for _, s in ipairs(M.series) do
-      local a, b = low:find(s[1]:lower(), 1, true)
+      local a, b = starts_a_line(low, s[1]:lower())
       if a and (not first or a < first) then
         first = a
         out.series, out.publisher = s[1], s[2]

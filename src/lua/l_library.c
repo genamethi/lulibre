@@ -12,13 +12,16 @@
  *     nothing holds the library, and when "any" as a change would, through the
  *     content server if it is set; batch, a batch to join. Waits: the batch and
  *     what it printed, or nil and why
- *   store.command_undo(batch, args)    the calibredb command that puts a
- *     command's batch back, which store.undo and :undo then run
+ *   store.add(books [, label [, batch]])   adds books as one batch, a process
+ *     per book, as many at once as changes run. books: { {path=, title=, authors=,
+ *     tags=, series=, series_index=, identifiers = {type = value}, cover=, duplicates=,
+ *     restores=, record=}, ... }; no path: a book with no file. Waits: a list of the
+ *     new ids, false for one that failed; then why, if any did; then the batch
+ *   store.remove(ids [, label [, batch]])  removes books as one batch and one
+ *     process, to calibre's recycle bin. Waits: the batch, or nil and why
+ *   store.set_aside(path, to [, batch [, label]])  moves a file, which undo puts back
  *   store.drop(book, held [, batch])   a staged file to the path held, its
  *     record kept for undo: the batch, or nil and why
- *   store.note(batch, book, field, old, new [, label])  a row of the journal for
- *     a change made some way of lulibre's own: the batch (0 or nil for a new one)
- *   store.mark_undone(batch)           the batch's rows are undone
  *   store.cancel(batch)                a queued batch out of the queue
  *   store.undo(batch)                  puts a batch's old values back
  *   store.holder()                     "none" | "server" | "program" | "other"
@@ -54,11 +57,13 @@ struct msg {
   long long undo; /* a batch to put back */
   long long drop;     /* a staged file to take out of the folder */
   char *held;         /* to here */
-  int set_undo;       /* argv is what puts join back */
   int cancel;         /* join is to come out of the queue */
-  int mark_undone;    /* join's rows are undone */
-  char *note_field, *note_old, *note_new; /* a row of the journal for note_book */
-  long long note_book;
+  struct add_item *adds; /* books to add */
+  int nadds;
+  long long *added;   /* their ids */
+  long long *removes; /* books to remove */
+  int nremoves;
+  char *aside;        /* a file to move to held */
   char *output;       /* what a command printed */
   struct op_settings set; /* from the lua_State's copy, as the call was made */
   /* the answer */
@@ -80,9 +85,16 @@ static void msg_free(struct msg *m) {
   free(m->argv);
   free(m->label);
   free(m->held);
-  free(m->note_field);
-  free(m->note_old);
-  free(m->note_new);
+  for (int i = 0; i < m->nadds; i++) {
+    for (char **a = m->adds[i].args; a && *a; a++) free(*a);
+    free(m->adds[i].args);
+    free((char *)m->adds[i].from);
+    free((char *)m->adds[i].record);
+  }
+  free(m->adds);
+  free(m->added);
+  free(m->removes);
+  free(m->aside);
   free(m->output);
   free(m->err);
   free((char *)m->set.server);
@@ -96,7 +108,19 @@ static void msg_free(struct msg *m) {
 static void answered(struct app *app, void *arg) {
   struct msg *m = arg;
   lua_State *L = sched_end_wait(m->task);
-  if (L) {
+  if (L && m->adds) {
+    /* the ids, whether or not all of them went */
+    lua_createtable(L, m->nadds, 0);
+    for (int i = 0; i < m->nadds; i++) {
+      if (m->added[i]) lua_pushinteger(L, m->added[i]);
+      else lua_pushboolean(L, 0);
+      lua_rawseti(L, -2, i + 1);
+    }
+    if (m->failed) lua_pushstring(L, m->err ? m->err : "failed");
+    else lua_pushnil(L);
+    lua_pushinteger(L, m->batch);
+    sched_wake(m->task, 3);
+  } else if (L) {
     if (m->failed) {
       lua_pushnil(L);
       lua_pushstring(L, m->err ? m->err : "failed");
@@ -134,20 +158,17 @@ static void submit(struct app *app, void *arg) { /* the background thread */
     err = xstrdup("the library is closed");
   } else if (m->undo) {
     rc = library_undo(app->library, m->undo, &m->set, done, m, &err);
-  } else if (m->set_undo) {
-    rc = library_command_undo(app->library, m->join, (const char *const *)m->argv, &err);
-    if (!rc) done(m->join, OP_APPLIED, NULL, m);
   } else if (m->cancel) {
     rc = library_cancel(app->library, m->join, &err);
     if (!rc) done(m->join, OP_APPLIED, NULL, m);
-  } else if (m->mark_undone) {
-    library_mark_undone(app->library, m->join);
-    rc = 0;
-    done(m->join, OP_APPLIED, NULL, m);
-  } else if (m->note_field) {
-    long long batch = library_note(app->library, m->join, m->note_book, m->note_field, m->note_old, m->note_new, m->label);
-    rc = 0;
-    done(batch, OP_APPLIED, NULL, m);
+  } else if (m->adds) {
+    rc = library_add(app->library, m->adds, m->nadds, m->label, m->join, &m->set, m->added, done, m);
+  } else if (m->removes) {
+    rc = library_remove(app->library, m->removes, m->nremoves, m->label, m->join, &m->set, done, m, &err);
+  } else if (m->aside) {
+    long long batch = library_set_aside(app->library, m->aside, m->held, m->join, m->label, &err);
+    rc = batch ? 0 : -1;
+    if (!rc) done(batch, OP_APPLIED, NULL, m);
   } else if (m->drop) {
     long long batch = library_drop(app->library, m->drop, m->held, m->join, &err);
     rc = batch ? 0 : -1;
@@ -252,45 +273,107 @@ static int l_command(lua_State *L) {
   return to_library(L, m);
 }
 
-static int l_command_undo(lua_State *L) {
-  lua_Integer batch = luaL_checkinteger(L, 1);
-  luaL_checktype(L, 2, LUA_TTABLE);
-  sched_require_task(L);
-  int n = (int)lua_rawlen(L, 2);
-  struct msg *m = xcalloc(1, sizeof *m);
-  m->argv = xcalloc((size_t)n + 1, sizeof *m->argv);
-  for (int i = 1; i <= n; i++) {
-    lua_rawgeti(L, 2, i);
-    m->argv[i - 1] = xstrdup(luaL_tolstring(L, -1, NULL));
-    lua_pop(L, 2);
+/* a field of a book to add, as an option of calibredb add */
+static void add_option(lua_State *L, int idx, const char *field, const char *flag, char ***args, int *n) {
+  lua_getfield(L, idx, field);
+  if (lua_isstring(L, -1) && *lua_tostring(L, -1)) {
+    *args = xrealloc(*args, (size_t)(*n + 3) * sizeof **args);
+    (*args)[(*n)++] = xstrdup(flag);
+    (*args)[(*n)++] = xstrdup(lua_tostring(L, -1));
+    (*args)[*n] = NULL;
   }
-  m->set_undo = 1;
-  m->join = batch;
+  lua_pop(L, 1);
+}
+
+static int l_add(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  sched_require_task(L);
+  int n = (int)lua_rawlen(L, 1);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->adds = xcalloc((size_t)(n ? n : 1), sizeof *m->adds);
+  m->added = xcalloc((size_t)(n ? n : 1), sizeof *m->added);
+  m->nadds = n;
+  m->label = luaL_optstring(L, 2, NULL) ? xstrdup(lua_tostring(L, 2)) : NULL;
+  m->join = luaL_optinteger(L, 3, 0);
+  for (int i = 1; i <= n; i++) {
+    lua_rawgeti(L, 1, i);
+    int item = lua_gettop(L);
+    if (!lua_istable(L, item)) {
+      msg_free(m);
+      return luaL_error(L, "book %d is not a table", i);
+    }
+    struct add_item *a = &m->adds[i - 1];
+    int na = 0;
+    a->args = xcalloc(2, sizeof *a->args);
+    lua_getfield(L, item, "duplicates");
+    int duplicates = lua_isnil(L, -1) || lua_toboolean(L, -1); /* lulibre compares the bytes itself */
+    lua_pop(L, 1);
+    if (duplicates) a->args[na++] = xstrdup("--duplicates");
+    add_option(L, item, "title", "--title", &a->args, &na);
+    add_option(L, item, "authors", "--authors", &a->args, &na);
+    add_option(L, item, "tags", "--tags", &a->args, &na);
+    add_option(L, item, "series", "--series", &a->args, &na);
+    add_option(L, item, "series_index", "--series-index", &a->args, &na);
+    add_option(L, item, "cover", "--cover", &a->args, &na);
+    add_option(L, item, "languages", "--languages", &a->args, &na);
+    lua_getfield(L, item, "identifiers");
+    if (lua_istable(L, -1)) {
+      lua_pushnil(L);
+      while (lua_next(L, -2)) {
+        a->args = xrealloc(a->args, (size_t)(na + 3) * sizeof *a->args);
+        a->args[na++] = xstrdup("--identifier");
+        lua_pushvalue(L, -2);
+        a->args[na++] = xasprintf("%s:%s", lua_tostring(L, -1), lua_tostring(L, -2));
+        lua_pop(L, 2);
+      }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, item, "path");
+    a->args = xrealloc(a->args, (size_t)(na + 3) * sizeof *a->args);
+    if (lua_isstring(L, -1)) {
+      a->from = xstrdup(lua_tostring(L, -1));
+      a->args[na++] = xstrdup(lua_tostring(L, -1));
+    } else {
+      a->args[na++] = xstrdup("--empty");
+    }
+    a->args[na] = NULL;
+    lua_pop(L, 1);
+    lua_getfield(L, item, "record");
+    a->record = lua_isstring(L, -1) ? xstrdup(lua_tostring(L, -1)) : NULL;
+    lua_getfield(L, item, "restores");
+    a->restores = lua_tointeger(L, -1);
+    lua_pop(L, 3);
+  }
   return to_library(L, m);
 }
 
-static int l_note(lua_State *L) {
-  lua_Integer batch = luaL_optinteger(L, 1, 0);
-  lua_Integer book = luaL_checkinteger(L, 2);
-  const char *field = luaL_checkstring(L, 3), *old = luaL_optstring(L, 4, ""), *new = luaL_optstring(L, 5, "");
-  const char *label = luaL_optstring(L, 6, NULL);
+static int l_remove(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  sched_require_task(L);
+  int n = (int)lua_rawlen(L, 1);
+  struct msg *m = xcalloc(1, sizeof *m);
+  m->removes = xcalloc((size_t)(n ? n : 1), sizeof *m->removes);
+  m->nremoves = n;
+  for (int i = 1; i <= n; i++) {
+    lua_rawgeti(L, 1, i);
+    m->removes[i - 1] = lua_tointeger(L, -1);
+    lua_pop(L, 1);
+  }
+  m->label = luaL_optstring(L, 2, NULL) ? xstrdup(lua_tostring(L, 2)) : NULL;
+  m->join = luaL_optinteger(L, 3, 0);
+  return to_library(L, m);
+}
+
+static int l_set_aside(lua_State *L) {
+  const char *path = luaL_checkstring(L, 1), *to = luaL_checkstring(L, 2);
+  lua_Integer batch = luaL_optinteger(L, 3, 0);
+  const char *label = luaL_optstring(L, 4, NULL);
   sched_require_task(L);
   struct msg *m = xcalloc(1, sizeof *m);
+  m->aside = xstrdup(path);
+  m->held = xstrdup(to);
   m->join = batch;
-  m->note_book = book;
-  m->note_field = xstrdup(field);
-  m->note_old = xstrdup(old);
-  m->note_new = xstrdup(new);
   m->label = label ? xstrdup(label) : NULL;
-  return to_library(L, m);
-}
-
-static int l_mark_undone(lua_State *L) {
-  lua_Integer batch = luaL_checkinteger(L, 1);
-  sched_require_task(L);
-  struct msg *m = xcalloc(1, sizeof *m);
-  m->join = batch;
-  m->mark_undone = 1;
   return to_library(L, m);
 }
 
@@ -396,7 +479,7 @@ void lapi_store_write(struct store_req *q) {
 
 int luaopen_store(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"apply", l_apply}, {"command", l_command}, {"command_undo", l_command_undo}, {"drop", l_drop}, {"note", l_note}, {"mark_undone", l_mark_undone}, {"cancel", l_cancel}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
+    {"apply", l_apply}, {"command", l_command}, {"add", l_add}, {"remove", l_remove}, {"drop", l_drop}, {"set_aside", l_set_aside}, {"cancel", l_cancel}, {"undo", l_undo}, {"holder", l_holder}, {"reload", l_db_reload},
     {NULL, NULL},
   };
   luaL_newlib(L, fns);

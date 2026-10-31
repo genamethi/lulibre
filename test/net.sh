@@ -202,6 +202,7 @@ h = io.popen('gzip -c > "' .. dir .. '/ol_dump_authors_latest.txt.gz"', "w"); h:
 local ol = require("net.service").ask("openlibrary-dump", "9780387900407")
 local of = net.services["openlibrary-dump"].how.record(ol)
 say("dump read", of.title, of.authors, of.publisher, of.pubdate, of.series, of.series_index)
+say("by statement", net.services.openlibrary.how.record('{"ISBN:1":{"title":"A Course","by_statement":"[by] J.-P. Serre."}}').authors)
 -- what a dataset has, the service it covers isn't asked about
 local keys_of, online = net.keys, {}
 net.keys = function() return { { service = "arxiv-snapshot", key = "2201.00001", ident = "arxiv" },
@@ -303,6 +304,7 @@ expect "and found by grep; a key it lacks is no record" "grep finds|true|false"
 expect "Open Library's dump, through gzip, its author by key" "dump read|Dumped Book|Robin Hartshorne|Springer|1994-03-03|Graduate Texts in Mathematics|52"
 expect "what a dataset has isn't asked of the service it covers" "covered|2201.00002"
 expect "a paper found by its title" "by title|2201.00001"
+expect "an edition with no authors says who in words" "by statement|J.-P. Serre"
 expect "a dataset fetched" "fetched|true|nil|true"
 expect "zbMATH's table gives a number" "zbmath links|123|123"
 expect "a file of no dataset isn't taken" "adopt|true|nil"

@@ -104,21 +104,33 @@ int library_undo(struct library *lib, long long batch, const struct op_settings 
  * "outside", field by field, and whole books added or removed. On db's thread. */
 void library_log_outside(struct db *db);
 
-/* What puts a command's batch back: a calibredb command, its arguments in
- * argv (NULL-terminated). library_undo runs it in place of anything else
- * in the batch. */
-int library_command_undo(struct library *lib, long long batch, const char *const *argv, char **err);
+/* One book to add: what calibredb add is run with. restores: the id of a removed
+ * book this one brings back. record: what the journal keeps of it, as JSON. */
+struct add_item {
+  char **args; /* after "add", NULL-terminated */
+  const char *from;
+  const char *record;
+  long long restores;
+};
 
-/* A row of the journal for a change lulibre made some way of its own, which
- * only the code that made it can put back, in batch or a new one: the batch. */
-long long library_note(struct library *lib, long long batch, long long book, const char *field, const char *old,
-                       const char *new, const char *label);
+/* Adds books as one batch, a process per book, as many at once as a batch's
+ * changes run; the journal has each with its new id, and undo removes them. added[i]
+ * gets the book's id, 0 if it failed, before done fires. In batch, or a new one. */
+int library_add(struct library *lib, const struct add_item *items, int n, const char *label, long long batch,
+                const struct op_settings *set, long long *added, library_done *done, void *ud);
 
-/* The batch's applied rows are undone. */
-void library_mark_undone(struct library *lib, long long batch);
+/* Removes books as one batch, one process for them all: the journal has each one's
+ * record first. Those still in calibre's records after it are failed. In batch, or a
+ * new one. */
+int library_remove(struct library *lib, const long long *ids, int n, const char *label, long long batch,
+                   const struct op_settings *set, library_done *done, void *ud, char **err);
 
 /* Takes a batch out of the queue if it hasn't begun. Returns 0, or -1 with *err. */
 int library_cancel(struct library *lib, long long batch, char **err);
+
+/* Moves a file, as a change of the journal that undo puts back, in batch or a new
+ * one. Returns the batch, or 0 with *err. */
+long long library_set_aside(struct library *lib, const char *path, const char *to, long long batch, const char *label, char **err);
 
 /* Takes a staged file (book, below 0) out of the sync folder, to the path
  * held, as a change of the journal that undo puts back, its record too, in

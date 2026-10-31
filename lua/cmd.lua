@@ -373,10 +373,12 @@ cmdman.create("remove", function(o)
   local what = #ids == 1 and ("book %d, %s,"):format(ids[1], bookman.get(ids[1], "title") or "?") or ("%d books"):format(#ids)
   local answer = uiman.input { prompt = ("remove %s from calibre? to its recycle bin (y/N) "):format(what) }
   if not (answer and answer:lower():sub(1, 1) == "y") then return end
-  local n, err = require("lulib._remove").remove(ids)
+  for _, id in ipairs(ids) do
+    if id < 0 then return uiman.notify("files in the sync folder are not in calibre: :sync drop takes them out of the folder", "error") end
+  end
+  local b, err = require("store").remove(ids)
   for _, id in ipairs(ids) do uiman.mark(id, false) end
-  uiman.notify(err and ("removed %d, then: %s"):format(n, err) or ("removed %d book%s: :undo puts them back"):format(n, n == 1 and "" or "s"),
-               err and "error" or nil)
+  uiman.notify(b and ("removed %d book%s: :undo puts them back"):format(#ids, #ids == 1 and "" or "s") or err, not b and "error" or nil)
 end, { desc = "[filter]  remove the selected books from calibre, to its recycle bin; :undo puts them back", complete = "filter" })
 cmdman.create("restore-removed", function(o)
   local new, why = require("lulib._remove").restore(tonumber(o.args))

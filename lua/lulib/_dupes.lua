@@ -265,10 +265,10 @@ function M.open(found)
                 end
               end
             end
-            local n, err = require("lulib._remove").remove(ids, { label = "duplicates" })
-            local msg = ("removed %d duplicate book%s"):format(n, n == 1 and "" or "s")
+            local b, err = require("store").remove(ids, "duplicates")
+            local msg = ("removed %d duplicate book%s"):format(#ids, #ids == 1 and "" or "s")
             if carried > 0 then msg = msg .. ("; %d value%s only they had proposed for the copies kept: :review"):format(carried, carried == 1 and "" or "s") end
-            uiman.notify(err and ("removed %d, then: %s"):format(n, err) or msg, err and "error" or nil)
+            uiman.notify(b and msg or err, not b and "error" or nil)
             return
           end
         end

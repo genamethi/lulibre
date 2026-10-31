@@ -95,15 +95,14 @@ static int reset_if_stale(struct db *db, char **err) {
  * command (argv, as calibredb's arguments joined by tabs); a batch is one
  * operation. need: enum op_need; state: enum op_state. proposal, proposed
  * and source: where the value came from, for a decision taken in review.
- * undoes: the batch an undo puts back. undo_argv: the calibredb command that
- * puts a structural command's batch back, its arguments joined by tabs. */
+ * undoes: the batch an undo puts back. */
 static const char history_schema[] =
   "PRAGMA history.journal_mode=WAL;"
   "CREATE TABLE IF NOT EXISTS history.journal("
   " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, label TEXT, need INTEGER NOT NULL DEFAULT 0,"
   " store TEXT NOT NULL, state INTEGER NOT NULL, error TEXT, ts INTEGER,"
   " book INTEGER, field TEXT, old TEXT, new TEXT, argv TEXT,"
-  " proposal INTEGER, proposed TEXT, source TEXT, undoes INTEGER, undo_argv TEXT);"
+  " proposal INTEGER, proposed TEXT, source TEXT, undoes INTEGER);"
   /* a snapshot is a position in the journal; its values, those a copy of
    * calibre's database had that the journal didn't see (lulib._snapshots) */
   "CREATE TABLE IF NOT EXISTS history.snapshots("
@@ -167,16 +166,6 @@ static const char wit_before_reviews[] =
   "INSERT INTO wit.wits(id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts)"
   " SELECT id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts FROM wit.wits_old;"
   "DROP TABLE wit.wits_old;";
-
-/* A journal from before undo_argv. */
-static int history_prepare(struct db *db, char **err) {
-  if (db_exec(db, history_schema, err)) return -1;
-  sqlite3_stmt *st = NULL;
-  if (sqlite3_prepare_v2(db->h, "SELECT undo_argv FROM history.journal LIMIT 0", -1, &st, NULL) != SQLITE_OK)
-    return db_exec(db, "ALTER TABLE history.journal ADD COLUMN undo_argv TEXT;", err);
-  sqlite3_finalize(st);
-  return 0;
-}
 
 static int wit_prepare(struct db *db, char **err) {
   if (db_exec(db, wit_schema, err)) return -1;
@@ -281,7 +270,7 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
       reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
-      history_prepare(db, err) || attach_beside(db, "custom", "rwc", err) ||
+      db_exec(db, history_schema, err) || attach_beside(db, "custom", "rwc", err) ||
       db_exec(db, custom_schema, err) || attach_beside(db, "wit", "rwc", err) || wit_prepare(db, err)) {
     db_close(db);
     return -1;

@@ -306,7 +306,6 @@ function M.rollback(id, o)
   local plan = M.plan(snap, o)
   local out = { plan = plan, applied = 0, failed = {}, restored = {}, removed = 0, unsynced = 0 }
   if plan.books == 0 then return out end
-  local remove = require "lulib._remove"
   out.before = M.take(("before going back to %d \"%s\""):format(snap.id, snap.name), { auto = true })
   local label = ("rollback to %d"):format(snap.id)
   if #plan.changes > 0 then
@@ -315,7 +314,7 @@ function M.rollback(id, o)
     elseif batch then out.applied = #plan.changes end
   end
   for _, row in ipairs(plan.restore) do
-    local new, err = remove.restore_one(row)
+    local new, err = require("lulib._remove").restore_one(row)
     if new then
       out.restored[#out.restored + 1] = new
       local fix = plan.after_restore[row.book]
@@ -330,9 +329,8 @@ function M.rollback(id, o)
     if err then out.failed[#out.failed + 1] = { book = row.book, error = err } end
   end
   if #plan.remove > 0 then
-    local n, err = remove.remove(plan.remove, { label = label })
-    out.removed = n
-    if err then out.failed[#out.failed + 1] = { book = plan.remove[1], error = err } end
+    local b, err = store.remove(plan.remove, label)
+    if b then out.removed = #plan.remove else out.failed[#out.failed + 1] = { book = plan.remove[1], error = err } end
   end
   local leaving = {}
   for _, book in ipairs(plan.unsync) do
@@ -341,9 +339,8 @@ function M.rollback(id, o)
     if ok then leaving[#leaving + 1] = book else out.failed[#out.failed + 1] = { book = book, error = err } end
   end
   if #leaving > 0 then
-    local n, err = remove.remove(leaving, { label = "unsync (" .. label .. ")" })
-    out.unsynced = n
-    if err then out.failed[#out.failed + 1] = { book = leaving[1], error = err } end
+    local b, err = store.remove(leaving, "unsync (" .. label .. ")")
+    if b then out.unsynced = #leaving else out.failed[#out.failed + 1] = { book = leaving[1], error = err } end
   end
   for _, batch in ipairs(plan.undrop) do
     local ok, err = store.undo(batch)
