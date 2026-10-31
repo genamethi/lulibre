@@ -503,6 +503,23 @@ cmdman.create("datasets", function(o)
   require("lulib._dialogs").datasets()
 end, { desc = "[list | fetch NAME... [force] | add FILE...]  databases for looking books up on this machine. Alone, a dialog", complete = { "list", "fetch", "add" } })
 cmdman.create("arxiv-titles", function(o) require("net.datasets").arxiv_titles(M.books(o)) end, { desc = "[filter]  find books' arXiv numbers by their titles in arXiv's snapshot on this machine, as proposals", complete = "filter" })
+cmdman.create("recheck", function(o)
+  local recheck = require "lulib._recheck"
+  local words = {}
+  for w in (o.args or ""):gmatch("%S+") do words[#words + 1] = w end
+  local mode = words[1] == "ls" and table.remove(words, 1) or nil
+  local since
+  if words[1] == "since" then
+    table.remove(words, 1)
+    local snap, why = require("lulib._snapshots").find(table.remove(words, 1))
+    if not snap then return uiman.notify(why, "error") end
+    since = snap
+  end
+  local filter = table.concat(words, " ")
+  local ids = filter ~= "" and bookman.ids(filter) or nil
+  if mode == "ls" then return say(recheck.rows(recheck.find { ids = ids, since = since })) end
+  recheck.open { ids = ids, since = since }
+end, { desc = "[ls] [since SNAP] [filter]  go back over what lulibre wrote, with each book's own file deciding; p proposes, w writes", complete = "filter" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

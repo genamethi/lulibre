@@ -188,6 +188,97 @@ function M.title_match(mine, theirs, my_authors, their_authors)
   return agree == true or words >= 4
 end
 
+-- Text as words: folded; the accents TeX leaves beside their letter dropped;
+-- punctuation, symbols and figures glued to a name apart.
+local LOOSE_ACCENTS = { "\194\180", "\194\168", "\194\184", "\203\134", "\203\156", "\203\153", "`" }
+local function each_word(text, fn)
+  local t = expr.fold(text or "")
+  for _, a in ipairs(LOOSE_ACCENTS) do t = t:gsub(a, "") end
+  t = t:gsub("\226[\128-\191][\128-\191]", " "):gsub("\194[\128-\191]", " ")
+  for w in t:gmatch("[%a\128-\255]+") do fn(w) end
+  for w in t:gmatch("%d+") do fn(w) end
+end
+
+-- the longest run of a value's words found in a text's order, as a share
+local function phrase_in(value, text)
+  local want = {}
+  each_word(value, function(w)
+    if not M.minor[w] then want[#want + 1] = w end
+  end)
+  if #want == 0 then return nil end
+  local seq, at = {}, {}
+  each_word(text, function(w)
+    if not M.minor[w] and not w:match("^%d+$") then
+      seq[#seq + 1] = w
+      at[w] = at[w] or {}
+      table.insert(at[w], #seq)
+    end
+  end)
+  local best = 0
+  for i = 1, #want do
+    for _, pos in ipairs(at[want[i]] or {}) do
+      local k = 1
+      while i + k <= #want and seq[pos + k] == want[i + k] do k = k + 1 end
+      if k > best then best = k end
+    end
+    if best >= #want - i + 1 then break end
+  end
+  return best / #want
+end
+
+--- How much of a title the pages hold in its own word order: the longest run of its
+-- significant words that stands in that order, as a share of them, kept. "On Predicate
+-- Logic as Modal Logic" against pages that say "Modal Predicate Logic" shares every
+-- word, but its longest run is two of four. nil with no text or no words.
+function M.phrase(value, k, text)
+  local key = "phrase\0" .. value
+  local v = k:get("check", key)
+  if v == nil then
+    local t = text.get()
+    if not t then return nil end
+    v = phrase_in(value, t.text) or false
+    k:put("check", key, v)
+  end
+  return v or nil
+end
+
+--- How many pages `headline` reads type sizes from.
+M.HEADLINE_PAGES = 3
+
+--- How much of a title the largest type of the first pages holds, as `phrase`
+-- measures it, kept: a title page sets the title there, and a section heading is
+-- smaller than the title above it. nil with no text or no words.
+function M.headline(value, k, text)
+  local key = "headline\0" .. value
+  local v = k:get("check", key)
+  if v == nil then
+    local t = text.get()
+    if not t then return nil end
+    local parts, by_page = {}, {}
+    for i = 1, #t do
+      local l = t:line(i)
+      if l.page > M.HEADLINE_PAGES then break end
+      -- (a line set sideways is arXiv's stamp in the margin, not the title)
+      if not l.rotated then
+        by_page[l.page] = by_page[l.page] or {}
+        table.insert(by_page[l.page], l)
+      end
+    end
+    for page = 1, M.HEADLINE_PAGES do
+      local top = 0
+      for _, l in ipairs(by_page[page] or {}) do
+        if (l.size or 0) > top then top = l.size end
+      end
+      for _, l in ipairs(by_page[page] or {}) do
+        if top > 0 and (l.size or 0) >= top * 0.8 then parts[#parts + 1] = l.text end
+      end
+    end
+    v = phrase_in(value, table.concat(parts, "\n")) or false
+    k:put("check", key, v)
+  end
+  return v or nil
+end
+
 --- An online record against the file: `{ score=, same=, length= }`, or nil
 -- when the file has no text it can compare it with.
 -- @tparam table r `{ fields=, pages= }`

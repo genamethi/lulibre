@@ -206,6 +206,24 @@ local h = require("lulib._history").batches()
 say("history", h[1].batch > h[#h].batch)
 LUA
 
+cat > "$t/recheck.lua" <<'LUA'
+local recheck = require "lulib._recheck"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+local book = bookman.ids('title:"A Note on Sieve Methods"')[1]
+-- a title written by a source, which the pages do not show; what it was they do
+store.apply({ { book = book, field = "title", value = "Quantum Gravity Without Tears", proposal = 99, proposed = "Quantum Gravity Without Tears", source = "crossref" } }, "review")
+-- one typed by hand on another book is left
+local other = bookman.ids('title:"Hand Typed"')[1]
+store.apply({ { book = other, field = "title", value = "Typed Over" } }, "edit")
+local found = recheck.find()
+local first = found.changes[1]
+say("recheck", #found.changes, first and first.book == book, first and first.field, first and first.value, found.typed >= 1)
+say("recheck write", recheck.write(found) ~= nil, bookman.get(book, "title"))
+say("recheck again", #recheck.find().changes)
+LUA
+
 cat > "$t/queued.lua" <<'LUA'
 local offline = require "lulib._offline"
 local store = require "store"
@@ -282,6 +300,29 @@ calibredb --with-library "$t/lib" add --empty --title "Snap Book" --authors "Som
 cp "$t/lib/metadata.db" "$t/copy.db"
 calibredb --with-library "$t/lib" set_metadata "$(calibredb --with-library "$t/lib" list -s 'title:"Snap Book"' -f id --for-machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')" -f tags:changed >/dev/null 2>&1
 "$bin" -L "$t/lib" run "$t/snap.lua" 2>&1
+# a file with a title page of its own, to be held against
+mkdir -p "$t/rc" && cd "$t/rc"
+cat > paper.pdf <<'PDF'
+%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
+4 0 obj<</Length 420>>stream
+BT /F1 24 Tf 72 700 Td (A Note on Sieve Methods) Tj ET
+BT /F1 12 Tf 72 620 Td (We give a short account of the classical sieve and some of its uses in additive problems.) Tj ET
+BT /F1 12 Tf 72 600 Td (The bounds are the expected ones, and the methods are those of the older literature in the field.) Tj ET
+BT /F1 12 Tf 72 580 Td (Nothing here is new, but the arguments are set out at more length than one usually finds them.) Tj ET
+endstream
+endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+trailer<</Root 1 0 R/Size 6>>
+%%EOF
+PDF
+cd - >/dev/null
+calibredb --with-library "$t/lib" add --title "A Note on Sieve Methods" --authors "Some Writer" "$t/rc/paper.pdf" >/dev/null 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Hand Typed" --authors "Some Writer" >/dev/null 2>&1
+"$bin" -L "$t/lib" index >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/recheck.lua" 2>&1
 rm -f "$t"/data/lulibre/*.journal.db
 ip link set lo up 2>/dev/null || true
 calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
@@ -348,6 +389,9 @@ expect "what changed outside is left, unless exact" "snap outside|1|0|1"
 expect "a removed book comes back by a rollback" "snap restored|1|1"
 expect "a snapshot from a copy of calibre's database holds what the journal didn't see" "snap import|2|true"
 expect "history lists batches, newest first" "history|true"
+expect "recheck: a record's title the pages don't show goes back; one typed by hand stays" "recheck|1|true|title|A Note on Sieve Methods|true"
+expect "and writes it" "recheck write|true|A Note on Sieve Methods"
+expect "after which there's nothing to do" "recheck again|0"
 expect "the sync folder's files are waiting" "sync waiting|2"
 expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
 expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"

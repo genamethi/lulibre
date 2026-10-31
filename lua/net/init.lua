@@ -111,6 +111,29 @@ function M.records(book, found)
   return out
 end
 
+--- The records kept for an identifier, whichever service gave them: `{ {service=,
+-- fields=, pages=}, ... }`. Asks nobody.
+-- @tparam string kind "doi", "isbn", "arxiv"
+-- @tparam string value canonical
+function M.kept_for(kind, value)
+  local out = {}
+  for name, s in pairs(service.services) do
+    local kinds = type(s.how.ident) == "table" and s.how.ident or { s.how.ident }
+    for _, one in ipairs(kinds) do
+      local answer = one == kind and not s.how.identifies and service.kept(name, value)
+      if answer then
+        local ok, fields = pcall(s.how.record, answer, value)
+        if ok and fields then
+          local pages = fields.pages
+          fields.pages = nil
+          out[#out + 1] = { service = name, fields = fields, pages = pages }
+        end
+      end
+    end
+  end
+  return out
+end
+
 --- Asks every service a book can be asked about; posts "source_arrived"
 -- for each new answer. Returns how many services answered anew.
 -- @tparam integer book

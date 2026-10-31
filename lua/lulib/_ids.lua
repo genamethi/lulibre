@@ -127,6 +127,25 @@ function M.in_text(text, top, pages, from)
   return out
 end
 
+--- Where an identifier stands in a text: "own", "mentioned", "cited" (only after
+-- the references begin) or "absent".
+-- @tparam string kind
+-- @tparam string value canonical
+-- @tparam string text
+-- @tparam integer top
+-- @tparam[opt] integer pages
+-- @tparam[opt] number from
+function M.place(kind, value, text, top, pages, from)
+  for _, f in ipairs(M.in_text(text, top, pages, from)) do
+    if f.kind == kind and f.value == value then return f.own and "own" or "mentioned" end
+  end
+  for _, f in ipairs(expr.match(text, scan) or {}) do
+    arxiv_doi(f)
+    if f.kind == kind and f.value == value then return "cited" end
+  end
+  return "absent"
+end
+
 --- The identifiers in a file's own metadata, as `txt.metadata` gives it:
 -- prism:doi, pdfx:doi, crossmark:DOI, dc:identifier (with a doi or isbn
 -- scheme or prefix), and an Info entry named doi or a "doi:" in the Info

@@ -205,6 +205,15 @@ what was kept and reads only files not read before. It changes nothing, but
 `r` proposes for the book under the cursor, adding it to the current review, and
 `R` for every book listed. `z` lists the rest too.
 
+`:recheck [ls] [since SNAP] [filter]` goes back over what lulibre itself wrote, with
+each book's file deciding: a title or authors the pages don't show, where what was
+there before is shown, go back; a DOI, ISBN or arXiv number it added that stands in
+the file only as a cited work's, or whose kept record is plainly another work's,
+comes off; one it took off that the file's own metadata names goes back on. Values
+typed by hand are left alone, as are changes made outside lulibre and files that
+can't be read. It asks nobody, and changes nothing until `p` proposes them into the
+current review or `w` writes them, after a snapshot.
+
 ## The sync folder
 
 The files in `path.sync` are shown by `gS` or `:source sync` as books, and

@@ -365,7 +365,7 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 | `wit.prune([review])` | drops the proposals whose value the record now holds |
 | `lulib._propose.propose(book, w)` | waits: rank the book's values, reading only what was not kept, and keep them in the current review; `w` is `lulib._propose.settings()` |
 | `lulib._ids` | a file's identifiers, and which are its own: `in_text`, `in_metadata`, `in_name`, `of`, `book`; `finders`, what finds them, each kept apart: add yours and only it runs |
-| `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `title_match`, `titles_agree`, `minor` |
+| `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `title_match`, `titles_agree`, `phrase`, `headline`, `minor` |
 | `lulib._kept` | what was worked out from a file, kept while the file is as it was read |
 | `net.enrich_many(ids [, {titles=, offline=, services=}])` | waits: ask about many books at once, in as few requests as each service takes |
 | `net.service.ask_all(name, keys [, fn])` | waits: a service asked about many works at once |
