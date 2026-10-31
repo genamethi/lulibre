@@ -15,7 +15,7 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
 - Added `:verify` (with `written` and `junk`), `:rewrite` (`titlecase`, `notation`, `authors`, `tags`, `levels`, `clear`) and `:capture`. The rewrites propose into the current review.
 - Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings.
-- Added `:sync` (with `beside` and a folder), `:change`, `:enrich dialog` and `:propose dialog`. `y` in a review writes and adds its sync folder files.
+- Added `:sync` (with `beside` and a folder), `:change`, `:enrich -i` and `:propose -i`. `y` in a review writes and adds its sync folder files.
 - Changed `store.command` to say when it may run and to give back what the command printed. `store.command_undo` and `store.drop` are new, and `uiman.form` takes `sections` for a dialog.
 - Fixed `store.command` crashing lulibre when the command had run.
 - Added zbMATH and OpenAlex as sources, and `:enrich titles`, which searches Crossref by title for books with no identifier.

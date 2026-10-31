@@ -56,7 +56,7 @@ end
 -- a command's leading word, if it is that word, and the command with it gone
 local function flagged(o, word)
   local args = o.args or ""
-  local rest = args:match("^" .. word .. "%s+(.*)$") or (args == word and "")
+  local rest = args:sub(1, #word + 1) == word .. " " and args:sub(#word + 2):match("^%s*(.*)$") or (args == word and "")
   return rest ~= nil and rest ~= false and true or false, { args = rest or args, selection = o.selection }
 end
 
@@ -272,15 +272,17 @@ cmdman.create("orphans", function(c)
   if c.args == "ls" then say(orphan_rows(M.orphans { ls = true })) else M.orphans { write = c.args == "write" } end
 end, { desc = "[ls | write]  files a record names that are not on disk, files no record names, links, empty folders; ls prints them; write does what is suggested", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o)
-  if o.args == "dialog" then return require("lulib._dialogs").enrich(M.books { selection = o.selection }) end
+  local interactive, asked = flagged(o, "-i")
+  if interactive then return require("lulib._dialogs").enrich(M.books(asked)) end
   local titles, rest = flagged(o, "titles")
   local offline, rest2 = flagged(rest, "offline")
   M.enrich(M.books(rest2), { titles = titles, offline = offline })
-end, { desc = "[dialog | titles | offline] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
+end, { desc = "[-i | titles | offline] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o)
-  if o.args == "dialog" then return require("lulib._dialogs").propose_review(M.books { selection = o.selection }) end
+  local interactive, rest = flagged(o, "-i")
+  if interactive then return require("lulib._dialogs").propose_review(M.books(rest)) end
   M.propose(M.books(o))
-end, { desc = "[dialog | filter]  propose metadata from the files, for :review; dialog: which books, what to ask, which fields", complete = "filter" })
+end, { desc = "[-i] [filter]  propose metadata from the files, for :review; -i: say which books, what to ask, which fields", complete = "filter" })
 cmdman.create("capture", function(o) require("lulib._capture").open(o.selection or {}, (o.args or "") ~= "" and o.args or nil) end,
   { desc = "[pattern]  pull fields out of the selected books with a pattern, and propose them" })
 cmdman.create("sync", function(o)

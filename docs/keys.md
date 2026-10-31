@@ -143,8 +143,8 @@ and paste it with `<C-v>`.
 | `go` | `orphans` | records with no file, files with no record, broken links |
 | `gz` | `snapshot` | the snapshots, and what going back to each would do |
 | `yy` · `yp` · `yb` · `yk` | `yank title` · `yank path` · `yank bib` · `yank key` | copy the selection's titles, paths, BibTeX or cite keys |
-| `<Leader>pr` | `propose dialog` | a dialog for a whole round: which books, what to ask, which fields |
-| `<Leader>e` | `enrich dialog` | what would be asked of whom, which services, then review |
+| `<Leader>pr` | `propose -i` | a dialog for a whole round: which books, what to ask, which fields |
+| `<Leader>e` | `enrich -i` | what would be asked of whom, which services, then review |
 | `<Leader>c` | `change` | one change to every selected book |
 | `<Leader>s` | `sync` | a dialog on the selected waiting files |
 | `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
