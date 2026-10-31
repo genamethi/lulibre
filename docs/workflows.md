@@ -262,6 +262,27 @@ and a service that says it is asked too much is left alone for a while.
 Nothing is asked but on command. `contact_email`, when set, goes with each
 request; some services answer faster for it.
 
+## History and snapshots
+
+Every change goes into the journal with its old value, and lulibre also logs what
+changed in calibre by other means, each time it reads calibre's records, in batches
+labelled "outside". `:history` lists the batches, newest first: Enter shows a batch's
+rows, `u` puts it back, `a` hides what changed outside.
+
+A snapshot is a position in the journal, not a copy of the library. `:snapshot NAME`
+takes one, `:snapshots` (`gz`) shows what going back to each would do, and
+`:rollback SNAP` goes back to it, after showing that and asking. It takes a snapshot
+of its own first, and going back to that rolls forward.
+
+| | |
+|---|---|
+| `exact` | put back changes made outside lulibre too |
+| `unsync` | books added from the sync folder leave the library, their files to `unsynced/` in the folder; otherwise they go back to how they came |
+| `fields` | fields only: no book is brought back, removed or taken out |
+
+`:snapshot import FILE [NAME]` makes a snapshot from a copy of calibre's `metadata.db`,
+such as one kept from before lulibre.
+
 ## Looking after the library
 
 | | |

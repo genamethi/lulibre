@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -671,7 +672,10 @@ static void reload_work(uv_work_t *req) {
     return;
   }
   r->rc = db_mirror(&db, r->library_dir, r->force, &r->err);
-  if (r->rc > 0) r->ids = db_mirror_changed(&db, &r->nids);
+  if (r->rc > 0) {
+    r->ids = db_mirror_changed(&db, &r->nids);
+    library_log_outside(&db);
+  }
   /* the sync folder with them: its files are books too (design 36) */
   long long *staged = NULL;
   int nstaged = 0;
@@ -1067,6 +1071,108 @@ int library_command_undo(struct library *lib, long long batch, const char *const
   }
   sb_free(&joined);
   return rc;
+}
+
+/* a whole book as the journal keeps it */
+static char *book_json(struct db *db, const char *table, long long id) {
+  char *sql = xasprintf("SELECT json_object('title', title, 'authors', authors, 'tags', tags, 'series', series,"
+                        " 'series_index', series_index, 'publisher', publisher, 'pubdate', pubdate,"
+                        " 'languages', languages, 'identifiers', idents, 'formats', formats) FROM %s WHERE id = ?", table);
+  sqlite3_stmt *st;
+  char *err = NULL, *out = NULL;
+  if (!db_prepare(db, sql, &st, &err)) {
+    sqlite3_bind_int64(st, 1, id);
+    if (sqlite3_step(st) == SQLITE_ROW) out = xstrdup((const char *)sqlite3_column_text(st, 0));
+    sqlite3_finalize(st);
+  }
+  free(err);
+  free(sql);
+  return out ? out : xstrdup("{}");
+}
+
+/* Whether the journal has a row for the book and field: with new, its latest
+ * has that value (and is not failed or undone); else any that stands. */
+static int journal_says(struct db *db, long long book, const char *field, const char *new) {
+  sqlite3_stmt *st;
+  char *err = NULL;
+  int yes = 0;
+  if (db_prepare(db, "SELECT new FROM history.journal WHERE book = ? AND field = ? AND state IN (0, 1, 2) ORDER BY id DESC LIMIT 1",
+                 &st, &err)) {
+    free(err);
+    return 0;
+  }
+  sqlite3_bind_int64(st, 1, book);
+  sqlite3_bind_text(st, 2, field, -1, SQLITE_STATIC);
+  if (sqlite3_step(st) == SQLITE_ROW) {
+    const char *was = (const char *)sqlite3_column_text(st, 0);
+    yes = !new || (was && !strcasecmp(was, new));
+  }
+  sqlite3_finalize(st);
+  return yes;
+}
+
+void library_log_outside(struct db *db) {
+  static const char *const fields[] = {"title", "authors", "tags", "series", "series_index", "publisher", "pubdate",
+                                       "languages", "identifiers", NULL};
+  char *err = NULL;
+  sqlite3_stmt *st;
+  if (db_prepare(db,
+                 "SELECT c.id, EXISTS(SELECT 1 FROM temp.mirror_prev p WHERE p.id = c.id),"
+                 " EXISTS(SELECT 1 FROM books b WHERE b.id = c.id)"
+                 " FROM temp.mirror_changed c WHERE c.id > 0 AND NOT EXISTS(SELECT 1 FROM temp.mirror_first) ORDER BY c.id",
+                 &st, &err)) {
+    free(err);
+    return;
+  }
+  if (db_exec(db, "BEGIN IMMEDIATE", &err)) {
+    free(err);
+    sqlite3_finalize(st);
+    return;
+  }
+  long long batch = 0;
+#define OUTSIDE(book, field, old, new)                                                                \
+  do {                                                                                                \
+    if (!batch) batch = next_batch(db);                                                               \
+    journal_add(db, batch, "outside", NEED_ANY, "outside", OP_APPLIED, (book), (field), (old), (new), NULL, NULL, 0); \
+  } while (0)
+  while (sqlite3_step(st) == SQLITE_ROW) {
+    long long id = sqlite3_column_int64(st, 0);
+    int before = sqlite3_column_int(st, 1), now = sqlite3_column_int(st, 2);
+    if (!before && now) {
+      if (!journal_says(db, id, "(added)", NULL) && !journal_says(db, id, "(restored)", NULL)) {
+        char *j = book_json(db, "books", id);
+        OUTSIDE(id, "(added)", "", j);
+        free(j);
+      }
+    } else if (before && !now) {
+      if (!journal_says(db, id, "(removed)", NULL)) {
+        char *j = book_json(db, "temp.mirror_prev", id);
+        OUTSIDE(id, "(removed)", j, "");
+        free(j);
+      }
+    } else if (before && now) {
+      int series_ours = 0;
+      for (int i = 0; fields[i]; i++) {
+        char *e = NULL;
+        char *was = field_current_in(db, "temp.mirror_prev", id, fields[i], &e);
+        if (!was) free(e);
+        e = NULL;
+        char *is = field_current(db, id, fields[i], &e);
+        if (!is) free(e);
+        if (was && is && strcmp(was, is)) {
+          /* a series index means nothing without its series: it changes with it */
+          int ours = journal_says(db, id, fields[i], is) || (!strcmp(fields[i], "series_index") && series_ours);
+          if (!strcmp(fields[i], "series")) series_ours = ours;
+          if (!ours) OUTSIDE(id, fields[i], was, is);
+        }
+        free(was);
+        free(is);
+      }
+    }
+  }
+#undef OUTSIDE
+  sqlite3_finalize(st);
+  if (db_exec(db, "COMMIT", &err)) free(err);
 }
 
 long long library_note(struct library *lib, long long batch, long long book, const char *field, const char *old,

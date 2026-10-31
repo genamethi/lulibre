@@ -349,6 +349,7 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "<Leader><Space>", "mark none"},
     {MODE_NORMAL, "gr", "review"},
     {MODE_NORMAL, "gb", "beside"},
+    {MODE_NORMAL, "gz", "snapshots"},
     {MODE_NORMAL, "gd", "dupes"},
     {MODE_NORMAL, "go", "orphans"},
     {MODE_NORMAL, "gt", "browse"},

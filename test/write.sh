@@ -169,6 +169,43 @@ store.apply({ { book = back[1], field = "#partof", value = "A Whole" } })
 say("push", columns.push("partof"))
 LUA
 
+cat > "$t/snap.lua" <<'LUA'
+local snapshots = require "lulib._snapshots"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+local book = bookman.ids('title:"Snap Book"')[1]
+store.apply({ { book = book, field = "title", value = "Title Then" } })
+local s = snapshots.take("plain")
+say("snap taken", s.id > 0 and 1 or 0, s.name)
+store.apply({ { book = book, field = "title", value = "Title Now" } })
+local plan = snapshots.plan(s)
+say("snap plan", #plan.changes, plan.changes[1] and plan.changes[1].value == "Title Then" and "Title Now" or "?", #plan.restore)
+local out = snapshots.rollback(s)
+say("snap back", out.applied, bookman.get(book, "title"), out.before and out.before.name:find("before going back") and "Title Now")
+snapshots.rollback(out.before)
+say("snap forward", bookman.get(book, "title"))
+-- a field changed outside
+local s2 = snapshots.take("second")
+os.execute(("calibredb --with-library %q set_metadata %d -f publisher:Outsider >/dev/null 2>&1"):format(setman.get("path.library"), book))
+store.reload()
+local p2 = snapshots.plan(s2)
+local p3 = snapshots.plan(s2, { exact = true })
+say("snap outside", p2.kept.outside, #p2.changes, #p3.changes)
+-- a book removed since
+local s3 = snapshots.take("third")
+local remove = require "lulib._remove"
+remove.remove({ book })
+local back = snapshots.rollback(s3)
+store.reload()
+say("snap restored", #back.restored, #bookman.ids('title:"Title Now"'))
+-- from a copy of calibre's database
+local si, n = snapshots.import(os.getenv("T") .. "/copy.db", "old copy")
+say("snap import", si and si.id > 0 and 2 or si, n and n.values and n.values > 0)
+local h = require("lulib._history").batches()
+say("history", h[1].batch > h[#h].batch)
+LUA
+
 cat > "$t/queued.lua" <<'LUA'
 local offline = require "lulib._offline"
 local store = require "store"
@@ -211,6 +248,11 @@ rm -rf "$t/lib" "$t/data" "$t/state"
   calibredb --with-library "$r" add --empty --title four --authors "C Author" >/dev/null 2>&1
   "$bin" -L "$r" query -c >/dev/null 2>&1
   echo "reread untouched|$(sqlite3 "$idx" "SELECT sort FROM books WHERE id = 3")"
+  jr=$(ls "$t"/rr/lulibre/*.journal.db)
+  echo "outside title|$(sqlite3 "$jr" "SELECT store, label, old, new FROM journal WHERE book = 1 AND field = 'title'")"
+  echo "outside removed|$(sqlite3 "$jr" "SELECT label, json_extract(old, '\$.title') FROM journal WHERE book = 2 AND field = '(removed)'")"
+  echo "outside added|$(sqlite3 "$jr" "SELECT label, json_extract(new, '\$.title') FROM journal WHERE field = '(added)'")"
+  echo "outside fresh|$(sqlite3 "$jr" "SELECT count(*) FROM journal WHERE book = 3")"
   sqlite3 "$idx" "UPDATE books SET sort = 'three' WHERE id = 3"
   dump() {
     for q in "SELECT * FROM books" "SELECT * FROM book_authors ORDER BY book, ord" "SELECT * FROM authors" \
@@ -236,6 +278,10 @@ calibredb --with-library "$t/lib" add --empty --title "Book To Remove" --authors
 for f in "$t"/lib/*/*/*.pdf; do stray=$(dirname "$f"); done
 echo "stray bytes" > "$stray/stray.pdf"
 "$bin" -L "$t/lib" run "$t/remove.lua" 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Snap Book" --authors "Some Writer" >/dev/null 2>&1
+cp "$t/lib/metadata.db" "$t/copy.db"
+calibredb --with-library "$t/lib" set_metadata "$(calibredb --with-library "$t/lib" list -s 'title:"Snap Book"' -f id --for-machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')" -f tags:changed >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/snap.lua" 2>&1
 rm -f "$t"/data/lulibre/*.journal.db
 ip link set lo up 2>/dev/null || true
 calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
@@ -290,6 +336,18 @@ expect "and lulibre's values copied into them" "push|1"
 expect "a command that needs the library closed waits while the server holds it" "offline waits|1|waiting|the column #waiting"
 expect "and can be cancelled" "offline cancel|true|0"
 expect "whoever waited for it is told" "offline answered|nil|cancelled"
+expect "a change made outside lulibre is logged, field by field" "outside title|outside|outside|one|Uno"
+expect "a book removed outside lulibre, with its record" "outside removed|outside|two"
+expect "a book added outside lulibre" "outside added|outside|four"
+expect "a book nobody changed has nothing" "outside fresh|0"
+expect "a snapshot's position" "snap taken|1|plain"
+expect "a plan says what going back would do" "snap plan|1|Title Now|0"
+expect "and going back does it" "snap back|1|Title Then|Title Now"
+expect "a rollback's own snapshot rolls forward" "snap forward|Title Now"
+expect "what changed outside is left, unless exact" "snap outside|1|0|1"
+expect "a removed book comes back by a rollback" "snap restored|1|1"
+expect "a snapshot from a copy of calibre's database holds what the journal didn't see" "snap import|2|true"
+expect "history lists batches, newest first" "history|true"
 expect "the sync folder's files are waiting" "sync waiting|2"
 expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
 expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"

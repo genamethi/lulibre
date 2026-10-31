@@ -286,6 +286,7 @@ function M.apply(found)
       local b, printed = store.command({ "add", "--duplicates", s.path }, { label = "orphans", when = "any" })
       local id = b and tonumber((printed or ""):match("Added book ids:%s*(%d+)"))
       if id then
+        store.note(b, id, "(added)", s.path, "", "orphans")
         store.command_undo(b, { "remove", tostring(id) })
         out.added = out.added + 1
         aside(s)

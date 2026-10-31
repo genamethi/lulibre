@@ -194,6 +194,15 @@ keys(":features\r", 0.6)
 keys("q", 0.4)
 keys(":offline\r", 0.6)
 keys("q", 0.4)
+keys(":history\r", 0.8)
+keys("\r", 0.4)        # a batch's rows
+keys("a", 0.4)
+keys("q", 0.5)
+keys(":snapshots\r", 1)
+keys("n", 0.3)
+keys("first\r", 0.8)
+keys("q", 0.6)
+keys(":lua note('snapshots|' .. #require('lulib._snapshots').list())\r", 0.5)
 keys(":orphans\r", 1)  # none here: it says so and opens nothing
 keys(":dupes\r", 1)
 keys(":lua uiman.jump(1)\r", 0.6)
@@ -267,6 +276,7 @@ check("s names the review", "review named|kept" in got)
 check("a dialog: a box, a choice, a typed value, what can't be changed, an action",
       "dialog|go|true|2|filled|false" in got)
 check(":verify opens, and closes", "verify closed" in got)
+check(":snapshots takes one", "snapshots|1" in got)
 check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
 check("the edit form: e edits a field, x takes a change back, w writes the rest",
       "stored|1|Edited Title" in got and "stored|1|Edited Title|authors" not in got)

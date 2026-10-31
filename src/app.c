@@ -123,7 +123,9 @@ void app_open_db(struct app *app) {
   db_side_set(app_str(app, S_JOURNAL_DB), app_str(app, S_CUSTOM_DB), app_str(app, S_WIT_DB));
   if (db_open(&app->db, path, &err)) die("%s", err);
   free(path);
-  if (db_mirror(&app->db, real, 0, &err) < 0) {
+  int mirrored = db_mirror(&app->db, real, 0, &err);
+  if (mirrored > 0) library_log_outside(&app->db);
+  if (mirrored < 0) {
     /* calibre's database there, but not to be read (damaged): lulibre goes
      * on with the library as it last read it */
     char *cal = xasprintf("%s/metadata.db", real);

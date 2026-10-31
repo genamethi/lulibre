@@ -11,6 +11,7 @@
 --
 -- @library lulib._sync
 local bookman = require "bookman"
+local json = require "dkjson"
 local sql = require "sql"
 local sqlite3 = require "lsqlite3"
 local store = require "store"
@@ -86,6 +87,11 @@ function M.add(ids, o)
           batch = b
           into = id
           added[#added + 1] = id
+          local came = { from = row.path }
+          for _, field in ipairs { "title", "authors", "tags", "series", "series_index", "publisher", "pubdate", "languages", "identifiers" } do
+            came[field] = bookman.get(book, field) or ""
+          end
+          store.note(batch, id, "(added)", row.path, json.encode(came), "sync: add")
           out.added = out.added + 1
           for _, field in ipairs { "pubdate", "publisher" } do
             local value = bookman.get(book, field)

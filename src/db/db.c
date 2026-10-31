@@ -104,6 +104,11 @@ static const char history_schema[] =
   " store TEXT NOT NULL, state INTEGER NOT NULL, error TEXT, ts INTEGER,"
   " book INTEGER, field TEXT, old TEXT, new TEXT, argv TEXT,"
   " proposal INTEGER, proposed TEXT, source TEXT, undoes INTEGER, undo_argv TEXT);"
+  /* a snapshot is a position in the journal; its values, those a copy of
+   * calibre's database had that the journal didn't see (lulib._snapshots) */
+  "CREATE TABLE IF NOT EXISTS history.snapshots("
+  " id INTEGER PRIMARY KEY, name TEXT, ts INTEGER, upto INTEGER, auto INTEGER, retired INTEGER, note TEXT);"
+  "CREATE TABLE IF NOT EXISTS history.snapshot_values(snap INTEGER, book INTEGER, field TEXT, value TEXT);"
   "CREATE INDEX IF NOT EXISTS history.journal_batch ON journal(batch);"
   "CREATE INDEX IF NOT EXISTS history.journal_book ON journal(book, field);";
 

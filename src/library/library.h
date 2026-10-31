@@ -60,6 +60,7 @@ struct operation {
 };
 
 struct library;
+struct db;
 
 /* batch: the journal's batch, 0 when nothing was to change; state:
  * OP_APPLIED, OP_FAILED (err says why, for the first book that failed). */
@@ -97,6 +98,11 @@ void library_reload(struct library *lib, int force, library_reloaded *done, void
 /* Puts a batch's old values back, as an operation of its own. */
 int library_undo(struct library *lib, long long batch, const struct op_settings *set, library_done *done, void *ud,
                  char **err);
+
+/* After db_mirror copied calibre's records (it returned above 0): what changed
+ * that lulibre didn't change goes into the journal as a batch labelled
+ * "outside", field by field, and whole books added or removed. On db's thread. */
+void library_log_outside(struct db *db);
 
 /* What puts a command's batch back: a calibredb command, its arguments in
  * argv (NULL-terminated). library_undo runs it in place of anything else

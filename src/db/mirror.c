@@ -66,6 +66,17 @@ static const char changed_sql[] =
   "  WHERE m.id IS NULL OR m.modified IS NOT b.last_modified"
   " UNION SELECT m.id FROM books m WHERE m.id > 0 AND NOT EXISTS(SELECT 1 FROM cal.books b WHERE b.id = m.id);";
 
+/* What those books were, for library_log_outside; first, whether this is the
+ * index's first reading, when nothing is an outside change. */
+static const char prev_sql[] =
+  "CREATE TEMP TABLE IF NOT EXISTS mirror_prev(id INTEGER PRIMARY KEY, title, authors, tags, series, series_index,"
+  " publisher, pubdate, idents, languages, formats);"
+  "DELETE FROM temp.mirror_prev;"
+  "INSERT INTO temp.mirror_prev SELECT id, title, authors, tags, series, series_index, publisher, pubdate, idents,"
+  " languages, formats FROM books WHERE id > 0 AND id IN (SELECT id FROM temp.mirror_changed);"
+  "CREATE TEMP TABLE IF NOT EXISTS mirror_first(yes INTEGER);"
+  "DELETE FROM temp.mirror_first;";
+
 static const char redo_changed_sql[] = "INSERT INTO temp.redo SELECT id FROM temp.mirror_changed;";
 static const char redo_all_sql[] =
   "INSERT INTO temp.redo SELECT id FROM cal.books UNION SELECT id FROM books WHERE id > 0;";
@@ -204,6 +215,7 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
   /* the same SQL, over the same library: else every book is copied */
   char *base = xasprintf(MIRROR_VERSION "|%s|", cal);
   int whole = force > 1 || !have || strncmp(have, base, strlen(base)) != 0;
+  int first = !have;
   free(base);
   free(have);
 
@@ -230,7 +242,9 @@ int db_mirror(struct db *db, const char *library, int force, char **err) {
     whole = whole || !had || strcmp(had, columns) != 0;
     free(had);
     sqlite3_stmt *cf = NULL;
-    int ok = db_exec(db, changed_sql, err) == 0 && db_exec(db, whole ? redo_all_sql : redo_changed_sql, err) == 0 &&
+    int ok = db_exec(db, changed_sql, err) == 0 && db_exec(db, prev_sql, err) == 0 &&
+             (!first || db_exec(db, "INSERT INTO temp.mirror_first VALUES (1);", err) == 0) &&
+             db_exec(db, whole ? redo_all_sql : redo_changed_sql, err) == 0 &&
              db_exec(db, mirror_sql, err) == 0 &&
              db_exec(db, "CREATE TEMP TABLE IF NOT EXISTS cf(book INTEGER, fmt TEXT, path TEXT, PRIMARY KEY(book, fmt))",
                      err) == 0 &&

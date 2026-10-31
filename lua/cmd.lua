@@ -414,6 +414,60 @@ cmdman.create("offline", function(o)
   uiman.list { title = "waiting for nothing to hold the library", items = rows,
                columns = { { "Job", 6 }, { "State", 8 }, { "Since", 16 }, { "What", -1 }, { "Runs", -2 }, { "Why", -2 } } }
 end, { desc = "[cancel JOB | retry | restart]  the changes waiting for nothing to hold the library; restart stops the content server for them", complete = { "cancel", "retry", "restart" } })
+cmdman.create("history", function() require("lulib._history").open() end, { desc = "what lulibre changed, and what changed outside it, newest first; u puts a batch back" })
+cmdman.create("snapshots", function() require("lulib._snapshots").open() end, { desc = "the snapshots: what going back to each would do; go back, take, retire" })
+cmdman.create("snapshot", function(o)
+  local snapshots = require "lulib._snapshots"
+  local words, flags = {}, {}
+  for w in (o.args or ""):gmatch("%S+") do
+    if w == "exact" or w == "unsync" or w == "fields" or w == "all" then flags[w] = true else words[#words + 1] = w end
+  end
+  local verbs = { take = 1, list = 1, plan = 1, rollback = 1, retire = 1, unretire = 1, import = 1 }
+  local verb = verbs[words[1] or ""] and table.remove(words, 1) or "take"
+  local rest = table.concat(words, " ")
+  local function find()
+    local snap, why = snapshots.find(rest)
+    if not snap then uiman.notify(why, "error") end
+    return snap
+  end
+  if verb == "take" then
+    local snap = snapshots.take(rest)
+    uiman.notify(("took snapshot %d, \"%s\""):format(snap.id, snap.name))
+  elseif verb == "list" then
+    local out = {}
+    for _, s in ipairs(snapshots.list(flags)) do
+      out[#out + 1] = ("%4d  %s  %-44s %5d changes on %d books since%s%s"):format(s.id, os.date("%Y-%m-%d %H:%M", s.ts), s.name:sub(1, 44),
+        s.changes, s.books, s.auto == 1 and "  (taken by a rollback)" or "", s.retired and "  retired" or "")
+    end
+    uiman.pager("snapshots", #out > 0 and table.concat(out, "\n") or "no snapshots yet: :snapshot NAME takes one")
+  elseif verb == "plan" then
+    local snap = find()
+    if snap then uiman.pager("going back to a snapshot (nothing has been changed)", table.concat(snapshots.describe(snapshots.plan(snap, flags)), "\n")) end
+  elseif verb == "rollback" then
+    local snap = find()
+    if not snap then return end
+    local plan = snapshots.plan(snap, flags)
+    if plan.books == 0 then return uiman.notify("the library is as it was then: nothing to do") end
+    local answer = uiman.input { prompt = table.concat(snapshots.describe(plan), ";"):sub(1, 200) .. "  go back? (y/N) " }
+    if answer and answer:lower():sub(1, 1) == "y" then
+      local out = snapshots.rollback(snap, flags)
+      uiman.notify(snapshots.summary(out), #out.failed > 0 and "error" or nil)
+    end
+  elseif verb == "retire" or verb == "unretire" then
+    local snap = find()
+    if snap then
+      snapshots.retire(snap.id, verb == "retire")
+      uiman.notify(("snapshot %d, \"%s\", %s"):format(snap.id, snap.name, verb == "retire" and "retired" or "back in the list"))
+    end
+  elseif verb == "import" then
+    local path = table.remove(words, 1)
+    if not path then return uiman.notify("snapshot import takes a copy of calibre's metadata.db", "error") end
+    local snap, n = snapshots.import(path, #words > 0 and table.concat(words, " ") or nil)
+    if not snap then return uiman.notify(n, "error") end
+    uiman.notify(("snapshot %d, \"%s\": %d books, %d values the journal did not see"):format(snap.id, snap.name, n.books, n.values))
+  end
+end, { desc = "[take] NAME | list | plan SNAP | rollback SNAP | retire SNAP | unretire SNAP | import FILE [NAME]; exact, unsync, fields: how to go back", complete = { "take", "list", "plan", "rollback", "retire", "unretire", "import", "exact", "unsync", "fields", "all" } })
+cmdman.create("rollback", function(o) uiman.exec("snapshot rollback " .. (o.args or "")) end, { desc = "SNAP [exact | unsync | fields]  put the library back to a snapshot (shows what it will do, then asks)" })
 cmdman.create("verify", function(o) M.verify(M.books(o, "")) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")

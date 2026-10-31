@@ -114,9 +114,13 @@ static char *col_or_empty(sqlite3_stmt *st, int col) {
 }
 
 char *field_current(struct db *db, long long book, const char *field, char **err) {
+  return field_current_in(db, "books", book, field, err);
+}
+
+char *field_current_in(struct db *db, const char *table, long long book, const char *field, char **err) {
   /* one identifier, by its type, as calibre's metadata sources name it */
   if (!strncmp(field, "identifier:", 11)) {
-    char *all = field_current(db, book, "identifiers", err);
+    char *all = field_current_in(db, table, book, "identifiers", err);
     if (!all) return NULL;
     struct items it = {0};
     split("identifiers", all, &it);
@@ -144,11 +148,11 @@ char *field_current(struct db *db, long long book, const char *field, char **err
     sqlite3_finalize(st);
     return v;
   }
-  if (db_prepare(db,
-                 "SELECT title, authors, tags, series, series_index, publisher, pubdate, idents, languages"
-                 " FROM books WHERE id = ?",
-                 &st, err))
-    return NULL;
+  char *sql = xasprintf("SELECT title, authors, tags, series, series_index, publisher, pubdate, idents, languages"
+                        " FROM %s WHERE id = ?", table);
+  int bad = db_prepare(db, sql, &st, err);
+  free(sql);
+  if (bad) return NULL;
   sqlite3_bind_int64(st, 1, book);
   if (sqlite3_step(st) != SQLITE_ROW) {
     sqlite3_finalize(st);

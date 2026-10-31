@@ -50,10 +50,15 @@ function M.remove(ids, o)
       end
     end
     if #chunk > 0 then
-      local b, printed = store.command({ "remove", table.concat(chunk, ",") }, { label = label, when = "any", batch = batch })
-      if not b then return n, printed end
-      batch = b
-      for _, r in ipairs(rows) do store.note(batch, r[1], "(removed)", r[2], "", label) end
+      -- noted first: a reading of calibre's records meanwhile takes them for lulibre's
+      local noted = batch
+      for _, r in ipairs(rows) do noted = store.note(noted, r[1], "(removed)", r[2], "", label) end
+      local b, printed = store.command({ "remove", table.concat(chunk, ",") }, { label = label, when = "any", batch = noted })
+      if not b then
+        if not batch then store.mark_undone(noted) end
+        return n, printed, batch
+      end
+      batch = noted
       n = n + #chunk
     end
   end
@@ -109,6 +114,20 @@ local function restore(id, snap)
   return new
 end
 
+--- Brings back one removed book, by its journal row (`book=, old=`): its new id,
+-- and why not all of it; or nil and why not.
+function M.restore_one(r)
+  local id, err = restore(r.book, json.decode(r.old) or {})
+  if id then
+    store.note(nil, id, "(restored)", tostring(r.book), r.old, "restore")
+    wit.move(r.book, id)
+    local custom = sql.open(setman.get("path.customdb"), sqlite3.OPEN_READWRITE)
+    sql.run(custom, "UPDATE data SET book = ? WHERE book = ?", id, r.book)
+    custom:close()
+  end
+  return id, err
+end
+
 --- Brings back the books a batch removed. Returns the new ids, and why not all.
 -- @tparam integer batch
 function M.restore(batch)
@@ -117,14 +136,8 @@ function M.restore(batch)
   db:close()
   local new, why = {}, nil
   for _, r in ipairs(rows) do
-    local id, err = restore(r.book, json.decode(r.old) or {})
-    if id then
-      new[#new + 1] = id
-      wit.move(r.book, id)
-      local custom = sql.open(setman.get("path.customdb"), sqlite3.OPEN_READWRITE)
-      sql.run(custom, "UPDATE data SET book = ? WHERE book = ?", id, r.book)
-      custom:close()
-    end
+    local id, err = M.restore_one(r)
+    if id then new[#new + 1] = id end
     why = why or err
   end
   if #new == #rows then store.mark_undone(batch) end

@@ -27,6 +27,8 @@ int field_is_own(const char *field);   /* "#name": lulibre's own */
  * series index without a series. identifier:TYPE is one identifier's
  * value, without its type. */
 char *field_current(struct db *db, long long book, const char *field, char **err);
+/* The same from another table of books' records with the same columns. */
+char *field_current_in(struct db *db, const char *table, long long book, const char *field, char **err);
 
 /* The value after a change: set replaces it; add and remove keep a list's
  * other items (an identifier is added or removed by its type). malloc'd,
