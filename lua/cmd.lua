@@ -67,17 +67,17 @@ local function rewritten(name, ids, o)
   return n
 end
 
---- :titlecase [all] [filter]: titles in capitals, or with all any title, in
+--- :rewrite titlecase [all] [filter]: titles in capitals, or with all any title, in
 -- title case, as proposals.
 function M.titlecase(ids, o) return rewritten("titlecase", ids, o) end
---- :notation [filter]: titles with their mathematics in Unicode, as proposals.
+--- :rewrite notation [filter]: titles with their mathematics in Unicode, as proposals.
 function M.notation(ids) return rewritten("notation", ids) end
---- :split-authors [filter]: one "author" that is several people, as proposals.
+--- :rewrite authors [filter]: one "author" that is several people, as proposals.
 function M.split_authors(ids) return rewritten("split-authors", ids) end
---- :normalize-tags [filter]: tags under their canonical name, as proposals.
+--- :rewrite tags [filter]: tags under their canonical name, as proposals.
 function M.normalize_tags(ids) return rewritten("normalize-tags", ids) end
 
---- :clear FIELDS [filter]: blank fields, as proposals.
+--- :rewrite clear FIELDS [filter]: blank fields, as proposals.
 function M.clear(fields, ids)
   local n, err = require("lulib._rewrites").clear(fields, ids)
   if not n then return uiman.notify(err, "error") end
@@ -85,7 +85,7 @@ function M.clear(fields, ids)
   return n
 end
 
---- :junk [filter]: marks and lists the books whose title or authors are
+--- :verify junk [filter]: marks and lists the books whose title or authors are
 -- plainly not one (a file's name, a number, a program's name).
 function M.junk(ids)
   local junk, names = require "lulib._junk", require "lulib._names"
@@ -232,7 +232,7 @@ local function tag_rows(found)
   return rows
 end
 
---- :tags [ls | write]: tags whose levels are split with "/"
+--- :rewrite levels [ls | write]: tags whose levels are split with "/"
 -- ("math/number-theory") as calibre writes levels, with "."
 -- ("math.number-theory"), which it shows as a tree in the categories listed
 -- under Preferences → Look & feel → "Categories with hierarchical items".
@@ -271,32 +271,30 @@ end, { desc = "[ls]  books whose files hold the same bytes; ls prints them; chan
 cmdman.create("orphans", function(c)
   if c.args == "ls" then say(orphan_rows(M.orphans { ls = true })) else M.orphans { write = c.args == "write" } end
 end, { desc = "[ls | write]  files a record names that are not on disk, files no record names, links, empty folders; ls prints them; write does what is suggested", complete = { "ls", "write" } })
-cmdman.create("tags", function(c)
-  if c.args == "ls" then say(tag_rows(M.tags { ls = true })) else M.tags { write = c.args == "write" } end
-end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o)
+  if o.args == "dialog" then return require("lulib._dialogs").enrich(M.books { selection = o.selection }) end
   local titles, rest = flagged(o, "titles")
   local offline, rest2 = flagged(rest, "offline")
   M.enrich(M.books(rest2), { titles = titles, offline = offline })
-end, { desc = "[titles] [offline] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
-cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
-cmdman.create("titlecase", function(o)
-  local all, rest = flagged(o, "all")
-  M.titlecase(M.books(rest), { all = all })
-end, { desc = "[all] [filter]  propose titles in CAPITALS, or with all any title, in title case", complete = "filter" })
-cmdman.create("notation", function(o) M.notation(M.books(o)) end, { desc = "[filter]  propose titles with their mathematics in Unicode (SL₂(ℤ))", complete = "filter" })
-cmdman.create("split-authors", function(o) M.split_authors((o.args or "") == "" and bookman.ids("is:listauthor") or M.library(o)) end, { desc = "[filter]  propose author lists where one author is several people", complete = "filter" })
-cmdman.create("normalize-tags", function(o) M.normalize_tags(M.library(o)) end, { desc = "[filter]  propose tags under their canonical names", complete = "filter" })
-cmdman.create("clear", function(o)
-  local fields, rest = (o.args or ""):match("^(%S*)%s*(.*)$")
-  M.clear(fields, M.books { args = rest, selection = o.selection })
-end, { desc = "FIELDS [filter]  propose blanking fields (title authors tags identifiers pubdate publisher series, or t a s i d p e)" })
-cmdman.create("junk", function(o) M.junk(M.library(o)) end, { desc = "[filter]  mark and list the books whose title or author is plainly not one", complete = "filter" })
+end, { desc = "[dialog | titles | offline] [filter]  ask the online services about the books, by their identifiers", complete = "filter" })
+cmdman.create("propose", function(o)
+  if o.args == "dialog" then return require("lulib._dialogs").propose_review(M.books { selection = o.selection }) end
+  M.propose(M.books(o))
+end, { desc = "[dialog | filter]  propose metadata from the files, for :review; dialog: which books, what to ask, which fields", complete = "filter" })
 cmdman.create("capture", function(o) require("lulib._capture").open(o.selection or {}, (o.args or "") ~= "" and o.args or nil) end,
   { desc = "[pattern]  pull fields out of the selected books with a pattern, and propose them" })
 cmdman.create("sync", function(o)
   local sync = require "lulib._sync"
   local verb, rest = (o.args or ""):match("^(%a+)%s*(.*)$")
+  local dir = (o.args or ""):match("^[~/.].*$")
+  if dir then
+    dir = dir:gsub("^~", os.getenv("HOME") or "~")
+    setman.set("path.sync", dir)
+    require("store").reload()
+    uiman.exec("source sync")
+    return uiman.notify(("%s is the sync folder for now: :sync adds its files, :propose proposes for them"):format(dir))
+  end
+  if verb == "beside" then return require("lulib._beside").open() end
   if verb ~= "add" and verb ~= "move" and verb ~= "drop" then
     return require("lulib._dialogs").sync(M.books(o))
   end
@@ -309,72 +307,10 @@ cmdman.create("sync", function(o)
     local out = sync.add(ids, { remove = verb == "move" })
     uiman.notify(sync.summary(out), #out.failed > 0 and "error" or nil)
   end
-end, { desc = "[add | move | drop] [filter]  the sync folder's files: add the selection; add and take them out; drop without adding. Alone, a dialog", complete = { "add", "move", "drop" } })
-cmdman.create("beside", function() require("lulib._beside").open() end, { desc = "the sync folder beside the library" })
-cmdman.create("onboard", function(o)
-  if (o.args or "") == "" then return uiman.notify("give the folder", "error") end
-  local dir = o.args:gsub("^~", os.getenv("HOME") or "~")
-  setman.set("path.sync", dir)
-  require("store").reload()
-  uiman.exec("source sync")
-  uiman.notify(("%s is the sync folder for now: :sync adds its files, :propose proposes for them"):format(dir))
-end, { desc = "DIR  take a folder as the sync folder for now, to bring its ebook files in" })
+end, { desc = "[add | move | drop] [filter] | beside | DIR  the sync folder's files: add the selection; add and take them out; drop without adding; beside the library; or take DIR as the sync folder for now. Alone, a dialog", complete = { "add", "move", "drop", "beside" } })
 cmdman.create("change", function(o) require("lulib._dialogs").change(M.books(o)) end, { desc = "[filter]  one change to every selected book" })
-cmdman.create("enrich-dialog", function(o) require("lulib._dialogs").enrich(M.books(o)) end, { desc = "[filter]  say what :enrich would ask, choose the services, then review", complete = "filter" })
-cmdman.create("propose-review", function(o) require("lulib._dialogs").propose_review(M.books(o)) end, { desc = "a dialog for a whole round: which books, what to ask, which fields, then review" })
 cmdman.create("browse", function(o) require("lulib._browse").open((o.args or "") ~= "" and o.args or nil) end,
   { desc = "[author | subject | series | publisher | year | format]  the library as a tree", complete = { "author", "subject", "series", "publisher", "year", "format" } })
-cmdman.create("yank", function(o)
-  local what = (o.args or "") ~= "" and o.args or "title"
-  if what ~= "title" and what ~= "path" then return uiman.notify("yank path | title", "error") end
-  local out = {}
-  for _, id in ipairs(o.selection or {}) do
-    if what == "path" then
-      local f = (bookman.files(id) or {})[1]
-      if f then out[#out + 1] = f.path end
-    else
-      out[#out + 1] = bookman.get(id, "title") or ""
-    end
-  end
-  if uiman.clipboard(table.concat(out, "\n")) then
-    uiman.notify(("copied %s for %d book%s"):format(what, #out, #out == 1 and "" or "s"))
-  else
-    uiman.notify("could not reach the terminal to copy", "error")
-  end
-end, { desc = "path | title  copy for the selection to the clipboard", complete = { "path", "title" } })
-cmdman.create("addpages", function(o)
-  local id, page = (o.args or ""):match("^(%-?%d+)%s+(%d+)$")
-  if not id then return uiman.notify("addpages BOOK PAGE", "error") end
-  uiman.progress(("reading book %s as far as page %s"):format(id, page))
-  local r, err = utils.index { filter = (tonumber(id) < 0 and "in:sync " or "") .. "id:" .. math.abs(tonumber(id)),
-                               pages = tonumber(page), force = true }
-  uiman.progress(nil)
-  if not r then return uiman.notify(err, "error") end
-  uiman.notify(r.failed and r.failed > 0 and "the file could not be read" or ("read as far as page %s"):format(page))
-end, { desc = "BOOK PAGE  read a file as far as that page (the preview's a does it for the page being shown)" })
-cmdman.create("features", function()
-  local features = {
-    { "calibredb", "calibredb", "writing to the library" },
-    { "calibre-server", "calibre-server", "the content server, through which writes reach an open library" },
-    { "tesseract", "tesseract", "OCR: reading files with no text (the setting ocr)" },
-    { "systemctl", "systemctl", ":units, lulibre's systemd units around the content server" },
-    { "xdg-open", "xdg-open", "opening files in other programs" },
-  }
-  local out = {}
-  for _, f in ipairs(features) do
-    local found
-    for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
-      local h = io.open(dir .. "/" .. f[2])
-      if h then
-        h:close()
-        found = true
-        break
-      end
-    end
-    out[#out + 1] = ("%-15s %-10s %s"):format(f[1], found and "installed" or "missing", f[3])
-  end
-  uiman.pager("features and the programs they need", table.concat(out, "\n"))
-end, { desc = "the features that need programs of their own: installed or not" })
 cmdman.create("remove", function(o)
   local ids = M.books(o)
   if #ids == 0 then return end
@@ -388,11 +324,6 @@ cmdman.create("remove", function(o)
   for _, id in ipairs(ids) do uiman.mark(id, false) end
   uiman.notify(b and ("removed %d book%s: :undo puts them back"):format(#ids, #ids == 1 and "" or "s") or err, not b and "error" or nil)
 end, { desc = "[filter]  remove the selected books from calibre, to its recycle bin; :undo puts them back", complete = "filter" })
-cmdman.create("restore-removed", function(o)
-  local new, why = require("lulib._remove").restore(tonumber(o.args))
-  uiman.notify(why and ("%d back, then: %s"):format(#new, why) or ("%d book%s back"):format(#new, #new == 1 and "" or "s"),
-               why and "error" or nil)
-end, { desc = "BATCH  bring back the books a batch removed (what :undo does for it)" })
 cmdman.create("embed", function(o)
   local ids = M.books(o)
   if #ids == 0 then return end
@@ -426,7 +357,6 @@ cmdman.create("offline", function(o)
                columns = { { "Job", 6 }, { "State", 8 }, { "Since", 16 }, { "What", -1 }, { "Runs", -2 }, { "Why", -2 } } }
 end, { desc = "[cancel JOB | retry | restart]  the changes waiting for nothing to hold the library; restart stops the content server for them", complete = { "cancel", "retry", "restart" } })
 cmdman.create("history", function() require("lulib._history").open() end, { desc = "what lulibre changed, and what changed outside it, newest first; u puts a batch back" })
-cmdman.create("snapshots", function() require("lulib._snapshots").open() end, { desc = "the snapshots: what going back to each would do; go back, take, retire" })
 cmdman.create("snapshot", function(o)
   local snapshots = require "lulib._snapshots"
   local words, flags = {}, {}
@@ -434,6 +364,7 @@ cmdman.create("snapshot", function(o)
     if w == "exact" or w == "unsync" or w == "fields" or w == "all" then flags[w] = true else words[#words + 1] = w end
   end
   local verbs = { take = 1, list = 1, plan = 1, rollback = 1, retire = 1, unretire = 1, import = 1 }
+  if #words == 0 and not next(flags) then return snapshots.open() end
   local verb = verbs[words[1] or ""] and table.remove(words, 1) or "take"
   local rest = table.concat(words, " ")
   local function find()
@@ -477,7 +408,7 @@ cmdman.create("snapshot", function(o)
     if not snap then return uiman.notify(n, "error") end
     uiman.notify(("snapshot %d, \"%s\": %d books, %d values the journal did not see"):format(snap.id, snap.name, n.books, n.values))
   end
-end, { desc = "[take] NAME | list | plan SNAP | rollback SNAP | retire SNAP | unretire SNAP | import FILE [NAME]; exact, unsync, fields: how to go back", complete = { "take", "list", "plan", "rollback", "retire", "unretire", "import", "exact", "unsync", "fields", "all" } })
+end, { desc = "alone, the list; [take] [NAME] | list | plan SNAP | rollback SNAP | retire SNAP | unretire SNAP | import FILE [NAME]; exact, unsync, fields: how to go back", complete = { "take", "list", "plan", "rollback", "retire", "unretire", "import", "exact", "unsync", "fields", "all" } })
 cmdman.create("rollback", function(o) uiman.exec("snapshot rollback " .. (o.args or "")) end, { desc = "SNAP [exact | unsync | fields]  put the library back to a snapshot (shows what it will do, then asks)" })
 cmdman.create("datasets", function(o)
   local datasets = require "lulib._datasets"
@@ -512,25 +443,92 @@ cmdman.create("datasets", function(o)
   end
   require("lulib._dialogs").datasets()
 end, { desc = "[list | fetch NAME... [force] | add FILE...]  databases for looking books up on this machine. Alone, a dialog", complete = { "list", "fetch", "add" } })
-cmdman.create("arxiv-titles", function(o) require("net.datasets").arxiv_titles(M.books(o)) end, { desc = "[filter]  find books' arXiv numbers by their titles in arXiv's snapshot on this machine, as proposals", complete = "filter" })
-cmdman.create("recheck", function(o)
-  local recheck = require "lulib._recheck"
+cmdman.create("rewrite", function(o)
+  local what, rest = (o.args or ""):match("^(%S*)%s*(.*)$")
+  local given = { args = rest, selection = o.selection }
+  if what == "titlecase" then
+    local all, after = flagged(given, "all")
+    M.titlecase(M.books(after), { all = all })
+  elseif what == "notation" then
+    M.notation(M.books(given))
+  elseif what == "authors" then
+    M.split_authors(rest == "" and bookman.ids("is:listauthor") or M.library(given))
+  elseif what == "tags" then
+    M.normalize_tags(M.library(given))
+  elseif what == "levels" then
+    if rest == "ls" then say(tag_rows(M.tags { ls = true })) else M.tags { write = rest == "write" } end
+  elseif what == "clear" then
+    local fields, after = rest:match("^(%S*)%s*(.*)$")
+    M.clear(fields, M.books { args = after, selection = o.selection })
+  else
+    uiman.notify("rewrite titlecase [all] | notation | authors | tags | levels [ls | write] | clear FIELDS, then a filter", "error")
+  end
+end, { desc = "titlecase [all] | notation | authors | tags | levels [ls | write] | clear FIELDS, then [filter]  propose values worked out from those a field has", complete = { "titlecase", "notation", "authors", "tags", "levels", "clear" } })
+cmdman.create("yank", function(o)
+  local what = (o.args or "") ~= "" and o.args or "title"
+  if what ~= "title" and what ~= "path" and what ~= "bib" and what ~= "key" then return uiman.notify("yank bib | key | path | title", "error") end
+  local ids, text = o.selection or {}, nil
+  if what == "bib" or what == "key" then
+    local entries, keys = require("lulib._bib").export(ids)
+    text = what == "bib" and entries or table.concat(keys, ",")
+  else
+    local out = {}
+    for _, id in ipairs(ids) do
+      if what == "path" then
+        local f = (bookman.files(id) or {})[1]
+        if f then out[#out + 1] = f.path end
+      else
+        out[#out + 1] = bookman.get(id, "title") or ""
+      end
+    end
+    text = table.concat(out, "\n")
+  end
+  if uiman.clipboard(text) then
+    uiman.notify(("copied %s for %d book%s"):format(what, #ids, #ids == 1 and "" or "s"))
+  else
+    uiman.notify("could not reach the terminal to copy", "error")
+  end
+end, { desc = "bib | key | path | title  copy for the selection to the clipboard", complete = { "bib", "key", "path", "title" } })
+cmdman.create("undo", function(o)
+  local batch = tonumber(o.args)
+  if not batch then
+    local db = require("sql").open(setman.get("path.journaldb"), require("lsqlite3").OPEN_READONLY)
+    batch = require("sql").run(db, "SELECT max(batch) AS n FROM journal WHERE state = 2 AND undoes IS NULL AND field IS NOT NULL"
+                                   .. " AND store NOT IN ('review', 'outside')")[1].n
+    db:close()
+  end
+  if not batch then return uiman.notify("nothing to undo") end
+  local done, err = require("store").undo(batch)
+  uiman.notify(done and ("put back (batch %d)"):format(batch) or ("undo failed: " .. tostring(err)), not done and "error" or nil)
+end, { desc = "[N]  put the last change back, or batch N (:history lists them)" })
+cmdman.create("verify", function(o)
   local words = {}
   for w in (o.args or ""):gmatch("%S+") do words[#words + 1] = w end
-  local mode = words[1] == "ls" and table.remove(words, 1) or nil
-  local since
-  if words[1] == "since" then
-    table.remove(words, 1)
-    local snap, why = require("lulib._snapshots").find(table.remove(words, 1))
-    if not snap then return uiman.notify(why, "error") end
-    since = snap
+  local what = (words[1] == "written" or words[1] == "junk") and table.remove(words, 1) or nil
+  if what == "written" then
+    local recheck = require "lulib._recheck"
+    local ls = words[1] == "ls" and table.remove(words, 1)
+    local since
+    if words[1] == "since" then
+      table.remove(words, 1)
+      local snap, why = require("lulib._snapshots").find(table.remove(words, 1))
+      if not snap then return uiman.notify(why, "error") end
+      since = snap
+    end
+    local filter = table.concat(words, " ")
+    local ids = filter ~= "" and bookman.ids(filter) or nil
+    if ls then return say(recheck.rows(recheck.find { ids = ids, since = since })) end
+    return recheck.open { ids = ids, since = since }
   end
-  local filter = table.concat(words, " ")
-  local ids = filter ~= "" and bookman.ids(filter) or nil
-  if mode == "ls" then return say(recheck.rows(recheck.find { ids = ids, since = since })) end
-  recheck.open { ids = ids, since = since }
-end, { desc = "[ls] [since SNAP] [filter]  go back over what lulibre wrote, with each book's own file deciding; p proposes, w writes", complete = "filter" })
-cmdman.create("verify", function(o) M.verify(M.library(o)) end, { desc = "[filter]  the books' records held against their files; sends books to review", complete = "filter" })
+  local rest = { args = table.concat(words, " "), selection = o.selection }
+  if what == "junk" then M.junk(M.library(rest)) else M.verify(M.library(rest)) end
+end, { desc = "[written [ls] [since SNAP] | junk] [filter]  the records held against their files; written: what lulibre wrote, with each file deciding; junk: titles and authors plainly not one", complete = { "written", "junk" } })
+cmdman.create("new", function(o)
+  local name, rest = (o.args or ""):match("^(%S+)%s*(.*)$")
+  if not name then return uiman.notify("new: which command? (:new review)", "error") end
+  local ok, err = uiman.again(name, { args = rest, selection = o.selection })
+  if not ok then uiman.notify(err, "error") end
+end, { desc = "command [args]  run a command that opens a screen, as another one when that screen is open already", complete = "command" })
 cmdman.create("review", function(o)
   local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")
   local given = { args = deep and args or o.args, selection = o.selection }

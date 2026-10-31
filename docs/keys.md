@@ -4,7 +4,7 @@
 global keys (including the ones `init.lua` added), every place's and the
 commands, under headings that open and close: `<CR>` or `za` on a heading,
 `zR` and `zM` for all of them. `/` searches as you type and opens the
-headings with a match. A heading stays as you left it the next time; `:help-plain`
+headings with a match. A heading stays as you left it the next time; `:help plain`
 shows every one open. Every key runs a command, and `:` runs a command by
 name.
 
@@ -51,7 +51,7 @@ Markdown files in `docs/` under the configuration and data folders
 | `P` | text ⇄ page image |
 | `+` `-` `=` | zoom the image in, out, reset |
 | `H` `L` | pan the image |
-| `a` | if the page shown is past the indexed pages, read the file up to that page (`:addpages BOOK PAGE` does this for any book) |
+| `a` | if the page shown is past the indexed pages, read the file up to that page (`:index BOOK PAGE BOOK PAGE` does this for any book) |
 | `v` | select text with the keys. A cursor appears in the page's text. `h` `j` `k` `l` and the arrows move it, `w` `b` move by words, `0` `$` go to the ends of the line, and `gg` `G` to the ends of the page. `v` starts a selection (pressing it again cancels the selection), and `V` selects the line. `y` or Enter copies and leaves, and `Esc` or `q` leaves. These keys belong to the place `select`: `keymap.set("select", "n", "down")` |
 
 ## Windows
@@ -137,14 +137,14 @@ and paste it with `<C-v>`.
 | `u` | `undo` | put the last change back |
 | `1` … `9` | `source N` | the bar's tab with that number |
 | `gl` | `source library` | back to the library |
-| `gb` | `beside` | the sync folder's files in a column beside the library |
+| `gb` | `sync beside` | the sync folder's files in a column beside the library |
 | `gt` | `browse` | the library as a tree beside the list |
 | `gd` | `dupes` | books whose files hold the same bytes: keep one, remove the rest |
 | `go` | `orphans` | records with no file, files with no record, broken links |
-| `gz` | `snapshots` | the snapshots, and what going back to each would do |
-| `yy` · `yp` | `yank title` · `yank path` | copy the selection's titles or paths |
-| `<Leader>pr` | `propose-review` | a dialog for a whole round: which books, what to ask, which fields |
-| `<Leader>e` | `enrich-dialog` | what would be asked of whom, which services, then review |
+| `gz` | `snapshot` | the snapshots, and what going back to each would do |
+| `yy` · `yp` · `yb` · `yk` | `yank title` · `yank path` · `yank bib` · `yank key` | copy the selection's titles, paths, BibTeX or cite keys |
+| `<Leader>pr` | `propose dialog` | a dialog for a whole round: which books, what to ask, which fields |
+| `<Leader>e` | `enrich dialog` | what would be asked of whom, which services, then review |
 | `<Leader>c` | `change` | one change to every selected book |
 | `<Leader>s` | `sync` | a dialog on the selected waiting files |
 | `gS` | `source sync` | the files waiting in the sync folder (`path.sync`), read again |
@@ -170,7 +170,7 @@ each screen made with `tab = true` ([the API](api.md)); clicking one, or
 | `echo text` | show a message |
 | `config` | the settings, in the bar's Configuration tab ([configuration](configuration.md)) |
 | `units [apply]` | lulibre's systemd units around calibre's content server ([workflows](workflows.md#calibres-server-and-lulibres-systemd-units)) |
-| `help` · `help-plain` · `quit` | the same as `?` · the keys and commands as one long page · the same as `q`, `ZZ` |
+| `help` · `help plain` · `quit` | the same as `?` · the keys and commands as one long page · the same as `q`, `ZZ` |
 
 ## Inside a panel
 

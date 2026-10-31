@@ -120,6 +120,23 @@ void tui_start_index(struct tui *t, int force) {
   tui_dirty(t);
 }
 
+void tui_index_page(struct tui *t, long long book, int page) {
+  if (t->indexing) {
+    tui_msg(t, 1, "indexing is already running");
+    return;
+  }
+  char *err = NULL;
+  char *filter = xasprintf("%sid:%lld", book < 0 ? "in:sync " : "", book < 0 ? -book : book);
+  t->indexing = 1;
+  if (work_index(t->app, page, 1, 0, filter, index_done, NULL, &err)) {
+    t->indexing = 0;
+    tui_msg(t, 1, "%s", err);
+    free(err);
+  }
+  free(filter);
+  tui_dirty(t);
+}
+
 /* Calibre changed underneath us (the content server, calibredb, another
  * lulibre): pick it up without being asked. */
 static void tick_cb(uv_timer_t *h) {

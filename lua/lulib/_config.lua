@@ -48,7 +48,28 @@ function M.settings(changed)
 end
 
 --- The band's rows for a setting: `{label, text}` each.
+--- The programs lulibre's features need, listed after the settings: `{ name, program, what it's for }`.
+M.programs = {
+  { "calibredb", "calibredb", "writing to the library" },
+  { "calibre-server", "calibre-server", "the content server, through which writes reach an open library" },
+  { "tesseract", "tesseract", "OCR: reading files with no text (the setting ocr)" },
+  { "systemctl", "systemctl", ":units, lulibre's systemd units around the content server" },
+}
+
+-- whether a program is on the PATH
+function own.installed(program)
+  for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
+    local h = io.open(dir .. "/" .. program)
+    if h then
+      h:close()
+      return true
+    end
+  end
+  return false
+end
+
 function M.about(i)
+  if i.program then return { { "what it's for", i.used_for } } end
   local rows = {}
   local line, first = "", true
   for word in (i.help ~= "" and i.help or "(no help is given for this one)"):gmatch("%S+") do
@@ -99,7 +120,16 @@ function M.open()
   local function rows()
     list = M.settings(changed)
     local out = {}
-    for k, i in ipairs(list) do out[k] = { i.name, get("shown")(setman.get(i.name)), FROM[i.from] or i.from } end
+    if not changed then
+      for _, f in ipairs(M.programs) do list[#list + 1] = { name = f[1], program = f[2], used_for = f[3] } end
+    end
+    for k, i in ipairs(list) do
+      if i.program then
+        out[k] = { "program: " .. i.name, get("installed")(i.program) and "installed" or "missing", "" }
+      else
+        out[k] = { i.name, get("shown")(setman.get(i.name)), FROM[i.from] or i.from }
+      end
+    end
     return out
   end
   local function title()
@@ -123,7 +153,9 @@ function M.open()
     local action, at, value = p:wait()
     if not action then break end
     local i = list[at]
-    if action == "edit" and i then
+    if i and i.program then
+      uiman.notify(i.name .. " is a program lulibre uses, not a setting")
+    elseif action == "edit" and i then
       get("change")(i.name, value)
     elseif action == "cycle" and i then
       local nxt = get("next")(i)

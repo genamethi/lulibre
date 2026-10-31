@@ -185,25 +185,29 @@ keys("w", 0.8)        # the first action
 keys(":demoverify\r", 1.5)
 keys("z", 0.4)
 keys("q", 0.6)
+keys(":review\r", 1)
+keys(":review\r", 0.8)     # open already: the cursor goes there
+keys(":new review\r", 1)   # another
+keys("q", 0.5)             # closes it: the cursor goes back to the list
+keys(":review\r", 0.8)     # the first is still open: to it
+keys("q", 0.5)
 keys(":browse author\r", 1)
 keys("j", 0.5)        # narrows the list to the author
 keys("f", 0.5)
 keys("q", 0.6)
 keys(":lua uiman.filter('')\r", 0.4)
-keys(":features\r", 0.6)
-keys("q", 0.4)
 keys(":offline\r", 0.6)
 keys("q", 0.4)
 keys(":history\r", 0.8)
 keys("\r", 0.4)        # a batch's rows
 keys("a", 0.4)
 keys("q", 0.5)
-keys(":snapshots\r", 1)
+keys(":snapshot\r", 1)
 keys("n", 0.3)
 keys("first\r", 0.8)
 keys("q", 0.6)
 keys(":lua note('snapshots|' .. #require('lulib._snapshots').list())\r", 0.5)
-keys(":recheck\r", 1)
+keys(":verify written\r", 1)
 keys("q", 0.5)
 keys(":datasets\r", 1)
 keys("q", 0.5)
@@ -280,7 +284,8 @@ check("s names the review", "review named|kept" in got)
 check("a dialog: a box, a choice, a typed value, what can't be changed, an action",
       "dialog|go|true|2|filled|false" in got)
 check(":verify opens, and closes", "verify closed" in got)
-check(":snapshots takes one", "snapshots|1" in got)
+check("a screen opened again goes to the open one", "review is already open" in text)
+check(":snapshot alone opens the list, and n takes one", "snapshots|1" in got)
 check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
 check("the edit form: e edits a field, x takes a change back, w writes the rest",
       "stored|1|Edited Title" in got and "stored|1|Edited Title|authors" not in got)

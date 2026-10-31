@@ -78,7 +78,7 @@ function M.keys(book, found, o)
   end
   local title = not any and o and o.titles and searchable(book)
   if title then
-    local key = require("expr").fold(title)
+    local key = require("net.datasets").title_key(title)
     for name, s in pairs(service.services) do
       if s.how.ident == "title" then out[#out + 1] = { service = name, key = key, ident = "title" } end
     end

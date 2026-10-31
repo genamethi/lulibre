@@ -207,7 +207,7 @@ what was kept and reads only files not read before. It changes nothing, but
 `r` proposes for the book under the cursor, adding it to the current review, and
 `R` for every book listed. `z` lists the rest too.
 
-`:recheck [ls] [since SNAP] [filter]` goes back over what lulibre itself wrote, with
+`:verify written [ls] [since SNAP] [filter]` goes back over what lulibre itself wrote, with
 each book's file deciding: a title or authors the pages don't show, where what was
 there before is shown, go back; a DOI, ISBN or arXiv number it added that stands in
 the file only as a cited work's, or whose kept record is plainly another work's,
@@ -228,8 +228,8 @@ review. What you change stays in lulibre until the file is added.
 | `:sync add [filter]` | add them to the library, with what lulibre knows of them |
 | `:sync move [filter]` | add them, and take them out of the folder |
 | `:sync drop [filter]` | take them out of the folder without adding them |
-| `:beside`, `gb` | the waiting files in a column; the library's list follows the file under the cursor |
-| `:onboard DIR` | take a folder as the sync folder for now |
+| `:sync beside`, `gb` | the waiting files in a column; the library's list follows the file under the cursor |
+| `:sync DIR` | take a folder as the sync folder for now |
 
 In a review, `y` does what `w` does, then adds the review's files to the library:
 the same review, ending in sync instead of write. Proposals still waiting go with
@@ -245,14 +245,15 @@ review writes them. With no filter, each works on the selection.
 
 | | |
 |---|---|
-| `:titlecase [all] [filter]` | titles in CAPITALS, or with `all` any title, in title case |
-| `:notation [filter]` | titles with their mathematics in Unicode: SL₂(ℤ), read from the title page where it has them |
-| `:split-authors [filter]` | one "author" that is several people, by default every such book |
-| `:normalize-tags [filter]` | tags under their canonical names, by default every book |
-| `:clear FIELDS [filter]` | blank fields: title authors tags identifiers pubdate publisher series, or t a s i d p e |
+| `:rewrite titlecase [all] [filter]` | titles in CAPITALS, or with `all` any title, in title case |
+| `:rewrite notation [filter]` | titles with their mathematics in Unicode: SL₂(ℤ), read from the title page where it has them |
+| `:rewrite authors [filter]` | one "author" that is several people, by default every such book |
+| `:rewrite tags [filter]` | tags under their canonical names, by default every book |
+| `:rewrite levels [ls \| write]` | tags whose levels are split with "/", as calibre writes levels, with "." |
+| `:rewrite clear FIELDS [filter]` | blank fields: title authors tags identifiers pubdate publisher series, or t a s i d p e |
 | `:capture [pattern]` | pull fields out of the selected books with a pattern, `%author% - %title% (%year%)`, and propose them |
 
-`:junk [filter]` marks and lists the books whose title or author is plainly not one.
+`:verify junk [filter]` marks and lists the books whose title or author is plainly not one.
 `lulib._rewrites.list` holds the rewrites: yours is a field and a function from
 value to value.
 
@@ -269,8 +270,8 @@ has isn't asked of the service: arXiv's snapshot, Open Library's dumps, zbMATH's
 links to arXiv. `:datasets` is a dialog that says what is here and fetches what you
 tick; `:datasets list`, `:datasets fetch NAME... [force]`, and `:datasets add FILE...`,
 for a file fetched some other way, are the same by hand. `:enrich offline` asks
-nobody. `:arxiv-titles [filter]` looks for the books' titles in arXiv's snapshot and
-proposes the number of a paper their pages bear out.
+nobody. `:enrich titles` looks for the titles in arXiv's snapshot as well, when it's
+here, and asks Crossref only about those it doesn't have.
 Each answer is kept in the index, and a kept answer is not asked for
 again. An answer is a source of agreement for the parses, and a parse of
 its own: it proposes, ranked beside the grammars'.
@@ -289,7 +290,7 @@ labelled "outside". `:history` lists the batches, newest first: Enter shows a ba
 rows, `u` puts it back, `a` hides what changed outside.
 
 A snapshot is a position in the journal, not a copy of the library. `:snapshot NAME`
-takes one, `:snapshots` (`gz`) shows what going back to each would do, and
+takes one, `:snapshot` alone (`gz`) shows what going back to each would do, and
 `:rollback SNAP` goes back to it, after showing that and asking. It takes a snapshot
 of its own first, and going back to that rolls forward.
 

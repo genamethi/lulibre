@@ -525,6 +525,7 @@ function M.open()
     title = title(), screen = "snapshots", height = 0.35, moves = true, rows = rows(),
     columns = { { "#", 5 }, { "taken", 17 }, { "name", -2 }, { "changed since", 22 }, { "", 16 } },
   }
+  if not p then return end
   local ctx <close> = uiman.panel { side = "main", title = "going back to this snapshot", focus = false,
                                     columns = { { "", 14 }, { "", -1 } }, rows = {} }
   local function about(row)

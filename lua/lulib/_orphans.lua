@@ -411,6 +411,7 @@ function M.open()
     columns = { { "", 1 }, { "Action", 14 }, { "Id", 6 }, { "Title or file", -3 }, { "Authors", -2 }, { "Verdict", -3 } },
     rows = build(),
   }
+  if not p then return end
   p:cursor(2)
   local function next_action(item, to)
     local i = 1

@@ -13,21 +13,22 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Added saved reviews: a review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `:review deep` shows what a review otherwise hides.
 - Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again.
 - Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
-- Added `:verify`, `:titlecase`, `:notation`, `:split-authors`, `:normalize-tags`, `:clear`, `:junk` and `:capture`, back from 0.2. The rewrites propose into the current review.
+- Added `:verify` (with `written` and `junk`), `:rewrite` (`titlecase`, `notation`, `authors`, `tags`, `levels`, `clear`) and `:capture`. The rewrites propose into the current review.
 - Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings.
-- Added `:sync`, `:beside`, `:onboard`, `:change`, `:enrich-dialog` and `:propose-review`, back from 0.2. `y` in a review writes and adds its sync folder files.
+- Added `:sync` (with `beside` and a folder), `:change`, `:enrich dialog` and `:propose dialog`. `y` in a review writes and adds its sync folder files.
 - Changed `store.command` to say when it may run and to give back what the command printed. `store.command_undo` and `store.drop` are new, and `uiman.form` takes `sections` for a dialog.
 - Fixed `store.command` crashing lulibre when the command had run.
 - Added zbMATH and OpenAlex as sources, and `:enrich titles`, which searches Crossref by title for books with no identifier.
 - Added `:remove`, with undo from calibre's recycle bin; `:embed`; `:columns`; and `:offline`, which lists, cancels, retries and restarts for what waits for the library.
 - Changed `:dupes` and `:orphans` to screens that can act: remove the rest, re-attach, move out, repair links. `ls` still prints.
 - Changed the journal to log what changes in calibre outside lulibre, whenever lulibre reads calibre's records.
-- Added `:history`, and snapshots: `:snapshot`, `:snapshots`, `:rollback`.
-- Added datasets on this machine: `:datasets`, `:enrich offline`, `:arxiv-titles`. What a dataset has isn't asked of the service.
-- Added `:recheck`, which goes back over what lulibre wrote with each book's file deciding.
+- Added `:history`, and snapshots: `:snapshot`, `:rollback`.
+- Added datasets on this machine: `:datasets`, `:enrich offline`. What a dataset has isn't asked of the service.
+- Added `:verify written`, which goes back over what lulibre wrote with each book's file deciding.
 - Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Books from the sync folder are added as many at once as changes run.
 - Added `server_stop` and `server_start`, back from 0.2, which `:offline restart` uses before a systemd unit.
 - Changed `:datasets` and `:enrich` to read a hypergraph of arXiv (`arxiv.json`, `arxiv.zip`) when arXiv's own snapshot isn't there.
+- Added `yb` and `yk`: BibTeX and cite keys for the selection. Added `:new`: one of each screen is open at a time, and `:new COMMAND` opens another.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 

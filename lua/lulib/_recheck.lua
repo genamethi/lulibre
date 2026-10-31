@@ -1,4 +1,4 @@
---- :recheck: goes back over what lulibre wrote, with each book's own file deciding.
+--- :verify written: goes back over what lulibre wrote, with each book's own file deciding.
 -- A title or authors it wrote that the pages do not show, where what was there before
 -- is shown, goes back; a DOI, ISBN or arXiv number it added that stands in the file
 -- only as a cited work's, or whose kept record is plainly another work's, comes off; one

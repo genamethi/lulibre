@@ -157,6 +157,7 @@ function M.open(args)
     title = title(), screen = "browse", side = "left", width = 0.27, moves = true,
     columns = { { facet, -1 }, { "", 5 } }, rows = rows,
   }
+  if not p then return end
   local applied
   local function apply(node)
     if node and node.filter ~= applied then

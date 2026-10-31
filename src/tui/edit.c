@@ -204,8 +204,8 @@ static void c_edit(struct tui *t, const char *args) {
 static void c_undo(struct tui *t, const char *args) {
   sqlite3_stmt *st;
   char *err = NULL;
-  long long batch = 0;
-  if (db_prepare(&t->app->db,
+  long long batch = strtoll(args, NULL, 10);
+  if (!batch && db_prepare(&t->app->db,
                  "SELECT max(batch) FROM history.journal WHERE state = 2 AND undoes IS NULL AND field IS NOT NULL AND store NOT IN ('review', 'outside')",
                  &st, &err) == 0) {
     if (sqlite3_step(st) == SQLITE_ROW) batch = sqlite3_column_int64(st, 0);
@@ -216,23 +216,6 @@ static void c_undo(struct tui *t, const char *args) {
   }
   if (!batch) {
     tui_msg(t, 0, "nothing to undo");
-    return;
-  }
-  /* removed books come back through Lua: from calibre's recycle bin */
-  int removed = 0;
-  if (db_prepare(&t->app->db, "SELECT EXISTS(SELECT 1 FROM history.journal WHERE batch = ? AND state = 2 AND field = '(removed)')",
-                 &st, &err) == 0) {
-    sqlite3_bind_int64(st, 1, batch);
-    if (sqlite3_step(st) == SQLITE_ROW) removed = sqlite3_column_int(st, 0);
-    sqlite3_finalize(st);
-  } else {
-    free(err);
-    err = NULL;
-  }
-  if (removed) {
-    char *line = xasprintf("restore-removed %lld", batch);
-    tui_exec(t, line);
-    free(line);
     return;
   }
   struct job *j = job_new(t->app);

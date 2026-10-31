@@ -175,6 +175,7 @@ function M.open(found)
     columns = { { "", 1 }, { "Id", 9 }, { "Title", -4 }, { "Authors", -2 }, { "Subject", -2 }, { "Date", 10 } },
     rows = build(),
   }
+  if not p then return end
   p:cursor(2)
   -- the group's copies, field by field
   local function about(r)

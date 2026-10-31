@@ -150,6 +150,7 @@ function M.open(ids, spec)
   recompute()
   local cols, rows, title = view()
   local p <close> = uiman.panel { title = title, screen = "capture", columns = cols, rows = rows, follow = true }
+  if not p then return end
   local function refresh()
     cols, rows, title = view()
     p:columns(cols)

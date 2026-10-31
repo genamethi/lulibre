@@ -148,7 +148,7 @@ check "from the list: its keys first, open" sh -c "$T capture-pane -p -t s | gre
 check "and pband's heading closed, as it was left" sh -c "! $T capture-pane -p -t s | grep -q 'greet the row'"
 $T send-keys -t s q
 sleep 0.3
-$T send-keys -t s ":help-plain" Enter
+$T send-keys -t s ":help plain" Enter
 wait_for "KEYS" || true
 $T send-keys -t s / f o r g e t Enter
 sleep 0.3

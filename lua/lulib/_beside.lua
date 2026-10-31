@@ -1,4 +1,4 @@
---- :beside: the sync folder beside the library. The files waiting are in a
+--- :sync beside: the sync folder beside the library. The files waiting are in a
 -- column on the left; the library's list follows the file under the cursor:
 -- it moves to the book with the same file if the library already has it, or
 -- else narrows to the books that look like the file.
@@ -96,6 +96,7 @@ function M.open()
     title = title(), screen = "beside", side = "left", width = 0.42, follow = true, moves = true, reloads = true,
     columns = { { "", 7 }, { "title", -1 }, { "author", 16 }, { "file", 22 } }, rows = rows(),
   }
+  if not p then return end
   local narrowed, matching = nil, true
   -- brings the library's list beside the file under the cursor
   local function beside(f)

@@ -910,6 +910,8 @@ void tui_show_msg(struct tui *t, int error, const char *text);
 int console_key(struct tui *t, void *state, uint32_t key);
 void console_wheel(void *state, int delta);
 void tui_start_index(struct tui *t, int force);
+/* Reads one file as far as a page. */
+void tui_index_page(struct tui *t, long long book, int page);
 /* The background thread: where an index run is (phase -1 started, 0 going,
  * 1 ended; st NULL when it has no numbers), for the status line. */
 struct index_stats;

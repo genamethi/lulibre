@@ -396,15 +396,16 @@ static void c_preview(struct tui *t, const char *args) {
     if (!preview_position(t, &book, &page, &indexed)) tui_msg(t, 1, "there is no file in the preview");
     else if (page <= indexed) tui_msg(t, 0, "page %d is read already: the first %d pages of this file are", page, indexed);
     else {
-      char *line = xasprintf("addpages %lld %d", (long long)book, page);
-      tui_exec(t, line);
-      free(line);
+      tui_index_page(t, book, page);
     }
   } else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N | select | add");
 }
 
 static void c_index(struct tui *t, const char *args) {
-  tui_start_index(t, arg_is(args, "force"));
+  long long book;
+  int page;
+  if (sscanf(args, "%lld %d", &book, &page) == 2) tui_index_page(t, book, page); /* as far as that page */
+  else tui_start_index(t, arg_is(args, "force"));
 }
 
 static void c_reload(struct tui *t, const char *args) {
@@ -474,12 +475,9 @@ static void c_echo(struct tui *t, const char *args) {
 }
 
 static void c_help(struct tui *t, const char *args) {
-  if (*args) guides_help(t, args);
+  if (arg_is(args, "plain")) command_help(t, 1);
+  else if (*args) guides_help(t, args);
   else command_help(t, 0);
-}
-
-static void c_help_plain(struct tui *t, const char *args) {
-  command_help(t, 1);
 }
 
 static void c_source(struct tui *t, const char *args) {
@@ -718,14 +716,13 @@ void commands_builtin(void) {
   command_register("preview", c_preview,
                    "scroll N | page N | graphic | zoom +1|-1|0 | pan N  (zoom and pan: image only)");
   command_register("pick", c_pick, "books | authors | subjects | filters  fuzzy finder");
-  command_register("index", c_index, "[force]  extract text from new or changed files");
+  command_register("index", c_index, "[force | BOOK PAGE]  extract text from new or changed files; or read a file as far as that page");
   command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
                    "[N | library | sync | SCREEN]  the bar's tabs: the tab numbered N, the calibre library or the sync folder in the list, or a tab screen");
   command_register("set", c_set, "[name[=value]]  show or change a setting; alone, every setting");
   command_register("echo", c_echo, "text  show a message");
-  command_register("help", c_help, "[TOPIC]  the keys, by where they work; or the guides, where they speak of TOPIC");
-  command_register("help-plain", c_help_plain, "keys and commands as one long page");
+  command_register("help", c_help, "[TOPIC | plain]  the keys, by where they work; the guides, where they speak of TOPIC; or plain, keys and commands as one long page");
   command_set_complete("set", COMPLETE_SETTING, NULL);
   command_set_complete("help", COMPLETE_HELP, NULL);
   command_set_complete("filter", COMPLETE_FILTER, NULL);

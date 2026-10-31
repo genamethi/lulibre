@@ -331,68 +331,27 @@ function M.by_title(path, wanted, progress)
   return out, n
 end
 
---- :arxiv-titles: books' arXiv numbers, found by their titles in arXiv's snapshot on
--- this machine, asking nobody. A paper whose title is the book's, word for word,
--- counts only if the book's pages bear its record out: then its arXiv number is
--- proposed, in the current review, and :enrich offline proposes the rest of it.
--- @tparam {integer,...} ids
-function M.arxiv_titles(ids)
-  local bookman = require "bookman"
-  local check = require "lulib._check"
-  local junk = require "lulib._junk"
-  local kept = require "lulib._kept"
-  local wit = require "wit"
-  local path = datasets().path("arxiv-metadata-oai-snapshot.json")
-  if not path then return uiman.notify("no arXiv snapshot, one record a line, on this machine: :datasets fetches one", "error") end
-  local books, wanted, n = {}, {}, 0
-  for _, id in ipairs(ids) do
-    local b = bookman.get(id)
-    local title = bookman.get(id, "title") or ""
-    local file = kept.file_of(id)
-    if b and not (b.idents or {}).arxiv and title ~= "" and not junk.unlikely_title(title) and file and file.text and file.usable ~= false then
-      for _, t in ipairs { title, title:match("^(.-)%s*:%s") or false } do
-        local key = t and M.title_key(t)
-        if key and #key >= 12 then
-          wanted[key] = true
-          books[key] = books[key] or {}
-          table.insert(books[key], id)
-        end
-      end
-      n = n + 1
-    end
-  end
-  if n == 0 then
-    return uiman.notify("no books to look for: each has an arXiv number, or no title to go by, or a file that can't be read")
-  end
-  uiman.progress(("looking for %d titles in arXiv's snapshot"):format(n))
-  local found, passed = M.by_title(path, wanted, function(t) uiman.progress("reading arXiv's snapshot: " .. t) end)
-  uiman.progress(nil)
-  if not found then return uiman.notify(passed, "error") end
-  local c = check.settings()
-  local proposed, refused, done = 0, 0, {}
-  for key, arxiv_ids in pairs(found) do
-    for _, book in ipairs(books[key] or {}) do
-      if not done[book] then
-        local file = kept.file_of(book)
-        local k <close> = kept.open(file.id, file.indexed)
-        local text <close> = kept.reader(file)
-        for _, aid in ipairs(arxiv_ids) do
-          local fields = M.arxiv_fields(service.kept("arxiv-snapshot", aid))
-          local verdict = fields and check.record({ fields = fields }, file, k, text, c)
-          if verdict and verdict.same then
-            wit.add(book, { field = "identifier:arxiv", value = aid, source = "arxiv-titles", op = "add" })
-            proposed = proposed + 1
-            done[book] = true
-            break
-          else
-            refused = refused + 1
-          end
-        end
-      end
-    end
-  end
-  uiman.notify(("%d books looked for among %.1f million papers: %d found by title and borne out by their pages; %d same-titled refused"):format(n, passed / 1e6, proposed, refused))
-  return proposed, refused
-end
+-- arXiv's snapshot by title, for a book with no identifier to ask by (:enrich
+-- titles). One pass through the file for all the titles. The record says the paper's
+-- number, so that it's proposed with the rest.
+service.define("arxiv-title", {
+  ident = "title", covers = "crossref-title", pace = 0, hold = 0, batch = 100000,
+  available = function() return datasets().path("arxiv-metadata-oai-snapshot.json") ~= nil end,
+  request = function(keys)
+    local wanted = {}
+    for _, key in ipairs(keys) do wanted[key] = true end
+    local found, why = M.by_title(datasets().path("arxiv-metadata-oai-snapshot.json"), wanted)
+    if not found then return nil, why end
+    local out = {}
+    for key, ids in pairs(found) do out[key] = service.kept("arxiv-snapshot", ids[1]) end
+    return out
+  end,
+  record = function(answer)
+    local fields = M.arxiv_fields(answer)
+    local id = answer:match('"id"%s*:%s*"([^"]+)"')
+    if fields and id then fields["identifier:arxiv"] = mesr.canonical("arxiv", id) end
+    return fields
+  end,
+})
 
 return M

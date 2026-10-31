@@ -23,6 +23,55 @@
 local M = {}
 local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
 
+-- One of each screen at a time. A screen opened again while it is open goes to the
+-- open one, so nothing it holds is lost and two of them are never up by chance. `:new
+-- COMMAND` opens another all the same.
+local newest = setmetatable({}, { __mode = "v" }) -- the screen's name -> the last one opened
+local again = {} -- task id -> true: this task may open one that is open
+local panel = uiman.panel
+
+local function alive(q)
+  local ok, open = pcall(q.is_open, q)
+  return ok and open
+end
+
+--- uiman.panel, but for a screen open already (not one of its views, nor a dialog),
+-- when it moves the cursor to the open one, says so, and returns nil.
+function uiman.panel(spec)
+  local name = not spec.view and not spec.dialog and spec.screen
+  local open = name and newest[name]
+  if open and alive(open) and not again[taskman.self()] then
+    open:focus()
+    uiman.notify(("%s is already open, and the cursor is in it (:new %s opens another)"):format(name, name))
+    return nil
+  end
+  local p = panel(spec)
+  if name then newest[name] = p end
+  return p
+end
+
+-- what the commands made in Lua do, by name, for :new
+local commands, create = {}, cmdman.create
+function cmdman.create(name, fn, o)
+  commands[name] = fn
+  return create(name, fn, o)
+end
+
+--- Runs a command made in Lua so that it may open a second copy of a screen that
+-- is already open. Returns true, or nil and why.
+-- @tparam string name
+-- @tparam table o what the command is given: `{ args=, selection= }`
+function uiman.again(name, o)
+  local fn = commands[name]
+  if not fn then return nil, "no command " .. name .. " to open another of" end
+  local task = taskman.self()
+  again[task] = true
+  local ok, err = pcall(fn, o)
+  again[task] = nil
+  if not ok then return nil, err end
+  return true
+end
+
 -- the options uiman.panel takes as they are
 local passed = { "title", "help", "columns", "follow", "preview", "height", "side", "focus", "dialog", "pass", "screen", "form", "view" }
 
@@ -81,6 +130,7 @@ function M.list(o)
   end
   if o.band then spec.moves = true end
   local p <close> = uiman.panel(spec)
+  if not p then return end
   -- a view of the screen that says more of the item under the cursor
   local band <close> = o.band and uiman.panel {
     title = o.band.title or "", screen = o.screen, view = o.band.view, focus = false,

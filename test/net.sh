@@ -252,6 +252,11 @@ local fetched, why = datasets.fetch(zb, { url = "file://" .. srcf, say = functio
 say("fetched", fetched, why, datasets.status(zb).here)
 say("zbmath links", require("net.service").ask("zbmath-links", "2201.00001"), net.services["zbmath-links"].how.record("123")["identifier:zbl"])
 say("adopt", datasets.adopt(srcf) == nil, (datasets.adopt(dir .. "/nothing")))
+-- BibTeX: a cite key, and an entry
+do
+  local text, keys = require("lulib._bib").export({ 2 })
+  say("bib", keys[1], text:find("@", 1, true) ~= nil, text:find("Erd", 1, true) ~= nil)
+end
 -- the check's score
 local check = require "lulib._check"
 local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
@@ -345,6 +350,7 @@ expect "an edition with no authors says who in words" "by statement|J.-P. Serre"
 expect "a dataset fetched" "fetched|true|nil|true"
 expect "zbMATH's table gives a number" "zbmath links|123|123"
 expect "a file of no dataset isn't taken" "adopt|true|nil"
+expect "yank's BibTeX: a key of surname, year and a word that says something, and an entry" "bib|erdos1996|true|true"
 expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
 expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
 expect "an identifier compared with its own value is the same" "same identifier|equal"

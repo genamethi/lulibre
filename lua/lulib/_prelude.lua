@@ -5,9 +5,9 @@
 --
 -- @library lulib._prelude
 require "exprman._pages"
+require "lulib._uiman"
 require "cmd"
 require "lulib._remove"
-require "lulib._uiman"
 require "units"
 require "lulib._config"
 -- once init.lua has started: lulibre's systemd units as the settings say,
