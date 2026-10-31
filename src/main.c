@@ -26,6 +26,7 @@ static const struct {
   {"show", cmd_show, "show one book: metadata, files, indexed text"},
   {"stats", cmd_stats, "what is missing across the library"},
   {"run", cmd_run, "run a Lua script without the interface"},
+  {"offline", cmd_offline, "read calibre's records and make the changes that wait (before calibre's server starts)"},
 };
 
 static void usage(FILE *f) {

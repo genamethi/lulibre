@@ -192,7 +192,7 @@ static void c_edit(struct tui *t, const char *args) {
   else snprintf(title, sizeof title, "edit %d books (the values shown are the first's)   lists take +a, -b", n);
   panel_set_title(p, title);
   panel_set_form(p, FORM_STAGED);
-  panel_set_fields(p, NFIELDS, field_names, field_names, (const char *const *)now);
+  panel_set_fields(p, NFIELDS, field_names, field_names, (const char *const *)now, NULL);
   for (int i = 0; i < NFIELDS; i++) free(now[i]);
   panel_set_dialog(p, 1);
   panel_on_event(p, on_event, f);

@@ -552,8 +552,9 @@ static int l_ls(lua_State *L) {
 }
 
 /* setman.info(name): {name=, type=, default=, choices=, help=, value=,
- * from=, made=}; from: default, saved, set (init.lua, a script, :set) or
- * command line; made: made in Lua. nil and why for no such setting. */
+ * from=, made=, fixed=}; from: default, saved, set (init.lua, a script,
+ * :set) or command line; made: made in Lua; fixed: set on the command line
+ * only. nil and why for no such setting. */
 static int l_info(lua_State *L) {
   const char *name = luaL_checkstring(L, 1);
   int i = find(name);
@@ -597,6 +598,8 @@ static int l_info(lua_State *L) {
   lua_setfield(L, -2, "from");
   lua_pushboolean(L, (d->flags & SETTING_MADE) != 0);
   lua_setfield(L, -2, "made");
+  lua_pushboolean(L, (d->flags & SETTING_CLI_ONLY) != 0);
+  lua_setfield(L, -2, "fixed");
   return 1;
 }
 

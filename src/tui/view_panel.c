@@ -532,10 +532,10 @@ static int search_key(struct tui *t, struct panel *p, uint32_t key) {
 
 /* ---- a form: its rows are fields ---- */
 
-/* field i's row: its label, its value and (staged) its change */
-static void field_row(struct panel *p, struct prow *r, int i, const char *label, const char *value) {
-  const char *c = p->change[i], *cells[] = {label, value, c ? (*c ? c : "(blank)") : ""};
-  fill_row(r, p->form == FORM_STAGED ? 3 : 2, cells, 0, c ? PSTYLE_ACCENT : PSTYLE_NORMAL);
+/* field i's row: its label, its value and its change (staged) or its note */
+static void field_row(struct panel *p, struct prow *r, int i, const char *label, const char *value, const char *note) {
+  const char *c = p->change[i], *cells[] = {label, value, c ? (*c ? c : "(blank)") : note ? note : ""};
+  fill_row(r, p->form == FORM_STAGED || note ? 3 : 2, cells, 0, c ? PSTYLE_ACCENT : PSTYLE_NORMAL);
 }
 
 void panel_set_form(struct panel *p, int kind) {
@@ -550,7 +550,7 @@ int panel_form(const struct panel *p) {
 }
 
 void panel_set_fields(struct panel *p, int n, const char *const *names, const char *const *labels,
-                      const char *const *values) {
+                      const char *const *values, const char *const *notes) {
   char **was = p->names, **changes = p->change;
   int nwas = p->nfields, cur = p->cur;
   p->names = xcalloc((size_t)n + 1, sizeof *p->names);
@@ -564,7 +564,8 @@ void panel_set_fields(struct panel *p, int n, const char *const *names, const ch
         p->change[i] = changes[j];
         changes[j] = NULL;
       }
-    field_row(p, new_row(p), i, labels[i] ? labels[i] : p->names[i], values[i] ? values[i] : "");
+    field_row(p, new_row(p), i, labels[i] ? labels[i] : p->names[i], values[i] ? values[i] : "",
+              p->form == FORM_DIRECT && notes ? notes[i] : NULL);
   }
   for (int j = 0; j < nwas; j++) {
     free(was[j]);
@@ -584,7 +585,8 @@ const char *panel_field(const struct panel *p, int i, const char **change) {
 /* row i shown again, with the change it has now */
 static void field_changed(struct panel *p, int i) {
   struct prow *r = &p->rows[i], was = *r;
-  field_row(p, r, i, was.cells[0], was.ncells > 1 ? was.cells[1] : "");
+  field_row(p, r, i, was.cells[0], was.ncells > 1 ? was.cells[1] : "",
+            p->form == FORM_DIRECT && was.ncells > 2 ? was.cells[2] : NULL);
   for (int c = 0; c < was.ncells; c++) free(was.cells[c]);
   free(was.cells);
   tui_dirty(p->t);

@@ -187,6 +187,25 @@ journal, and run at the next start if lulibre is closed first.
 With `embed`, each change is also written into the books' files
 (`calibredb embed_metadata`, once per change), so other programs see it.
 
+## calibre's server and lulibre's systemd units
+
+When calibre's content server runs as a systemd unit, three settings say
+which units of lulibre's go with it:
+
+| Setting | |
+|---|---|
+| `server_hook = true` | `lulibre.service`, run before each start of the server's unit: `lulibre offline` reads calibre's records and makes the changes that wait for nothing to hold the library |
+| `opf_writer = "server"` | a drop-in on the server's unit (`lulibre-opf-writer.conf`) that starts it through `contrib/calibre-server-opf.py`, so calibre's own opf writer runs in the server; not made on a unit with sandboxing or hardening settings, where the change is shown instead |
+| `server_restart_at = "HH:MM"` | `lulibre-restart.timer`, which restarts the server every day at that time |
+
+`:units` shows what would change and why not where it cannot; `:units
+apply` makes it: a user unit's files directly, a system unit's with sudo,
+in the terminal, after asking, and a restart of the server, asked. When
+one of the three has been set (init.lua, the command line, the saved
+state), the interface keeps a user unit as they say when it starts;
+left at their defaults, nothing is touched. Changing one in the
+Configuration tab applies it at once.
+
 ## When something goes wrong
 
 `` ` `` opens the log console. The status line counts errors until the

@@ -4,7 +4,8 @@
  * or ~/.config, as calibre finds it), parsed with mupdf's JSON reader; and
  * calibre's content server as it runs: its process among /proc's, the port
  * it listens on from its sockets (else its --port, else calibre's
- * server-config.txt, else 8080), and whether it asks for a password. */
+ * server-config.txt, else 8080), https when it has a certificate, its URL
+ * prefix, and whether it asks for a password. */
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -183,7 +184,14 @@ int calibre_server_find(const char *library, char **url, int *auth) {
   if (!port && (opt = server_option("port"))) port = atoi(opt);
   free(opt);
   if (!port) port = 8080; /* calibre's own default */
-  *url = xasprintf("http://%s:%d", addr, port);
+  /* https with a certificate; a prefix before every path, as calibre-server --help has them */
+  const char *cert = args ? arg_value(args, len, "--ssl-certfile") : NULL, *prefix = args ? arg_value(args, len, "--url-prefix") : NULL;
+  char *cert_opt = cert ? NULL : server_option("ssl_certfile"), *prefix_opt = prefix ? NULL : server_option("url_prefix");
+  if (!prefix) prefix = prefix_opt;
+  *url = xasprintf("%s://%s:%d%s%s", cert || (cert_opt && *cert_opt && strcmp(cert_opt, "None")) ? "https" : "http", addr,
+                   port, prefix && *prefix && *prefix != '/' ? "/" : "", prefix && strcmp(prefix, "None") ? prefix : "");
+  free(cert_opt);
+  free(prefix_opt);
   opt = server_option("auth");
   *auth = args && (has_arg(args, len, "--enable-auth") ||
                    (!has_arg(args, len, "--disable-auth") && opt && !strncmp(opt, "True", 4)));

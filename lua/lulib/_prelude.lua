@@ -7,3 +7,10 @@
 require "exprman._front"
 require "cmd"
 require "lulib._uiman"
+require "units"
+require "lulib._config"
+-- once init.lua has started: lulibre's systemd units as the settings say,
+-- in the interface only (lulib.headless is known by then)
+taskman.spawn(function()
+  if not lulib.headless then require("units").on_start() end
+end)

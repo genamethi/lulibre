@@ -552,10 +552,11 @@ void panels_reloaded(struct tui *t);
 enum { FORM_DIRECT = 1, FORM_STAGED };
 void panel_set_form(struct panel *p, int kind);
 int panel_form(const struct panel *p); /* 0 for a panel that is no form */
-/* The fields, each a name, a label and its value; a staged form keeps the
+/* The fields, each a name, a label, its value and (a direct form; notes
+ * may be NULL) a note in a column after it; a staged form keeps the
  * changes of the fields still there by name. */
 void panel_set_fields(struct panel *p, int n, const char *const *names, const char *const *labels,
-                      const char *const *values);
+                      const char *const *values, const char *const *notes);
 /* Field i's name, and its change in a staged form (NULL for none). */
 const char *panel_field(const struct panel *p, int i, const char **change);
 /* width > 0: that many columns; width <= 0: a share of what is left */

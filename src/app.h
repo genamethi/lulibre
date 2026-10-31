@@ -75,6 +75,7 @@ int cmd_show(struct app *app, int argc, char **argv);
 int cmd_stats(struct app *app, int argc, char **argv);
 
 int cmd_run(struct app *app, int argc, char **argv);
+int cmd_offline(struct app *app, int argc, char **argv);
 
 /* tui/tui.c */
 int tui_run(struct app *app);

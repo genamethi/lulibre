@@ -17,6 +17,7 @@ script, replaces the command line's value.
     lulibre -o help           the settings, their values and what they do
     lulibre -o name=value     a setting for this run
     :set                      every setting, its value and where it is set
+    :config                   the same as a form, in the bar's Configuration tab
     :set name                 a setting's value; :set name=value changes it
     lulibre --clean           start without init.lua
     lulibre -C DIR            another configuration folder (or $LULIBRE_CONFIG_DIR)
@@ -95,6 +96,17 @@ removed.
 | `write_jobs` | `4` | calibredb processes at once through the content server; straight to the folder, one |
 | `contact_email` | | sent to the metadata services with each request, when set |
 | `server` `user` `path.password` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |
+| `server_hook` | `false` | lulibre's systemd unit runs `lulibre offline` before each start of calibre's content server's unit: calibre's records read, the changes that wait made ([workflows](workflows.md#calibres-server-and-lulibres-systemd-units)) |
+| `opf_writer` | `off` | `server`: calibre's content server starts with calibre's own opf writer, through a drop-in on its unit |
+| `server_restart_at` | | `HH:MM`: a timer restarts calibre's content server every day at that time |
+
+`:config` (the bar's Configuration tab) shows every setting as a form, in
+the list's place: its value, where the value comes from, and, in a band
+below, what the setting under the cursor does, its default and what it
+takes. `e` or Enter types a value, Space takes the next of its choices
+(true or false), `d` gives it its default back and `c` shows only the
+settings not at their default. A change takes effect at once and holds
+for the run, or is kept with `persistent` true.
 
 ## Colours
 

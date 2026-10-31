@@ -209,7 +209,7 @@ $T send-keys -t s ":set" Enter
 wait_for "SETTINGS" || true
 $T send-keys -t s G
 sleep 0.3
-check ":set alone lists the settings, those made in Lua under their own heading" sh -c "$T capture-pane -p -t s | grep -A2 'MADE IN LUA' | grep -q 'mine.colour'"
+check ":set alone lists the settings, those made in Lua under their own heading" sh -c "$T capture-pane -p -t s | sed -n '/MADE IN LUA/,\$p' | grep -q 'mine.colour'"
 $T send-keys -t s q
 sleep 0.3
 $T send-keys -t s ":set mine.col" Tab
@@ -220,6 +220,32 @@ sleep 0.4
 $T send-keys -t s ":set mine.colour" Enter
 sleep 0.4
 check "and its choices; :set changes it" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'mine.colour=blue'"
+# the Configuration tab: a form of every setting, in the list's place
+$T send-keys -t s ":config" Enter
+wait_for "changes hold for this run" || true
+check ":config opens the Configuration tab, its tab in the bar" sh -c "$T capture-pane -p -t s | sed -n 1p | grep -q 'Configuration' && $T capture-pane -p -t s | grep -q '^ pages  *6'"
+$T send-keys -t s / p a g e s Enter
+sleep 0.3
+$T send-keys -t s e C-u 9 Enter
+sleep 0.5
+check "e edits a setting there, which says it was set" sh -c "$T capture-pane -p -t s | grep -q '^.pages  *9  .*set'"
+check "and a band says what the one under the cursor does" sh -c "$T capture-pane -p -t s | grep -q 'what it does .*pages of each file'"
+$T send-keys -t s j Space
+sleep 0.5
+check "Space takes the next of its choices" sh -c "$T capture-pane -p -t s | grep -q '^.ocr  *auto'"
+$T send-keys -t s c
+sleep 0.5
+check "c shows only those not at their default" sh -c "$T capture-pane -p -t s | grep -q '^.ocr ' && ! $T capture-pane -p -t s | grep -q '^.ocr_pages '"
+$T send-keys -t s / o c r Enter
+sleep 0.3
+$T send-keys -t s d
+sleep 0.5
+check "d gives one its default back" sh -c "! $T capture-pane -p -t s | grep -q '^.ocr  *auto'"
+$T send-keys -t s q
+sleep 0.3
+$T send-keys -t s ":set pages" Enter
+sleep 0.3
+check "the change holds outside the tab" sh -c "$T capture-pane -p -t s | tail -1 | grep -q 'pages=9'"
 $T send-keys -t s ":run qui" Tab
 sleep 0.4
 check ":run completes a script's name" sh -c "$T capture-pane -p -t s | tail -1 | grep -q ':run quince'"

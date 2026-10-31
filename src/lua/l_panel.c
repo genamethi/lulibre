@@ -247,21 +247,27 @@ static int style_of(lua_State *L, int idx) {
 }
 
 /* rows table at idx -> the panel */
-/* a form's rows, {label, value} each: its fields, the label their name */
+/* a form's rows, {label, value [, note]} each: its fields, the label their name */
 static void set_fields(lua_State *L, struct panel *p, int idx) {
-  int n = (int)lua_rawlen(L, idx);
-  const char **labels = xcalloc((size_t)n + 1, sizeof *labels), **values = xcalloc((size_t)n + 1, sizeof *values);
-  luaL_checkstack(L, 2 * n + 4, "form fields");
+  int n = (int)lua_rawlen(L, idx), any = 0;
+  char **cell[3];
+  for (int c = 0; c < 3; c++) cell[c] = xcalloc((size_t)n + 1, sizeof *cell[c]);
   for (int i = 0; i < n; i++) {
     lua_rawgeti(L, idx, i + 1);
-    lua_rawgeti(L, -1, 1);
-    labels[i] = luaL_tolstring(L, -1, NULL); /* stays on the stack */
-    lua_rawgeti(L, -3, 2);
-    values[i] = lua_isnil(L, -1) ? "" : luaL_tolstring(L, -1, NULL);
+    for (int c = 0; c < 3; c++) {
+      lua_rawgeti(L, -1, c + 1);
+      any = any || (c == 2 && !lua_isnil(L, -1));
+      cell[c][i] = xstrdup(lua_isnil(L, -1) ? "" : luaL_tolstring(L, -1, NULL));
+      lua_settop(L, lua_gettop(L) - (lua_isnil(L, -1) ? 1 : 2));
+    }
+    lua_pop(L, 1);
   }
-  panel_set_fields(p, n, labels, labels, values);
-  free(labels);
-  free(values);
+  panel_set_fields(p, n, (const char *const *)cell[0], (const char *const *)cell[0], (const char *const *)cell[1],
+                   any ? (const char *const *)cell[2] : NULL);
+  for (int c = 0; c < 3; c++) {
+    for (int i = 0; i < n; i++) free(cell[c][i]);
+    free(cell[c]);
+  }
 }
 
 static void set_rows(lua_State *L, struct panel *p, int idx) {
