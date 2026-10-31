@@ -42,8 +42,8 @@ end
 
 --- Shows a sequence, one item to a row, and waits until it is closed.
 -- @tparam table o `{ items=, row=, screen=, actions=, refresh= }` and
--- uiman.panel's title, help, columns, follow, preview, height, side,
--- focus, dialog and pass. items: a list, an iter, or a function giving one, read again after
+-- uiman.panel's title (or a function giving it, read again with the items),
+-- help, columns, follow, preview, height, side, focus, dialog and pass. items: a list, an iter, or a function giving one, read again after
 -- each key and each refresh; row(item): its cells, with `id=` (the book)
 -- and `style=` as a panel's rows have them (by default the item, a row
 -- already, or the item as text);
@@ -69,6 +69,8 @@ function M.list(o)
   end
   local spec = { rows = rows() }
   for _, k in ipairs(passed) do spec[k] = o[k] end
+  local title = spec.title
+  if type(title) == "function" then spec.title = title() end
   if not spec.columns then -- untitled, as many as the widest row has cells: a panel draws its rows in columns
     local n = 1
     for _, r in ipairs(spec.rows) do n = math.max(n, #r) end
@@ -94,6 +96,7 @@ function M.list(o)
     if fn and items[i] ~= nil then get("act")(fn, items[i], i, value) end
     items = get("read")(o.items)
     p:rows(rows())
+    if type(title) == "function" then p:title(title()) end
   end
 end
 

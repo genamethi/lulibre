@@ -9,6 +9,10 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 \* 0.4.0-pre-alpha includes every change made for 0.3.0, which was not released.
 
 - Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
+- Changed review to mark and write separately. `a`, `e` and `r` only mark; `w` writes what is marked as one batch.
+- Added saved reviews: a review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `:review deep` shows what a review otherwise hides.
+- Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again.
+- Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
 

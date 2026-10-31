@@ -22,22 +22,23 @@ function own.record(b)
   return fields
 end
 
---- Returns the book's sources: the record, the file's own metadata, and
--- each online record kept for it (net).
+--- Returns the book's sources: the record, the file's own metadata as the
+-- index holds it, and each online record kept for it (net).
 -- @tparam integer book
--- @param[opt] t the book's text (txt), for the file's own metadata
+-- @tparam[opt] table file the row of bookman.files it is read from
+-- @tparam[opt] {table,...} found the file's identifiers (lulib._ids)
 -- @treturn {table,...} each `{ name=, kind = "record"|"embedded"|"online",
--- fields = { [field] = value } }`
-function M.of(book, t)
+-- fields = { [field] = value } }`; an online one has its key, ident and
+-- pages too
+function M.of(book, file, found)
   local out = {}
   local b = bookman.get(book)
   if b then out[#out + 1] = { name = "record", kind = "record", fields = get("record")(b) } end
-  local meta = t and t.meta
-  if meta and (meta.title or meta.author) then
-    out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = meta.title, authors = meta.author } }
+  if file and (file.title or file.author) then
+    out[#out + 1] = { name = "embedded", kind = "embedded", fields = { title = file.title, authors = file.author } }
   end
-  for _, r in ipairs(require("net").records(book)) do
-    out[#out + 1] = { name = r.service, kind = "online", fields = r.fields }
+  for _, r in ipairs(require("net").records(book, found)) do
+    out[#out + 1] = { name = r.service, kind = "online", fields = r.fields, key = r.key, ident = r.ident, pages = r.pages }
   end
   return out
 end

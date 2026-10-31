@@ -52,6 +52,27 @@ local function decisions()
   return rows
 end
 
+--- The values a review has decided on and that stand, not to be proposed
+-- again: `decided[book][wit field][value]`. An undone decision is not one.
+function M.decided()
+  local db = sql.open(setman.get("path.journaldb"), sqlite3.OPEN_READONLY)
+  local rows = sql.run(db, "SELECT book, field, proposed FROM journal"
+                           .. " WHERE proposal IS NOT NULL AND proposed IS NOT NULL AND state = 2")
+  db:close()
+  local out = {}
+  for _, r in ipairs(rows) do
+    local field, value = r.field, r.proposed
+    if field == "identifiers" then
+      local kind, v = value:match("^([^:]+):(.*)$")
+      if kind then field, value = "identifier:" .. kind, v end
+    end
+    out[r.book] = out[r.book] or {}
+    out[r.book][field] = out[r.book][field] or {}
+    out[r.book][field][value] = true
+  end
+  return out
+end
+
 --- Every parse's record per field, from the journal as it stands: a table
 -- keyed by parse and library field (`records[parse][field]`), empty while
 -- the journal holds fewer than `after` decisions. Taken once by the code

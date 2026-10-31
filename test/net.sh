@@ -25,6 +25,7 @@ say("enrich", net.enrich(2))
 say("kept", net.enrich(2), asked)
 taskman.sleep(300)
 for _, f in ipairs(wit.get(2)) do say("proposal", f.field, f.alts[1].value, f.alts[1].source) end
+for _, f in ipairs(wit.get(2, { deep = true })) do say("deep", f.field, f.alts[1].value, f.alts[1].hidden) end
 local a = net.services.arxiv.how.record([[<entry><id>http://arxiv.org/abs/1012.6008v1</id><published>2010-12-30T00:00:00Z</published><title>A Note on
  Sieve Methods</title><author><name>Ben Green</name></author><author><name>T. Tao</name></author></entry>]])
 say("arxiv", a.title, a.authors, a.pubdate)
@@ -38,16 +39,72 @@ for _, f in ipairs(wit.get(1)) do if f.field == "identifier:arxiv" then say("fou
 for _, k in ipairs(net.keys(1)) do say("asked by", k.service, k.key) end
 -- a propose asked for twice while one runs for the book: both return at
 -- once, and the one running goes once more
-local txt, runs = require "txt", 0
-local of = txt.of
-txt.of = function(...) runs = runs + 1 return of(...) end
+local runs = 0
+local once = propose.once
+propose.once = function(...) runs = runs + 1; taskman.sleep(10) return once(...) end
 local done
 taskman.spawn(function() done = propose.propose(1, propose.settings()) end)
 taskman.yield()
 say("while running", (propose.propose(1, propose.settings())), (propose.propose(1, propose.settings())))
 while not done do taskman.sleep(20) end
-txt.of = of
+propose.once = once
 say("runs", runs)
+-- a new answer only ranks: the text is not read again
+local txt = require "txt"
+local load, loads = txt.load, 0
+txt.load = function(...) loads = loads + 1 return load(...) end
+propose.propose(1, propose.settings())
+say("read again", loads)
+-- a record the pages do not bear out is kept but not shown; one they do
+-- is shown over the record's title
+local arxiv_says
+net.services.arxiv.how.request = function(keys)
+  return { [keys[1]] = "<entry><id>http://arxiv.org/abs/" .. keys[1] .. "v1</id><title>" .. arxiv_says .. "</title></entry>" }
+end
+arxiv_says = "Quantum Gravity Without Tears"
+net.enrich(1)
+taskman.sleep(100)
+local function title_of(o)
+  for _, f in ipairs(wit.get(1, o)) do
+    if f.field == "title" then
+      local t = {}
+      for _, a in ipairs(f.alts) do t[#t + 1] = a.source .. ":" .. tostring(a.hidden) end
+      return table.concat(t, ",")
+    end
+  end
+end
+say("borne out not", tostring((title_of())):find("arxiv") == nil, tostring((title_of { deep = true })):find("arxiv:1") ~= nil)
+txt.load = load
+-- identifiers: which are the file's own
+local ids = require "lulib._ids"
+local function own_of(text)
+  local t = {}
+  for _, f in ipairs(ids.in_text(text, 100)) do t[#t + 1] = f.kind .. ":" .. f.value .. ":" .. tostring(f.own) end
+  return table.concat(t, ",")
+end
+local pad = string.rep("words on a page ", 20) .. "\n"
+say("isbn label", own_of(pad .. "ISBN 0-387-90040-3\n"))
+say("isbn bare", own_of(pad .. "0-387-90040-3\n"))
+say("isbn-13 e", own_of(pad .. "e-ISBN-13: 978-0-387-90040-7\n"))
+say("doi top", own_of("10.1000/abc\n"))
+say("doi far", own_of(pad .. "see 10.1000/abc\n"))
+say("doi label", own_of(pad .. "DOI 10.1000/abc\n"))
+say("doi scan", own_of(pad .. "d0i: 10.1000/abc\n"))
+say("doi cited", own_of(pad .. "as in doi:10.1000/abc\n"))
+say("after refs", own_of(pad .. "ISBN 0-387-90040-3\nReferences\n[1] ISBN 978-3-16-148410-0 doi:10.1000/x\n"))
+say("arxiv stamp", own_of(pad .. "arXiv:1012.6008v1 [math.CO] 29 Dec\n"))
+say("arxiv cited", own_of(pad .. "see arXiv:1012.6008\n"))
+say("issn", own_of("ISSN 0012-7094\n"))
+local meta = {}
+for _, f in ipairs(ids.in_metadata('<prism:doi>10.1000/META</prism:doi>\ndoi: 10.48550/arXiv.1012.6008\n')) do meta[#meta + 1] = f.kind .. ":" .. f.value end
+say("metadata", table.concat(meta, ","))
+say("named", ids.in_name("/a/b/1012.6008v2.pdf").value, ids.in_name("/a/notes.pdf"))
+-- the check's score
+local check = require "lulib._check"
+local c = { k = 1, base = 0.25, authors = 0.25, pages = 0.25, same = 0.6 }
+say("title score", check.title(0, 4, c), check.title(2, 4, c), check.title(4, 4, c))
+say("length", check.length(100, 110, c), check.length(100, 200, c), check.length(nil, 200, c))
+say("found", require("mesr").found("The Theory of Numbers", "numbers and THEO-\nRY here", check.minor))
 -- one work asked for by two tasks at once: asked once, both answered; a
 -- request that fails answers with its error and the service goes on
 local svc = require "net.service"
@@ -71,7 +128,7 @@ expect "a book is asked about by its canonical identifiers" "keys|crossref|10.10
 expect "a new answer is counted" "enrich|1"
 expect "a kept answer is not asked for again" "kept|0|1"
 expect "the online record proposes: title" "proposal|title|Notes on Additive Number Theory|crossref"
-expect "and pubdate" "proposal|pubdate|1996|crossref"
+expect "pubdate is less than the record has, under what replacing takes: only a deep review shows it" "deep|pubdate|1996|1"
 expect "and publisher" "proposal|publisher|Example Press|crossref"
 expect "arXiv's entry read" "arxiv|A Note on Sieve Methods|Ben Green & T. Tao|2010"
 expect "Open Library's record read" "openlibrary|Topics: In Combinatorics|T. Tao|CUP|2006"
@@ -81,5 +138,24 @@ expect "an identifier in a book's text is a wit" "found|1012.6008|lex"
 expect "and the book is asked about by it" "asked by|arxiv|1012.6008"
 expect "a propose asked for while one runs returns at once" "while running|nil|nil"
 expect "and the one running goes once more" "runs|2"
+expect "ranking again reads no text" "read again|0"
+expect "a record the pages do not bear out is shown only by a deep review" "borne out not|true|true"
+expect "a labelled ISBN is the file's own" "isbn label|isbn:9780387900407:true"
+expect "an unlabelled one is not" "isbn bare|isbn:9780387900407:false"
+expect "nor is an e-ISBN's label missed" "isbn-13 e|isbn:9780387900407:true"
+expect "a DOI at the top is the file's own" "doi top|doi:10.1000/abc:true"
+expect "one further on with no label is not" "doi far|doi:10.1000/abc:false"
+expect "one beginning a line with its label is" "doi label|doi:10.1000/abc:true"
+expect "as a scan may read the label" "doi scan|doi:10.1000/abc:true"
+expect "one with words before it is cited" "doi cited|doi:10.1000/abc:false"
+expect "nothing after the references counts" "after refs|isbn:9780387900407:true"
+expect "an arXiv number with its margin stamp is the file's own" "arxiv stamp|arxiv:1012.6008:true"
+expect "one further on with none is not" "arxiv cited|arxiv:1012.6008:false"
+expect "an ISSN never is" "issn|issn:0012-7094:false"
+expect "the metadata's identifiers, an arXiv DOI as its number" "metadata|doi:10.1000/meta,arxiv:1012.6008"
+expect "a file named by an arXiv number" "named|1012.6008|nil"
+expect "a title's score: base, then in step with its words" "title score|0.25|0.75|1"
+expect "a page count within the tolerance, outside it, none" "length|true|false|nil"
+expect "words found whole, across a broken line, small words not counted" "found|2|2"
 case "$out" in *"proposal|authors"*) echo "FAIL  authors the record already has were proposed"; fails=$((fails + 1)) ;; *) echo "ok    authors the record already has are not proposed" ;; esac
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

@@ -31,6 +31,12 @@ void rarity_free(struct rarity *w);
 
 double similar(const struct rarity *w, enum field_kind kind, const char *a, const char *b);
 
+/* How many of value's words a text holds, as whole words folded, with a word
+ * broken over a line ("combina-\ntorics") whole: *found of *words, leaving out
+ * the words skip says yes to (skip may be NULL). */
+void words_found(const char *value, const char *text, int (*skip)(const char *word, void *ud), void *ud,
+                 int *found, int *words);
+
 /* The thresholds are settings: near for "near", same for "equal". */
 enum likeness likeness(double ab, double ba, double near, double same);
 

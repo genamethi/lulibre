@@ -9,7 +9,7 @@ local bookman = require "bookman"
 local service = require "net.service"
 local mesr = require "mesr"
 local curl = require "curl"
-local wit = require "wit"
+local ids = require "lulib._ids"
 
 local M = {}
 
@@ -35,18 +35,20 @@ function M.ask(name, key)
 end
 
 --- The services that can be asked about a book, with the key each is
--- asked by: `{ {service=, key=}, ... }`. A key is an identifier the
--- record has, or one a wit proposes (found in the book's text).
-function M.keys(book)
+-- asked by: `{ {service=, key=, ident=}, ... }`. A key is an identifier the
+-- record has, or one that is the book's file's own (lulib._ids).
+-- @tparam integer book
+-- @tparam[opt] {table,...} found the file's identifiers, when the caller
+-- has them
+function M.keys(book, found)
   local out, b = {}, bookman.get(book)
   if not b then return out end
   local idents = {}
   for kind, value in pairs(b.idents or {}) do idents[kind] = { value } end
-  for _, f in ipairs(wit.get(book)) do
-    local kind = f.field:match("^identifier:(.+)")
-    for _, a in ipairs(kind and f.alts or {}) do
-      idents[kind] = idents[kind] or {}
-      table.insert(idents[kind], a.value)
+  for _, f in ipairs(found or ids.book(book)) do
+    if f.own then
+      idents[f.kind] = idents[f.kind] or {}
+      table.insert(idents[f.kind], f.value)
     end
   end
   for name, s in pairs(service.services) do
@@ -55,7 +57,7 @@ function M.keys(book)
       local key = mesr.canonical(s.how.ident, value)
       if key and not seen[key] then
         seen[key] = true
-        out[#out + 1] = { service = name, key = key }
+        out[#out + 1] = { service = name, key = key, ident = s.how.ident }
       end
     end
   end
@@ -63,14 +65,24 @@ function M.keys(book)
   return out
 end
 
---- The online records kept for a book, as fields: `{ {service=, fields=}, ... }`.
-function M.records(book)
+--- The online records kept for a book: `{ {service=, key=, ident=, fields=,
+-- pages=}, ... }`; pages, the record's page count, when it has one.
+-- @tparam integer book
+-- @tparam[opt] {table,...} found the file's identifiers, when the caller
+-- has them
+function M.records(book, found)
   local out = {}
-  for _, k in ipairs(M.keys(book)) do
+  for _, k in ipairs(M.keys(book, found)) do
     local answer = service.kept(k.service, k.key)
     if answer then
       local ok, fields = pcall(service.services[k.service].how.record, answer)
-      if ok and fields and next(fields) then out[#out + 1] = { service = k.service, fields = fields } end
+      if ok and fields then
+        local pages = fields.pages
+        fields.pages = nil
+        if next(fields) then
+          out[#out + 1] = { service = k.service, key = k.key, ident = k.ident, fields = fields, pages = pages }
+        end
+      end
     end
   end
   return out

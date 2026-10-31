@@ -128,14 +128,46 @@ static const char custom_schema[] =
  * wit writes it through a connection of its own. Per book and field, alt 1
  * is the first-ranked; agree and disagree name the sources that agree and
  * differ, comma-separated; start and stop, where in the file's text (its
- * txt) the value was found. ---- */
+ * txt) the value was found; review, the review it belongs to (wit.lua);
+ * hidden, shown only by a deep review; decision ("accept" or "reject") and
+ * edited, what the review has marked and not yet written. ---- */
 static const char wit_schema[] =
   "PRAGMA wit.journal_mode=WAL;"
+  "CREATE TABLE IF NOT EXISTS wit.reviews(id INTEGER PRIMARY KEY, name TEXT, opened INTEGER NOT NULL DEFAULT 0);"
   "CREATE TABLE IF NOT EXISTS wit.wits("
-  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
-  " source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
+  " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
   " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
-  " UNIQUE(book, field, alt));";
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT,"
+  " UNIQUE(review, book, field, alt));"
+  /* what was worked out from a file, so that it is not worked out again
+   * while the file is as it was read at stamp (lulib._kept) */
+  "CREATE TABLE IF NOT EXISTS wit.kept("
+  " file INTEGER NOT NULL, step TEXT NOT NULL, key TEXT NOT NULL, stamp INTEGER, data TEXT,"
+  " PRIMARY KEY(file, step, key));";
+
+/* A wits table from before reviews: its rows become the first review's. */
+static const char wit_before_reviews[] =
+  "ALTER TABLE wit.wits RENAME TO wits_old;"
+  "CREATE TABLE wit.wits("
+  " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
+  " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT,"
+  " UNIQUE(review, book, field, alt));"
+  "INSERT INTO wit.wits(id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts)"
+  " SELECT id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts FROM wit.wits_old;"
+  "DROP TABLE wit.wits_old;";
+
+static int wit_prepare(struct db *db, char **err) {
+  if (db_exec(db, wit_schema, err)) return -1;
+  sqlite3_stmt *st = NULL;
+  if (sqlite3_prepare_v2(db->h, "SELECT review FROM wit.wits LIMIT 0", -1, &st, NULL) == SQLITE_OK) {
+    sqlite3_finalize(st);
+    return 0;
+  }
+  return db_exec(db, wit_before_reviews, err);
+}
 
 static char *side[3]; /* journal, custom, wit */
 static const char *const side_names[] = {"journal", "custom", "wit"};
@@ -229,7 +261,7 @@ int db_open(struct db *db, const char *path, char **err) {
               err) ||
       reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
       db_exec(db, history_schema, err) || attach_beside(db, "custom", "rwc", err) ||
-      db_exec(db, custom_schema, err) || attach_beside(db, "wit", "rwc", err) || db_exec(db, wit_schema, err)) {
+      db_exec(db, custom_schema, err) || attach_beside(db, "wit", "rwc", err) || wit_prepare(db, err)) {
     db_close(db);
     return -1;
   }

@@ -33,16 +33,26 @@ function M.field(name, patt)
   return Cg(Ct(Cg(Cp(), "start") * Cg(value, "value") * Cg(Cp() / function(p) return p - 1 end, "stop")), name)
 end
 
---- The grammars, by name: `{ pattern=, group= }`.
+--- The grammars, by name: `{ pattern=, group=, version= }`.
 M.grammars = {}
 
---- Adds a grammar, or replaces the one of that name.
+--- Adds a grammar, or replaces the one of that name. What it finds in a file
+-- is kept (lulib._kept) until the file is read again or `version` changes.
 -- @tparam string name
 -- @param pattern an LPeg pattern capturing a table of fields (`field`)
 -- @tparam[opt] string group what the grammar was written for: an author, a
 -- publisher, a series
-function M.add(name, pattern, group)
-  M.grammars[name] = { pattern = pattern, group = group }
+-- @param[opt] version change it when you change the pattern
+function M.add(name, pattern, group, version)
+  M.grammars[name] = { pattern = pattern, group = group, version = version }
+end
+
+--- The grammars' names, in the order they run.
+function M.names()
+  local names = {}
+  for name in pairs(M.grammars) do names[#names + 1] = name end
+  table.sort(names)
+  return names
 end
 
 --- Removes a grammar.
@@ -62,14 +72,12 @@ end
 -- `{ value= }` and no positions.
 -- @param t a text (txt), held by the caller
 -- @tparam[opt] integer book the book the text is of
+-- @tparam[opt] {string,...} names only these grammars
 -- @treturn {table,...} each `{ grammar=, fields = { [field] = {value=,
 -- start=, stop=} } }`, by grammar name
-function M.parse(t, book)
+function M.parse(t, book, names)
   local parses, text = {}, t.text
-  local names = {}
-  for name in pairs(M.grammars) do names[#names + 1] = name end
-  table.sort(names)
-  for _, name in ipairs(names) do
+  for _, name in ipairs(names or M.names()) do
     local fields = lpeg.match(M.grammars[name].pattern, text, 1, t, book)
     if type(fields) == "table" and next(fields) then
       for _, f in pairs(fields) do f.value = M.clean(f.value) end

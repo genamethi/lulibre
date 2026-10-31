@@ -33,9 +33,10 @@ function M.propose(ids)
   print(("proposals for %d fields of %d books"):format(fields, books))
 end
 
---- :review [filter]: the books' proposals.
-function M.review(ids)
-  review.open(ids)
+--- :review [deep] [filter]: the current review, or its proposals for the
+-- books; deep shows what it otherwise doesn't.
+function M.review(ids, o)
+  review.open(ids, o)
 end
 
 --- :enrich [filter]: ask the online services about the books, by their
@@ -196,6 +197,11 @@ cmdman.create("tags", function(c)
 end, { desc = "[ls | write]  tags whose levels are split with \"/\", as calibre writes levels, with \".\"; write rewrites them", complete = { "ls", "write" } })
 cmdman.create("enrich", function(o) M.enrich(M.books(o)) end, { desc = "[filter]  ask the online services about the books, by their identifiers", complete = "filter" })
 cmdman.create("propose", function(o) M.propose(M.books(o)) end, { desc = "[filter]  propose metadata from the files, for :review", complete = "filter" })
-cmdman.create("review", function(o) M.review(M.books(o, "is:proposed")) end, { desc = "[filter]  the books' proposals: accept, edit, reject", complete = "filter" })
+cmdman.create("review", function(o)
+  local deep, args = (o.args or ""):match("^(deep)%s*(.*)$")
+  local given = { args = deep and args or o.args, selection = o.selection }
+  local filtered = (given.args or "") ~= "" or (o.selection and #o.selection > 0)
+  M.review(filtered and M.books(given) or nil, { deep = deep ~= nil })
+end, { desc = "[deep] [filter]  the books' proposals: accept, edit, reject", complete = "filter" })
 
 return M

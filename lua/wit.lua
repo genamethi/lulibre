@@ -1,16 +1,23 @@
 --- Wits: a value for a book's field, with the source that gave it, kept
--- until a review accepts or rejects it.
+-- until a review writes or rejects it.
 --
 -- Per book and field the wits are in order, the first-ranked first; the
--- others are its alternatives. They are kept in the file path.witdb
--- (table `wits`), which the filter `is:proposed` reads.
+-- others are its alternatives. They belong to a review, and each review has
+-- its own: its proposals and what is marked on them. Accepting and rejecting
+-- only mark; `write` does what is marked and takes it out of that review, and
+-- no other review changes. One review is the current one, which proposing
+-- adds to; `open` makes another current. They are kept in the file path.witdb
+-- (tables `wits` and `reviews`), which the filter `is:proposed` reads.
 --
 --     local wit = require "wit"
 --     wit.set(12, { { field = "title", value = "Knot Theory", source = "front", start = 41, stop = 52 } })
 --     for _, f in ipairs(wit.get(12)) do print(f.field, f.alts[1].value) end
 --     wit.accept(f.alts[1].id)
+--     wit.write()
 --
 -- @library wit
+local bookman = require "bookman"
+local mesr = require "mesr"
 local sql = require "sql"
 local sqlite3 = require "lsqlite3"
 local store = require "store"
@@ -27,39 +34,118 @@ local function run(query, ...)
   return sql.run(db, query, ...)
 end
 
+local function transaction(fn)
+  run("BEGIN IMMEDIATE")
+  local ok, err = pcall(fn)
+  run(ok and "COMMIT" or "ROLLBACK")
+  if not ok then error(err, 3) end
+end
+
 local function joined(list)
   return list and table.concat(list, ",") or nil
 end
 
---- Replaces a book's wits. Each is `{ field=, value=, source=, score=,
--- agree=, disagree=, file=, start=, stop= }`, agree and disagree lists of
+--- The current review, made if there is none yet.
+-- @treturn integer
+function M.current()
+  local r = run("SELECT id FROM reviews ORDER BY opened DESC, id DESC LIMIT 1")[1]
+  if r then return r.id end
+  run("INSERT INTO reviews(opened) VALUES (1)")
+  return run("SELECT MAX(id) AS id FROM reviews")[1].id
+end
+
+--- Makes a review the current one.
+function M.open(review)
+  run("UPDATE reviews SET opened = (SELECT MAX(opened) + 1 FROM reviews) WHERE id = ?", review)
+end
+
+--- Starts a new review, empty, and makes it the current one.
+-- @tparam[opt] string name
+-- @treturn integer
+function M.new(name)
+  run("INSERT INTO reviews(name, opened) VALUES (?, (SELECT COALESCE(MAX(opened), 0) + 1 FROM reviews))", name)
+  return run("SELECT MAX(id) AS id FROM reviews")[1].id
+end
+
+--- Names a review.
+function M.name(review, name)
+  run("UPDATE reviews SET name = ? WHERE id = ?", name, review)
+end
+
+--- Discards a review: its proposals and what is marked on them.
+function M.discard(review)
+  transaction(function()
+    run("DELETE FROM wits WHERE review = ?", review)
+    run("DELETE FROM reviews WHERE id = ?", review)
+  end)
+end
+
+--- The reviews, the current one first: `{ {id=, name=, books=, marked=}, ... }`.
+function M.reviews()
+  M.current()
+  return run("SELECT r.id, r.name, COUNT(DISTINCT w.book) AS books, COUNT(w.decision) AS marked"
+             .. " FROM reviews r LEFT JOIN wits w ON w.review = r.id"
+             .. " GROUP BY r.id ORDER BY r.opened DESC, r.id DESC")
+end
+
+--- The books a review has shown proposals for, in the order they came.
+-- @tparam[opt] table o `{ review=, deep= }`: deep, those with hidden ones too
+function M.books(o)
+  o = o or {}
+  local out = {}
+  for _, r in ipairs(run("SELECT book FROM wits WHERE review = ? AND (? OR NOT hidden) GROUP BY book ORDER BY MIN(id)",
+                         o.review or M.current(), o.deep and 1 or 0)) do
+    out[#out + 1] = r.book
+  end
+  return out
+end
+
+--- Replaces a book's wits in a review, keeping what is marked: a mark stays
+-- on its value, or, when the value is no longer proposed, on the value and
+-- its source added last. Each is `{ field=, value=, source=, score=, agree=,
+-- disagree=, file=, start=, stop=, hidden= }`, agree and disagree lists of
 -- source names; a field's wits are ranked in the order given.
 -- @tparam integer book
 -- @tparam {table,...} wits
-function M.set(book, wits)
-  run("BEGIN IMMEDIATE")
-  local ok, err = pcall(function()
-    run("DELETE FROM wits WHERE book = ?", book)
-    local alt = {}
-    for _, w in ipairs(wits) do
-      alt[w.field] = (alt[w.field] or 0) + 1
-      run("INSERT INTO wits(book, field, value, source, alt, score, agree, disagree, file, start, stop, ts)"
-          .. " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))",
-          book, w.field, w.value, w.source, alt[w.field], w.score, joined(w.agree), joined(w.disagree),
-          w.file, w.start, w.stop)
+-- @tparam[opt] integer review the current one by default
+function M.set(book, wits, review)
+  review = review or M.current()
+  transaction(function()
+    local marks = {}
+    for _, m in ipairs(run("SELECT field, value, source, score, decision, edited FROM wits"
+                           .. " WHERE review = ? AND book = ? AND decision IS NOT NULL", review, book)) do
+      marks[m.field .. "\0" .. m.value] = m
     end
+    run("DELETE FROM wits WHERE review = ? AND book = ?", review, book)
+    local alt = {}
+    local function insert(w, m)
+      alt[w.field] = (alt[w.field] or 0) + 1
+      run("INSERT INTO wits(review, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts,"
+          .. " hidden, decision, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), ?, ?, ?)",
+          review, book, w.field, w.value, w.source, alt[w.field], w.score, joined(w.agree), joined(w.disagree),
+          w.file, w.start, w.stop, w.hidden and 1 or 0, m and m.decision, m and m.edited)
+    end
+    for _, w in ipairs(wits) do
+      local key = w.field .. "\0" .. w.value
+      insert(w, marks[key])
+      marks[key] = nil
+    end
+    for _, m in pairs(marks) do insert(m, m) end
   end)
-  run(ok and "COMMIT" or "ROLLBACK")
-  if not ok then error(err, 2) end
 end
 
---- A book's wits, per field: the first-ranked and its alternatives.
+--- A book's wits in a review, per field: the first-ranked and its
+-- alternatives. Those a review doesn't show are left out, unless `deep`.
 -- @tparam integer book
--- @treturn {table,...} `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=}, ... } }, ... }`
-function M.get(book)
+-- @tparam[opt] table o `{ review=, deep= }`
+-- @treturn {table,...} `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=, hidden=,
+-- decision=, edited=}, ... } }, ... }`
+function M.get(book, o)
+  o = o or {}
   local out, by = {}, {}
-  for _, row in ipairs(run("SELECT id, field, value, source, score, agree, disagree, start, stop FROM wits"
-                           .. " WHERE book = ? ORDER BY field, alt", book)) do
+  for _, row in ipairs(run("SELECT id, field, value, source, score, agree, disagree, start, stop, hidden, decision, edited"
+                           .. " FROM wits WHERE review = ? AND book = ? AND (? OR NOT hidden OR decision IS NOT NULL)"
+                           .. " ORDER BY field, alt", o.review or M.current(), book, o.deep and 1 or 0)) do
     local f = by[row.field]
     if not f then
       f = { field = row.field, alts = {} }
@@ -82,34 +168,89 @@ local function change(w, value)
 end
 
 local function row(id)
-  return run("SELECT id, book, field, value, source FROM wits WHERE id = ?", id)[1]
+  return run("SELECT id, review, book, field, value, source FROM wits WHERE id = ?", id)[1]
 end
 
--- the decision applied, and the field's wits gone
-local function decide(w, value, label)
-  local batch, err = store.apply({ change(w, value) }, label)
-  if err then return nil, err end
-  run("DELETE FROM wits WHERE book = ? AND field = ?", w.book, w.field)
-  return batch
+-- a mark on a wit, none left on the field's others
+local function mark(id, decision, value)
+  local w = row(id)
+  if not w then return nil, "no wit " .. id end
+  transaction(function()
+    run("UPDATE wits SET decision = NULL, edited = NULL WHERE review = ? AND book = ? AND field = ?",
+        w.review, w.book, w.field)
+    if decision then run("UPDATE wits SET decision = ?, edited = ? WHERE id = ?", decision, value, id) end
+  end)
+  return true
 end
 
---- Accepts a wit, as it is or edited, as an operation of the library;
--- waits for it. Returns the batch, or nil and why.
+--- Marks a wit accepted, as it is or edited. `write` writes it.
 -- @tparam integer id
 -- @tparam[opt] string value the edited value
 function M.accept(id, value)
-  local w = row(id)
-  if not w then return nil, "no wit " .. id end
-  return decide(w, value or w.value, "review: " .. w.field)
+  return mark(id, "accept", value)
 end
 
---- Rejects a wit: the field keeps its value, and the journal keeps the
--- decision, for the source's track record (trust).
+--- Marks a wit rejected. `write` keeps the decision in the journal, for the
+-- source's track record (trust); the field keeps its value.
 -- @tparam integer id
 function M.reject(id)
-  local w = row(id)
-  if not w then return nil, "no wit " .. id end
-  return decide(w, nil, "review: " .. w.field .. " rejected")
+  return mark(id, "reject")
+end
+
+--- Takes the mark off a field's wits.
+-- @tparam integer id one of them
+function M.unmark(id)
+  return mark(id)
+end
+
+--- Writes what is marked in a review, as one operation of the library, and
+-- takes the fields from the review; waits for it. Returns the batch and how
+-- many fields it took, 0 and 0 with nothing marked, or nil and why.
+-- @tparam[opt] integer review the current one by default
+function M.write(review)
+  review = review or M.current()
+  local marked = run("SELECT id, book, field, value, source, decision, edited FROM wits"
+                     .. " WHERE review = ? AND decision IS NOT NULL", review)
+  if #marked == 0 then return 0, 0 end
+  local changes = {}
+  for i, w in ipairs(marked) do
+    changes[i] = change(w, w.decision == "accept" and (w.edited or w.value) or nil)
+  end
+  local batch, err = store.apply(changes, "review")
+  if err then return nil, err end
+  transaction(function()
+    for _, w in ipairs(marked) do
+      run("DELETE FROM wits WHERE review = ? AND book = ? AND field = ?", review, w.book, w.field)
+    end
+  end)
+  return batch, #marked
+end
+
+--- A field as the record has it now: bookman's, or for identifier:TYPE the
+-- identifier of that type.
+function M.now(book, field)
+  local kind = field:match("^identifier:(.+)")
+  if not kind then return bookman.get(book, field) end
+  local b = bookman.get(book)
+  return b and b.idents and b.idents[kind] or ""
+end
+
+--- Drops from a review the proposals whose value the record now holds, unless
+-- marked. Returns how many.
+-- @tparam[opt] integer review the current one by default
+function M.prune(review)
+  review = review or M.current()
+  local n = 0
+  transaction(function()
+    for _, w in ipairs(run("SELECT id, book, field, value FROM wits WHERE review = ? AND decision IS NULL", review)) do
+      local now = M.now(w.book, w.field)
+      if now and now ~= "" and mesr.cmp(w.field, w.value, now) == "equal" then
+        run("DELETE FROM wits WHERE id = ?", w.id)
+        n = n + 1
+      end
+    end
+  end)
+  return n
 end
 
 return M

@@ -98,6 +98,7 @@ cmdman.create("demowits", function()
                           { field = "title", value = "Second Title", source = "crossref" } })
   note("wits")
 end)
+cmdman.create("demoreview", function() note("review named|" .. tostring(require("wit").reviews()[1].name)) end)
 ''')
 env = dict(os.environ, TERM="xterm-256color", LULIBRE_LOG=log, XDG_CONFIG_HOME=t + "/config",
            XDG_DATA_HOME=t + "/data", XDG_STATE_HOME=t + "/state", SCREENS_OUT=out)
@@ -145,8 +146,12 @@ keys(":review\r", 1.5)
 keys("j")            # the title's row, under the book's heading
 keys(" ")            # its second alternative
 keys("m")            # an action added to review
-keys("a", 1.5)       # accepted: written through store.calibre
+keys("a", 0.8)       # marked; nothing written yet
+keys("s", 0.4)       # names the review
+keys("kept\r", 0.6)
+keys("w", 1.5)       # written through store.calibre
 keys("q", 0.6)
+keys(":demoreview\r", 0.6)
 keys(":lua uiman.jump(1)\r", 0.6)
 keys(":edit\r", 1)  # the edit form on book 1, a form that writes on w
 keys("e", 0.4)       # the title
@@ -213,7 +218,8 @@ check("an event in refresh runs its function, and the list reads its items again
 check("the list returns when it closes", "list closed|a" in got)
 check("e edits a form's field, through edit", "edit|pages|9" in got)
 check("and the form returns when it closes", "form closed|9|never" in got)
-check("review, a list: space shows the next alternative, a accepts it", "stored|1|Second Title" in got)
+check("review, a list: space shows the next alternative, a marks it, w writes it", "stored|1|Second Title" in got)
+check("s names the review", "review named|kept" in got)
 check("an action added to review through its module runs on the row", "mine|title|Second Title" in got)
 check("the edit form: e edits a field, x takes a change back, w writes the rest",
       "stored|1|Edited Title" in got and "stored|1|Edited Title|authors" not in got)

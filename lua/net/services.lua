@@ -26,6 +26,12 @@ local function status(body, code, retry)
   return nil, ("HTTP %s"):format(tostring(code))
 end
 
+-- "123-145" as 23 pages
+local function pages_of(range)
+  local from, to = tostring(range or ""):match("^(%d+)%s*%-%s*(%d+)$")
+  if from and tonumber(to) >= tonumber(from) then return tonumber(to) - tonumber(from) + 1 end
+end
+
 local function people(list, given, family)
   local names = {}
   for _, p in ipairs(list or {}) do
@@ -54,6 +60,7 @@ service.define("crossref", {
       publisher = m.publisher,
       series = m["container-title"] and m["container-title"][1],
       pubdate = issued and issued[1] and tostring(issued[1]),
+      pages = pages_of(m.page),
     }
   end,
 })
@@ -80,6 +87,7 @@ service.define("openlibrary", {
       authors = #authors > 0 and table.concat(authors, " & ") or nil,
       publisher = b.publishers and b.publishers[1] and b.publishers[1].name,
       pubdate = year,
+      pages = tonumber(b.number_of_pages),
     }
   end,
 })
@@ -111,6 +119,7 @@ service.define("arxiv", {
       title = xml_text(answer:match("<title>(.-)</title>") or ""),
       authors = #authors > 0 and table.concat(authors, " & ") or nil,
       pubdate = answer:match("<published>(%d%d%d%d)"),
+      pages = tonumber(answer:match("<arxiv:comment[^>]*>.-(%d+)%s+pages")),
     }
   end,
 })

@@ -79,15 +79,27 @@ for _, f in ipairs(wit.get(1)) do id[f.field] = f.alts[1].id end
 print("filter|" .. #bookman.ids("is:proposed"))
 print("accept|" .. tostring(wit.accept(id.title)))
 print("reject|" .. tostring(wit.reject(id.authors)))
+print("marked|" .. bookman.get(1).title .. "|" .. #wit.get(1) .. "|" .. wit.get(1)[1].alts[1].decision)
+-- another review of its own, which writing the first leaves as it is
+local first = wit.current()
+local other = wit.new("other")
+wit.set(1, { { field = "title", value = "Another Title", source = "front" } })
+print("reviews|" .. #wit.reviews() .. "|" .. wit.reviews()[1].name .. "|" .. wit.get(1)[1].alts[1].value)
+wit.open(first)
+print("write|" .. table.concat({ wit.write() }, "|"))
 local b = bookman.get(1)
 print("decided|" .. b.title .. "|" .. b.author .. "|" .. #wit.get(1) .. "|" .. #bookman.ids("is:proposed"))
-local r = q("journaldb", "SELECT store, field, proposal, source FROM journal WHERE batch = 2")[1]
-print("rejection|" .. r.store .. "|" .. r.field .. "|" .. r.proposal .. "|" .. r.source)
+print("other kept|" .. wit.get(1, { review = other })[1].alts[1].value)
+local r = q("journaldb", "SELECT store, field, proposal, source FROM journal WHERE batch = 1 AND field = 'authors'")[1]
+print("rejection|" .. r.store .. "|" .. r.field .. "|" .. tostring(r.proposal ~= nil) .. "|" .. r.source)
+wit.discard(other)
+print("discarded|" .. #wit.reviews() .. "|" .. #bookman.ids("is:proposed"))
 local rec = trust.records(1, 0.7, 0.95)
 print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
 -- an identifier's wit, accepted: added to the record's identifiers
 wit.set(1, { { field = "identifier:isbn", value = "9780387900407", source = "lex" } })
-print("ident accept|" .. tostring(wit.accept(wit.get(1)[1].alts[1].id) ~= nil))
+wit.accept(wit.get(1)[1].alts[1].id)
+print("ident accept|" .. tostring(wit.write() ~= nil))
 print("ident|" .. bookman.get(1, "identifier:isbn") .. "|" .. bookman.get(1, "authors") .. "|" .. tostring(bookman.get(99, "title")))
 LUA
 
@@ -169,10 +181,15 @@ expect "and puts the old values back" "after undo|paper|Unknown"
 expect "the batch put back is undone, all five rows" "undone|5"
 expect "two changes to one field apply one after the other" "in order|y"
 expect "a book with wits is proposed" "filter|1"
-expect "a wit accepted is a change with its provenance" "accept|1"
-expect "a wit rejected is a decision in the journal" "reject|2"
-expect "the record has the one, not the other, and the wits are gone" "decided|Topics in Additive Combinatorics|Unknown|0|0"
-expect "a rejection changes nothing but is kept" "rejection|review|authors|2|front"
+expect "accepting a wit only marks it" "accept|true"
+expect "rejecting a wit only marks it" "reject|true"
+expect "the marks are kept and the record is as it was" "marked|paper|2|reject"
+expect "a second review has its own proposals" "reviews|2|other|Another Title"
+expect "writing is one batch of what is marked" "write|1|2"
+expect "the record has the one, not the other, and the wits are gone" "decided|Topics in Additive Combinatorics|Unknown|0|1"
+expect "writing in one review leaves another's proposals" "other kept|Another Title"
+expect "a rejection changes nothing but is kept" "rejection|review|authors|true|front"
+expect "a discarded review's proposals go" "discarded|1|0"
 expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
 expect "an identifier's wit accepted is added to the record's identifiers" "ident accept|true"
 expect "bookman.get gives one identifier by its type, an unknown author as nothing, no book as nil" "ident|9780387900407||nil"

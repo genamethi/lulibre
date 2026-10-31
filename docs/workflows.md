@@ -139,25 +139,61 @@ authors count most), by how far its values agree with the book's sources
 (the record, the file's own metadata, the online answers kept for it), and
 by its record of review decisions once the journal holds a hundred of them.
 The settings `rank_coverage`, `rank_agreement` and `rank_track` weigh the
-three. A field's proposal is the best-ranked parse's value; every other
-parse's value is an alternative. A value the record already has is not
-proposed.
+three, and a value on the file's pages gains `rank_on_page`.
+
+What is worked out from a file is kept: what each grammar finds, the file's
+identifiers, how much of a value is on its pages. A new online answer or a
+changed setting only ranks again; nothing is read again until the file is.
+
+An identifier is taken as the file's own if its metadata says so, or, before
+any references or bibliography, if an ISBN has its label, or a DOI or arXiv
+number is near the top (`id_top`), or a DOI begins a line with its label, or
+an arXiv number has its margin stamp. An online record is compared with the
+pages before it counts: its title scores `min(1, check_title_k * found / words
++ check_title_base)`, without small words; its authors found add up to
+`check_authors`; a page count further from the file's than `check_pages` means
+it is another book, and no page count means nothing. At `check_same` it is
+this book. When such a record comes by the file's own identifier, and all of
+them agree (several ISBNs of one work do), the book's match is clear: its
+values score from `score_identified` up to 1 by how much of them is on the
+pages, and the other parses' values for those fields are kept but not shown.
+
+A field's proposal is the best-scoring value, and the others its alternatives.
+A value the record already has is not proposed, nor one a decision has already
+gone against. A review shows up to `propose_values` values per field, none
+scoring under `propose_min` or, where the field has a value, under
+`propose_over`. `:review deep`, or `z` in review, shows the rest too, with
+records the pages did not bear out.
 
 In review, one row per field:
 
 | Key | |
 |---|---|
-| `a` | accept the value shown |
-| `e` | edit it, then accept |
-| `r` | reject it: the field keeps its value |
+| `a` | mark the value shown accepted |
+| `e` | edit it, then mark it accepted |
+| `r` | mark it rejected: the field keeps its value |
+| `u` | take the mark off |
 | `Space` | show the next alternative |
+| `w` | write what is marked |
+| `z` | show or hide what the review otherwise doesn't |
+| `s` | name the review |
+| `o` | open another review |
+| `n` | start a new review |
+| `d` | discard the review |
+| `A` | add books to it, by a filter |
+| `E` | ask the online services about its books |
+| `p` | drop the proposals whose value the record now holds (`review_prune` does so by itself) |
 | `q` | close |
 
-Accepting is a change like any other, and `u` puts it back. Every
-decision, rejections too, goes into the journal with the parse that made
+A review stays as it is until you write or discard it: closing it, or quitting,
+keeps its proposals and marks. `:propose` adds to the current one. Writing in
+one review leaves the others' proposals alone; the Record column always shows
+what the record holds now.
+
+Writing is an operation like any other, and `u` in the list puts it back.
+Every decision, rejections too, goes into the journal with the parse that made
 the proposal: that is what a parse's record is measured from, against each
-field's value as it stands now. While review is open, a change to a book
-in view proposes for it again.
+field's value as it stands now.
 
 ## Looking books up: `:enrich`
 

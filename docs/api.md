@@ -128,6 +128,7 @@ value stays when it is still one. `info` says where the value comes from:
 | `records_changed` | `{ids=, fields=}`: the books' records changed; `fields` lists those lulibre changed, and is empty when the change was made in calibre |
 | `holder` | `{holder = "none" \| "server" \| "program" \| "other"}`: who has the library open; `other`, a calibre program with another library open |
 | `source_arrived` | `{book=, service=}`: an online answer came |
+| `proposed` | `{book=}`: a book's proposals were made anew |
 
 The callback runs as a task with the payload, then the values after the
 function. A value given there is taken when `add` is called; a function
@@ -239,6 +240,7 @@ change, and nil and why when the operation failed. With the setting
     local txt = require "txt"
     local t <close>, err = txt.of(book)   -- waits: the book's file, as lines
     local t <close> = txt.load(file)      -- waits: a file by its id in the index
+    local meta = txt.metadata(file)       -- waits: its XMP and Info dictionary, or an EPUB's package document, as text
 
 | | |
 |---|---|
@@ -285,6 +287,7 @@ txt returns a string.
 | `lex.isbn` | an ISBN, 10 or 13 digits, captured as 13; hyphens between the digits, or spaces after the label ISBN |
 | `lex.issn` | an ISSN after its label, captured as `0012-7094` |
 | `lex.doi` | a DOI, with or without `doi:` or `https://doi.org/`, captured in lower case without them |
+| `lex.labelled` | `{isbn=, doi=, arxiv=}`: the patterns that match only with the label before the number |
 | `lex.arxiv` | an arXiv number after `arXiv:`, captured without its version; then the class, when the margin stamp gives one |
 
 An identifier's pattern matches only where its check digit is right, and
@@ -315,9 +318,12 @@ values) or an iterator function, and itself a `for` loop's iterator.
                                     * exprman.field("authors", expr.line)), "My Series")
 
 A grammar is a pattern matched from the start of a book's text, kept by
-name in `exprman`: `exprman.add(name, pattern [, group])`,
-`exprman.remove(name)`, and `exprman.parse(t)`, every grammar's parse of a
-text. `exprman.field(name, patt)` captures a field's value with its
+name in `exprman`: `exprman.add(name, pattern [, group [, version]])`,
+`exprman.remove(name)`, `exprman.names()`, and `exprman.parse(t [, book [,
+names]])`, every grammar's parse of a text, or the named ones'. What a grammar
+finds in a file is kept until the file is read again or the grammar's
+`version` changes: change it when you change the pattern. A book the text
+shows to be of `group` raises its grammar's values by `rank_group`. `exprman.field(name, patt)` captures a field's value with its
 positions: what `patt` captures, or what it matches when it captures
 nothing (`expr.P "KEITH CONRAD" / "Keith Conrad"`). A grammar's pattern
 gets the text and the book as LPeg's extra arguments (`expr.Carg(1)`,
@@ -330,9 +336,11 @@ written for groups of books. expr's line predicates test the line at the current
 yours. The packaged grammar is `front` (`exprman._front`).
 
 A **wit** is a value for a book's field, with the source that gave it,
-kept until a review accepts or rejects it. `:propose` makes them from the
-grammars' parses, the identifiers in the text and the online records, and
-`:review` shows them. A field is named as calibre's metadata sources name
+kept until a review writes or rejects it. `:propose` makes them from the
+grammars' parses, the file's identifiers and the online records, and adds
+them to the current review; `:review` shows it. Accepting and rejecting
+only mark; `wit.write` does what is marked. A review keeps its own proposals
+and marks, and writing in one changes no other. A field is named as calibre's metadata sources name
 it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 `identifier:TYPE` for one identifier (`identifier:isbn`, its value
 `9780387900407`), which accepting adds to the book's identifiers.
@@ -341,12 +349,18 @@ it: `title`, `authors`, `publisher`, `series`, `pubdate`, `tags`, and
 
 | | |
 |---|---|
-| `wit.set(book, wits)` | replaces the book's wits: each `{field=, value=, source=, score=, agree=, disagree=, file=, start=, stop=}`, a field's in rank order |
-| `wit.get(book)` | `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=}, ... } }, ... }` |
-| `wit.accept(id [, value])` | waits: the wit, or the value edited from it, as an operation |
-| `wit.reject(id)` | waits: kept in the journal; the field keeps its value |
-| `lulib._propose.propose(book, w)` | waits: read, parse, rank and keep the book's wits; `w` is `lulib._propose.settings()` |
+| `wit.set(book, wits [, review])` | replaces the book's wits, keeping what is marked: each `{field=, value=, source=, score=, agree=, disagree=, file=, start=, stop=, hidden=}`, a field's in rank order |
+| `wit.get(book [, {review=, deep=}])` | `{ {field=, alts = { {id=, value=, source=, score=, agree=, disagree=, start=, stop=, hidden=, decision=, edited=}, ... } }, ... }`; hidden ones only if deep |
+| `wit.accept(id [, value])` `wit.reject(id)` `wit.unmark(id)` | mark a field's wit, or take the mark off |
+| `wit.write([review])` | waits: what is marked, as one operation, and takes it from the review: the batch and how many fields |
+| `wit.current()` `wit.open(review)` `wit.new([name])` `wit.name(review, name)` `wit.discard(review)` `wit.reviews()` `wit.books([{review=, deep=}])` | the reviews |
+| `wit.prune([review])` | drops the proposals whose value the record now holds |
+| `lulib._propose.propose(book, w)` | waits: rank the book's values, reading only what was not kept, and keep them in the current review; `w` is `lulib._propose.settings()` |
+| `lulib._ids` | a file's identifiers, and which are its own: `in_text`, `in_metadata`, `in_name`, `of`, `book` |
+| `lulib._check` | how much of a value is on a file's pages, and whether a record is this book: `count`, `share`, `title`, `length`, `record`, `minor` |
+| `lulib._kept` | what was worked out from a file, kept while the file is as it was read |
 | `lulib._rank`, `trust`, `lulib._sources` | ranking: coverage, agreement with the sources, and each parse's record of review decisions |
+| `mesr.found(value, text [, skip])` | how many of value's words the text holds as whole words, then how many there are; skip, a table of folded words not to count |
 | `mesr.cmp(kind, a, b)` `mesr.score(kind, a, b)` `mesr.fuzzy(query, s)` | `"equal"`, `"contains"`, `"contained"`, `"near"` or `"differs"`, then both scores; kind `text`, `people`, `tags`, `date`, `ident`, or a field's name, compared as its kind (`pubdate` as a date, `identifier:isbn` as an identifier) |
 
 ## Online lookups

@@ -197,7 +197,7 @@ end)
 | `~/.local/share/lulibre/NAME-HASH.db` | the index of one library: what lulibre read from it and its files. A new version of its tables makes it again, keeping the sync folder's files |
 | `~/.local/share/lulibre/NAME-HASH.journal.db` | beside the index, and never removed with it: every operation on the library, with where each value came from |
 | `~/.local/share/lulibre/NAME-HASH.custom.db` | the fields of lulibre's own (`#name`) |
-| `~/.local/share/lulibre/NAME-HASH.wit.db` | the wits waiting for review |
+| `~/.local/share/lulibre/NAME-HASH.wit.db` | the reviews, their wits, and what was worked out from each file (which can be deleted) |
 | `~/.local/share/lulibre/net.db` | every online answer, for every library |
 
 lulibre honours `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME`,

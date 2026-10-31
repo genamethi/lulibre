@@ -61,11 +61,12 @@ local function number(sep)
   return C(digits(13, sep) + digits(10, sep, digit + S "Xx")) * -(alnum)
 end
 
-local isbn_label = (P "ISBN" + "isbn") * (P "-1" * S "03") ^ -1 * S ": \t" ^ 0
+local isbn_label = (S "eE" * P "-" ^ -1) ^ -1 * (P "ISBN" + "isbn" + "Isbn") * (S "- " ^ -1 * "1" * S "03") ^ -1 * S ":. \t" ^ 0
 
 --- An ISBN, 10 or 13 digits, captured as 13. Its digits may be split by
 -- hyphens, or after the label ISBN by spaces too.
 M.isbn = -B(alnum + "-") * checked(isbn_label * number(S "- ") + number(P "-"), isbn)
+local isbn_labelled = -B(alnum) * checked(isbn_label * number(S "- "), isbn)
 
 local function issn(s)
   local d = s:gsub("[^%dXx]", ""):upper()
@@ -100,11 +101,15 @@ local function doi(s)
   if s:find("/.") then return mesr.canonical("doi", s) end
 end
 
-local doi_label = (P "https://" + "http://") * (P "dx." ^ -1) * "doi.org/" + S "dD" * S "oO" * S "iI" * S ": \t" ^ 1
+-- as a scan may read it too: "dol:", "d0i"
+local doi_label = (P "https://" + "http://") * (P "dx." ^ -1) * "doi.org/"
+  + S "dD" * S "oO0" * S "iIlL1" * S ": \t" ^ 0
+  + (P "Digital Object Identifier" + "digital object identifier") * S ": \t" ^ 0
 
 --- A DOI, with or without its label (doi:, https://doi.org/), captured in
 -- lower case without it.
-M.doi = checked(doi_label ^ -1 * C(P "10." * digit ^ 4 * "/" * (1 - S " \t\n\f,;\"'<>[]{}") ^ 1), doi)
+local doi_number = C(P "10." * digit ^ 4 * "/" * (1 - S " \t\n\f,;\"'<>[]{}") ^ 1)
+M.doi = checked(doi_label ^ -1 * doi_number, doi)
 
 local arxiv_new = digit * digit * digit * digit * "." * digit * digit * digit * digit * digit ^ -1
 local arxiv_old = (R "az" + "-") ^ 1 * (P "." * R "AZ" * R "AZ") ^ -1 * "/" * digits(7, P(false))
@@ -114,5 +119,8 @@ local arxiv_old = (R "az" + "-") ^ 1 * (P "." * R "AZ" * R "AZ") ^ -1 * "/" * di
 -- class.
 M.arxiv = (P "arXiv" + "arxiv" + "ARXIV") * ":" * S " \t" ^ 0 * C(arxiv_new + arxiv_old) / string.lower
   * (P "v" * digit ^ 1) ^ -1 * (S " \t" ^ 0 * "[" * C((alnum + S ".-") ^ 1) * "]") ^ -1
+
+--- The patterns that match an identifier only with its label before it.
+M.labelled = { isbn = isbn_labelled, doi = -B(alnum) * checked(doi_label * doi_number, doi), arxiv = M.arxiv }
 
 return M

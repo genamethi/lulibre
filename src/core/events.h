@@ -16,6 +16,7 @@ enum event_kind {
   EV_RECORDS_CHANGED, /* lulibre's writes and changes found in calibre */
   EV_HOLDER,          /* the library's holder (library.h) */
   EV_SOURCE_ARRIVED,  /* an online answer for a book */
+  EV_PROPOSED,        /* a book's proposals made anew */
   EV_KINDS
 };
 
@@ -25,7 +26,8 @@ enum event_kind {
  *   EV_RECORDS_CHANGED  ids; fields, those lulibre changed (none when the
  *                       change was made outside lulibre)
  *   EV_HOLDER           holder
- *   EV_SOURCE_ARRIVED   book, service */
+ *   EV_SOURCE_ARRIVED   book, service
+ *   EV_PROPOSED         book */
 struct event {
   enum event_kind kind;
   long long *ids;

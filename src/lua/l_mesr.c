@@ -8,6 +8,10 @@
  *                                 "contains": a holds all of b
  *
  *   mesr.canonical(type, value)  an identifier's canonical form, or nil
+ *   mesr.found(value, text [, skip])
+ *                                 how many of value's words the text holds as
+ *                                 whole words, folded, then how many it has;
+ *                                 skip: a table of folded words not to count
  *
  * kind: "text" (title, series, publisher), "people" (authors), "tags",
  * "date" ("1942", "1942-05", "1942-05-03"), "ident" ("type:value"); or a
@@ -112,9 +116,27 @@ static int l_canonical(lua_State *L) {
   return 1;
 }
 
+/* skip[word] is true: the table at index ud (a stack index) */
+static int skip_word(const char *word, void *ud) {
+  lua_State *L = ud;
+  lua_getfield(L, 3, word);
+  int yes = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  return yes;
+}
+
+static int l_found(lua_State *L) {
+  const char *value = luaL_checkstring(L, 1), *text = luaL_checkstring(L, 2);
+  int skip = lua_istable(L, 3), found, words;
+  words_found(value, text, skip ? skip_word : NULL, L, &found, &words);
+  lua_pushinteger(L, found);
+  lua_pushinteger(L, words);
+  return 2;
+}
+
 int luaopen_mesr(lua_State *L) {
   static const luaL_Reg fns[] = {
-    {"score", l_score}, {"cmp", l_cmp}, {"canonical", l_canonical}, {"fuzzy", l_mesr_fuzzy}, {NULL, NULL},
+    {"score", l_score}, {"cmp", l_cmp}, {"canonical", l_canonical}, {"found", l_found}, {"fuzzy", l_mesr_fuzzy}, {NULL, NULL},
   };
   luaL_newlib(L, fns);
   return 1;

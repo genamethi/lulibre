@@ -6,6 +6,9 @@
  *   local r <close> = txt.load(file)   of a file, by its id in the index
  *     both wait (the lines are read on a worker); nil and the reason when
  *     the file has no lines
+ *   txt.metadata(file)                 a file's own metadata as text: a PDF's
+ *     XMP packet and Info dictionary, an EPUB's package document; waits, as
+ *     the file is opened on a worker; nil and the reason when it cannot be
  *
  *   r.text, r.file, r.pages, r.meta = {title=, author=, subject=,
  *     keywords=, creator=, producer=}
@@ -192,6 +195,8 @@ struct job {
   char *index;
   long long book, file; /* the book's best file, when file is 0 */
   struct reading *r;
+  int metadata; /* the file's own metadata, not its lines */
+  char *meta;
   char *err;
 };
 
@@ -204,6 +209,20 @@ static void work(uv_work_t *req) {
     return;
   }
   sqlite3_busy_timeout(db.h, DB_BUSY_MS);
+  if (j->metadata) {
+    char *path = NULL;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(db.h, "SELECT path FROM files WHERE id = ?", -1, &st, NULL) == SQLITE_OK) {
+      sqlite3_bind_int64(st, 1, j->file);
+      if (sqlite3_step(st) == SQLITE_ROW) path = xstrdup((const char *)sqlite3_column_text(st, 0));
+      sqlite3_finalize(st);
+    }
+    sqlite3_close(db.h);
+    if (path) j->meta = doc_metadata(path, &j->err);
+    else j->err = xasprintf("no file %lld", j->file);
+    free(path);
+    return;
+  }
   if (!j->file) {
     sqlite3_stmt *st;
     if (sqlite3_prepare_v2(db.h,
@@ -223,7 +242,10 @@ static void work(uv_work_t *req) {
 static void after(uv_work_t *req, int status) {
   struct job *j = req->data;
   lua_State *L = sched_end_job(j->task);
-  if (L && j->r) {
+  if (L && j->meta) {
+    lua_pushstring(L, j->meta);
+    sched_wake(j->task, 1);
+  } else if (L && j->r) {
     push_reading(L, j->r);
     j->r = NULL;
     sched_wake(j->task, 1);
@@ -233,12 +255,13 @@ static void after(uv_work_t *req, int status) {
     sched_wake(j->task, 2);
   }
   reading_release(j->r);
+  free(j->meta);
   free(j->err);
   free(j->index);
   free(j);
 }
 
-static int start(lua_State *L, long long book, long long file) {
+static int start(lua_State *L, long long book, long long file, int metadata) {
   struct app *app = lapi_app(L);
   sched_require_task(L);
   struct db *db = lapi_db(L);
@@ -246,6 +269,7 @@ static int start(lua_State *L, long long book, long long file) {
   j->index = xstrdup(db->path);
   j->book = book;
   j->file = file;
+  j->metadata = metadata;
   j->req.data = j;
   j->task = sched_begin_job(L);
   uv_queue_work(app->lloop, &j->req, work, after);
@@ -253,11 +277,15 @@ static int start(lua_State *L, long long book, long long file) {
 }
 
 static int l_of(lua_State *L) {
-  return start(L, luaL_checkinteger(L, 1), 0);
+  return start(L, luaL_checkinteger(L, 1), 0, 0);
 }
 
 static int l_load(lua_State *L) {
-  return start(L, 0, luaL_checkinteger(L, 1));
+  return start(L, 0, luaL_checkinteger(L, 1), 0);
+}
+
+static int l_metadata(lua_State *L) {
+  return start(L, 0, luaL_checkinteger(L, 1), 1);
 }
 
 int luaopen_txt(lua_State *L) {
@@ -273,7 +301,7 @@ int luaopen_txt(lua_State *L) {
     lua_setfield(L, -2, "methods");
   }
   lua_pop(L, 1);
-  static const luaL_Reg fns[] = {{"of", l_of}, {"load", l_load}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"of", l_of}, {"load", l_load}, {"metadata", l_metadata}, {NULL, NULL}};
   luaL_newlib(L, fns);
   return 1;
 }
