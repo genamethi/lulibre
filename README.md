@@ -20,9 +20,15 @@ by hand.
 
 ## Build
 
-Needs a C compiler, pkgconf and the development files of **libuv**,
-**sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto),
+### Dependencies (Sorry, Claude didn't think to put this keyword here)
+
+A C compiler (I use gcc, but clang will work), pkgconf and dev files
+files for **libuv**, **sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto),
 **libcurl**, **md4c** and **Lua 5.4 or 5.5**.
+
+Docs require **ldoc** which you can get via LuaRocks or github.
+
+Pixi can be helpful for runtime dependencies (see below).
 
     ./configure
     make                # build/lulibre, and build/lulibre-setup
