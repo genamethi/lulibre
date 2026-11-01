@@ -73,6 +73,9 @@ static void indexing_arrived(struct app *app, void *arg) {
       t->ix_failed = m->stats.failed;
     } else if (m->phase > 0) {
       t->indexing = 0;
+      int again = t->ix_again;
+      t->ix_again = 0;
+      if (again) tui_start_index(t, 0); /* what the records brought while it ran */
       if (m->has && m->stats.queued)
         tui_msg(t, 0, "indexed %d files in %.1fs (%d could not be read)", m->stats.ok, m->stats.elapsed,
                 m->stats.failed);
@@ -197,7 +200,9 @@ static void records_changed(const struct event *ev, void *ud) {
   struct tui *t = ud;
   if (t->quit) return;
   rows_reload(t);
-  if (!ev->nfields && !t->indexing) tui_start_index(t, 0);
+  if (ev->nfields) return;
+  if (t->indexing) t->ix_again = 1; /* its list was made before these */
+  else tui_start_index(t, 0);
 }
 
 /* -------------------------------------------------------------------- run */
@@ -383,18 +388,19 @@ int tui_run(struct app *app) {
   bridge_start(app); /* and Lua runs on its own thread */
   uv_run(loop, UV_RUN_DEFAULT);
 
-  /* Give the terminal back first, then let work in flight finish. */
   t->quit = 1;
   if (t->picker) picker_close(t);
   tui_input_cancel(t);
   bridge_stop(app); /* scripts stop with the interface; their thread ends */
   lstate_close(app); /* what waited on Lua's answers is told it will not come */
-  work_stop(app);    /* what is running ends; changes still queued stay in the journal */
+  /* Give the terminal back first, then let work in flight finish. */
   log_on_entry(NULL, NULL);
   wm_free(t);
   terminal_release(t);
   log_to_stderr(1);
   input_unwatch(t);
+  if (t->indexing) fputs("lulibre: stopping the indexer (what it has read is kept)\n", stderr);
+  work_stop(app); /* what is running ends; changes still queued stay in the journal */
   uv_close((uv_handle_t *)&t->prepare, closed);
   uv_close((uv_handle_t *)&t->tick, closed);
   uv_close((uv_handle_t *)&t->settle, closed);

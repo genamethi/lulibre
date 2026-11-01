@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
   /* libuv sizes its pool on first use, from the environment */
   if (!getenv("UV_THREADPOOL_SIZE")) {
     char n[16];
-    snprintf(n, sizeof n, "%d", app_jobs(&app));
+    snprintf(n, sizeof n, "%d", app_jobs(&app) + POOL_SPARE); /* the indexer leaves the spare (app_index_opts) */
     setenv("UV_THREADPOOL_SIZE", n, 1);
   }
   if (i >= argc) { /* no command: the interactive interface */

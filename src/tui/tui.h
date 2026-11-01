@@ -766,6 +766,8 @@ struct tui {
   int msg_error;
 
   int indexing; /* a run is going, on the background thread (work.h) */
+
+  int ix_again; /* records came with files while the indexer ran: it runs again */
   int ix_done, ix_total, ix_failed;
   int mirroring; /* calibre's database is being read again (tui_mirror) */
 };

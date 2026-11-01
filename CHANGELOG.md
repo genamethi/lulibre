@@ -28,6 +28,10 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Changed a start with no library set to ask on a terminal, for that run. Answers are not kept.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
 - Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
+- Fixed quitting during indexing waiting for every OCR already started, for minutes on a frozen screen. The terminal comes back first, and OCR stops.
+- Fixed the list, the preview and `:sync DIR` waiting behind OCR. Each tesseract now uses one thread, and the indexer leaves workers free.
+- Fixed the indexer holding the database's write lock while no file finished, which could make reading calibre's records fail.
+- Fixed files brought in during indexing, such as a sync folder's, not being read until the next change.
 
 ## 0.2.1
 

@@ -1,5 +1,6 @@
 #include "index/indexer.h"
 
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -22,6 +23,7 @@ struct job {
   enum file_outcome outcome; /* set on the worker */
   int ocr_pages;             /* pages OCR read, 0 when it did not */
   int ocr_lua;               /* OCR is for the reader Lua put in tesseract's place */
+  int dropped;               /* cancelled before it was read: nothing to store, the next run reads it */
 };
 
 struct indexer {
@@ -36,7 +38,8 @@ struct indexer {
 
   struct job **jobs;
   int njobs, next, inflight;
-  int cancelled, finished;
+  atomic_int cancelled; /* read by the workers */
+  int finished;
 
   sqlite3_stmt *del_paras, *del_lines, *ins_line, *ins_para, *upd_file;
   int in_txn, since_commit;
@@ -47,6 +50,7 @@ struct indexer {
   struct job **held;
   int nheld, capheld;
   uv_timer_t *retry;
+  uv_timer_t *commits; /* a slow file leaves the write lock with nobody waiting on it */
 
   struct index_stats st;
 };
@@ -174,12 +178,24 @@ static void retry_closed(uv_handle_t *h) {
   free(h);
 }
 
+/* What has been stored is committed within a second whether or not another
+ * file comes: OCR can take a minute over one, and another connection (the
+ * records read again, a script) waits for the write lock until then. */
+static void commits_cb(uv_timer_t *h) {
+  struct indexer *ix = h->data;
+  if (ix->in_txn && now_s() - ix->last_commit > 1.0) txn_commit(ix);
+}
+
 static void finish(struct indexer *ix) {
   if (ix->finished) return;
   ix->finished = 1;
   if (ix->retry) {
     uv_close((uv_handle_t *)ix->retry, retry_closed);
     ix->retry = NULL;
+  }
+  if (ix->commits) {
+    uv_close((uv_handle_t *)ix->commits, retry_closed);
+    ix->commits = NULL;
   }
   txn_commit(ix);
   ix->st.elapsed = now_s() - ix->st.started;
@@ -221,8 +237,14 @@ static void ocr_step(struct indexer *ix, struct job *j) {
     pg->w = d->pages[i].w;
     pg->h = d->pages[i].h;
     char *err = NULL;
-    if (ocr_page(ix->tesseract, j->path, pg->no - 1, ix->ocr_lang, pg, &err) == 0) read++;
+    if (ocr_page(ix->tesseract, j->path, pg->no - 1, ix->ocr_lang, &ix->cancelled, pg, &err) == 0) read++;
     else free(err); /* a page OCR could not read is a page without text */
+  }
+  if (atomic_load(&ix->cancelled)) {
+    /* not a verdict on the file: OCR was stopped */
+    doc_info_free(&o);
+    j->dropped = 1;
+    return;
   }
   ocr_choose(j, o, read);
 }
@@ -232,6 +254,10 @@ static void ocr_step(struct indexer *ix, struct job *j) {
 static void work_cb(uv_work_t *req) {
   struct job *j = req->data;
   struct indexer *ix = j->ix;
+  if (atomic_load(&ix->cancelled)) {
+    j->dropped = 1;
+    return;
+  }
   doc_extract(j->path, j->format, &ix->dopts, &j->info);
   if (j->info.error) {
     j->outcome = OUT_UNREADABLE;
@@ -342,11 +368,12 @@ static void hold(struct indexer *ix, struct job *j) {
 static void after_cb(uv_work_t *req, int status) {
   struct job *j = req->data;
   struct indexer *ix = j->ix;
-  if (status == 0 && j->ocr_lua) {
+  if (j->ocr_lua && ix->cancelled) j->dropped = 1;
+  if (status == 0 && j->ocr_lua && !j->dropped) {
     ask_lua(ix, j); /* goes on in lua_read */
     return;
   }
-  if (status != 0) {
+  if (status != 0 || j->dropped) {
     ix->inflight--;
     job_free(j);
   } else if (ix->nheld || txn_begin(ix)) {
@@ -501,6 +528,11 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
     return NULL;
   }
 
+  ix->commits = xmalloc(sizeof *ix->commits);
+  uv_timer_init(loop, ix->commits);
+  ix->commits->data = ix;
+  uv_timer_start(ix->commits, commits_cb, 1000, 1000);
+
   if (ix->njobs == 0) {
     uv_idle_t *idle = xmalloc(sizeof *idle);
     uv_idle_init(loop, idle);
@@ -513,7 +545,7 @@ struct indexer *indexer_start(uv_loop_t *loop, struct db *db, const struct index
 }
 
 void indexer_cancel(struct indexer *ix) {
-  ix->cancelled = 1;
+  atomic_store(&ix->cancelled, 1);
 }
 
 void indexer_free(struct indexer *ix) {

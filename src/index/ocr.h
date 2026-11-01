@@ -6,6 +6,8 @@
  * with boxes in points, a size (the line's height) and LINE_BLOCK on the
  * first line of each paragraph. Safe on a worker thread. */
 
+#include <stdatomic.h>
+
 #include "doc/doc.h"
 
 /* tesseract's path on $PATH, malloc'd, or NULL. */
@@ -13,9 +15,10 @@ char *ocr_find(void);
 
 /* Reads page (0-based) of the file at path into *out (its no, w and h are
  * the caller's: the page as extraction measured it, in points). Returns 0,
- * or -1 with *err set (malloc'd). */
-int ocr_page(const char *tesseract, const char *path, int page, const char *lang, struct doc_page *out,
-             char **err);
+ * or -1 with *err set (malloc'd). tesseract is stopped as soon as *cancel
+ * is set. */
+int ocr_page(const char *tesseract, const char *path, int page, const char *lang, const atomic_int *cancel,
+             struct doc_page *out, char **err);
 
 /* A file's pages for a reader of Lua's (core/registry.h), and its answer:
  * out[i] is page pages[i] (0-based) as lines, when ok[i]. done runs on the

@@ -63,6 +63,9 @@ void app_open_db(struct app *app);
 /* first.c: on a terminal, with no library set, asked for this run: the
  * library calibre opened last (1 when it was taken), then calibre's content
  * server, when one is running. */
+/* threads of libuv's pool the indexer leaves for the interface's work */
+enum { POOL_SPARE = 2 };
+
 int first_interactive(void);
 int first_library(struct app *app);
 void first_server(struct app *app);

@@ -87,7 +87,12 @@ void app_index_opts(const struct app *app, struct index_opts *o) {
   o->ocr = !strcmp(ocr, "auto") ? OCR_AUTO : !strcmp(ocr, "always") ? OCR_ALWAYS : OCR_NEVER;
   o->ocr_pages = (int)app_int(app, S_OCR_PAGES);
   o->ocr_lang = app_str(app, S_OCR_LANG);
-  o->inflight = app_jobs(app) + app_jobs(app) / 2;
+  /* never the whole pool: what the interface asks of it (the list, the
+   * preview, the records read again) doesn't wait behind a file being OCRed */
+  const char *pool = getenv("UV_THREADPOOL_SIZE");
+  int most = pool ? atoi(pool) - POOL_SPARE : app_jobs(app);
+  o->inflight = app_jobs(app) < most ? app_jobs(app) : most;
+  if (o->inflight < 1) o->inflight = 1;
   o->ocr_lua = lapi_ocr_read;
 }
 

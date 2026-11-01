@@ -1,6 +1,8 @@
 #include "index/ocr.h"
 
 #include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,8 +59,23 @@ static char *write_pgm(const struct doc_image *img, char **err) {
   return path;
 }
 
+/* The environment for tesseract: one thread of its own, unless the user says
+ * otherwise. Several read at once, one on each worker, and its threads get in
+ * each other's way across processes. */
+static char **tesseract_env(void) {
+  size_t n = 0;
+  int said = 0;
+  while (environ[n]) said |= !strncmp(environ[n++], "OMP_THREAD_LIMIT=", 17);
+  char **env = xmalloc((n + 2) * sizeof *env);
+  memcpy(env, environ, n * sizeof *env);
+  if (!said) env[n++] = (char *)"OMP_THREAD_LIMIT=1";
+  env[n] = NULL;
+  return env;
+}
+
 /* tesseract IMAGE stdout -l LANG tsv: its output, malloc'd, or NULL. */
-static char *run_tesseract(const char *tesseract, const char *image, const char *lang, char **err) {
+static char *run_tesseract(const char *tesseract, const char *image, const char *lang, const atomic_int *cancel,
+                           char **err) {
   int out[2];
   if (pipe(out) != 0) {
     *err = xasprintf("pipe: %s", errstr(errno));
@@ -71,7 +88,9 @@ static char *run_tesseract(const char *tesseract, const char *image, const char 
   posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", 0, 0);
   char *argv[] = {(char *)"tesseract", (char *)image, (char *)"stdout", (char *)"-l", (char *)lang, (char *)"tsv", NULL};
   pid_t pid;
-  int rc = posix_spawn(&pid, tesseract, &fa, NULL, argv, environ);
+  char **env = tesseract_env();
+  int rc = posix_spawn(&pid, tesseract, &fa, NULL, argv, env);
+  free(env);
   posix_spawn_file_actions_destroy(&fa);
   close(out[1]);
   if (rc != 0) {
@@ -81,9 +100,20 @@ static char *run_tesseract(const char *tesseract, const char *image, const char 
   }
   sbuf b = SBUF_INIT;
   char buf[8192];
-  ssize_t n;
-  while ((n = read(out[0], buf, sizeof buf)) > 0 || (n < 0 && errno == EINTR))
-    if (n > 0) sb_putn(&b, buf, (size_t)n);
+  struct pollfd pf = {out[0], POLLIN, 0};
+  for (;;) {
+    if (cancel && atomic_load(cancel)) {
+      kill(pid, SIGTERM);
+      break;
+    }
+    int ready = poll(&pf, 1, 100);
+    if (ready < 0 && errno != EINTR) break;
+    if (ready <= 0) continue;
+    ssize_t n = read(out[0], buf, sizeof buf);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) break;
+    sb_putn(&b, buf, (size_t)n);
+  }
   close(out[0]);
   int status = 0;
   while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
@@ -179,8 +209,8 @@ static void lines_of(char *tsv, float scale, struct doc_page *pg) {
   free(l);
 }
 
-int ocr_page(const char *tesseract, const char *path, int page, const char *lang, struct doc_page *out,
-             char **err) {
+int ocr_page(const char *tesseract, const char *path, int page, const char *lang, const atomic_int *cancel,
+             struct doc_page *out, char **err) {
   struct doc_image img = {0};
   doc_render(path, page, OCR_WIDTH, 1.0f, &img);
   if (img.error) {
@@ -191,7 +221,7 @@ int ocr_page(const char *tesseract, const char *path, int page, const char *lang
   float scale = out->w > 0 && img.w > 0 ? out->w / (float)img.w : 72.0f / 300.0f;
   doc_image_free(&img);
   if (!image) return -1;
-  char *tsv = run_tesseract(tesseract, image, lang, err);
+  char *tsv = run_tesseract(tesseract, image, lang, cancel, err);
   remove(image);
   free(image);
   if (!tsv) return -1;
