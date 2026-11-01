@@ -37,39 +37,10 @@ const char db_schema[] =
 
   /* ---- lulibre's own records. Unlike everything else here these are not
    * derived from the library, so they are never dropped on a schema change.
-   * Lua reads and writes them through lulibre.store(). ---- */
-  "CREATE TABLE IF NOT EXISTS proposals("
-  " id INTEGER PRIMARY KEY, book INTEGER NOT NULL, field TEXT NOT NULL,"
-  " op TEXT NOT NULL DEFAULT 'set', value TEXT NOT NULL, source TEXT, confidence REAL,"
-  " status TEXT NOT NULL DEFAULT 'pending', created INTEGER, note TEXT, asked INTEGER);"
-  "CREATE INDEX IF NOT EXISTS proposals_status ON proposals(status, book);"
+   * Lua's own data (wits, online answers) is in files of its own. ---- */
   /* the journal of changes lives in the history file beside the index
    * (db.c, history_schema), so that nothing done to the index loses it */
   "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);"
-  /* records the user has confirmed as right: what is learned about subjects
-   * is learned from these (lua/lulibre/quality.lua, learn.lua) */
-  "CREATE TABLE IF NOT EXISTS good(book INTEGER PRIMARY KEY, ts INTEGER);"
-  /* works no catalogue has a record of (a handout, course notes): they have
-   * no DOI or ISBN of their own and are not looked up by one
-   * (lua/lulibre/noncatalog.lua) */
-  "CREATE TABLE IF NOT EXISTS noncatalog(book INTEGER PRIMARY KEY, ts INTEGER);"
-  /* the phrases that tell one subject from the others, learned from the good
-   * records; state is 'learned', 'kept' (the user's own, or pinned) or
-   * 'dropped' (never to come back) */
-  /* what each book cites, one key for each entry of its bibliography
-   * (lua/lulibre/refs.lua): books that cite the same things are about the
-   * same thing */
-  "CREATE TABLE IF NOT EXISTS refs("
-  " book INTEGER NOT NULL, key TEXT NOT NULL, raw TEXT, PRIMARY KEY(book, key)) WITHOUT ROWID;"
-  "CREATE INDEX IF NOT EXISTS refs_key ON refs(key);"
-  /* what metadata services answered (lua/lulibre/net/core.lua), so that each work
-   * is asked about once; status 404 is "asked, and there is none" */
-  "CREATE TABLE IF NOT EXISTS lookups("
-  " service TEXT NOT NULL, key TEXT NOT NULL, at INTEGER, status INTEGER, body TEXT,"
-  " PRIMARY KEY(service, key)) WITHOUT ROWID;"
-  "CREATE TABLE IF NOT EXISTS terms("
-  " subject TEXT NOT NULL, term TEXT NOT NULL, score REAL, books INTEGER, state TEXT NOT NULL DEFAULT 'learned',"
-  " PRIMARY KEY(subject, term)) WITHOUT ROWID;"
   /* content hashes, filled on demand by lulibre.md5(); a row is good while
    * the file's size and mtime still match */
   "CREATE TABLE IF NOT EXISTS hashes("
@@ -82,38 +53,32 @@ const char db_schema[] =
   " id INTEGER PRIMARY KEY, path TEXT UNIQUE NOT NULL, size INTEGER, mtime INTEGER,"
   " title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL, publisher TEXT,"
   " pubdate TEXT, idents TEXT, languages TEXT, added INTEGER, twin INTEGER, note TEXT);"
-  /* the books as they were the last time changes made outside lulibre were
-   * looked for (db/mirror.c keeps it, lua/lulibre/snapshots.lua compares it
-   * with the books as they are now and empties it) */
-  "CREATE TABLE IF NOT EXISTS mirror_prev("
-  " id INTEGER PRIMARY KEY, title TEXT, authors TEXT, tags TEXT, series TEXT, series_index REAL,"
-  " publisher TEXT, pubdate TEXT, languages TEXT, idents TEXT, formats TEXT, path TEXT);"
 
-  /* ---- files and their extracted text; survives mirror refreshes ---- */
+  /* ---- files and what reading them came to (design 37, 38) ---- */
   "CREATE TABLE IF NOT EXISTS files("
   " id INTEGER PRIMARY KEY, book INTEGER, format TEXT NOT NULL, path TEXT NOT NULL,"
-  " size INTEGER, mtime INTEGER, status INTEGER NOT NULL DEFAULT 0, error TEXT,"
-  " npages INTEGER, req_pages INTEGER, req_layout INTEGER,"
-  " nchars INTEGER, quality REAL, text_src TEXT,"
+  " size INTEGER, mtime INTEGER,"
+  " outcome INTEGER NOT NULL DEFAULT 0," /* enum file_outcome (index/outcome.h) */
+  " error TEXT, npages INTEGER, req_pages INTEGER, nchars INTEGER, quality REAL, garbled REAL,"
+  " ocr_pages INTEGER, ocr_lang TEXT," /* what OCR read, when it did */
   " emb_title TEXT, emb_author TEXT, emb_subject TEXT, emb_keywords TEXT,"
-  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER, garbled REAL,"
+  " emb_creator TEXT, emb_producer TEXT, indexed_at INTEGER,"
   " UNIQUE(book, format));"
   "CREATE INDEX IF NOT EXISTS files_path ON files(path);"
-  "CREATE TABLE IF NOT EXISTS pages("
-  " id INTEGER PRIMARY KEY, file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
-  " page INTEGER NOT NULL, text TEXT NOT NULL, src TEXT, w REAL, h REAL,"
-  " UNIQUE(file, page));"
+  /* the only stored text: one row per printed line; flags LINE_* (doc/doc.h),
+   * LINE_BLOCK on the first line of each paragraph */
   "CREATE TABLE IF NOT EXISTS lines("
+  " id INTEGER PRIMARY KEY,"
   " file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
   " page INTEGER NOT NULL, n INTEGER NOT NULL, text TEXT NOT NULL,"
   " size REAL, flags INTEGER, x0 REAL, y0 REAL, x1 REAL, y1 REAL, math TEXT,"
-  " PRIMARY KEY(file, page, n)) WITHOUT ROWID;"
-  "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
-  " text, content='pages', content_rowid='id', tokenize='unicode61 remove_diacritics 2');"
-  "CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN"
-  " INSERT INTO pages_fts(rowid, text) VALUES (new.id, new.text); END;"
-  "CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN"
-  " INSERT INTO pages_fts(pages_fts, rowid, text) VALUES ('delete', old.id, old.text); END;"
-  "CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN"
-  " INSERT INTO pages_fts(pages_fts, rowid, text) VALUES ('delete', old.id, old.text);"
-  " INSERT INTO pages_fts(rowid, text) VALUES (new.id, new.text); END;";
+  " UNIQUE(file, page, n));"
+  /* a page's text, from its lines: a blank line before each paragraph */
+  "CREATE VIEW IF NOT EXISTS pages(file, page, text) AS"
+  " SELECT file, page, group_concat(CASE WHEN flags & 32 AND n > 0 THEN char(10) || text ELSE text END,"
+  " char(10) ORDER BY n) FROM lines GROUP BY file, page;"
+  /* one row per paragraph, built from its lines when they are stored; the
+   * rowid is the paragraph's first line's. A match is found again in the
+   * paragraph's lines. */
+  "CREATE VIRTUAL TABLE IF NOT EXISTS paragraphs_fts USING fts5("
+  " text, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2');";

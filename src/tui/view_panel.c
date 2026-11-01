@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app.h"
+#include "core/queue.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -43,6 +45,14 @@ struct panel {
   void *event_ud;
   char *search;    /* what / looks for in the rows, folded; NULL for nothing */
   int search_from; /* the row the cursor was on when / was pressed */
+  int place;          /* its screen's place (ctxkeys.c), whose actions its keys mean; -1 for none */
+  uint32_t ppending;  /* the first key of a two-key action of that place */
+  /* a form (panel_set_form): a row is a field */
+  int form;
+  char **names, **change; /* each field's name; its change in a staged form, NULL for none */
+  int nfields, editing;   /* the row being typed, or -1 */
+  uint32_t fpending;
+  int of_screen; /* a view of that screen's place beside its main panel, or -1 */
 };
 
 static void free_rows(struct panel *p) {
@@ -81,7 +91,17 @@ void panel_unref(struct panel *p) {
   free(p->pass);
   free(p->pv_note);
   free(p->search);
+  for (int i = 0; i < p->nfields; i++) {
+    free(p->names[i]);
+    free(p->change[i]);
+  }
+  free(p->names);
+  free(p->change);
   free(p);
+}
+
+static void place_window(struct panel *p) {
+  wm_place(p->t, &view_panel, p, p->size, p->side);
 }
 
 struct panel *panel_open(struct tui *t, float size, char side) {
@@ -92,10 +112,12 @@ struct panel *panel_open(struct tui *t, float size, char side) {
   p->title = xstrdup("");
   p->help = xstrdup("");
   p->page = 10;
+  p->place = -1;
+  p->of_screen = -1;
+  p->editing = -1;
   p->size = size;
   p->side = side;
-  if (side == 'm') wm_over_list(t, &view_panel, p);
-  else wm_dock(t, &view_panel, p, size, side);
+  place_window(p);
   return p;
 }
 
@@ -103,16 +125,36 @@ int panel_is_open(const struct panel *p) {
   return p->open;
 }
 
+static void form_typed(struct tui *t, const char *text, void *ud);
+
+/* a screen's main panel has gone: its views go too, a turn later, not in the
+ * middle of the window's closing */
+static void close_views(struct app *app, void *arg) {
+  int place = (int)(intptr_t)arg;
+  struct node *all[32];
+  int n = app->tui ? wm_leaves(app->tui, all, 32) : 0;
+  for (int i = 0; i < n; i++) {
+    struct panel *q = all[i]->cls == &view_panel ? all[i]->state : NULL;
+    if (q && q->of_screen == place) {
+      panel_close(q);
+      n = wm_leaves(app->tui, all, 32);
+      i = -1;
+    }
+  }
+}
+
 /* The panel is closed for good: say so, and drop the window's reference. */
 static void gone(struct panel *p) {
   p->open = 0;
+  if (p->place >= 0) queue_post(LOOP_UI, close_views, (void *)(intptr_t)p->place);
+  if (p->editing >= 0 && p->t->input_cb == form_typed && p->t->input_ud == p) tui_input_cancel(p->t);
   if (p->t->screen_tab == p) {
     p->t->screen_tab = NULL;
     tui_dirty(p->t);
   }
   panel_event_fn *fn = p->event;
   p->event = NULL;
-  if (fn) fn(p, NULL, -1, p->event_ud);
+  if (fn) fn(p, NULL, -1, NULL, p->event_ud);
   panel_unref(p);
 }
 
@@ -159,8 +201,7 @@ static void follow(struct panel *p);
 void panel_show(struct panel *p) {
   if (!p->open || !p->hidden) return;
   p->hidden = 0;
-  if (p->side == 'm') wm_over_list(p->t, &view_panel, p);
-  else wm_dock(p->t, &view_panel, p, p->size, p->side);
+  place_window(p);
   follow(p);
 }
 
@@ -190,15 +231,36 @@ void panel_set_own(struct panel *p, int n, const uint32_t *keys) {
   p->nown = n > 0 ? n : 0;
 }
 
-/* Is this key one that goes past the panel to a global binding? Only for a
- * panel that has said which keys are its own, only for a key that is not,
- * and only when it starts a binding to one of the commands let through. */
+/* Is this key one that goes past the panel to a global binding? Not when
+ * the panel has it: its movement, its screen's actions, the keys it said
+ * are its own. Help (?) goes past any panel; other commands only past a
+ * panel that has said which keys are its own, and only those let through. */
 int panel_passes(const struct panel *p, uint32_t key) {
-  if (!p->open || !p->pass || !p->nown) return 0;
+  if (!p->open) return 0;
   if (p->pending || ctx_bound(KC_PANEL, key)) return 0; /* the panel's movement, always its own */
+  if (p->place >= 0 && (p->ppending || ctx_bound(p->place, key))) return 0; /* its screen's actions */
+  if (p->form && (p->fpending || ctx_bound(KC_FORM, key))) return 0;         /* a form's */
   for (int i = 0; i < p->nown; i++)
     if (p->own[i] == key) return 0;
+  if (keymap_starts(p->t->km, MODE_NORMAL, key, "help")) return 1;
+  /* a tab of the bar: the bar's other tabs stay within reach */
+  if (p->t->screen_tab == p && keymap_starts(p->t->km, MODE_NORMAL, key, "source")) return 1;
+  if (!p->pass || (!p->nown && p->place < 0)) return 0;
   return keymap_starts(p->t->km, MODE_NORMAL, key, p->pass);
+}
+
+int panel_place(const struct panel *p) {
+  return p->place;
+}
+
+void panel_set_place(struct panel *p, int place) {
+  p->place = place;
+  p->ppending = 0;
+  tui_dirty(p->t);
+}
+
+void panel_set_view_of(struct panel *p, int place) {
+  p->of_screen = place;
 }
 
 void panel_on_event(struct panel *p, panel_event_fn *fn, void *ud) {
@@ -249,19 +311,26 @@ void panel_clear_rows(struct panel *p) {
   tui_dirty(p->t);
 }
 
-void panel_add_row(struct panel *p, int ncells, const char *const *cells, sqlite3_int64 id,
-                   int style) {
+static struct prow *new_row(struct panel *p) {
   if (p->nrows == p->cap) {
     p->cap = p->cap ? p->cap * 2 : 64;
     p->rows = xrealloc(p->rows, (size_t)p->cap * sizeof *p->rows);
   }
-  struct prow *r = &p->rows[p->nrows++];
+  tui_dirty(p->t);
+  return &p->rows[p->nrows++];
+}
+
+static void fill_row(struct prow *r, int ncells, const char *const *cells, sqlite3_int64 id, int style) {
   r->cells = xcalloc((size_t)(ncells > 0 ? ncells : 1), sizeof *r->cells);
   for (int i = 0; i < ncells; i++) r->cells[i] = xstrdup(cells[i] ? cells[i] : "");
   r->ncells = ncells;
   r->id = id;
   r->style = style;
-  tui_dirty(p->t);
+}
+
+void panel_add_row(struct panel *p, int ncells, const char *const *cells, sqlite3_int64 id,
+                   int style) {
+  fill_row(new_row(p), ncells, cells, id, style);
 }
 
 int panel_cursor(const struct panel *p) {
@@ -341,7 +410,7 @@ void panels_reloaded(struct tui *t) {
   for (int i = 0; i < n; i++) {
     if (all[i]->cls != &view_panel) continue;
     struct panel *p = all[i]->state;
-    if (p->reloads && p->open && p->event) p->event(p, "<Reload>", p->nrows ? p->cur : -1, p->event_ud);
+    if (p->reloads && p->open && p->event) p->event(p, "<Reload>", p->nrows ? p->cur : -1, NULL, p->event_ud);
   }
 }
 
@@ -361,7 +430,7 @@ static int motion(struct panel *p, int action) {
 }
 
 static void moved(struct panel *p, int before) {
-  if (p->moves && p->event && p->cur != before) p->event(p, "<Move>", p->cur, p->event_ud);
+  if (p->moves && p->event && p->cur != before) p->event(p, "<Move>", p->cur, NULL, p->event_ud);
 }
 
 void panel_click(struct panel *p, int line, int x) {
@@ -369,7 +438,7 @@ void panel_click(struct panel *p, int line, int x) {
   if (line == 0 && p->event) { /* a tab in the bar: the script is told which */
     for (int i = 0; i < p->ntabs; i++)
       if (p->tab_w[i] > 0 && x >= p->tab_x[i] && x < p->tab_x[i] + p->tab_w[i]) {
-        p->event(p, "<Tab>", i, p->event_ud);
+        p->event(p, "<Tab>", i, NULL, p->event_ud);
         return;
       }
   }
@@ -482,6 +551,113 @@ static int search_key(struct tui *t, struct panel *p, uint32_t key) {
   return 0;
 }
 
+/* ---- a form: its rows are fields ---- */
+
+/* field i's row: its label, its value and its change (staged) or its note */
+static void field_row(struct panel *p, struct prow *r, int i, const char *label, const char *value, const char *note) {
+  const char *c = p->change[i], *cells[] = {label, value, c ? (*c ? c : "(blank)") : note ? note : ""};
+  fill_row(r, p->form == FORM_STAGED || note ? 3 : 2, cells, 0, c ? PSTYLE_ACCENT : PSTYLE_NORMAL);
+}
+
+void panel_set_form(struct panel *p, int kind) {
+  p->form = kind;
+  const char *titles[] = {"Field", kind == FORM_STAGED ? "Now" : "Value", "To be"};
+  int widths[] = {16, 0, 0};
+  if (!p->ncols) panel_set_columns(p, kind == FORM_STAGED ? 3 : 2, titles, widths); /* unless the opener gave some */
+}
+
+int panel_form(const struct panel *p) {
+  return p->form;
+}
+
+void panel_set_fields(struct panel *p, int n, const char *const *names, const char *const *labels,
+                      const char *const *values, const char *const *notes) {
+  char **was = p->names, **changes = p->change;
+  int nwas = p->nfields, cur = p->cur;
+  p->names = xcalloc((size_t)n + 1, sizeof *p->names);
+  p->change = xcalloc((size_t)n + 1, sizeof *p->change);
+  p->nfields = n;
+  free_rows(p);
+  for (int i = 0; i < n; i++) {
+    p->names[i] = xstrdup(names[i] ? names[i] : "");
+    for (int j = 0; j < nwas; j++) /* a staged change stays with its field */
+      if (changes[j] && !strcmp(was[j], p->names[i])) {
+        p->change[i] = changes[j];
+        changes[j] = NULL;
+      }
+    field_row(p, new_row(p), i, labels[i] ? labels[i] : p->names[i], values[i] ? values[i] : "",
+              p->form == FORM_DIRECT && notes ? notes[i] : NULL);
+  }
+  for (int j = 0; j < nwas; j++) {
+    free(was[j]);
+    free(changes[j]);
+  }
+  free(was);
+  free(changes);
+  panel_set_cursor(p, cur);
+}
+
+const char *panel_field(const struct panel *p, int i, const char **change) {
+  if (i < 0 || i >= p->nfields) return NULL;
+  if (change) *change = p->change[i];
+  return p->names[i];
+}
+
+/* row i shown again, with the change it has now */
+static void field_changed(struct panel *p, int i) {
+  struct prow *r = &p->rows[i], was = *r;
+  field_row(p, r, i, was.cells[0], was.ncells > 1 ? was.cells[1] : "",
+            p->form == FORM_DIRECT && was.ncells > 2 ? was.cells[2] : NULL);
+  for (int c = 0; c < was.ncells; c++) free(was.cells[c]);
+  free(was.cells);
+  tui_dirty(p->t);
+}
+
+static void form_typed(struct tui *t, const char *text, void *ud) {
+  struct panel *p = ud;
+  int i = p->editing;
+  p->editing = -1;
+  if (text && p->open && i >= 0 && i < p->nfields) {
+    if (p->form == FORM_STAGED) {
+      free(p->change[i]);
+      p->change[i] = xstrdup(text);
+      field_changed(p, i);
+    } else if (p->event) {
+      p->event(p, "edit", i, text, p->event_ud);
+    }
+  }
+  panel_unref(p);
+}
+
+/* a form's action: 1 when it was the form's */
+static int form_action(struct tui *t, struct panel *p, int a) {
+  int i = p->nrows ? p->cur : -1, staged = p->form == FORM_STAGED;
+  if (i < 0 || i >= p->nfields) return a == FA_EDIT;
+  if (a == FA_EDIT) {
+    const char *now = p->change[i] ? p->change[i] : p->rows[i].ncells > 1 ? p->rows[i].cells[1] : "";
+    char *label = xasprintf("%s: ", p->rows[i].cells[0]);
+    p->refs++; /* until the line is done with it */
+    p->editing = i;
+    tui_input(t, label, now, form_typed, p);
+    free(label);
+    return 1;
+  }
+  if (!staged) return 0;
+  if (a == FA_DROP) {
+    free(p->change[i]);
+    p->change[i] = NULL;
+    field_changed(p, i);
+  } else if (a == FA_WRITE && p->event) {
+    p->event(p, "write", i, NULL, p->event_ud);
+  }
+  return 1;
+}
+
+/* the actions a form's hint offers: drop and write only where they do something */
+static int form_offers(int action, const void *ud) {
+  return ((const struct panel *)ud)->form == FORM_STAGED || action == FA_EDIT;
+}
+
 int panel_key(struct tui *t, struct panel *p, uint32_t key) {
   int before = p->cur;
   int action = ctx_feed(KC_PANEL, &p->pending, key);
@@ -497,6 +673,20 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
   if (action == PA_BACK) {
     wm_focus_back(t);
     return 1;
+  }
+  if (p->form) {
+    int a = ctx_feed(KC_FORM, &p->fpending, key);
+    if (a == CTX_PENDING) return 1;
+    if (a > 0 && form_action(t, p, a)) return 1;
+  }
+  /* a screen's own action, by its name: rebound with keymap.set(screen, ...) */
+  if (p->place >= 0) {
+    int a = ctx_feed(p->place, &p->ppending, key);
+    if (a == CTX_PENDING) return 1;
+    if (a > 0) {
+      if (p->event) p->event(p, ctx_action_name(p->place, a), p->nrows ? p->cur : -1, NULL, p->event_ud);
+      return 1;
+    }
   }
   if (search_key(t, p, key)) return 1;
   switch (key) {
@@ -514,10 +704,11 @@ int panel_key(struct tui *t, struct panel *p, uint32_t key) {
     for (int i = 0; i < p->nown; i++) own = own || p->own[i] == key;
     if (!own) return 0;
   }
+  if (p->place >= 0) return 1; /* a screen's panel hears its actions, not its keys */
   if (p->event) {
     sbuf k = SBUF_INIT;
     key_format(&k, &key, 1);
-    p->event(p, k.s, p->nrows ? p->cur : -1, p->event_ud);
+    p->event(p, k.s, p->nrows ? p->cur : -1, NULL, p->event_ud);
     sb_free(&k);
   }
   return 1;
@@ -608,11 +799,25 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
     used += tw[i] + 1;
   }
   if (p->ntabs) used += 2;
-  int hw = dr_width(p->help, strlen(p->help));
+  /* the help: what the opener said, else the screen's hint, with the keys
+   * its actions are on now */
+  sbuf hint = SBUF_INIT;
+  const char *help = p->help;
+  if (!*help) { /* a form's hint, then its screen's */
+    sbuf more = SBUF_INIT;
+    if (p->form) ctx_hint_line_if(KC_FORM, &hint, form_offers, p);
+    if (p->place >= 0 || !p->form) ctx_hint_line(p->place >= 0 ? p->place : KC_PANEL, &more);
+    if (hint.len && more.len) sb_puts(&hint, "   ");
+    if (more.len) sb_puts(&hint, more.s);
+    sb_free(&more);
+    if (hint.len) help = hint.s;
+  }
+  int hw = dr_width(help, strlen(help));
   if (hw && used + hw + 4 <= r.w) {
     dr_style(n, focused ? theme.on_accent : theme.dim, focused ? theme.accent : theme.bar_bg, 0);
-    dr_text(n, r.y, r.x + r.w - hw - 1, hw, p->help);
+    dr_text(n, r.y, r.x + r.w - hw - 1, hw, help);
   }
+  sb_free(&hint);
   if (r.h < 3 || p->ncols == 0) return;
 
   int x[32], w[32], nc = columns(p, r, x, w);
@@ -648,4 +853,10 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
 }
 
-const struct view_class view_panel = {"panel", NULL, destroy, draw, NULL};
+/* a focused panel takes a key first, unless it is one it lets through to
+ * a global binding */
+static int key(struct tui *t, void *state, uint32_t k, const struct ncinput *ni) {
+  return !panel_passes(state, k) && panel_key(t, state, k);
+}
+
+const struct view_class view_panel = {"panel", NULL, destroy, draw, NULL, key, 0};

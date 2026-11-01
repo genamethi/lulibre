@@ -5,19 +5,26 @@
 
 #include <uv.h>
 
-#include "core/config.h"
+#include "core/setdefs.h"
 #include "db/db.h"
 
 struct lua_State;
 struct sched;
 struct lctx;
 struct tui;
+struct library;
 
 struct app {
-  struct config cfg;
+  struct settings *settings; /* the store; read and changed on the main thread only */
+  char *config_dir;          /* where init.lua is: fixed at start */
+  char *state_path;          /* the saved settings: fixed at start */
   struct db db;
   int db_ready;
+  int answered; /* settings came from the questions at start (first.c) */
+  struct library *library; /* calibre's library as a resource (library/library.h); the background thread's */
   uv_loop_t *loop;      /* the interface's loop; the only loop when headless */
+  uv_loop_t *wloop;     /* the background thread's loop (work.h); the main loop when headless */
+  struct db *wdb;       /* the background thread's connection to the index */
   uv_loop_t *lloop;     /* the loop Lua's timers, processes and luv use (lua/bridge.h) */
   struct db *ldb;       /* the Lua thread's own connection, while it has one */
   struct lua_State *L;  /* the main Lua state; lives on the Lua thread */
@@ -25,11 +32,6 @@ struct app {
   struct sched *sched;  /* Lua tasks (lua/sched.h) */
   struct tui *tui;      /* NULL when running headless */
   atomic_int source;    /* what the list shows (tui.h rows.source); Lua filters default to it */
-  /* what the command line set (-L, -o name=value): applied on top of
-   * init.lua, at start and again whenever init.lua is read again */
-  const char *cli_library;
-  const char *cli_sets[32];
-  int ncli_sets;
 };
 
 /* This build's number among the builds of its version ("007"), and the
@@ -37,12 +39,37 @@ struct app {
  * both "" in a binary that was not linked by the Makefile's rule. */
 extern const char lulibre_build_number[], lulibre_build_commit[];
 
-/* Apply the command line's options. Returns 0, or -1 with *err set. */
-int app_apply_cli(struct app *app, char **err);
+/* The settings: the store with its defaults and the saved state, then the
+ * command line's (-C, -L, -o name=value) laid over it. Dies with a message
+ * on a bad value. */
+void app_settings(struct app *app, const char *confdir, const char *library, const char **sets, int nsets);
+/* A value in effect, on the main thread. */
+const char *app_str(const struct app *app, enum setting_id id);
+long long app_int(const struct app *app, enum setting_id id);
+int app_bool(const struct app *app, enum setting_id id);
+/* A change from the main thread (:set), made while lulibre runs: it
+ * replaces the command line's value too (settings_change). */
+int app_set(struct app *app, const char *name, const char *text, char **err);
+/* An indexer run's options from the settings in effect (index/indexer.h),
+ * on the main thread; the indexer copies what it keeps. */
+struct index_opts;
+void app_index_opts(const struct app *app, struct index_opts *o);
+/* The index file in effect, for the library in effect; malloc'd. */
+char *app_index_path(const struct app *app);
 
 /* Resolve the library, open the index and refresh the calibre mirror.
  * Dies with a message on failure: every command needs this to proceed. */
 void app_open_db(struct app *app);
+
+/* first.c: on a terminal, with no library set, asked for this run: the
+ * library calibre opened last (1 when it was taken), then calibre's content
+ * server, when one is running. */
+/* threads of libuv's pool the indexer leaves for the interface's work */
+enum { POOL_SPARE = 2 };
+
+int first_interactive(void);
+int first_library(struct app *app);
+void first_server(struct app *app);
 int app_jobs(const struct app *app); /* worker thread count in effect */
 
 /* subcommands: argv[0] is the command name */
@@ -52,7 +79,7 @@ int cmd_show(struct app *app, int argc, char **argv);
 int cmd_stats(struct app *app, int argc, char **argv);
 
 int cmd_run(struct app *app, int argc, char **argv);
-int cmd_config(struct app *app, int argc, char **argv);
+int cmd_offline(struct app *app, int argc, char **argv);
 
 /* tui/tui.c */
 int tui_run(struct app *app);
@@ -64,9 +91,14 @@ void tui_reload(struct tui *t); /* refresh the list: calibre's database was read
 struct lua_State *lstate_new(struct app *app);
 int lstate_run_init(struct app *app); /* loads ~/.config/lulibre/init.lua if present */
 void lstate_close(struct app *app);
+/* :restart-scripts (design 7): the lua_State torn down and made again,
+ * init.lua its first task; keys and commands from Lua go with the old one.
+ * The interface goes on meanwhile. */
+void lstate_restart(struct app *app);
 /* When the binary runs from a source tree that has since become another
  * version: a sentence saying so (the caller frees it), else NULL. */
 char *lstate_tree_mismatch(void);
 const char *lstate_runtime_modules(void);
+const char *lstate_datadir(void);
 
 #endif

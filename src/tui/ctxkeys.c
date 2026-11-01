@@ -5,9 +5,16 @@
  * for that place asks which action a key means. So these can be rebound
  * like any other:
  *
- *   lulibre.map("panel", "n", "down")       lulibre.map("line", "<C-g>", "cancel")
+ *   keymap.set("panel", "n", "down")       keymap.set("line", "<C-g>", "cancel")
  *
- * A binding is one key, or two in a row ("gg"). An empty action unbinds. */
+ * A binding is one key, or two in a row ("gg"). An empty action unbinds.
+ * With a description, what ? says the action does changes; hidden leaves
+ * the action out of ?.
+ *
+ * lulibre's places come first, in the order of the enums in tui.h; a
+ * screen made in Lua (scrnman.create) adds a place of its own after them,
+ * with its actions and the ones its hint shows, and goes with the
+ * lua_State (:restart-scripts). */
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,7 +74,20 @@ static const struct action pager_actions[] = {
   {"up", "k <Up>", "up a line"},
   {"page-down", "<C-d> <PageDown> <Space>", "a page down"},
   {"page-up", "<C-u> <PageUp>", "a page up"},
-  {"top", "g", "the top"},
+  {"top", "g <Home>", "the top"},
+  {"bottom", "G <End>", "the end"},
+  {"toggle", "<CR> za", "open or close the heading the cursor is under"},
+  {"open", "l <Right> zo", "open it"},
+  {"close", "h <Left> zc", "close it"},
+  {"all", "zR", "open every heading"},
+  {"none", "zM", "close every heading"},
+  {"search", "/", "search as you type; the headings with a match open"},
+  {"next", "n", "the next match"},
+  {"prev", "N", "the match before"},
+  {"follow", "<C-]> K", "follow the link on the cursor's line (choose, when it has several)"},
+  {"back", "<C-t> <C-o>", "back to the page the link was followed from"},
+  {"forward", "<Tab>", "forward again, to the page gone back from"},
+  {"leave", "q <Esc>", "close the overlay"},
 };
 static const struct action console_actions[] = {
   {"up", "k <Up>", "back a line"},
@@ -101,21 +121,123 @@ static const struct action select_actions[] = {
   {"leave", "q <Esc>", "leave without copying"},
 };
 
+static const struct action form_actions[] = {
+  {"edit", "e <CR>", "edit the field under the cursor"},
+  {"drop", "x", "take the field's change back (a form that writes on w)"},
+  {"write", "w", "write the changes (a form that writes on w)"},
+};
+
+/* hint: the actions the place's hint line shows, separated by spaces */
 static const struct {
   const char *name, *title;
   const struct action *actions;
   int n;
-} ctxs[KC_N] = {
-  [KC_PANEL] = {"panel", "IN A PANEL", panel_actions, (int)ARRAY_LEN(panel_actions)},
-  [KC_LINE] = {"line", "WHILE TYPING", line_actions, (int)ARRAY_LEN(line_actions)},
-  [KC_PICKER] = {"picker", "IN A PICKER (the line's editing keys work too)", picker_actions, (int)ARRAY_LEN(picker_actions)},
-  [KC_PAGER] = {"pager", "IN AN OVERLAY SUCH AS THIS (any other key closes it)", pager_actions, (int)ARRAY_LEN(pager_actions)},
-  [KC_CONSOLE] = {"console", "IN THE CONSOLE", console_actions, (int)ARRAY_LEN(console_actions)},
-  [KC_SELECT] = {"select", "SELECTING TEXT IN THE PREVIEW", select_actions, (int)ARRAY_LEN(select_actions)},
+  const char *hint;
+} own[KC_N] = {
+  [KC_PANEL] = {"panel", "IN A PANEL", panel_actions, (int)ARRAY_LEN(panel_actions), ""},
+  [KC_LINE] = {"line", "WHILE TYPING", line_actions, (int)ARRAY_LEN(line_actions), ""},
+  [KC_PICKER] = {"picker", "IN A PICKER (the line's editing keys work too)", picker_actions, (int)ARRAY_LEN(picker_actions),
+                 "accept cancel"},
+  [KC_PAGER] = {"pager", "IN AN OVERLAY SUCH AS THIS ONE (any other key closes it)", pager_actions,
+                (int)ARRAY_LEN(pager_actions), "toggle search follow back leave"},
+  [KC_CONSOLE] = {"console", "IN THE CONSOLE", console_actions, (int)ARRAY_LEN(console_actions),
+                  "errors warnings notices everything clear close"},
+  [KC_SELECT] = {"select", "SELECTING TEXT IN THE PREVIEW", select_actions, (int)ARRAY_LEN(select_actions),
+                 "left down up right mark line copy leave"},
+  [KC_FORM] = {"form", "IN A FORM (the edit form, a script's form; a panel's keys too)", form_actions,
+               (int)ARRAY_LEN(form_actions), "edit drop write"},
+  /* no actions: its keys are keymap.set("preview", ...)'s; here for where it goes */
+  [KC_PREVIEW] = {"preview", "THE PREVIEW", NULL, 0, ""},
 };
+
+/* Every place: lulibre's (copied from own[] on first use) and those made
+ * in Lua after them. The interface thread's. */
+struct place {
+  char *name, *title;
+  struct action *actions; /* the strings are the place's */
+  unsigned char *hidden;  /* per action: left out of ? (keymap.set's hidden) */
+  int n;
+  int *hint, nhint; /* the actions its hint line shows, by number */
+  int lua;
+  /* a screen's: where its views go (a panel's side: b l m f o t, 0 for
+   * the opener's choice) and their size, and whether it is a tab of the bar */
+  char side;
+  float size;
+  int tab;
+  struct view_place { /* views of the screen beside its main one */
+    char *name, side;
+    float size;
+  } *views;
+  int nviews;
+};
+static struct place *ctxs;
+static int nctxs;
+
+static void set_hint(struct place *pl, int nhint, const char *const *hint) {
+  free(pl->hint);
+  pl->nhint = 0;
+  pl->hint = xcalloc((size_t)nhint + 1, sizeof *pl->hint);
+  for (int h = 0; h < nhint; h++)
+    for (int a = 0; a < pl->n; a++)
+      if (!strcmp(hint[h], pl->actions[a].name)) pl->hint[pl->nhint++] = a + 1;
+}
+
+/* lulibre's place c as it comes: its actions, what ? says of them, its hint */
+static void own_place(int c) {
+  struct place *pl = &ctxs[c];
+  pl->name = xstrdup(own[c].name);
+  pl->title = xstrdup(own[c].title);
+  pl->n = own[c].n;
+  pl->actions = xcalloc((size_t)pl->n, sizeof *pl->actions);
+  pl->hidden = xcalloc((size_t)pl->n, 1);
+  for (int a = 0; a < pl->n; a++)
+    pl->actions[a] = (struct action){xstrdup(own[c].actions[a].name), xstrdup(own[c].actions[a].keys),
+                                     xstrdup(own[c].actions[a].about)};
+  const char *words[32];
+  char *list = xstrdup(own[c].hint), *save = NULL;
+  int nh = 0;
+  for (char *w = strtok_r(list, " ", &save); w && nh < 32; w = strtok_r(NULL, " ", &save)) words[nh++] = w;
+  set_hint(pl, nh, words);
+  free(list);
+}
+
+static void own_places(void) {
+  if (nctxs) return;
+  ctxs = xcalloc(KC_N, sizeof *ctxs);
+  for (int c = 0; c < KC_N; c++) own_place(c);
+  nctxs = KC_N;
+}
+
+static void place_free(struct place *pl) {
+  for (int a = 0; a < pl->n; a++) {
+    free((char *)pl->actions[a].name);
+    free((char *)pl->actions[a].keys);
+    free((char *)pl->actions[a].about);
+  }
+  free(pl->actions);
+  free(pl->hidden);
+  free(pl->hint);
+  free(pl->name);
+  free(pl->title);
+  for (int v = 0; v < pl->nviews; v++) free(pl->views[v].name);
+  free(pl->views);
+  memset(pl, 0, sizeof *pl);
+}
+
+int ctx_is_own(const char *name) { /* own[] is constant: any thread */
+  for (int c = 0; c < KC_N; c++)
+    if (!strcmp(own[c].name, name)) return 1;
+  return 0;
+}
+
+int ctx_count(void) {
+  own_places();
+  return nctxs;
+}
 
 static struct cbind {
   int ctx, action, nkeys;
+  int own; /* bound by keymap.set, not one of the action's defaults */
   uint32_t keys[2];
 } *binds;
 static int nbinds, capbinds;
@@ -129,7 +251,7 @@ static void ctx_unbind_keys(int ctx, const uint32_t *keys, int n) {
     }
 }
 
-static void ctx_bind_keys(int ctx, const uint32_t *keys, int n, int action) {
+static void ctx_bind_keys(int ctx, const uint32_t *keys, int n, int action, int own) {
   ctx_unbind_keys(ctx, keys, n);
   if (nbinds == capbinds) {
     capbinds = capbinds ? capbinds * 2 : 128;
@@ -139,37 +261,189 @@ static void ctx_bind_keys(int ctx, const uint32_t *keys, int n, int action) {
   memset(b, 0, sizeof *b);
   b->ctx = ctx;
   b->action = action;
+  b->own = own;
   b->nkeys = n;
   memcpy(b->keys, keys, (size_t)n * sizeof *keys);
 }
 
-void ctx_defaults(void) {
-  nbinds = 0;
-  for (int c = 0; c < KC_N; c++)
-    for (int a = 0; a < ctxs[c].n; a++) {
-      char *specs = xstrdup(ctxs[c].actions[a].keys), *save = NULL;
-      for (char *s = strtok_r(specs, " ", &save); s; s = strtok_r(NULL, " ", &save)) {
-        uint32_t keys[KEYSEQ_MAX];
-        int n = key_parse(s, keys);
-        if (n == 1 || n == 2) ctx_bind_keys(c, keys, n, a + 1);
-      }
-      free(specs);
+/* place c's keys as its actions name them */
+static void bind_defaults(int c) {
+  for (int a = 0; a < ctxs[c].n; a++) {
+    char *specs = xstrdup(ctxs[c].actions[a].keys), *save = NULL;
+    for (char *s = strtok_r(specs, " ", &save); s; s = strtok_r(NULL, " ", &save)) {
+      uint32_t keys[KEYSEQ_MAX];
+      int n = key_parse(s, keys);
+      if (n == 1 || n == 2) ctx_bind_keys(c, keys, n, a + 1, 0);
     }
+    free(specs);
+  }
+}
+
+static void unbind_place(int c) {
+  int k = 0;
+  for (int i = 0; i < nbinds; i++)
+    if (binds[i].ctx != c) binds[k++] = binds[i];
+  nbinds = k;
+}
+
+void ctx_defaults(void) {
+  if (nctxs) /* init.lua says again what it changes in lulibre's places */
+    for (int c = 0; c < KC_N; c++) {
+      place_free(&ctxs[c]);
+      own_place(c);
+    }
+  own_places();
+  nbinds = 0;
+  for (int c = 0; c < nctxs; c++) bind_defaults(c);
 }
 
 void ctx_free(void) {
   free(binds);
   binds = NULL;
   nbinds = capbinds = 0;
+  for (int c = 0; c < nctxs; c++) place_free(&ctxs[c]);
+  free(ctxs);
+  ctxs = NULL;
+  nctxs = 0;
 }
 
 int ctx_named(const char *name) {
-  for (int c = 0; c < KC_N; c++)
+  own_places();
+  for (int c = 0; c < nctxs; c++)
     if (!strcmp(ctxs[c].name, name)) return c;
   return -1;
 }
 
-int ctx_bind(const char *ctx, const char *spec, const char *action, char **err) {
+int ctx_add(const char *name, const char *title, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char side, float size, int tab,
+            char **err) {
+  own_places();
+  int c = ctx_named(name);
+  if (c >= 0 && !ctxs[c].lua) {
+    *err = xasprintf("%s is one of lulibre's places: its keys are rebound with keymap.set", name);
+    return -1;
+  }
+  for (int a = 0; a < n; a++)
+    for (int b = 0; b < a; b++)
+      if (!strcmp(names[a], names[b])) {
+        *err = xasprintf("%s has two actions called %s", name, names[a]);
+        return -1;
+      }
+  if (c < 0) {
+    ctxs = xrealloc(ctxs, (size_t)(nctxs + 1) * sizeof *ctxs);
+    c = nctxs++;
+  } else { /* made again: its keys go back to what the new actions say */
+    place_free(&ctxs[c]);
+    unbind_place(c);
+  }
+  struct place *pl = &ctxs[c];
+  memset(pl, 0, sizeof *pl);
+  pl->name = xstrdup(name);
+  pl->title = xstrdup(title && *title ? title : name);
+  pl->lua = 1;
+  pl->side = side;
+  pl->size = size;
+  pl->tab = tab;
+  pl->n = n;
+  pl->actions = xcalloc((size_t)n + 1, sizeof *pl->actions);
+  pl->hidden = xcalloc((size_t)n + 1, 1);
+  for (int a = 0; a < n; a++)
+    pl->actions[a] = (struct action){xstrdup(names[a]), xstrdup(keys[a] ? keys[a] : ""), xstrdup(abouts[a] ? abouts[a] : "")};
+  set_hint(pl, nhint, hint);
+  bind_defaults(c);
+  return c;
+}
+
+void ctx_add_view(int ctx, const char *name, char side, float size) {
+  struct place *pl = &ctxs[ctx];
+  pl->views = xrealloc(pl->views, (size_t)(pl->nviews + 1) * sizeof *pl->views);
+  pl->views[pl->nviews++] = (struct view_place){xstrdup(name), side, size};
+}
+
+int ctx_view(int ctx, const char *name, char *side, float *size) {
+  for (int v = 0; ctx >= 0 && ctx < nctxs && v < ctxs[ctx].nviews; v++)
+    if (!strcmp(ctxs[ctx].views[v].name, name)) {
+      *side = ctxs[ctx].views[v].side;
+      *size = ctxs[ctx].views[v].size;
+      return 1;
+    }
+  return 0;
+}
+
+int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char side, float size, char **err) {
+  int c = ctx_named(name);
+  if (c < 0) {
+    *err = xasprintf("no screen or place is called %s", name);
+    return -1;
+  }
+  struct place *pl = &ctxs[c];
+  if (side && c < KC_N && c != KC_CONSOLE && c != KC_PREVIEW) {
+    *err = xasprintf("%s is no window to place: the console and the preview are", name);
+    return -1;
+  }
+  if (side && c == KC_PREVIEW && !strchr("blt", side)) {
+    *err = xasprintf("the preview goes in a band, a column or tiled");
+    return -1;
+  }
+  for (int h = 0; h < nhint; h++) {
+    int found = 0;
+    for (int a = 0; a < pl->n && !found; a++) found = !strcmp(hint[h], pl->actions[a].name);
+    if (!found) {
+      *err = xasprintf("%s has no action '%s' for its hint", name, hint[h]);
+      return -1;
+    }
+  }
+  if (nhint >= 0) set_hint(pl, nhint, hint);
+  if (title) {
+    free(pl->title);
+    pl->title = xstrdup(*title ? title : name);
+  }
+  if (side) {
+    pl->side = side;
+    pl->size = size;
+  }
+  return 0;
+}
+
+void ctx_drop_lua(void) {
+  own_places();
+  for (int c = KC_N; c < nctxs; c++) place_free(&ctxs[c]);
+  nctxs = KC_N;
+  int k = 0;
+  for (int i = 0; i < nbinds; i++)
+    if (binds[i].ctx < KC_N) binds[k++] = binds[i];
+  nbinds = k;
+}
+
+void ctx_placement(int ctx, char *side, float *size) {
+  *side = ctx >= 0 && ctx < nctxs ? ctxs[ctx].side : 0;
+  *size = ctx >= 0 && ctx < nctxs ? ctxs[ctx].size : 0;
+}
+
+int ctx_tab(int i, const char **name, const char **title) {
+  for (int c = 0; c < nctxs; c++)
+    if (ctxs[c].tab && i-- == 0) {
+      *name = ctxs[c].name;
+      *title = ctxs[c].title;
+      return c;
+    }
+  return -1;
+}
+
+int ctx_is_tab(int ctx) {
+  return ctx >= 0 && ctx < nctxs && ctxs[ctx].tab;
+}
+
+const char *ctx_name(int ctx) {
+  return ctx >= 0 && ctx < nctxs ? ctxs[ctx].name : NULL;
+}
+
+const char *ctx_action_name(int ctx, int action) {
+  if (ctx < 0 || ctx >= nctxs || action < 1 || action > ctxs[ctx].n) return NULL;
+  return ctxs[ctx].actions[action - 1].name;
+}
+
+int ctx_bind(const char *ctx, const char *spec, const char *action, const char *desc, int hidden, char **err) {
   int c = ctx_named(ctx);
   if (c < 0) {
     *err = xasprintf("no place named '%s' has keys of its own", ctx);
@@ -187,7 +461,13 @@ int ctx_bind(const char *ctx, const char *spec, const char *action, char **err) 
   }
   for (int a = 0; a < ctxs[c].n; a++)
     if (!strcmp(ctxs[c].actions[a].name, action)) {
-      ctx_bind_keys(c, keys, n, a + 1);
+      struct action *act = &ctxs[c].actions[a];
+      ctx_bind_keys(c, keys, n, a + 1, 1);
+      if (desc) {
+        free((char *)act->about);
+        act->about = xstrdup(desc);
+      }
+      if (hidden >= 0) ctxs[c].hidden[a] = (unsigned char)hidden;
       return 0;
     }
   sbuf names = SBUF_INIT;
@@ -223,13 +503,35 @@ int ctx_bound(int ctx, uint32_t key) {
   return 0;
 }
 
-static int ctx_key_of(int ctx, int action, sbuf *out) {
-  for (int i = nbinds - 1; i >= 0; i--)
-    if (binds[i].ctx == ctx && binds[i].action == action) {
-      key_format(out, binds[i].keys, binds[i].nkeys);
-      return 1;
+static int ctx_key_of(int ctx, int action, sbuf *out);
+
+int ctx_hint_line(int ctx, sbuf *out) {
+  return ctx_hint_line_if(ctx, out, NULL, NULL);
+}
+
+int ctx_hint_line_if(int ctx, sbuf *out, int (*keep)(int action, const void *ud), const void *ud) {
+  if (ctx < 0 || ctx >= nctxs) return 0;
+  int n = 0;
+  for (int h = 0; h < ctxs[ctx].nhint; h++) {
+    sbuf k = SBUF_INIT;
+    int a = ctxs[ctx].hint[h];
+    if ((!keep || keep(a, ud)) && ctx_key_of(ctx, a, &k)) { /* an action left with no key is not offered */
+      sb_printf(out, "%s%s %s", n++ ? "   " : "", k.s, ctxs[ctx].actions[a - 1].name);
     }
-  return 0;
+    sb_free(&k);
+  }
+  return n;
+}
+
+/* the key a hint shows for an action: the last one keymap.set put on it,
+ * else the first of its defaults */
+static int ctx_key_of(int ctx, int action, sbuf *out) {
+  int pick = -1;
+  for (int i = 0; i < nbinds; i++)
+    if (binds[i].ctx == ctx && binds[i].action == action && (pick < 0 || binds[i].own)) pick = i;
+  if (pick < 0) return 0;
+  key_format(out, binds[pick].keys, binds[pick].nkeys);
+  return 1;
 }
 
 const char *ctx_hint_in(char *buf, size_t size, int ctx, int action) {
@@ -241,11 +543,12 @@ const char *ctx_hint_in(char *buf, size_t size, int ctx, int action) {
 }
 
 /* One place's actions with the keys they are on, for the help overlay; with
- * names set, the action names too, which is what lulibre.map wants. */
+ * names set, the action names too, which is what keymap.set wants. */
 void ctx_describe(int ctx, sbuf *out, int names) {
-  sb_printf(out, "%s%s%s%s\n", ctxs[ctx].title, names ? "   lulibre.map(\"" : "", names ? ctxs[ctx].name : "",
+  sb_printf(out, "%s%s%s%s\n", ctxs[ctx].title, names ? "   keymap.set(\"" : "", names ? ctxs[ctx].name : "",
             names ? "\", key, action)" : "");
   for (int a = 0; a < ctxs[ctx].n; a++) {
+    if (ctxs[ctx].hidden[a]) continue;
     sbuf keys = SBUF_INIT;
     for (int i = 0; i < nbinds; i++)
       if (binds[i].ctx == ctx && binds[i].action == a + 1) {

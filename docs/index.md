@@ -14,10 +14,10 @@ and a first look. The
 [changelog](https://github.com/genamethi/lulibre/blob/main/CHANGELOG.md)
 lists what changed in each version.
 
-- [Workflows](workflows.md) — editing, review, capture, duplicates, orphans,
-  the sync folder, BibTeX, OCR, copies of calibre's database
+- [Workflows](workflows.md) — reading the files and OCR, editing,
+  proposals and review, online lookups, how changes reach calibre
 - [Filters](filters.md) — the query language
 - [Keys and commands](keys.md)
-- [Configuration](configuration.md) — options, colours, key maps
+- [Configuration](configuration.md) — settings, colours, key maps
 - [Lua API](api.md)
 - [Development](development.md) — builds, tests, source layout, releasing

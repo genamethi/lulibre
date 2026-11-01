@@ -1,6 +1,6 @@
 /* Subprocesses, without blocking.
  *
- *   local r = lulibre.system({"calibredb", "--version"} [, opts])
+ *   local r = utils.exec({"calibredb", "--version"} [, opts])
  *     opts.stdin    string fed to the process
  *     opts.cwd      working directory
  *     opts.timeout  milliseconds before the process is killed
@@ -131,7 +131,7 @@ static void timeout_cb(uv_timer_t *h) {
   if (!p->exited) uv_process_kill(&p->process, SIGKILL);
 }
 
-static int l_system(lua_State *L) {
+static int l_exec(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
   sched_require_task(L);
   struct app *app = lapi_app(L);
@@ -230,6 +230,6 @@ static int l_system(lua_State *L) {
 }
 
 void l_proc_open(lua_State *L) {
-  static const luaL_Reg fns[] = {{"system", l_system}, {NULL, NULL}};
+  static const luaL_Reg fns[] = {{"exec", l_exec}, {NULL, NULL}};
   luaL_setfuncs(L, fns, 0);
 }

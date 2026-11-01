@@ -2,8 +2,7 @@
 # -- the sections' full headings, "Module" in each page's title, and a "Manual"
 # -- block that links back to the guides of the site (Zensical, docs/), which
 # -- holds the reference in reference/.
-# local heading = { Scripting = "Scripting", Reading = "Reading books", Judging = "Judging metadata",
-#   Library = "calibre and the library", Services = "Services and data", Setup = "Setup", Screens = "Screens" }
+# local heading = { Library = "Modules" }
 # local function H(kind) return heading[kind] or kind end
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">

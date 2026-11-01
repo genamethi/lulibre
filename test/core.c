@@ -1,0 +1,674 @@
+/* Tests for the 0.3 runtime: settings, events, the registry. Built and run
+ * by `make unit`. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <lauxlib.h>
+#include <lua.h>
+
+#include "app.h"
+#include "core/events.h"
+#include "core/queue.h"
+#include "core/settings.h"
+#include "core/util.h"
+#include "db/db.h"
+#include "doc/doc.h"
+#include "doc/reading.h"
+#include "library/fields.h"
+#include "match/similar.h"
+#include "lua/sched.h"
+
+static int checks, fails;
+
+static void ok(int cond, const char *what) {
+  checks++;
+  if (!cond) {
+    fails++;
+    printf("FAIL  %s\n", what);
+  }
+}
+
+static void eq(const char *got, const char *want, const char *what) {
+  checks++;
+  if (!got || strcmp(got, want)) {
+    fails++;
+    printf("FAIL  %s\n      got  %s\n      want %s\n", what, got ? got : "(null)", want);
+  }
+}
+
+static char *tmpdir;
+
+/* ---- settings ---- */
+
+static const struct setting_def defs[] = {
+  {"name", SETTING_STR, 0, "x", NULL, "a text"},
+  {"mode", SETTING_STR, 0, "a", "a|b|c", "one of three"},
+  {"count", SETTING_INT, 0, "3", NULL, "a whole number"},
+  {"weight", SETTING_NUM, 0, "0.45", NULL, "a number"},
+  {"flag", SETTING_BOOL, 0, "false", NULL, "true or false"},
+  {"dir", SETTING_PATH, SETTING_CLI_ONLY, "~/d", NULL, "where things are"},
+  {"persistent", SETTING_BOOL, SETTING_PERSIST, "false", NULL, "keep the settings"},
+};
+#define NDEFS ((int)(sizeof defs / sizeof defs[0]))
+
+static long long get_i(struct settings *st, const char *name) {
+  union setting_value v;
+  char *err = NULL;
+  if (settings_get(st, name, &v, &err)) {
+    free(err);
+    return -1;
+  }
+  return v.i;
+}
+
+/* settings_get's copy of a text, kept for eq and freed on the next call,
+ * or by get_s_done. */
+static char *last;
+
+static void get_s_done(void) {
+  free(last);
+  last = NULL;
+}
+
+static const char *get_s(struct settings *st, const char *name) {
+  free(last);
+  last = NULL;
+  union setting_value v;
+  char *err = NULL;
+  if (settings_get(st, name, &v, &err)) {
+    free(err);
+    return NULL;
+  }
+  return last = v.s;
+}
+
+static int set(struct settings *st, const char *name, const char *text, enum setting_origin from) {
+  char *err = NULL;
+  int r = settings_set(st, name, text, from, &err);
+  free(err);
+  return r;
+}
+
+static int unset(struct settings *st, const char *name, enum setting_origin from) {
+  char *err = NULL;
+  int r = settings_unset(st, name, from, &err);
+  free(err);
+  return r;
+}
+
+static void test_settings_values(void) {
+  struct settings *st = settings_new(defs, NDEFS);
+  union setting_value v;
+  char *err = NULL;
+  eq(get_s(st, "name"), "x", "a default");
+  ok(get_i(st, "count") == 3, "a number's default");
+  ok(settings_get(st, "weight", &v, &err) == 0 && v.n == 0.45, "a fraction's default");
+  ok(settings_get(st, "flag", &v, &err) == 0 && v.b == 0, "a flag's default");
+  ok(get_s(st, "dir")[0] == '/', "a path's default is expanded");
+
+  ok(set(st, "count", "9", FROM_API) == 0 && get_i(st, "count") == 9, "set a number");
+  ok(set(st, "count", "nine", FROM_API) != 0 && get_i(st, "count") == 9,
+     "text is refused for a number, and the value stays");
+  ok(set(st, "count", "", FROM_API) != 0, "so is nothing");
+  ok(set(st, "weight", "0.5x", FROM_API) != 0, "and a number with more after it");
+  ok(set(st, "mode", "d", FROM_API) != 0, "a value outside the choices is refused");
+  ok(settings_set(st, "mode", "d", FROM_API, &err) != 0 && err && strstr(err, "a|b|c"),
+     "and the message names the choices");
+  free(err);
+  err = NULL;
+  ok(set(st, "flag", "on", FROM_API) == 0 && settings_get(st, "flag", &v, &err) == 0 && v.b == 1,
+     "a flag takes on");
+  ok(set(st, "flag", "maybe", FROM_API) != 0, "but not maybe");
+  ok(set(st, "nothing", "1", FROM_API) != 0, "an unknown setting is refused");
+  ok(settings_get(st, "nothing", &v, &err) != 0, "and has no value");
+  free(err);
+  ok(set(st, "dir", "/x", FROM_API) != 0, "a command line setting is refused from the API");
+  ok(set(st, "dir", "/x", FROM_CLI) == 0, "and taken from the command line");
+
+  /* a copy, not a view: a change after the get leaves the copy as it was */
+  union setting_value held;
+  err = NULL;
+  settings_get(st, "name", &held, &err);
+  set(st, "name", "y", FROM_API);
+  eq(held.s, "x", "a value taken once does not change under its holder");
+  eq(get_s(st, "name"), "y", "a later get returns the value in effect");
+  free(held.s);
+  get_s_done();
+  settings_free(st);
+}
+
+static int watched[NDEFS];
+
+static void watch(struct settings *st, int def, void *ud) {
+  watched[def]++;
+}
+
+static void test_settings_layers(void) {
+  char *err = NULL;
+  struct settings *st = settings_new(defs, NDEFS);
+  int count = settings_find(st, "count");
+  settings_watch(st, watch, NULL);
+  set(st, "count", "4", FROM_STATE);
+  ok(get_i(st, "count") == 3 && watched[count] == 0, "the state does not count while persistence is off");
+  set(st, "persistent", "true", FROM_API);
+  ok(get_i(st, "count") == 4 && watched[count] == 1, "it does once persistence is on, and the change is reported");
+  set(st, "count", "5", FROM_CLI);
+  ok(get_i(st, "count") == 5, "the command line over the state");
+  set(st, "count", "7", FROM_API);
+  ok(get_i(st, "count") == 5 && settings_origin(st, count) == FROM_CLI, "the command line over the Lua API");
+  unset(st, "count", FROM_CLI);
+  ok(get_i(st, "count") == 7, "unset, the layer below shows through");
+  set(st, "count", "8", FROM_CLI);
+  int before = watched[count];
+  set(st, "count", "8", FROM_API);
+  ok(watched[count] == before, "a value equal to the one in effect is no change");
+  ok(settings_change(st, "count", "9", &err) == 0 && get_i(st, "count") == 9 && settings_origin(st, count) == FROM_API,
+     "a change while running replaces the command line's value");
+  ok(settings_change(st, "count", NULL, &err) == 0 && get_i(st, "count") == 4,
+     "and emptied, the saved state shows through, the command line's gone");
+  ok(settings_change(st, "dir", "/x", &err) != 0, "a command line setting is not changed");
+  free(err);
+  set(st, "persistent", "false", FROM_API);
+  ok(get_i(st, "count") == 3, "persistence off again: down to the default");
+  ok(set(st, "persistent", "true", FROM_STATE) != 0, "persistence is not taken from the state");
+  settings_free(st);
+}
+
+static void test_settings_state(void) {
+  char *path = xasprintf("%s/state/settings", tmpdir);
+  char *err = NULL;
+  struct settings *st = settings_new(defs, NDEFS);
+  set(st, "name", "two\nlines \\ here", FROM_API);
+  set(st, "dir", "/new", FROM_CLI);
+  set(st, "count", "5", FROM_CLI);
+  ok(settings_save_state(st, path, &err) == 0 && access(path, F_OK) != 0, "persistence off: nothing is written");
+  set(st, "persistent", "true", FROM_API);
+  ok(settings_save_state(st, path, &err) == 0, "persistence on: the state is saved, its folder made");
+  settings_free(st);
+
+  st = settings_new(defs, NDEFS);
+  ok(settings_load_state(st, path, &err) == 0, "and read back");
+  eq(get_s(st, "name"), "x", "the state waits for persistence");
+  set(st, "persistent", "true", FROM_CLI);
+  eq(get_s(st, "name"), "two\nlines \\ here", "a value with a line break and a backslash");
+  ok(get_i(st, "count") == 3, "a command line value is not saved");
+  ok(get_s(st, "dir")[0] == '/' && strcmp(get_s(st, "dir"), "/new"), "nor a command line setting");
+  ok(settings_origin(st, settings_find(st, "name")) == FROM_STATE, "the origin is the state");
+  set(st, "count", "6", FROM_API);
+  ok(settings_save_state(st, path, &err) == 0, "saved again");
+  settings_free(st);
+  st = settings_new(defs, NDEFS);
+  settings_load_state(st, path, &err);
+  set(st, "persistent", "true", FROM_CLI);
+  eq(get_s(st, "name"), "two\nlines \\ here", "a value read from the state is saved again");
+  ok(get_i(st, "count") == 6, "with the API's laid over it");
+  settings_free(st);
+
+  FILE *f = fopen(path, "w");
+  fputs("# a comment\ngone=1\ncount=many\nmode=b\npersistent=true\n", f);
+  fclose(f);
+  st = settings_new(defs, NDEFS);
+  ok(settings_load_state(st, path, &err) == 0, "a state with an unknown setting and a bad value loads");
+  set(st, "persistent", "true", FROM_API);
+  ok(get_i(st, "count") == 3, "the bad value is passed over");
+  eq(get_s(st, "mode"), "b", "the good one is read");
+  settings_free(st);
+
+  char *none = xasprintf("%s/none", tmpdir);
+  st = settings_new(defs, NDEFS);
+  ok(settings_load_state(st, none, &err) == 0, "no state yet is no error");
+  settings_free(st);
+  free(none);
+  free(path);
+  get_s_done();
+}
+
+static void test_settings_made(void) {
+  char *err = NULL;
+  struct settings *st = settings_new(defs, NDEFS);
+  ok(set(st, "later", "5", FROM_CLI) == 0 && settings_find(st, "later") < 0,
+     "a name no setting has, from the command line: held, no error");
+  ok(set(st, "later", "5", FROM_API) != 0, "but refused from the API");
+  struct setting_def later = {"later", SETTING_INT, 0, "2", NULL, "made at run time"};
+  int i = settings_define(st, &later, &err);
+  ok(i >= NDEFS && get_i(st, "later") == 5 && settings_origin(st, i) == FROM_CLI,
+     "made, it is a setting after the others, with the value held for it");
+  set(st, "later", "7", FROM_API);
+  struct setting_def again = {"later", SETTING_STR, 0, "a", NULL, "made again"};
+  ok(settings_define(st, &again, &err) == i && !strcmp(get_s(st, "later"), "5") &&
+     !strcmp(settings_def(st, i)->help, "made again"), "made again: the same setting, its values kept");
+  struct setting_def own = {"count", SETTING_INT, 0, "1", NULL, ""};
+  ok(settings_define(st, &own, &err) < 0, "lulibre's own are not made again");
+  free(err);
+  err = NULL;
+  struct setting_def bad = {"odd", SETTING_INT, 0, "x", NULL, ""};
+  ok(settings_define(st, &bad, &err) < 0, "nor one whose default is no value of it");
+  free(err);
+  set(st, "typo", "1", FROM_CLI);
+  char *left = settings_unmade(st);
+  ok(left && strstr(left, "typo=1 (the command line): no setting is called typo"), "what nothing made is said");
+  free(left);
+  ok(settings_unmade(st) == NULL, "once");
+  settings_free(st);
+  get_s_done();
+}
+
+/* ---- the queue ---- */
+
+/* An inbox alone does not keep its loop running; in the program other
+ * handles do, here this one. */
+static uv_async_t keep;
+
+static void keep_open(uv_loop_t *loop) {
+  uv_async_init(loop, &keep, NULL);
+}
+
+static void keep_close(void) {
+  uv_close((uv_handle_t *)&keep, NULL);
+}
+
+static int order[8], norder;
+
+static void note(struct app *app, void *arg) {
+  order[norder++] = (int)(long)arg;
+}
+
+static void post_inside(struct app *app, void *arg) {
+  queue_post(LOOP_UI, note, (void *)2L);
+  order[norder++] = 1; /* the message posted above has not run yet */
+}
+
+static int counted;
+
+static void count(struct app *app, void *arg) {
+  counted++;
+}
+
+static void post_counted(void *arg) {
+  for (int i = 0; i < 1000; i++) queue_post(LOOP_UI, count, NULL);
+}
+
+static void stop_when_counted(uv_idle_t *h) {
+  if (counted == 2000) uv_stop(h->loop);
+}
+
+static void test_queue(void) {
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+  keep_open(&loop);
+  queue_post(LOOP_UI, note, (void *)7L);
+  queue_open(NULL, LOOP_UI, &loop);
+  queue_open(NULL, LOOP_LUA, &loop); /* headless: both inboxes on one loop */
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 1 && order[0] == 7, "a message posted before the inbox opened runs once it does");
+  uv_unref((uv_handle_t *)&keep);
+  ok(uv_run(&loop, UV_RUN_DEFAULT) == 0, "the inboxes alone do not keep the loop running");
+  uv_ref((uv_handle_t *)&keep);
+
+  norder = 0;
+  queue_post(LOOP_LUA, post_inside, NULL);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 2 && order[0] == 1 && order[1] == 2,
+     "a message posted from a message runs after it, never in its stack");
+
+  norder = 0;
+  queue_close(LOOP_LUA);
+  queue_post(LOOP_LUA, note, (void *)3L);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 0, "a closed inbox's messages wait");
+  queue_open(NULL, LOOP_LUA, &loop);
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(norder == 1 && order[0] == 3, "and run when it opens again");
+
+  /* two threads post at once; every message runs, once */
+  uv_thread_t a, b;
+  uv_idle_t idle;
+  uv_idle_init(&loop, &idle);
+  uv_idle_start(&idle, stop_when_counted);
+  uv_thread_create(&a, post_counted, NULL);
+  uv_thread_create(&b, post_counted, NULL);
+  uv_run(&loop, UV_RUN_DEFAULT);
+  uv_thread_join(&a);
+  uv_thread_join(&b);
+  ok(counted == 2000, "messages from two threads all run");
+  uv_close((uv_handle_t *)&idle, NULL);
+
+  norder = 0;
+  queue_close(LOOP_UI);
+  queue_close(LOOP_LUA);
+  keep_close();
+  uv_run(&loop, UV_RUN_NOWAIT);
+  queue_post(LOOP_UI, note, (void *)5L);
+  queue_drain(LOOP_UI);
+  ok(norder == 1 && order[0] == 5, "drain runs what waits, when the loop is gone");
+  ok(uv_loop_close(&loop) == 0, "the inboxes leave no handle open");
+}
+
+/* ---- events ---- */
+
+struct seen {
+  int calls;
+  long long first_id;
+};
+
+static void on_event(const struct event *ev, void *ud) {
+  struct seen *s = ud;
+  s->calls++;
+  s->first_id = ev->nids ? ev->ids[0] : -1;
+}
+
+static void remove_self(const struct event *ev, void *ud) {
+  struct seen *s = ud;
+  s->calls++;
+  events_unlisten(LOOP_LUA, ev->kind, remove_self, ud);
+}
+
+static struct event *records_changed(long long id) {
+  struct event *ev = xcalloc(1, sizeof *ev);
+  ev->kind = EV_RECORDS_CHANGED;
+  ev->ids = xmalloc(sizeof *ev->ids);
+  ev->ids[0] = id;
+  ev->nids = 1;
+  ev->fields = xmalloc(sizeof *ev->fields);
+  ev->fields[0] = xstrdup("title");
+  ev->nfields = 1;
+  return ev;
+}
+
+static void test_events(void) {
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+  keep_open(&loop);
+  queue_open(NULL, LOOP_UI, &loop);
+  queue_open(NULL, LOOP_LUA, &loop);
+
+  ok(!events_wanted(EV_RECORDS_CHANGED), "no callback: nothing wanted");
+  events_post(records_changed(1)); /* freed at once: nobody listens */
+  uv_run(&loop, UV_RUN_NOWAIT);
+
+  struct seen ui = {0}, lua = {0}, bare = {0};
+  events_listen(LOOP_UI, EV_RECORDS_CHANGED, on_event, &ui);
+  ok(events_wanted(EV_RECORDS_CHANGED), "one callback: the kind is wanted");
+  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, on_event, &lua);
+  events_listen(LOOP_LUA, EV_CURSOR, on_event, &bare);
+  ok(!events_wanted(EV_MARKS), "another kind is not");
+
+  events_post(records_changed(42));
+  ok(ui.calls == 0 && lua.calls == 0, "posting runs no callback in the poster's stack");
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(ui.calls == 1 && lua.calls == 1 && ui.first_id == 42, "each loop's callback is called once");
+  ok(bare.calls == 0, "a callback of another kind is not");
+
+  events_unlisten(LOOP_UI, EV_RECORDS_CHANGED, on_event, &ui);
+  events_post(records_changed(43));
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(ui.calls == 1 && lua.calls == 2, "a removed callback is not called; the other loop's is");
+
+  struct seen once = {0};
+  events_listen(LOOP_LUA, EV_RECORDS_CHANGED, remove_self, &once);
+  events_post(records_changed(44));
+  events_post(records_changed(45));
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(once.calls == 1 && lua.calls == 4, "a callback may remove itself while called; the others go on");
+
+  events_unlisten_all(LOOP_LUA, on_event);
+  ok(!events_wanted(EV_RECORDS_CHANGED) && !events_wanted(EV_CURSOR), "every callback of one function, dropped at once");
+  events_post(records_changed(46));
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(lua.calls == 4, "and none is called after");
+
+  queue_close(LOOP_UI);
+  queue_close(LOOP_LUA);
+  keep_close();
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(uv_loop_close(&loop) == 0, "the loop closes");
+}
+
+/* ---- evman, in a lua_State ---- */
+
+static void close_any(uv_handle_t *h, void *arg) {
+  if (!uv_is_closing(h)) uv_close(h, NULL);
+}
+
+static void run_until_quiet(struct app *app, uv_loop_t *loop) {
+  for (int i = 0; i < 50; i++) uv_run(loop, UV_RUN_NOWAIT);
+}
+
+static long long lua_int(lua_State *L, const char *expr) {
+  char *code = xasprintf("return %s", expr);
+  long long v = -1;
+  if (luaL_dostring(L, code) == LUA_OK) v = lua_tointeger(L, -1);
+  else printf("      %s\n", lua_tostring(L, -1));
+  lua_pop(L, 1);
+  free(code);
+  return v;
+}
+
+static void test_evman(void) {
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+  keep_open(&loop);
+  struct app app = {0};
+  char *cfg = xasprintf("%s/config", tmpdir);
+  app_settings(&app, cfg, NULL, NULL, 0);
+  app.loop = app.lloop = &loop;
+  queue_open(&app, LOOP_UI, &loop);
+  queue_open(&app, LOOP_LUA, &loop);
+  lstate_new(&app);
+  lua_State *L = app.L;
+  const char *setup =
+    "seen, order, n = {}, {}, 0\n"
+    "counter = 0\n"
+    "local function per_event() counter = counter + 1; return counter end\n"
+    "id1 = evman.add('records_changed', function(p, a, b, c)\n"
+    "  seen.id, seen.field, seen.a, seen.b, seen.c = p.ids[1], p.fields[1], a, b, c\n"
+    "  order[#order + 1] = 1\n"
+    "end, 'fixed', per_event, function() return 'x', 'y' end)\n"
+    "id2 = evman.add('records_changed', function(p) order[#order + 1] = 2; seen.at_start = counter end)\n"
+    "id3 = evman.add('cursor', function(p) n = n + 1 end)\n";
+  ok(luaL_dostring(L, setup) == LUA_OK, "evman.add registers callbacks");
+  ok(events_wanted(EV_RECORDS_CHANGED) && events_wanted(EV_CURSOR), "the kinds Lua listens for are wanted");
+  ok(!events_wanted(EV_MARKS), "and no other");
+
+  events_post(records_changed(42));
+  run_until_quiet(&app, &loop);
+  ok(lua_int(L, "seen.id") == 42 && lua_int(L, "seen.field == 'title' and 1 or 0") == 1,
+     "the callback gets the payload");
+  ok(lua_int(L, "seen.a == 'fixed' and 1 or 0") == 1, "a value passed at registration");
+  ok(lua_int(L, "seen.b") == 1, "a function's first result, taken as the event comes");
+  ok(lua_int(L, "seen.c == 'x' and 1 or 0") == 1, "the last function's results, all of them");
+  ok(lua_int(L, "#order") == 2 && lua_int(L, "order[1]") == 1 && lua_int(L, "order[2]") == 2,
+     "callbacks run in the order they were added");
+  ok(lua_int(L, "seen.at_start") == 1, "the functions are called before any callback runs");
+
+  events_post(records_changed(43));
+  run_until_quiet(&app, &loop);
+  ok(lua_int(L, "seen.b") == 2, "and again for each event");
+
+  ok(luaL_dostring(L, "evman.rm(id1); evman.rm(id2)") == LUA_OK, "evman.rm removes callbacks");
+  ok(!events_wanted(EV_RECORDS_CHANGED), "the kind is no longer wanted once its last callback goes");
+  ok(luaL_dostring(L, "evman.rm(id1)") != LUA_OK, "removing one twice is an error");
+  lua_pop(L, 1);
+  ok(luaL_dostring(L, "evman.add('nothing', print)") != LUA_OK, "an unknown event is an error");
+  lua_pop(L, 1);
+
+  queue_drain(LOOP_LUA);
+  lstate_close(&app);
+  ok(!events_wanted(EV_CURSOR), "closing the lua_State drops its callbacks");
+  queue_close(LOOP_UI);
+  queue_close(LOOP_LUA);
+  keep_close();
+  uv_walk(&loop, close_any, NULL); /* the scheduler's handle: the program leaves it to exit */
+  uv_run(&loop, UV_RUN_NOWAIT);
+  ok(uv_loop_close(&loop) == 0, "the loop closes");
+  settings_free(app.settings);
+  free(app.config_dir);
+  free(app.state_path);
+  free(cfg);
+}
+
+/* ---- a reading ---- */
+
+static void test_reading(void) {
+  char *path = xasprintf("%s/index.db", tmpdir), *err = NULL;
+  struct db db = {0};
+  ok(db_open(&db, path, &err) == 0, "an index opens");
+  const char *rows =
+    "INSERT INTO files(id, book, format, path, emb_title) VALUES (7, 1, 'PDF', '/x.pdf', 'Embedded');"
+    "INSERT INTO lines(file, page, n, text, size, flags) VALUES"
+    " (7, 1, 0, 'Title', 18, 32 | 1), (7, 1, 1, 'Author Name', 12, 0),"
+    " (7, 1, 2, 'First paragraph', 10, 32), (7, 2, 0, 'Next page', 10, 32);";
+  ok(db_exec(&db, rows, &err) == 0, "lines go in");
+  struct reading *r = reading_load(&db, 7, &err);
+  ok(r != NULL, "a reading loads");
+  if (r) {
+    eq(r->text, "Title\nAuthor Name\n\nFirst paragraph\fNext page",
+       "lines joined: a line break, a blank line before a paragraph, a form feed between pages");
+    ok(r->nlines == 4 && r->pages == 2, "four lines on two pages");
+    eq(r->meta.title, "Embedded", "the file's own metadata comes with it");
+    size_t at = (size_t)(strstr(r->text, "Name") - r->text);
+    ok(reading_line_at(r, at) == 1, "a position maps to its line");
+    ok(r->lines[1].size == 12 && r->lines[0].flags & 1, "and the line has its size and flags");
+    ok(reading_line_at(r, r->lines[1].start + r->lines[1].len) == 1, "a line break counts as the line before's");
+    ok(reading_line_at(r, (size_t)(strchr(r->text, '\f') - r->text)) == -1, "a page break is no line's");
+    ok(reading_line_at(r, r->len) == -1, "nor is the end");
+    ok(reading_line_at(r, 0) == 0, "the first position is the first line's");
+    reading_hold(r);
+    reading_release(r);
+    eq(r->text, "Title\nAuthor Name\n\nFirst paragraph\fNext page", "a second holder keeps it");
+    reading_release(r);
+  }
+  ok(reading_load(&db, 99, &err) == NULL && err, "a file the index lacks is an error");
+  free(err);
+  db_close(&db);
+  free(path);
+}
+
+/* ---- similarity ---- */
+
+static void test_similar(void) {
+  double ab = similar(NULL, KIND_TEXT, "Topics in Additive Combinatorics", "Additive Combinatorics");
+  double ba = similar(NULL, KIND_TEXT, "Additive Combinatorics", "Topics in Additive Combinatorics");
+  ok(ba == 1 && ab < 1, "asymmetric: the shorter title is all in the longer");
+  ok(likeness(ab, ba, 0.7, 0.95) == LIKE_CONTAINS, "so one contains the other");
+  ok(similar(NULL, KIND_TEXT, "Erdős", "erdos") == 1, "folded: case and accents do not count");
+  double typo = similar(NULL, KIND_TEXT, "Combinatorics", "Combinatorcs");
+  ok(typo > 0.85 && typo < 1, "a typo is near");
+  ok(likeness(typo, similar(NULL, KIND_TEXT, "Combinatorcs", "Combinatorics"), 0.7, 0.95) == LIKE_NEAR,
+     "and near both ways");
+  ok(similar(NULL, KIND_TEXT, "Sieve Methods", "Modular Forms") < 0.5, "different words differ");
+  ok(similar(NULL, KIND_PEOPLE, "T. Tao", "Terence Tao") == 1, "an initial matches a name part");
+  ok(similar(NULL, KIND_PEOPLE, "Terence Tao", "T. Tao") == 1, "and the other way");
+  double two = similar(NULL, KIND_PEOPLE, "Terence Tao & Van Vu", "Terence Tao");
+  ok(two > 0.5 && two < 0.75, "two people, one found: about half");
+  ok(similar(NULL, KIND_PEOPLE, "Terence Tao", "Terence Tao & Van Vu") == 1, "the one is in the two");
+  ok(similar(NULL, KIND_TAGS, "math", "math.number-theory.additive") == 1, "a broader term is in a narrower tag");
+  ok(similar(NULL, KIND_TAGS, "math.number-theory.additive", "math") < 0.5, "but not the narrower in the broader");
+  ok(similar(NULL, KIND_DATE, "1942-05-03", "1942") == 1, "a day lies in its year");
+  double part = similar(NULL, KIND_DATE, "1942", "1942-05");
+  ok(part > 0.08 && part < 0.09, "a month is a twelfth of its year");
+  ok(similar(NULL, KIND_DATE, "1942", "1943") == 0, "other years differ");
+  ok(similar(NULL, KIND_IDENT, "isbn:0-306-40615-2", "isbn:978-0-306-40615-7") == 1, "ISBN-10 as ISBN-13");
+  ok(similar(NULL, KIND_IDENT, "doi:https://doi.org/10.1000/XYZ", "doi:10.1000/xyz") == 1, "a DOI without its URL, in lower case");
+  ok(similar(NULL, KIND_IDENT, "arxiv:1012.6008v1", "arxiv:1012.6008") == 1, "an arXiv number without its version");
+  ok(similar(NULL, KIND_IDENT, "isbn:9780306406157", "doi:10.1000/xyz") == 0, "different kinds of identifier differ");
+
+  /* rarity from a library: a word on every record weighs less than a rare one */
+  char *path = xasprintf("%s/index.db", tmpdir), *err = NULL;
+  struct db db = {0};
+  db_open(&db, path, &err);
+  db_exec(&db,
+          "DELETE FROM books; INSERT INTO books(id, title) VALUES (1, 'Lectures on Sieves'),"
+          " (2, 'Lectures on Groups'), (3, 'Lectures on Rings'), (4, 'Lectures on Fields');",
+          &err);
+  struct rarity *w = rarity_build(&db, &err);
+  ok(w != NULL, "rarity builds from the records");
+  double common = similar(w, KIND_TEXT, "Lectures Sieves", "Lectures Groups");
+  double rare = similar(w, KIND_TEXT, "Lectures Sieves", "Notes Sieves");
+  ok(rare > common, "sharing a rare word counts more than sharing a common one");
+  rarity_free(w);
+  db_close(&db);
+  free(path);
+}
+
+/* ---- the write core's values ---- */
+
+static const char *resolved(const char *field, enum change_op op, const char *now, const char *value) {
+  static char *last;
+  free(last);
+  char *err = NULL;
+  last = field_resolve(field, op, now, value, &err);
+  if (!last) {
+    last = err; /* the message, for the checks that expect one */
+    return NULL;
+  }
+  return last;
+}
+
+static void test_fields(void) {
+  eq(resolved("tags", CHANGE_SET, "", "b, a,  c"), "a, b, c", "a set of tags is sorted, one spelling");
+  eq(resolved("tags", CHANGE_ADD, "a, c", "b"), "a, b, c", "add keeps the others");
+  eq(resolved("tags", CHANGE_ADD, "a, Topology", "topology"), "a, topology", "the same tag folded is the same tag");
+  eq(resolved("tags", CHANGE_REMOVE, "a, b, c", "b"), "a, c", "remove takes one out");
+  eq(resolved("authors", CHANGE_SET, "", "Terence Tao & Van Vu"), "Terence Tao & Van Vu", "authors keep their order");
+  eq(resolved("authors", CHANGE_ADD, "Terence Tao", "Ben Green"), "Terence Tao & Ben Green", "an author is added last");
+  eq(resolved("identifiers", CHANGE_ADD, "doi:10.1/x, isbn:1", "doi:10.2/y"), "doi:10.2/y, isbn:1",
+     "an identifier of a type held is replaced");
+  eq(resolved("identifiers", CHANGE_REMOVE, "doi:10.1/x, isbn:1", "doi"), "isbn:1", "and removed by its type");
+  ok(resolved("identifiers", CHANGE_SET, "", "10.1/x") == NULL, "an identifier without its type is refused");
+  eq(resolved("pubdate", CHANGE_SET, "", "2006"), "2006-01-01", "a year is its first of January");
+  ok(resolved("pubdate", CHANGE_SET, "", "soon") == NULL, "a date that is no date is refused");
+  ok(resolved("title", CHANGE_ADD, "", "x") == NULL, "a field of one value is only set");
+  eq(resolved("series_index", CHANGE_SET, "", " 2.50 "), "2.5", "a series index as a number");
+  ok(resolved("colour", CHANGE_SET, "", "x") == NULL, "an unknown field is refused");
+  eq(resolved("#partof", CHANGE_ADD, "a", "b"), "a, b", "a field of lulibre's own is a list");
+  resolved("title", CHANGE_SET, "", "");
+  char *w = field_wire("tags", "a, b");
+  eq(w, "a,b", "calibredb's tags: commas alone");
+  free(w);
+  w = field_wire("pubdate", "2006-01-01");
+  eq(w, "2006-01-01T12:00:00+00:00", "a date at noon UTC, the same day everywhere");
+  free(w);
+  w = field_wire("pubdate", "");
+  eq(w, "0101-01-01T00:00:00+00:00", "no date is calibre's no date");
+  free(w);
+  char *f = library_failure(1, "Traceback...\nAnother calibre program such as calibre-server is running", NULL);
+  ok(strstr(f, "calibre program has the library open") != NULL, "calibredb's error, in words");
+  free(f);
+  f = library_failure(1, "line one\nHTTP Error 401: Unauthorized\n", "http://x");
+  ok(strstr(f, "user name or password") != NULL, "a refused account");
+  free(f);
+}
+
+int main(void) {
+  const char *base = getenv("TMPDIR");
+  char *t = xasprintf("%s/lulibre-core-XXXXXX", base ? base : "/tmp");
+  tmpdir = mkdtemp(t);
+  /* the tree's Lua runtime, not an installed one (make unit runs from the tree) */
+  char *rt = realpath("lua", NULL);
+  if (rt) setenv("LULIBRE_RUNTIME", rt, 1);
+  free(rt);
+  if (!tmpdir) {
+    perror("mkdtemp");
+    return 1;
+  }
+  test_settings_values();
+  test_settings_layers();
+  test_settings_state();
+  test_settings_made();
+  test_queue();
+  test_events();
+  test_evman();
+  test_reading();
+  test_similar();
+  test_fields();
+  printf("core tests: %d checks, %d failed\n", checks, fails);
+  char *rm = xasprintf("rm -rf '%s'", tmpdir);
+  if (system(rm)) printf("could not remove %s\n", tmpdir);
+  free(rm);
+  free(tmpdir);
+  return fails ? 1 : 0;
+}

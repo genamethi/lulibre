@@ -1,5 +1,5 @@
 .\" lulibre(1). The guides in docs/ say more; :help inside lulibre reads them.
-.TH LULIBRE 1 "October 2026" "lulibre 0.2.0" "User Commands"
+.TH LULIBRE 1 "October 2026" "lulibre 0.4.0-pre-alpha" "User Commands"
 .SH NAME
 lulibre \- look after the metadata of a calibre library, from the terminal
 .SH SYNOPSIS
@@ -18,34 +18,34 @@ lulibre \- look after the metadata of a calibre library, from the terminal
 reads a calibre library (its
 .I metadata.db
 and the book files) and helps put its metadata right: it reads the first
-pages of every file into a search index, proposes titles, authors, subjects,
-dates, publishers and identifiers from what the files themselves say,
-looks books up by identifier, finds duplicates and records without files,
-and takes files from a sync folder into the library.
+pages of every file into a search index, with OCR where the text is not
+usable, proposes titles, authors, dates and publishers from what the files
+say and from online records, and lets you review and edit them.
 .PP
 It never writes to the library itself. Every change goes to calibre through
 .BR calibredb (1),
-is recorded with the value it replaced, and can be undone. The one
-exception is putting back one of its copies of calibre's database
-.RB ( "backup restore" ),
-with nothing holding the library, after a copy of the database as it is.
+through calibre's content server when the server has the library open, is
+recorded in a journal with the value it replaced, and can be undone.
 .PP
 With no
 .I command
 it opens the interactive interface: a list of the books, a preview of the
-file under the cursor, and screens for editing and review. There,
+file under the cursor, and panels for editing and review. There,
 .B ?
 shows the keys under headings that open and close, with a search;
 .BI :help " topic"
-shows what the guides say about a word.
+opens the guides where they speak of a topic, as vim's help does.
 .SH COMMANDS
 Each takes
 .B \-h
 for its own options.
 .TP
 .BR index " [" \-\-pages " \fIN\fR] [" \-\-force "] [" \-\-retry "] [\fIfilter\fR]"
-Read the first pages of every file into the search index. Files that have
-not changed are skipped, so it is cheap to run again and safe to interrupt.
+Read the first pages of every file into the search index, with OCR as the
+setting
+.B ocr
+says. Files that have not changed are skipped, so it is cheap to run again
+and safe to interrupt.
 .TP
 .BR query " [" \-f " \fIcols\fR] [" \-n " \fIN\fR] [" \-c "] [" \-H "] [\fIfilter\fR]"
 List the books a filter matches, one to a line, tab-separated.
@@ -53,145 +53,143 @@ List the books a filter matches, one to a line, tab-separated.
 prints only how many.
 .TP
 .BR show " [" \-p " \fIpage\fR] [" \-l "] \fIid\fR"
-One book: its metadata, its files, the indexed text of a page.
+One book: its metadata, its files and what reading them came to, the text
+of a page.
 .TP
 .B stats
-What is missing across the library, each line with the filter behind it.
+What is missing across the library, and what reading the files came to,
+each line with the filter behind it.
 .TP
-.BR propose " [" \-\-only " \fIfields\fR] [" \-\-fresh "] [" \-\-over | \-\-gaps "] [\fIfilter\fR]"
-Propose metadata from the files themselves. Nothing is changed: the
-proposals wait for review in the interface.
+.BR run " \fIfile\fR [\fIargs\fR]"
+Run a Lua file without the interface.
 .TP
-.BR enrich " [" \-\-plan "] [" \-\-offline "] [" \-\-titles "] [\fIfilter\fR]"
-Look books up by arXiv number, DOI or ISBN and propose what the records
-say.
-.B \-\-plan
-says what would be asked of whom and asks nothing;
-.B \-\-offline
-proposes only from what was fetched before.
+.B offline
+Read calibre's records again and make the changes waiting for nothing to hold
+the library, then end: what lulibre's systemd unit runs before calibre's content
+server starts.
+.SH COMMANDS IN THE INTERFACE
+Typed after
+.BR : .
+With no filter, those about books take the selection, unless noted.
+.SS Proposing and looking up
 .TP
-.BR datasets " [" list " | " fetch " \fIname\fR... | " add " \fIfile\fR...]"
-Databases kept on this machine so that books can be looked up without
-asking anybody: arXiv's records, Open Library's editions and authors,
-zbMATH's links to arXiv. With no argument it says what there is and asks
-which to fetch. It can be run again whenever.
+.BR propose " [" \-i "] [\fIfilter\fR]"
+Propose values from the files, from what was kept if the files have not changed.
+.B \-i
+asks which books, what to ask and which fields first.
 .TP
-.BR grammars " [" \-\-apply "] [\fIfilter\fR]"
-Lists the books each grammar of publications matches, and the fields it
-sets;
-.B \-\-apply
-keeps which whole each is a part of and marks the non-catalog ones.
+.BR review " [" deep "] [\fIfilter\fR | " selection ]
+The current review: accept, edit or reject, which only mark, then write.
+.B deep
+shows what a review otherwise hides. Reviews are saved, named, reopened and discarded here.
 .TP
-.BR reread " [\fIfilter\fR]"
-Read pages whose text came out garbled again, with poppler's pdftotext, or
-by moving shifted characters back; name the books that still need OCR.
+.BR enrich " [" \-i " | " titles " | " offline "] [\fIfilter\fR]"
+Ask the online services and datasets about the books, by their identifiers.
+.B titles
+also looks by title for books with none;
+.B offline
+asks only what is on this machine.
 .TP
-.BR arxiv\-titles " [\fIfilter\fR]"
-Find books' arXiv numbers by title in arXiv's snapshot kept on this
-machine, asking nobody; a paper counts only when the book's pages show its
-title and people.
+.BR datasets " [" list " | " fetch " \fIname\fR... [" force "] | " add " \fIfile\fR...]"
+Databases for looking books up on this machine. Alone, a dialog.
+.SS Checking and rewriting
 .TP
-.BR verify " [" \-\-list " title|authors|ids|unread] [\fIfilter\fR]"
-Hold the library against its files: whether the opening pages show each
-book's title and name its authors, and where its identifiers stand.
-Changes nothing.
+.BR verify " [" written " [" ls "] [" since " \fIsnap\fR] | " junk "] [\fIfilter\fR]"
+The records held against their files, by default every book.
+.B written
+goes over what lulibre wrote, with each book's file deciding;
+.B junk
+marks titles and authors plainly not one.
 .TP
-.BR recheck " [" \-\-list " | " \-\-propose " | " \-\-apply "] [" \-\-since " \fIsnap\fR] [\fIfilter\fR]"
-Go back over what lulibre wrote, with each book's file deciding: titles and
-authors a record replaced that the pages do not bear out go back, and
-identifiers of cited or other works come off.
-.B \-\-apply
-takes a snapshot first. Typed values are left alone.
+.BR rewrite " " titlecase " [" all "] | " notation " | " authors " | " tags " | " levels " [" ls " | " write "] | " clear " \fIfields\fR, then [\fIfilter\fR]"
+Propose values worked out from those a field has, in the current review.
 .TP
-.BR snapshot " [\fIname\fR | " list " | " plan " \fIsnap\fR | " rollback " \fIsnap\fR | " retire " \fIsnap\fR | " import " \fIfile\fR]"
-Points in the journal of changes that the library can be put back to.
-.B rollback
-puts back what lulibre changed since (with
-.BR \-\-exact ,
-what was changed outside it too), after taking a snapshot to roll forward
-to; without a screen it needs
-.BR \-\-yes .
-.B plan
-says what it would do.
-.B import
-makes a snapshot from an older copy of calibre's
-.IR metadata.db .
+.BR capture " [\fIpattern\fR]"
+Pull fields out of the selected books with a pattern, and propose them.
 .TP
-.BR offline " [" list " | " cancel " \fIid\fR]"
-Do the changes calibre makes only while the content server is stopped
-(adding or removing a custom column), after a copy of calibre's database;
-with
-.B server_hook
-true,
-.I lulibre.service
-runs it before each start of the server.
+.BR change " [\fIfilter\fR]"
+One change to every selected book.
+.SS The sync folder
 .TP
-.BR backup " [" now " [\fIwhy\fR] | " check " | " compare " \fIN\fR | " restore " \fIN\fR [" \-\-yes "] | " prune " [\fIkeep\fR]]"
-Copies of calibre's database: list them, make one, check calibre's
-database (SQLite's integrity check, read only), say what putting copy
-.I N
-back would change, put it back (queued like
-.BR offline ,
-after a copy of the database as it is), remove all but the newest.
+.BR sync " [" add " | " move " | " drop "] [\fIfilter\fR] | " beside " | \fIdir\fR"
+Add the waiting files to the library, add them and take them out of the folder, or
+take them out without adding them; show them beside the library; or take
+.I dir
+as the sync folder for now. Alone, a dialog.
+.SS Looking after the library
 .TP
-.BR units " [" apply ]
-The systemd units the options
-.BR server_hook ,
-.B opf_writer
-and
-.B server_restart_at
-ask for, beside the unit that runs calibre-server: what would change, and
-with
-.B apply
-the change. A user unit's are made when the interface starts; a system
-unit's with sudo, after asking; a hardened unit is shown the drop-in.
+.BR remove " [\fIfilter\fR]"
+Remove books from calibre, to its recycle bin.
+.TP
+.BR dupes " [" ls ]
+Books whose files hold the same bytes: keep one, remove the rest.
+.TP
+.BR orphans " [" ls " | " write ]
+Records with no file, files with no record, broken links, empty folders.
+.TP
+.BR embed " [\fIfilter\fR]"
+Write calibre's metadata into the books' own files.
 .TP
 .BR columns " [" push " | " remove ]
-calibre columns for lulibre's own fields (#partof, #part, #parts): queued
-for the next time the server is stopped; an example of the offline API.
+calibre columns for lulibre's own fields.
 .TP
-.BR refs " [" \-\-force "] [\fIfilter\fR | " all ]
-Read what the books cite, from the bibliography at the end of each file.
+.BR offline " [" cancel " \fIjob\fR | " retry " | " restart ]
+The changes waiting for nothing to hold the library.
 .TP
-.BR sync " [" add " | " move " | " drop "] [\fIfilter\fR | " all ]
-The sync folder: list the files waiting there, add them to the library,
-add and remove them, or drop them.
+.BR index " [" force " | \fIbook page\fR]"
+Read new or changed files, or one file as far as a page.
 .TP
-.B dupes
-Books whose files are the same, byte for byte.
+.BR units " [" apply ]
+lulibre's systemd units around calibre's content server.
+.SS History
 .TP
-.B orphans
-Records with no file, files with no record, broken links.
+.BR history
+What lulibre changed, and what changed outside it, newest first.
 .TP
-.BR bib " [\fIfilter\fR]"
-BibTeX for the books a filter matches.
+.BR undo " [\fIn\fR]"
+Put the last change back, or batch
+.IR n .
 .TP
-.BR ocr " [\fIfilter\fR | " all ]
-Read text from page images with
-.BR tesseract (1).
+.BR snapshot " [" take "] [\fIname\fR] | " list " | " plan " \fIsnap\fR | " retire " \fIsnap\fR | " unretire " \fIsnap\fR | " import " \fIfile\fR [\fIname\fR]"
+A snapshot is a position in the journal. Alone, the list.
 .TP
-.BR run " \fIscript\fR [\fIargs\fR]"
-Run a Lua script without the interface: a path, or the name of a script in
-the configuration directory or of a bundled one.
+.BR rollback " \fIsnap\fR [" exact " | " unsync " | " fields ]
+Put the library back to a snapshot, after showing what that would do and asking.
+.SS Moving around
 .TP
-.BR config " [" \-\-write " | " \-\-path ]
-Print the configuration as a Lua file, every option with what it does.
-.B \-\-write
-saves it as a first
-.IR init.lua .
+.BR browse " [" author " | " subject " | " series " | " publisher " | " year " | " format ]
+The library as a tree beside the list.
+.TP
+.BR yank " " bib " | " key " | " path " | " title
+Copy for the selection to the clipboard.
+.TP
+.BR config
+Every setting, and the programs lulibre's features need.
+.TP
+.BR new " \fIcommand\fR [\fIargs\fR]"
+One of each screen is open at a time: a screen opened again goes to the open one. This
+opens another.
+.PP
+.B :help
+lists the rest, with the keys.
 .SH OPTIONS
 .TP
 .BI \-L " dir"
-The calibre library. Otherwise
+The calibre library. Otherwise the setting
+.B path.library
+(in
+.IR options.lua ,
+or the saved state), else
 .BR LULIBRE_LIBRARY ,
-the option
-.B library
-of
-.IR init.lua ,
-or the current directory.
+else the current directory when it is a library; else, on a terminal,
+lulibre asks whether to open the library calibre opened last (calibre's
+.IR global.py.json ),
+for that run.
 .TP
 .BI \-o " name=value"
-Set an option for this run.
+A setting for this run. It lies over what
+.I init.lua
+sets as lulibre starts; a change made later replaces it.
 .B "lulibre \-o help"
 lists them all.
 .TP
@@ -223,21 +221,45 @@ negates.
 .SH FILES
 .TP
 .I ~/.config/lulibre/init.lua
-The configuration: plain Lua, loaded at startup.
-.B "lulibre config \-\-write"
-writes a first one. Scripts of your own go in
-.I scripts/
-beside it, modules in
-.IR lua/ .
+Plain Lua, run at startup as the first task. Modules of your own go in
+.I lua/
+beside it. Asked to,
+.B w
+in
+.B :config
+and lulibre-setup create it, or add the line that loads
+.IR lua/config/options.lua ;
+nothing else writes it.
+.TP
+.I ~/.config/lulibre/lua/config/options.lua
+The standard file for settings, and the one
+.B :config
+writes: set through
+.BR lulib.opt ,
+loaded by
+.B require \(dqconfig.options\(dq
+in
+.IR init.lua .
+.TP
+.I ~/.local/state/lulibre/settings
+The saved settings, read and written while the setting
+.B persistent
+is true.
 .TP
 .I ~/.local/share/lulibre/
-The index (one file for each library) and beside it its history
-.RI ( <index>.history.db :
-the journal of changes and the snapshots) and custom fields
+The index (one file for each library) and beside it its journal
+.RI ( <index>.journal.db :
+every change, where its value came from, and the snapshots), custom fields
 .RI ( <index>.custom.db ),
-the databases
-.B "lulibre datasets"
-fetches, and files dropped from the sync folder.
+and reviews
+.RI ( <index>.wit.db :
+their proposals and marks, and what was worked out from each file). Also the online
+answers kept
+.RI ( net.db ),
+the datasets, and files taken out of the sync folder
+.RI ( dropped/ )
+or the library
+.RI ( orphans/ ).
 .SH ENVIRONMENT
 .TP
 .B LULIBRE_LIBRARY
@@ -250,8 +272,18 @@ The configuration directory, when
 .B \-C
 is not given.
 .TP
-.BR XDG_DATA_HOME ", " XDG_CONFIG_HOME
-Where the data and configuration folders are looked for.
+.BR XDG_DATA_HOME ", " XDG_CONFIG_HOME ", " XDG_STATE_HOME
+Where the data, configuration and state folders are looked for.
+.TP
+.BR LUA_PATH_5_5 ", " LUA_CPATH_5_5
+Lua's own search path, after lulibre's own modules, yours, and the setting
+.BR path.modtree ;
+pixi's environment sets them (with Lua 5.4, the _5_4 names).
+.TP
+.B PIXI_ENVIRONMENT_NAME
+Set in a pixi environment, where
+.B path.modtree
+is ignored.
 .SH EXIT STATUS
 0 on success, 1 when a command or a script fails.
 .SH SEE ALSO

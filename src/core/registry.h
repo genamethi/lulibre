@@ -1,0 +1,25 @@
+#ifndef LULIBRE_REGISTRY_H
+#define LULIBRE_REGISTRY_H
+
+/* Replaceable parts (design 48).
+ *
+ * An entry is a part C does with its own code unless Lua has put a
+ * function in its place: a handler, set as a field of a library table
+ * (utils.ocr_eng for the OCR reader; lua/handler.c). C then calls the handler
+ * by the queue: it runs as a task on the Lua thread, and the answer comes
+ * back as a message. C never calls Lua and waits. */
+
+enum registry_kind {
+  REG_READER, /* how a file's page images become text (design 37): utils.ocr_eng */
+  REG_STORE,  /* how a book's changes reach calibre (design 28): store.calibre */
+  REG_KINDS
+};
+
+/* Whether Lua has put a function in the entry's place. Any thread. */
+int registry_lua(enum registry_kind kind);
+/* The Lua thread, as the module's function is set or cleared; every entry
+ * goes back to C's own when the lua_State is torn down. */
+void registry_set_lua(enum registry_kind kind, int on);
+void registry_clear_lua(void);
+
+#endif

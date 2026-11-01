@@ -104,9 +104,14 @@ void picker_open(struct tui *t, struct picker *p) {
   }
   t->picker = p;
   t->mode = MODE_PICKER;
+  wm_float(t, &view_picker, p, 0, FLOAT_BARE);
   le_set(&p->query, "");
   rematch(p);
   tui_dirty(t);
+}
+
+void *picker_ud_if(struct tui *t, picker_accept *accept) {
+  return t->picker && t->picker->accept == accept ? t->picker->ud : NULL;
 }
 
 void picker_close(struct tui *t) {
@@ -114,9 +119,10 @@ void picker_close(struct tui *t) {
   if (!p) return;
   picker_cancel_fn *cancel = p->accepted ? NULL : p->cancel;
   void *ud = p->ud;
-  picker_free(p);
   t->picker = NULL;
   t->mode = MODE_NORMAL;
+  wm_undock(t, p); /* its window; the picker itself is freed here */
+  picker_free(p);
   tui_dirty(t);
   if (cancel) cancel(t, ud);
 }
@@ -168,25 +174,10 @@ void picker_draw(struct tui *t) {
   int inner = w - 4, list_h = h - 4;
   p->page = list_h > 1 ? list_h - 1 : 1;
 
-  /* frame */
-  for (int r = 0; r < h; r++) {
-    dr_style(n, C_DEFAULT, theme.bar_bg, 0);
-    dr_fill(n, y + r, x, w);
-  }
+  /* frame, and the line under the query */
+  dr_frame(n, (struct rect){y, x, h, w}, theme.bar_bg);
   dr_style(n, theme.border, theme.bar_bg, 0);
-  for (int c = 1; c < w - 1; c++) {
-    ncplane_putstr_yx(n, y, x + c, "─");
-    ncplane_putstr_yx(n, y + h - 1, x + c, "─");
-    ncplane_putstr_yx(n, y + 2, x + c, "─");
-  }
-  for (int r = 1; r < h - 1; r++) {
-    ncplane_putstr_yx(n, y + r, x, "│");
-    ncplane_putstr_yx(n, y + r, x + w - 1, "│");
-  }
-  ncplane_putstr_yx(n, y, x, "╭");
-  ncplane_putstr_yx(n, y, x + w - 1, "╮");
-  ncplane_putstr_yx(n, y + h - 1, x, "╰");
-  ncplane_putstr_yx(n, y + h - 1, x + w - 1, "╯");
+  for (int c = 1; c < w - 1; c++) ncplane_putstr_yx(n, y + 2, x + c, "─");
   ncplane_putstr_yx(n, y + 2, x, "├");
   ncplane_putstr_yx(n, y + 2, x + w - 1, "┤");
 
@@ -197,6 +188,13 @@ void picker_draw(struct tui *t) {
   char *count = xasprintf(" %d/%d ", p->nmatch, p->n);
   dr_style(n, theme.dim, theme.bar_bg, 0);
   dr_text(n, y + h - 1, x + w - 2 - (int)strlen(count), (int)strlen(count), count);
+  sbuf hint = SBUF_INIT; /* the place's hint (scrnman.set), on the frame's foot */
+  if (ctx_hint_line(KC_PICKER, &hint) && dr_width(hint.s, hint.len) + (int)strlen(count) + 8 <= w) {
+    sb_putc(&hint, ' ');
+    dr_text(n, y + h - 1, x + 2, w - 4, " ");
+    dr_text(n, y + h - 1, x + 3, w - 4, hint.s);
+  }
+  sb_free(&hint);
   free(count);
 
   /* query line */
@@ -225,3 +223,15 @@ void picker_draw(struct tui *t) {
     }
   }
 }
+
+/* the picker as a floating window: it draws its own box, and every key is its own */
+static void view_draw(struct tui *t, void *state, struct rect r, int focused) {
+  if (t->picker == state) picker_draw(t);
+}
+
+static int view_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni) {
+  if (t->picker == state) picker_key(t, key, ni);
+  return 1;
+}
+
+const struct view_class view_picker = {"picker", NULL, NULL, view_draw, NULL, view_key, 1};

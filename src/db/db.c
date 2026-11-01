@@ -7,7 +7,7 @@
 
 #include "core/util.h"
 
-#define SCHEMA_VERSION "1"
+#define SCHEMA_VERSION "4"
 
 static int fail(struct db *db, char **err, const char *what) {
   *err = xasprintf("%s: %s", what, db->h ? sqlite3_errmsg(db->h) : "no database");
@@ -53,8 +53,9 @@ int db_meta_set(struct db *db, const char *key, const char *val) {
   return rc;
 }
 
-/* The index holds nothing that cannot be regenerated, so a schema change
- * drops everything instead of migrating. */
+/* A schema change drops what the index derived (from the library, the
+ * files, the readings) instead of migrating it; what nothing can derive
+ * again stays: the sync folder's files, kv. */
 static int reset_if_stale(struct db *db, char **err) {
   char *v = NULL;
   sqlite3_stmt *st;
@@ -66,53 +67,49 @@ static int reset_if_stale(struct db *db, char **err) {
   int stale = v && strcmp(v, SCHEMA_VERSION) != 0;
   free(v);
   if (!stale) return 0;
-  static const char *const drop[] = {
-    "pages_fts", "books_fts", "lines", "pages", "files", "idents", "book_tags", "tags",
-    "book_authors", "authors", "books", "marks", "meta",
-  };
-  for (size_t i = 0; i < ARRAY_LEN(drop); i++) {
-    char *sql = xasprintf("DROP TABLE IF EXISTS %s", drop[i]);
-    int rc = db_exec(db, sql, err);
-    free(sql);
-    if (rc) return rc;
+  /* every view and table of the index: views first, then full-text tables
+   * (which take their own tables with them: IF EXISTS passes over those) */
+  sbuf sql = SBUF_INIT;
+  if (sqlite3_prepare_v2(db->h,
+                         "SELECT type, name FROM main.sqlite_master WHERE type IN ('table', 'view')"
+                         " AND name NOT LIKE 'sqlite_%' AND name NOT IN ('staged', 'kv')"
+                         " ORDER BY type = 'view' DESC, sql LIKE 'CREATE VIRTUAL%' DESC",
+                         -1, &st, NULL) == SQLITE_OK) {
+    while (sqlite3_step(st) == SQLITE_ROW)
+      sb_printf(&sql, "DROP %s IF EXISTS \"%s\";", (const char *)sqlite3_column_text(st, 0),
+                (const char *)sqlite3_column_text(st, 1));
+    sqlite3_finalize(st);
   }
-  return 0;
+  int rc = sql.s ? db_exec(db, sql.s, err) : 0;
+  sb_free(&sql);
+  return rc;
 }
 
-/* ---- the history: every change made to the library, and the snapshots
- * taken of it. It is lulibre's record of what it did, not derived from
- * anything, so it lives in a file of its own beside the index
- * ("<index>.history.db") where rebuilding or deleting the index cannot
- * touch it. It is attached to each read-write connection as `history`; its
- * tables are named without the prefix ("FROM journal"). ---- */
+/* ---- the journal: every operation on the library, one lifecycle
+ * (design 25, 26, 27). It is lulibre's record of what it did, not derived
+ * from anything, so it lives in a file of its own beside the index
+ * ("<index>.journal.db") where rebuilding or deleting the index cannot
+ * touch it. It is attached to each read-write connection as `history`. ----
+ *
+ * A row is one field of one book changed (old and new), or one structural
+ * command (argv, as calibredb's arguments joined by tabs); a batch is one
+ * operation. need: enum op_need; state: enum op_state. proposal, proposed
+ * and source: where the value came from, for a decision taken in review.
+ * undoes: the batch an undo puts back. */
 static const char history_schema[] =
   "PRAGMA history.journal_mode=WAL;"
-  /* one row per field changed (or book removed, added, restored, dropped);
-   * label 'outside' marks changes found in calibre that lulibre did not make */
   "CREATE TABLE IF NOT EXISTS history.journal("
-  " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, book INTEGER NOT NULL, field TEXT NOT NULL,"
-  " old TEXT, new TEXT, status TEXT NOT NULL DEFAULT 'pending', error TEXT, ts INTEGER,"
-  " label TEXT, undone INTEGER NOT NULL DEFAULT 0);"
-  "CREATE INDEX IF NOT EXISTS history.journal_batch ON journal(batch);"
-  "CREATE INDEX IF NOT EXISTS history.journal_book ON journal(book, field);"
-  /* a snapshot is a point in the journal: the library as it was after row
-   * `upto` (lua/lulibre/snapshots.lua) */
+  " id INTEGER PRIMARY KEY, batch INTEGER NOT NULL, label TEXT, need INTEGER NOT NULL DEFAULT 0,"
+  " store TEXT NOT NULL, state INTEGER NOT NULL, error TEXT, ts INTEGER,"
+  " book INTEGER, field TEXT, old TEXT, new TEXT, argv TEXT,"
+  " proposal INTEGER, proposed TEXT, source TEXT, undoes INTEGER);"
+  /* a snapshot is a position in the journal; its values, those a copy of
+   * calibre's database had that the journal didn't see (lulib._snapshots) */
   "CREATE TABLE IF NOT EXISTS history.snapshots("
-  " id INTEGER PRIMARY KEY, name TEXT NOT NULL, ts INTEGER NOT NULL, upto INTEGER NOT NULL,"
-  " auto INTEGER NOT NULL DEFAULT 0, retired INTEGER, note TEXT);"
-  /* changes calibre makes only while no calibre program has the library
-   * open (add_custom_column ...), waiting for the content server to be
-   * stopped (lua/lulibre/offline.lua). argv: calibredb's arguments after
-   * --with-library, or a job lulibre does itself (restore_copy PATH), as
-   * JSON; status waiting, done, failed or cancelled */
-  "CREATE TABLE IF NOT EXISTS history.offline("
-  " id INTEGER PRIMARY KEY, argv TEXT NOT NULL, label TEXT, ts INTEGER NOT NULL,"
-  " status TEXT NOT NULL DEFAULT 'waiting', error TEXT, done INTEGER);"
-  /* for a snapshot made from a copy of calibre's database: the values in
-   * which that copy differs from what the journal says the library was */
-  "CREATE TABLE IF NOT EXISTS history.snapshot_values("
-  " snap INTEGER NOT NULL, book INTEGER NOT NULL, field TEXT NOT NULL, value TEXT,"
-  " PRIMARY KEY(snap, book, field)) WITHOUT ROWID;";
+  " id INTEGER PRIMARY KEY, name TEXT, ts INTEGER, upto INTEGER, auto INTEGER, retired INTEGER, note TEXT);"
+  "CREATE TABLE IF NOT EXISTS history.snapshot_values(snap INTEGER, book INTEGER, field TEXT, value TEXT);"
+  "CREATE INDEX IF NOT EXISTS history.journal_batch ON journal(batch);"
+  "CREATE INDEX IF NOT EXISTS history.journal_book ON journal(book, field);";
 
 /* ---- custom metadata: fields of your own beside calibre's (#partof,
  * #part ...), additive: calibre's database is never changed for them. In a
@@ -130,38 +127,94 @@ static const char custom_schema[] =
   " source TEXT, ts INTEGER, PRIMARY KEY(book, field, ord)) WITHOUT ROWID;"
   "CREATE INDEX IF NOT EXISTS custom.data_field ON data(field, value);";
 
-static char *beside(const char *index, const char *what) {
+/* ---- wits: a value for a book's field, with the source that gave it,
+ * waiting for review (lua/wit.lua). In a file of their own beside the
+ * index ("<index>.wit.db"), attached as `wit` for the filter is:proposed;
+ * wit writes it through a connection of its own. Per book and field, alt 1
+ * is the first-ranked; agree and disagree name the sources that agree and
+ * differ, comma-separated; start and stop, where in the file's text (its
+ * txt) the value was found; review, the review it belongs to (wit.lua);
+ * hidden, shown only by a deep review; decision ("accept" or "reject") and
+ * edited, what the review has marked and not yet written; op, set on a
+ * rewrite of the field (wit.add), which making proposals anew leaves. ---- */
+static const char wit_schema[] =
+  "PRAGMA wit.journal_mode=WAL;"
+  "CREATE TABLE IF NOT EXISTS wit.reviews(id INTEGER PRIMARY KEY, name TEXT, opened INTEGER NOT NULL DEFAULT 0);"
+  "CREATE TABLE IF NOT EXISTS wit.wits("
+  " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
+  " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT, op TEXT,"
+  " UNIQUE(review, book, field, alt));"
+  /* :capture's patterns kept under a name */
+  "CREATE TABLE IF NOT EXISTS wit.capture_rules(name TEXT PRIMARY KEY, source TEXT, spec TEXT);"
+  /* what was worked out from a file, so that it is not worked out again
+   * while the file is as it was read at stamp (lulib._kept) */
+  "CREATE TABLE IF NOT EXISTS wit.kept("
+  " file INTEGER NOT NULL, step TEXT NOT NULL, key TEXT NOT NULL, stamp INTEGER, data TEXT,"
+  " PRIMARY KEY(file, step, key));";
+
+/* A wits table from before reviews: its rows become the first review's. */
+static const char wit_before_reviews[] =
+  "ALTER TABLE wit.wits RENAME TO wits_old;"
+  "CREATE TABLE wit.wits("
+  " id INTEGER PRIMARY KEY, review INTEGER NOT NULL DEFAULT 1, book INTEGER NOT NULL, field TEXT NOT NULL,"
+  " value TEXT, source TEXT NOT NULL, alt INTEGER NOT NULL, score REAL, agree TEXT, disagree TEXT,"
+  " file INTEGER, start INTEGER, stop INTEGER, ts INTEGER,"
+  " hidden INTEGER NOT NULL DEFAULT 0, decision TEXT, edited TEXT, op TEXT,"
+  " UNIQUE(review, book, field, alt));"
+  "INSERT INTO wit.wits(id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts)"
+  " SELECT id, book, field, value, source, alt, score, agree, disagree, file, start, stop, ts FROM wit.wits_old;"
+  "DROP TABLE wit.wits_old;";
+
+static int wit_prepare(struct db *db, char **err) {
+  if (db_exec(db, wit_schema, err)) return -1;
+  sqlite3_stmt *st = NULL;
+  if (sqlite3_prepare_v2(db->h, "SELECT review FROM wit.wits LIMIT 0", -1, &st, NULL) != SQLITE_OK)
+    return db_exec(db, wit_before_reviews, err);
+  sqlite3_finalize(st);
+  if (sqlite3_prepare_v2(db->h, "SELECT op FROM wit.wits LIMIT 0", -1, &st, NULL) != SQLITE_OK)
+    return db_exec(db, "ALTER TABLE wit.wits ADD COLUMN op TEXT;", err);
+  sqlite3_finalize(st);
+  return 0;
+}
+
+static char *side[3]; /* journal, custom, wit */
+static const char *const side_names[] = {"journal", "custom", "wit"};
+
+void db_side_set(const char *journal, const char *custom, const char *wit) {
+  const char *paths[] = {journal, custom, wit};
+  for (int i = 0; i < 3; i++) {
+    free(side[i]);
+    side[i] = paths[i] && paths[i][0] ? xstrdup(paths[i]) : NULL;
+  }
+}
+
+char *db_side_path(const char *index, const char *what) {
+  for (int i = 0; i < 3; i++)
+    if (side[i] && !strcmp(what, side_names[i])) return xstrdup(side[i]);
   size_t n = strlen(index);
   if (n > 3 && !strcmp(index + n - 3, ".db")) return xasprintf("%.*s.%s.db", (int)(n - 3), index, what);
   return xasprintf("%s.%s.db", index, what);
 }
 
-/* Where the history (the journal and the snapshots) of the index at `index`
- * is kept. malloc'd. */
-static char *db_history_path(const char *index) {
-  return beside(index, "history");
-}
-
-/* Where the custom fields (#partof ...) of the index at `index` are kept. */
-static char *db_custom_path(const char *index) {
-  return beside(index, "custom");
-}
 
 /* mode: "rwc" (made if it is not there), "rw", "ro" */
 static int attach(struct db *db, const char *path, const char *as, const char *mode, char **err);
 
 static int attach_history(struct db *db, int create, char **err) {
   if (!strncmp(db->path, "file:", 5) || !strcmp(db->path, ":memory:")) return 0;
-  char *path = db_history_path(db->path);
+  char *path = db_side_path(db->path, "journal");
   int rc = attach(db, path, "history", create ? "rwc" : "rw", err);
   free(path);
   return rc;
 }
 
-static int attach_custom(struct db *db, const char *mode, char **err) {
+/* A file beside the index (custom, wit), attached under its name. */
+static int attach_beside(struct db *db, const char *what, const char *mode, char **err) {
   if (!strncmp(db->path, "file:", 5) || !strcmp(db->path, ":memory:")) return 0;
-  char *path = db_custom_path(db->path);
-  int rc = attach(db, path, "custom", mode, err);
+  char *path = db_side_path(db->path, what);
+  int rc = attach(db, path, what, mode, err);
   free(path);
   return rc;
 }
@@ -197,57 +250,9 @@ static int attach(struct db *db, const char *path, const char *as, const char *m
   return rc;
 }
 
-/* Columns added to the index since it was made: added, empty, to one made
- * before (the index is derived data, but rebuilding it would cost the text
- * of every file). */
-static int add_columns(struct db *db, char **err) {
-  static const struct { const char *table, *column, *decl; } cols[] = {
-    {"files", "garbled", "REAL"},
-    {"lines", "math", "TEXT"},
-    /* 1: a proposal someone asked for (taking a copy's values), shown whatever propose_min says */
-    {"proposals", "asked", "INTEGER"},
-  };
-  for (size_t i = 0; i < ARRAY_LEN(cols); i++) {
-    char *q = xasprintf("SELECT 1 FROM pragma_table_info('%s') WHERE name = '%s'", cols[i].table, cols[i].column);
-    sqlite3_stmt *st;
-    int have = 0;
-    if (sqlite3_prepare_v2(db->h, q, -1, &st, NULL) == SQLITE_OK) {
-      have = sqlite3_step(st) == SQLITE_ROW;
-      sqlite3_finalize(st);
-    }
-    free(q);
-    if (!have) {
-      char *alter = xasprintf("ALTER TABLE %s ADD COLUMN %s %s", cols[i].table, cols[i].column, cols[i].decl);
-      int rc = db_exec(db, alter, err);
-      free(alter);
-      if (rc) return rc;
-    }
-  }
-  return 0;
-}
-
-/* An index from before the history had a journal of its own: its rows move
- * to the history (once, and only into an empty one), and it goes. */
-static int move_journal(struct db *db, char **err) {
-  sqlite3_stmt *st;
-  int old = 0;
-  if (sqlite3_prepare_v2(db->h, "SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = 'journal'",
-                         -1, &st, NULL) == SQLITE_OK) {
-    old = sqlite3_step(st) == SQLITE_ROW;
-    sqlite3_finalize(st);
-  }
-  if (!old) return 0;
-  return db_exec(db,
-                 "BEGIN IMMEDIATE;"
-                 "INSERT INTO history.journal SELECT * FROM main.journal"
-                 " WHERE NOT EXISTS(SELECT 1 FROM history.journal);"
-                 "DROP TABLE main.journal;"
-                 "COMMIT;",
-                 err);
-}
-
 int db_open(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   char *tmp = xstrdup(path);
   mkdir_p(dirname(tmp));
   free(tmp);
@@ -264,9 +269,9 @@ int db_open(struct db *db, const char *path, char **err) {
               "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;"
               "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-32000;",
               err) ||
-      reset_if_stale(db, err) || db_exec(db, db_schema, err) || add_columns(db, err) || attach_history(db, 1, err) ||
-      db_exec(db, history_schema, err) || move_journal(db, err) || attach_custom(db, "rwc", err) ||
-      db_exec(db, custom_schema, err) || db_register_functions(db, err)) {
+      reset_if_stale(db, err) || db_exec(db, db_schema, err) || attach_history(db, 1, err) ||
+      db_exec(db, history_schema, err) || attach_beside(db, "custom", "rwc", err) ||
+      db_exec(db, custom_schema, err) || attach_beside(db, "wit", "rwc", err) || wit_prepare(db, err)) {
     db_close(db);
     return -1;
   }
@@ -276,6 +281,7 @@ int db_open(struct db *db, const char *path, char **err) {
 
 int db_open_reader(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   if (sqlite3_open_v2(path, &db->h, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, NULL) != SQLITE_OK) {
     *err = xasprintf("cannot open index %s: %s", path, db->h ? sqlite3_errmsg(db->h) : "?");
     db_close(db);
@@ -283,8 +289,9 @@ int db_open_reader(struct db *db, const char *path, char **err) {
   }
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
-  /* the custom fields, for filters on them (the file is made by db_open) */
-  if (attach_custom(db, "ro", err) || db_register_functions(db, err)) {
+  /* the custom fields and the wits, for filters on them (the files are
+   * made by db_open) */
+  if (attach_beside(db, "custom", "ro", err) || attach_beside(db, "wit", "ro", err)) {
     db_close(db);
     return -1;
   }
@@ -293,6 +300,7 @@ int db_open_reader(struct db *db, const char *path, char **err) {
 
 int db_open_writer(struct db *db, const char *path, char **err) {
   memset(db, 0, sizeof *db);
+  db_functions_everywhere();
   if (sqlite3_open_v2(path, &db->h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI, NULL) != SQLITE_OK) {
     *err = xasprintf("cannot open index %s: %s", path, db->h ? sqlite3_errmsg(db->h) : "?");
     db_close(db);
@@ -301,7 +309,8 @@ int db_open_writer(struct db *db, const char *path, char **err) {
   db->path = xstrdup(path);
   sqlite3_busy_timeout(db->h, DB_BUSY_MS);
   if (db_exec(db, "PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA temp_store=MEMORY;", err) ||
-      attach_history(db, 0, err) || attach_custom(db, "rw", err) || db_register_functions(db, err)) {
+      attach_history(db, 0, err) || attach_beside(db, "custom", "rw", err) ||
+      attach_beside(db, "wit", "ro", err)) {
     db_close(db);
     return -1;
   }
@@ -313,5 +322,4 @@ void db_close(struct db *db) {
   db->h = NULL;
   free(db->path);
   db->path = NULL;
-  /* db->L is closed in dbfuncs.c's destructor, run by sqlite3_close */
 }

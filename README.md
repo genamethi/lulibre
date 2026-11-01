@@ -1,32 +1,48 @@
 # lulibre
 
-A fast, modal terminal workbench for the metadata of a [calibre](https://calibre-ebook.com)
-library: a full-text index over the first pages of every book, a filter
-language, batch editing with undo, and Lua scripting. C, notcurses, libuv.
+Lulibre is a vibe-coded extensible modal terminal workbench for
+ebook metadata and [calibre](https://calibre-ebook.com) library organization. C, notcurses, libuv.
 
-**Alpha.** It works and is tested, but it is young: try changes on a few
-books before a few hundred. Every change is journaled and `u` undoes it,
-removals included. [Changelog](CHANGELOG.md).
+I will eventually get around to ensuring that it's not slop, but
+for the time being. Don't count on it. The text reads like it was
+written by an LLM, so it's a bit nauseating to use.
 
-## Install
+**Alpha.** It is very unstable and hasn't been well tested. Every change
+is journaled and `u` undoes it, removals included. Don't rely on that.
+It's unstable and a bit frustrating to use. Currently, 0.2.1 beta is
+a better experience.
 
-Needs a C compiler, pkgconf and the development files of **libuv**,
-**sqlite3**, **notcurses**, **mupdf**, **djvulibre** and **Lua 5.4 or 5.5**.
+I can't assure the accuracy of these instructions. Mostly because
+the pace has been a bit fast. Currently fiddling with 0.4.0 alpha.0
+by hand.
 
-    ./configure --prefix=/usr/local
-    make
-    make check          # optional: unit tests and a quick end-to-end test
-    sudo make install   # or: make DESTDIR=$PWD/stage install
+[Changelog](CHANGELOG.md).
+
+## Build
+
+### Dependencies (Sorry, Claude didn't think to put this keyword here)
+
+A C compiler (I use gcc, but clang will work), pkgconf and dev files
+files for **libuv**, **sqlite3**, **notcurses**, **mupdf**, **djvulibre**, **OpenSSL** (libcrypto),
+**libcurl**, **md4c** and **Lua 5.4 or 5.5**.
+
+Docs require **ldoc** which you can get via LuaRocks or github.
+
+Pixi can be helpful for runtime dependencies (see below).
+
+    ./configure
+    make                # build/lulibre, and build/lulibre-setup
+    make check          # optional: unit tests and the runtime's tests
 
 At run time:
 
 | For | Needs |
 |---|---|
 | changing the library | calibre's `calibredb` |
-| the sync folder, orphans, onboarding | the `luv` rock: `make rocks` |
 | OCR | `tesseract` |
-| looking books up (`:enrich`), fetching the databases below | `curl` |
-| arXiv's records from Kaggle | [`pixi`](https://pixi.sh) (or `kaggle`), and a Kaggle account |
+| looking books up (`:enrich`) | the `dkjson` rock |
+| scripts (`expr`, grammars) | the `lpeg` rock |
+| `:propose`, `:enrich`, `:lua` | the `penlight` rock |
 
 `pixi.toml` provides the run-time dependencies through [pixi](https://pixi.sh).
 
@@ -34,37 +50,53 @@ At run time:
 
 ## Set up
 
-    lulibre config --write        # writes ~/.config/lulibre/init.lua, every option commented
-    $EDITOR ~/.config/lulibre/init.lua
+    build/lulibre-setup       # one screen for what follows; runs from the build folder
 
-Set at least the library. If you run calibre's content server, give its
-address and account and changes go through it; without one, lulibre changes
-the library folder directly.
+On that screen, **Write options.lua** (`w`) writes your choices and installs
+nothing; **Install now** (`i`) installs lulibre first. Or by hand:
+
+    make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
+
+lulibre needs no configuration to start. init.lua is plain Lua, so you can keep
+your settings in any file, or in several. The standard layout, and the only one
+the configuration screen works with, is `lua/config/options.lua`, loaded from
+init.lua, both in `~/.config/lulibre/`:
 
 ```lua
-local o = lulibre.o
-o.library = "~/calibre-library"
-o.server = "http://127.0.0.1:8080"          -- optional
-o.user = "me"
-o.password_file = "~/.config/calibre/password-file"
+-- init.lua
+require "config.options"
 ```
 
-    lulibre index                 # first run: a few seconds per thousand files
+```lua
+-- lua/config/options.lua
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.server = "http://127.0.0.1:8080"          -- optional: calibre's content server
+opt.user = "me"
+opt.path.password = "~/.config/calibre/password-file"
+```
 
-Optional, now or any time later: databases for looking books up without
-asking anybody.
+You don't have to write these by hand. In lulibre, `:config` lists every
+setting; `w` writes the ones you changed to options.lua, creates init.lua with
+that line (or adds the line to yours, keeping `init.lua.bak`), and asks first.
+`a` also adds every other setting, commented out with its default. Another
+scheme is a short script: see [Configuration](docs/configuration.md#keeping-settings-elsewhere).
 
-    lulibre datasets              # says what there is and asks which to fetch
+With no library set (`-L DIR`, `$LULIBRE_LIBRARY` or `path.library`), started
+on a terminal, lulibre asks whether to open the library calibre opened last,
+then whether to send changes through calibre's content server when one is
+running (with its user and password file). The answers hold for that run;
+`w` in `:config` keeps them.
 
-| Dataset | Useful if you have | Size |
-|---|---|---|
-| `arxiv` | arXiv preprints | 1.7 GB to fetch, 5.6 GB on disk |
-| `openlibrary` | books with an ISBN | 9.7 GB |
-| `zbmath` | arXiv preprints in mathematics | 37 MB |
+When calibre's content server has the library open, changes go through it;
+when nothing has it open, straight to the folder. lulibre never reads the
+password: calibredb gets the file's name.
 
-They go in `~/.local/share/lulibre`. Run it again to renew them: what is
-here and fresh is left alone. Files you fetched yourself are taken up with
-`lulibre datasets add FILE...`. More in [docs/workflows.md](docs/workflows.md).
+    lulibre index                 # or just start lulibre, which reads new files itself
+
+Reading a library takes minutes, because files with no usable text go through
+OCR: 2,566 books took 135 s here, on 24 threads with the files already in the
+disk cache.
 
 ## Use
 
@@ -75,19 +107,15 @@ here and fresh is left alone. Files you fetched yourself are taken up with
 | `j` `k` `gg` `G` `<C-d>` `<C-u>` | move |
 | `/` then `n` `N` | search, next, previous |
 | `&` · `<BS>` | narrow the list as you type · show everything |
-| `f` `ga` `gs` · `gt` | fuzzy-find a book, author, subject · browse as a tree |
+| `f` `ga` `gs` | fuzzy-find a book, author, subject |
+| `gh` | the list as a tree: by author, subject, series, publisher, year, format |
 | `Space` · `V` | mark · select a range |
-| `e` | edit the selection, with ranked suggestions; `w` writes |
-| `gc` | capture fields from file names or titles by pattern |
-| `gr` | review proposed changes, surest first; `x` shows a book's other fields |
-| `gT` | titles in CAPITALS to title case |
-| `?` | every key: of the interface, or inside a panel, of that panel |
+| `e` | edit the selection; `w` writes |
+| `gp` · `gr` | propose metadata from the files · review the proposals |
 | `u` | undo the last change |
+| `?` | every key: of the interface, or inside a panel, of that panel |
 | `J` `K` `[` `]` · `P` | scroll and page the preview · text ⇄ page image |
 | mouse | click a row; wheel scrolls; drag over text anywhere to copy it, `<C-v>` pastes it into a field; drag the line between windows to resize |
-| `gd` · `go` | duplicate files (MD5) · orphaned records, files and links |
-| `gS` `S` `X` · `gl` | the sync folder: show, add, add-and-remove · back to the library |
-| `yb` `yk` `yp` | copy BibTeX, cite keys, paths |
 | `` ` `` · `:` · `q` | log console · command line · quit |
 
 Most actions apply to the selection: the range being selected, else the
@@ -101,29 +129,21 @@ From the shell:
     lulibre query 'author:unknown subject:number-theory'
     lulibre query -c 'text:"class field" year:>1990'
     lulibre show 1299                               # one book: metadata, file, indexed text
-    lulibre bib 'tag:math/algebra' > algebra.bib
-    lulibre run propose 'no:author'                 # read title pages; fills the review queue
-    lulibre dupes                                   # books whose files are byte-identical
-    lulibre orphans                                 # records with no file, files with no record
-    lulibre sync                                    # what is waiting in the sync folder
+    lulibre -o ocr=auto index                       # read the files, with OCR where their text is not usable
 
 In the interface:
 
-- **Label unknown books.** `&author:unknown`, then `:run propose`, then `gr`:
-  `a` accepts, `e` corrects, `A` accepts everything above a confidence, `w`
-  writes.
-- **Pull fields out of names.** Select books, `gc`, type
-  `%author% - %title% (%year%)`; the table follows your typing. `w` writes.
+- **Label unknown books.** `&author:unknown`, mark them, `gp`, then `gr`:
+  `a` accepts, `e` corrects, `r` rejects, Space shows the next alternative.
+- **Look them up.** Books with a DOI, ISBN or arXiv number: `:enrich`; the
+  answers propose too.
 - **Fix one thing on many books.** Mark them, `e`, `Enter` on *tags*, type
   `+math/topology, -misc`, `w`.
-- **Take in new files.** Set `o.sync_dir`, press `gS`, fix what needs fixing,
-  select all (`ggVG`) and `X`.
 
-A script is Lua with one table, `lulibre`:
+Anything else is Lua, in a module init.lua requires, or typed at `:lua`:
 
 ```lua
--- ~/.config/lulibre/scripts/no-date.lua  —  :run no-date
-for _, book in ipairs(lulibre.books("no:date has:doi")) do
+for _, book in ipairs(require("bookman").books("no:date has:doi")) do
   print(book.id, book.title, book.idents.doi)
 end
 ```
@@ -135,8 +155,8 @@ end
 - Inside tmux the page-image preview (`P`) is drawn with block characters;
   tmux does not pass graphics through. Run directly in a terminal with the
   kitty graphics protocol, such as ghostty, lulibre asks notcurses for real
-  pixels (tested in ghostty); `lulibre.o.blitter = "sextant"` forces block
-  characters if it misbehaves.
+  pixels (tested in ghostty); `opt.blitter = "sextant"` in options.lua forces
+  block characters if it misbehaves.
 
 ## Documentation
 
@@ -144,10 +164,10 @@ Inside lulibre, `?` shows the keys under headings (with a search), and
 `:help TOPIC` shows what these guides say about a word. `man lulibre`
 covers the command line.
 
-- [Workflows](docs/workflows.md) — editing, review, capture, duplicates, orphans, the sync folder, BibTeX, OCR
+- [Workflows](docs/workflows.md) — reading the files and OCR, editing, proposals and review, online lookups
 - [Filters](docs/filters.md) — the query language
 - [Keys and commands](docs/keys.md)
-- [Configuration](docs/configuration.md) — options, colours, key maps
+- [Configuration](docs/configuration.md) — settings, colours, key maps
 - [Lua API](docs/api.md)
 - [Development](docs/development.md) — builds, tests, source layout, releasing
 

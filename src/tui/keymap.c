@@ -3,6 +3,7 @@
 #include <string.h>
 #include <strings.h>
 
+#include "lua/lapi.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -115,16 +116,24 @@ static int keymap_bind(struct keymap *km, unsigned modes, const char *spec, cons
   return keymap_bind_as(km, modes, spec, command, NULL, 0);
 }
 
-int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
-                   int hidden) {
+/* A binding loses these modes; one left in none lets go of its function. */
+static void take_modes(struct binding *b, unsigned modes) {
+  b->modes &= ~modes;
+  if (!b->modes && b->lua_ref) {
+    lapi_unref(b->lua_ref);
+    b->lua_ref = 0;
+  }
+}
+
+static int add_binding(struct keymap *km, unsigned modes, const char *spec, const char *command, int ref,
+                       const char *about, int hidden) {
   uint32_t keys[KEYSEQ_MAX];
   int n = key_parse(spec, keys);
   if (!n) return -1;
   for (int i = 0; i < km->n; i++) {
     struct binding *b = &km->b[i];
-    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
-      b->modes &= ~modes; /* the new binding takes these modes over */
-    }
+    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys))
+      take_modes(b, modes); /* the new binding takes these modes over */
   }
   if (km->n == km->cap) {
     km->cap = km->cap ? km->cap * 2 : 64;
@@ -135,10 +144,34 @@ int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const ch
   b->modes = modes;
   b->nkeys = n;
   memcpy(b->keys, keys, (size_t)n * sizeof *keys);
-  b->command = xstrdup(command);
+  b->command = command ? xstrdup(command) : NULL;
+  b->lua_ref = ref;
   b->about = about && *about ? xstrdup(about) : NULL;
   b->hidden = hidden;
   return 0;
+}
+
+int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
+                   int hidden) {
+  return add_binding(km, modes, spec, command, 0, about, hidden);
+}
+
+int keymap_bind_fn(struct keymap *km, unsigned modes, const char *spec, int ref, const char *about, int hidden) {
+  return add_binding(km, modes, spec, NULL, ref, about, hidden);
+}
+
+int keymap_unbind(struct keymap *km, unsigned modes, const char *spec) {
+  uint32_t keys[KEYSEQ_MAX];
+  int n = key_parse(spec, keys), found = 0;
+  if (!n) return -1;
+  for (int i = 0; i < km->n; i++) {
+    struct binding *b = &km->b[i];
+    if (b->nkeys == n && (b->modes & modes) && !memcmp(b->keys, keys, (size_t)n * sizeof *keys)) {
+      take_modes(b, modes);
+      found = 1;
+    }
+  }
+  return found ? 0 : 1;
 }
 
 /* Does what was typed match a binding's keys? A <Leader> in the binding is
@@ -157,7 +190,7 @@ void keymap_set_leader(struct keymap *km, const char *spec) {
 int keymap_key_of(const struct keymap *km, unsigned mode, const char *command, sbuf *out) {
   for (int i = km->n - 1; i >= 0; i--) { /* the newest binding is the one to show */
     const struct binding *b = &km->b[i];
-    if (!(b->modes & mode) || strcmp(b->command, command)) continue;
+    if (!(b->modes & mode) || !b->command || strcmp(b->command, command)) continue;
     key_format(out, b->keys, b->nkeys);
     return 1;
   }
@@ -172,7 +205,7 @@ const char *key_hint_in(char *buf, size_t size, const char *command) {
   return buf;
 }
 
-const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
+const struct binding *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
   for (int attempt = 0; attempt < 2; attempt++) {
     if (km->npending == KEYSEQ_MAX) km->npending = 0;
     km->pending[km->npending++] = key;
@@ -182,12 +215,13 @@ const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
       const struct binding *b = &km->b[i];
       if (!(b->modes & mode) || b->nkeys < km->npending) continue;
       if (!keys_match(km, b->keys, km->pending, km->npending)) continue;
-      if (b->nkeys == km->npending) exact = b;
+      /* one of a view's goes before the global one on the same keys */
+      if (b->nkeys == km->npending) exact = !exact || (b->modes & (MODE_LIST | MODE_PREVIEW)) || !(exact->modes & (MODE_LIST | MODE_PREVIEW)) ? b : exact;
       else longer = 1;
     }
     if (exact && !longer) {
       km->npending = 0;
-      return exact->command;
+      return exact;
     }
     if (longer) return NULL; /* wait for the rest of the sequence */
     /* a dead end: drop the prefix and try this key on its own */
@@ -201,7 +235,7 @@ const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key) {
 int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands) {
   for (int i = 0; i < km->n; i++) {
     const struct binding *b = &km->b[i];
-    if (!(b->modes & mode) || b->nkeys < 1 || !keys_match(km, b->keys, &key, 1)) continue;
+    if (!(b->modes & mode) || !b->command || b->nkeys < 1 || !keys_match(km, b->keys, &key, 1)) continue;
     size_t len = strcspn(b->command, " ");
     for (const char *c = commands; *c;) {
       size_t cl = strcspn(c, " ");
@@ -311,42 +345,38 @@ void keymap_defaults(struct keymap *km) {
     {MODE_NORMAL, "<Leader><Down>", "resize down"},
     /* changing things (these commands are defined in lua/lulibre/commands/) */
     {MODE_NORMAL | MODE_VISUAL, "e", "edit"},
-    {MODE_NORMAL | MODE_VISUAL, "gc", "capture"},
-    {MODE_NORMAL | MODE_VISUAL, "gT", "titlecase"},
     {MODE_NORMAL | MODE_VISUAL, "gp", "propose"},
-    {MODE_NORMAL | MODE_VISUAL, "<Leader>pr", "propose-review"},
-    {MODE_NORMAL, "<Leader>w", "weights"},
-    {MODE_NORMAL | MODE_VISUAL, "<Leader>e", "enrich-dialog"},
-    {MODE_NORMAL | MODE_VISUAL, "<Leader>c", "change"},
-    {MODE_NORMAL, "<Leader>d", "datasets-dialog"},
-    {MODE_NORMAL | MODE_VISUAL, "<Leader>s", "sync-dialog"},
     {MODE_NORMAL, "<Leader><Space>", "mark none"},
     {MODE_NORMAL, "gr", "review"},
-    {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
-    {MODE_NORMAL, "gt", "browse"},
+    {MODE_NORMAL, "gb", "sync beside"},
+    {MODE_NORMAL, "gz", "snapshot"},
     {MODE_NORMAL, "gd", "dupes"},
     {MODE_NORMAL, "go", "orphans"},
-    {MODE_NORMAL, "gk", "good"},
-    {MODE_NORMAL, "gz", "snapshots"},
-    {MODE_NORMAL, "gC", "source config"},
-    /* the sync folder (lua/lulibre/sync.lua) */
-    {MODE_NORMAL, "gS", "sync"},
-    {MODE_NORMAL, "gb", "beside"},
-    {MODE_NORMAL, "1", "source library"},
-    {MODE_NORMAL, "2", "sync"},
-    {MODE_NORMAL, "3", "source config"},
-    {MODE_NORMAL, "gl", "source library"},
-    {MODE_NORMAL | MODE_VISUAL, "S", "sync add"},
-    {MODE_NORMAL | MODE_VISUAL, "X", "sync move"},
-    {MODE_NORMAL | MODE_VISUAL, "D", "sync drop"},
-    {MODE_NORMAL, "u", "undo"},
+    {MODE_NORMAL, "gt", "browse"},
     {MODE_NORMAL | MODE_VISUAL, "yb", "yank bib"},
     {MODE_NORMAL | MODE_VISUAL, "yk", "yank key"},
     {MODE_NORMAL | MODE_VISUAL, "yp", "yank path"},
     {MODE_NORMAL | MODE_VISUAL, "yy", "yank title"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>pr", "propose -i"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>e", "enrich -i"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>c", "change"},
+    {MODE_NORMAL | MODE_VISUAL, "<Leader>s", "sync"},
+    {MODE_NORMAL | MODE_VISUAL, "r", "review selection"},
+    /* the bar's tabs, by the numbers they show */
+    {MODE_NORMAL, "1", "source 1"},
+    {MODE_NORMAL, "2", "source 2"},
+    {MODE_NORMAL, "3", "source 3"},
+    {MODE_NORMAL, "4", "source 4"},
+    {MODE_NORMAL, "5", "source 5"},
+    {MODE_NORMAL, "6", "source 6"},
+    {MODE_NORMAL, "7", "source 7"},
+    {MODE_NORMAL, "8", "source 8"},
+    {MODE_NORMAL, "9", "source 9"},
+    {MODE_NORMAL, "gl", "source library"},
+    {MODE_NORMAL, "gS", "source sync"},
+    {MODE_NORMAL, "u", "undo"},
     /* misc */
     {MODE_NORMAL, "R", "reload"},
-    {MODE_NORMAL, "<Leader>R", "reload-cfg"},
     {MODE_NORMAL, "?", "help"},
     {MODE_NORMAL, "`", "console"},
     {MODE_NORMAL, "q", "quit"},

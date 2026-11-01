@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,11 +10,11 @@
 #include "config.h"
 #include "version.h"
 #include "core/log.h"
+#include "core/queue.h"
+#include "library/library.h"
 #include "core/util.h"
 #include "lua/bridge.h"
-
-/* Commands that are bundled scripts: `lulibre bib ...` is `lulibre run bib ...`. */
-static int cmd_script(struct app *app, int argc, char **argv);
+#include "work.h"
 
 static const struct {
   const char *name;
@@ -25,26 +26,7 @@ static const struct {
   {"show", cmd_show, "show one book: metadata, files, indexed text"},
   {"stats", cmd_stats, "what is missing across the library"},
   {"run", cmd_run, "run a Lua script without the interface"},
-  {"config", cmd_config, "print the configuration as a Lua file; --write saves a first one"},
-  {"sync", cmd_script, "the sync folder: list it, or `sync add` / `sync move` into the library"},
-  {"dupes", cmd_script, "books whose files are identical"},
-  {"orphans", cmd_script, "records with no file, files with no record, broken links"},
-  {"bib", cmd_script, "write BibTeX for the books matching a filter"},
-  {"ocr", cmd_script, "read text from page images with tesseract"},
-  {"propose", cmd_script, "propose metadata from the files themselves, for review"},
-  {"enrich", cmd_script, "look books up by their identifiers and propose what the records say"},
-  {"refs", cmd_script, "read what the books cite, from the bibliography at the end of each file"},
-  {"datasets", cmd_script, "databases for looking books up offline: see them, fetch them"},
-  {"grammars", cmd_script, "the books each grammar of publications matches, and the fields it sets"},
-  {"reread", cmd_script, "read garbled pages again with poppler, or shift their letters back; what still needs OCR"},
-  {"arxiv-titles", cmd_script, "find books' arXiv numbers by title in arXiv's snapshot, asking nobody"},
-  {"verify", cmd_script, "the library held against its files: titles, authors and identifiers the pages bear out"},
-  {"recheck", cmd_script, "go back over what lulibre wrote, with each book's file deciding"},
-  {"snapshot", cmd_script, "points the library can be put back to: take, list, plan, rollback, import"},
-  {"columns", cmd_script, "calibre columns for lulibre's own fields (#partof, #part, #parts): an example of lulibre.offline"},
-  {"units", cmd_script, "lulibre's systemd units around calibre's content server, as the options ask: show, or apply"},
-  {"backup", cmd_script, "copies of calibre's database: make one, check calibre's database, put a copy back"},
-  {"offline", cmd_script, "do the changes that wait for the content server to be stopped (lulibre.service runs it)"},
+  {"offline", cmd_offline, "read calibre's records and make the changes that wait (before calibre's server starts)"},
 };
 
 static void usage(FILE *f) {
@@ -52,64 +34,42 @@ static void usage(FILE *f) {
              "With no command, lulibre opens the interactive interface (? for help).\n\n");
   for (size_t i = 0; i < ARRAY_LEN(commands); i++)
     fprintf(f, "  %-8s %s\n", commands[i].name, commands[i].summary);
-  fprintf(f, "\n  -L DIR          calibre library (else $LULIBRE_LIBRARY, init.lua, or .)\n"
-             "  -o name=value   set an option; `lulibre -o help` lists them\n"
-             "  -C DIR          configuration directory: init.lua, scripts/, lua/\n"
+  fprintf(f, "\n  -L DIR          calibre library (else path.library, $LULIBRE_LIBRARY, ., or calibre's last, asked)\n"
+             "  -o name=value   a setting; `lulibre -o help` lists them\n"
+             "  -C DIR          configuration directory: init.lua, lua/\n"
              "                  (else $LULIBRE_CONFIG_DIR, else ~/.config/lulibre)\n"
              "  --clean         do not load init.lua\n"
              "  -V              version\n\n"
              "Run `lulibre <command> -h` for a command's own options.\n");
 }
 
-static void list_options(const struct config *c) {
-  size_t n;
-  const struct opt_def *o = config_opts(&n);
-  for (size_t i = 0; i < n; i++) {
-    char num[32];
-    const char *val = num;
-    if (o[i].type == OPT_INT) snprintf(num, sizeof num, "%d", config_int(c, &o[i]));
-    else val = config_str(c, &o[i]);
-    printf("%-15s %-34s %s%s%s%s\n", o[i].name, val, o[i].help, o[i].choices ? "  (" : "",
-           o[i].choices ? o[i].choices : "", o[i].choices ? ")" : "");
+static void list_settings(const struct app *app) {
+  for (int i = 0; i < S_COUNT; i++) {
+    const struct setting_def *d = &setting_defs[i];
+    char *val = settings_format(d, settings_value(app->settings, i));
+    printf("%-15s %-34s %s%s%s%s\n", d->name, val, d->help, d->choices ? "  (" : "", d->choices ? d->choices : "",
+           d->choices ? ")" : "");
+    free(val);
   }
-}
-
-/* A command that is one of the bundled scripts. Its help is what the script
- * says of itself: the comment it opens with. */
-static int cmd_script(struct app *app, int argc, char **argv) {
-  if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
-    char *path = lapi_find_script(app, argv[0]);
-    FILE *f = path ? fopen(path, "r") : NULL;
-    if (!f) {
-      fprintf(stderr, "lulibre %s: no help found for it\n", argv[0]);
-      free(path);
-      return 1;
-    }
-    char line[512];
-    printf("usage: lulibre %s [args]\n\n", argv[0]);
-    while (fgets(line, sizeof line, f) && !strncmp(line, "--", 2)) {
-      const char *text = line + 2;
-      if (*text == ' ') text++;
-      fputs(text, stdout);
-    }
-    printf("\n(In the interface this is :%s; a filter picks the books, else the selection.)\n", argv[0]);
-    fclose(f);
-    free(path);
-    return 0;
-  }
-  char **args = xcalloc((size_t)argc + 2, sizeof *args);
-  args[0] = "run";
-  for (int i = 0; i < argc; i++) args[i + 1] = argv[i];
-  int rc = cmd_run(app, argc + 1, args);
-  free(args);
-  return rc;
 }
 
 static int finish(struct app *app, int rc) {
+  char *err = NULL;
+  queue_drain(LOOP_UI); /* changes the loop ended before running */
+  if (settings_save_state(app->settings, app->state_path, &err)) {
+    warnf("%s", err);
+    free(err);
+  }
+  queue_drain(LOOP_LUA); /* what was on its way to the copy, before the lua_State goes */
   lstate_close(app);
+  ui_state_close();
+  work_stop(app); /* the library closes */
   if (app->db_ready) db_close(&app->db);
   tui_teardown();
-  config_free(&app->cfg);
+  settings_free(app->settings);
+  curl_global_cleanup();
+  free(app->config_dir);
+  free(app->state_path);
   return rc;
 }
 
@@ -117,8 +77,9 @@ int main(int argc, char **argv) {
   struct app app;
   memset(&app, 0, sizeof app);
   crash_install();
+  curl_global_init(CURL_GLOBAL_DEFAULT); /* before any thread: curl.h */
+  db_functions_everywhere();             /* before any connection, scripts' too */
   signal(SIGPIPE, SIG_IGN); /* a helper process that exits early is an error to report, not a death */
-  config_init(&app.cfg);
 
   /* global options come before the command */
   int i = 1, clean = 0, want_optlist = 0;
@@ -137,33 +98,34 @@ int main(int argc, char **argv) {
     else if (!strcmp(a, "--clean")) clean = 1;
     else if (!strcmp(a, "-h") || !strcmp(a, "--help")) {
       usage(stdout);
-      config_free(&app.cfg);
       return 0;
     }
     else if (!strcmp(a, "-V") || !strcmp(a, "--version")) {
       /* the second word is the version, alone: scripts read it */
       printf("lulibre %s (%s build%s%s, Lua %s)\n", LULIBRE_VERSION, LULIBRE_BUILD, lulibre_build_number[0] ? " " : "",
              lulibre_build_number, LULIBRE_LUA_VER);
-      config_free(&app.cfg);
       return 0;
     }
     else break;
   }
 
-  /* init.lua first, then the command line on top of it */
-  char *err = NULL;
-  if (confdir && confdir[0] && config_set(&app.cfg, "config_dir", confdir, &err)) die("%s", err);
+  /* the command line's values lie over what init.lua sets (design 44) */
+  app_settings(&app, confdir, library, sets, nsets);
   app.loop = uv_default_loop();
   /* with the interface, Lua gets a loop and (once it is up) a thread of its own */
   int interface = i >= argc && !want_optlist;
   bridge_init(&app, interface);
+  work_init(&app, interface);
+  queue_open(&app, LOOP_UI, app.loop);
+  queue_open(&app, LOOP_LUA, app.lloop);
+  queue_open(&app, LOOP_WORK, app.wloop);
   tui_setup(); /* built-in commands and keys exist before init.lua adds to them */
   lstate_new(&app);
   /* known before init.lua, so that what it and the prelude do at start can
    * tell: the systemd units are made as the options say in the interface
    * only, never by a command (lulibre offline, run from one of them) */
   if (!interface) {
-    lua_getglobal(app.L, "lulibre");
+    lua_getglobal(app.L, "lulib");
     lua_pushboolean(app.L, 1);
     lua_setfield(app.L, -2, "headless");
     lua_pop(app.L, 1);
@@ -172,25 +134,32 @@ int main(int argc, char **argv) {
   if (mismatch) warnf("%s", mismatch);
   free(mismatch);
   if (!clean) lstate_run_init(&app);
-  app.cli_library = library;
-  for (int k = 0; k < nsets && k < (int)ARRAY_LEN(app.cli_sets); k++) app.cli_sets[app.ncli_sets++] = sets[k];
-  if (app_apply_cli(&app, &err)) die("%s", err);
+  /* the changes init.lua made reach the store before C reads it */
+  queue_drain(LOOP_UI);
+  /* a value given for a setting nothing has made by now is said, and dropped */
+  char *unmade = settings_unmade(app.settings);
+  for (char *p = unmade; p && *p;) {
+    size_t n = strcspn(p, "\n");
+    warnf("%.*s", (int)n, p);
+    p += n + (p[n] == '\n');
+  }
+  free(unmade);
   {
     const char *env = getenv("LULIBRE_LOG");
-    const char *file = env && env[0] ? env : app.cfg.log_file;
+    const char *file = env && env[0] ? env : app_str(&app, S_LOG_FILE);
     if (file[0] && log_to_file(file)) warnf("cannot write the log file %s", file);
     log_debug("lulibre %s (%s build %s from %s, Lua %s) starting", LULIBRE_VERSION, LULIBRE_BUILD, lulibre_build_number,
               lulibre_build_commit, LULIBRE_LUA_VER);
   }
   if (want_optlist) {
-    list_options(&app.cfg);
+    list_settings(&app);
     return finish(&app, 0);
   }
 
   /* libuv sizes its pool on first use, from the environment */
   if (!getenv("UV_THREADPOOL_SIZE")) {
     char n[16];
-    snprintf(n, sizeof n, "%d", app_jobs(&app));
+    snprintf(n, sizeof n, "%d", app_jobs(&app) + POOL_SPARE); /* the indexer leaves the spare (app_index_opts) */
     setenv("UV_THREADPOOL_SIZE", n, 1);
   }
   if (i >= argc) { /* no command: the interactive interface */

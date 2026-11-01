@@ -5,8 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/events.h"
 #include "db/db.h"
 #include "doc/doc.h"
+#include "index/outcome.h"
 #include "match/fold.h"
 #include "tui/tui.h"
 
@@ -167,8 +169,8 @@ static void load_book(struct pstate *ps, sqlite3_int64 id) {
     sqlite3_finalize(st);
   }
   if (sqlite3_prepare_v2(h,
-                         "SELECT f.id, f.path, f.format, f.status, f.error, f.npages,"
-                         " (SELECT count(*) FROM pages p WHERE p.file = f.id), f.emb_title,"
+                         "SELECT f.id, f.path, f.format, f.outcome, f.error, f.npages,"
+                         " (SELECT count(DISTINCT page) FROM lines l WHERE l.file = f.id), f.emb_title,"
                          " f.emb_author FROM files f WHERE f.book = ? ORDER BY " DB_BOOK_FILE_ORDER("f.") " LIMIT 1",
                          -1, &st, NULL) == SQLITE_OK) {
     sqlite3_bind_int64(st, 1, id);
@@ -293,7 +295,7 @@ enum imode { IMG_PIXEL, IMG_SEXTANT, IMG_QUADRANT, IMG_HALF };
 /* Sets the image pixels one cell holds, and one such pixel's height over its
  * width (taking a cell to be twice as tall as wide). */
 static enum imode cell_geometry(struct tui *t, int *cw, int *ch, float *aspect) {
-  const char *want = t->app->cfg.blitter;
+  const char *want = app_str(t->app, S_BLITTER);
   int any = !strcmp(want, "auto");
   if ((any || !strcmp(want, "pixel")) && notcurses_canpixel(t->nc)) {
     unsigned pxy, pxx, cdy, cdx, my, mx;
@@ -464,7 +466,7 @@ static void *create(struct tui *t) {
   ps->t = t;
   ps->page = 1;
   ps->zoom = 1;
-  ps->graphic = !strcmp(t->app->cfg.preview, "image");
+  ps->graphic = !strcmp(app_str(t->app, S_PREVIEW), "image");
   return ps;
 }
 
@@ -561,8 +563,8 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
 
   /* Settle the image question before drawing the rule, which reports it. */
-  int overlay = t->picker != NULL || t->help != NULL;
-  int want_image = ps->graphic && ps->file && ps->fstatus != FILE_MISSING;
+  int overlay = t->nfloats > 0; /* a window above it: its image would cover that */
+  int want_image = ps->graphic && ps->file && ps->fstatus != OUT_MISSING;
   enum imode imode = IMG_HALF;
   int have_image = want_image && image_ready(ps, w, &imode);
 
@@ -570,9 +572,8 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   sb_reset(&line);
   const char *state_note = NULL;
   if (!ps->file) state_note = "no file on record";
-  else if (ps->fstatus == FILE_MISSING) state_note = "file missing on disk";
-  else if (ps->fstatus == FILE_ERROR) state_note = ps->ferror ? ps->ferror : "could not be read";
-  else if (ps->fstatus == FILE_PENDING) state_note = "not indexed yet";
+  else if (ps->fstatus == OUT_UNREADABLE) state_note = ps->ferror ? ps->ferror : outcome_names[OUT_UNREADABLE];
+  else if (ps->fstatus != OUT_READ && ps->fstatus >= 0 && ps->fstatus < OUTCOMES) state_note = outcome_names[ps->fstatus];
   sb_printf(&line, "── page %d", ps->page);
   if (ps->npages > 0) sb_printf(&line, "/%d", ps->npages);
   if (ps->skipped && ps->page == ps->first_text) sb_puts(&line, ", the first with text");
@@ -603,7 +604,7 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   if (blank) {
     /* say why there is nothing to read, and what would show it */
     dr_style(n, theme.dim, C_DEFAULT, 0);
-    if (ps->file && ps->fstatus == FILE_OK) {
+    if (ps->file && (ps->fstatus == OUT_READ || ps->fstatus == OUT_READ_OCR)) {
       const char *why, *then;
       char buf[160], image[96], past[320], scan[200];
       snprintf(image, sizeof image, "%s shows the page as an image.", key_hint("preview graphic"));
@@ -784,7 +785,9 @@ int preview_mouse(struct tui *t, void *state, int y, int x, int what) {
   return 1;
 }
 
-const struct view_class view_preview = {"preview", create, destroy, draw, hide};
+static int select_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni);
+
+const struct view_class view_preview = {"preview", create, destroy, draw, hide, select_key, 0};
 
 /* ---- commands act on the focused preview, else the first one ---- */
 
@@ -855,9 +858,10 @@ void preview_select(struct tui *t) {
   ps->caret = ps->wl[li].p - ps->text;
   ps->kcol = 0;
   kb_show(ps);
-  tui_msg(t, 0, "select: %s %s %s %s move, %s begins a selection, %s the line, %s copies, %s leaves", ctx_hint(KC_SELECT, SA_LEFT),
-          ctx_hint(KC_SELECT, SA_DOWN), ctx_hint(KC_SELECT, SA_UP), ctx_hint(KC_SELECT, SA_RIGHT), ctx_hint(KC_SELECT, SA_MARK),
-          ctx_hint(KC_SELECT, SA_LINE), ctx_hint(KC_SELECT, SA_COPY), ctx_hint(KC_SELECT, SA_LEAVE));
+  sbuf hint = SBUF_INIT; /* the place's hint (scrnman.set) */
+  if (ctx_hint_line(KC_SELECT, &hint)) tui_msg(t, 0, "select:   %s", hint.s);
+  else tui_msg(t, 0, "select");
+  sb_free(&hint);
 }
 
 static int is_word(const char *s) {
@@ -1008,9 +1012,19 @@ void preview_toggle_graphic(struct tui *t) {
   tui_dirty(t);
 }
 
+/* The cursor has come to rest: the preview follows, and so does EV_CURSOR
+ * (design 5), once per book it rests on. */
 static void settle_cb(uv_timer_t *h) {
   struct tui *t = h->data;
   t->settled = 1;
+  sqlite3_int64 book = rows_current(t);
+  if (book != t->posted_book && events_wanted(EV_CURSOR)) {
+    struct event *ev = xcalloc(1, sizeof *ev);
+    ev->kind = EV_CURSOR;
+    ev->book = book;
+    events_post(ev);
+  }
+  t->posted_book = book;
   tui_dirty(t);
 }
 
@@ -1018,4 +1032,9 @@ void preview_book_changed(struct tui *t) {
   t->settled = 0;
   uv_timer_start(&t->settle, settle_cb, 90, 0);
   tui_dirty(t);
+}
+
+/* selecting text with the keys: they are the preview's own while it does */
+static int select_key(struct tui *t, void *state, uint32_t key, const struct ncinput *ni) {
+  return preview_selecting(t) && preview_select_key(t, key);
 }

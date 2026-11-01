@@ -64,8 +64,7 @@ static const char help[] =
   "usage: lulibre index [options] [filter]\n\n"
   "Extract the first pages of every file in the library into the search index.\n"
   "Unchanged files are skipped, so this is cheap to re-run and safe to interrupt.\n\n"
-  "  --pages N          pages of text per file            (option: pages)\n"
-  "  --layout-pages N   pages also kept as tagged lines   (option: layout_pages)\n"
+  "  --pages N          pages of text per file            (setting: pages)\n"
   "  --force            re-extract everything\n"
   "  --retry            retry files that failed before\n"
   "  -v                 print each failure as it happens\n"
@@ -84,9 +83,7 @@ int cmd_index(struct app *app, int argc, char **argv) {
     else if (!strcmp(a, "--retry")) o.retry = 1;
     else if (!strcmp(a, "-v")) r.verbose = 1;
     else if (!strcmp(a, "--pages") && i + 1 < argc) {
-      if (config_set(&app->cfg, "pages", argv[++i], &err)) die("%s", err);
-    } else if (!strcmp(a, "--layout-pages") && i + 1 < argc) {
-      if (config_set(&app->cfg, "layout_pages", argv[++i], &err)) die("%s", err);
+      if (settings_set(app->settings, "pages", argv[++i], FROM_CLI, &err)) die("%s", err);
     } else {
       if (filter.len) sb_putc(&filter, ' ');
       sb_puts(&filter, a);
@@ -94,9 +91,7 @@ int cmd_index(struct app *app, int argc, char **argv) {
   }
 
   app_open_db(app);
-  o.pages = app->cfg.pages;
-  o.layout_pages = app->cfg.layout_pages < o.pages ? app->cfg.layout_pages : o.pages;
-  o.inflight = app_jobs(app) + app_jobs(app) / 2;
+  app_index_opts(app, &o); /* the main thread */
 
   struct query q = {0};
   if (filter.len) {
@@ -120,7 +115,7 @@ int cmd_index(struct app *app, int argc, char **argv) {
   double opt = 0;
   if (st->ok > 500 && !r.interrupted) {
     double t0 = now_s();
-    sqlite3_exec(app->db.h, "INSERT INTO pages_fts(pages_fts) VALUES('optimize')", NULL, NULL,
+    sqlite3_exec(app->db.h, "INSERT INTO paragraphs_fts(paragraphs_fts) VALUES('optimize')", NULL, NULL,
                  NULL);
     opt = now_s() - t0;
   }

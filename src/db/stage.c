@@ -7,11 +7,16 @@
  * are positive, staged files negative, and a filter's scope (in:library,
  * in:sync) is a test of the sign. Those rows are derived, rebuilt here
  * whenever `staged` changes or the mirror is replaced. */
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/stat.h>
+#include <time.h>
 
 #include "core/util.h"
 #include "db/db.h"
+#include "index/outcome.h"
 
 static const char clear_sql[] =
   "DELETE FROM books WHERE id < 0; DELETE FROM book_authors WHERE book < 0;"
@@ -190,5 +195,189 @@ out:
     char *ignored = NULL;
     if (db_exec(db, rc ? "ROLLBACK" : "COMMIT", &ignored)) free(ignored);
   }
+  return rc;
+}
+
+/* ---- reading the sync folder ---- */
+
+/* The files the sync folder offers: as 0.2 took them. */
+static const char *const ebook_ext[] = {"pdf", "djvu", "djv", "epub", "mobi", "azw3", "fb2", "cbz", "txt", "ps"};
+
+struct found {
+  char **path;
+  long long *size, *mtime;
+  int n, cap;
+};
+
+static void found_add(struct found *f, char *path, const struct stat *sb) {
+  if (f->n == f->cap) {
+    f->cap = f->cap ? f->cap * 2 : 64;
+    f->path = xrealloc(f->path, (size_t)f->cap * sizeof *f->path);
+    f->size = xrealloc(f->size, (size_t)f->cap * sizeof *f->size);
+    f->mtime = xrealloc(f->mtime, (size_t)f->cap * sizeof *f->mtime);
+  }
+  f->path[f->n] = path;
+  f->size[f->n] = (long long)sb->st_size;
+  f->mtime[f->n++] = (long long)sb->st_mtim.tv_sec;
+}
+
+static int is_ebook(const char *name) {
+  const char *ext = path_ext(name);
+  for (size_t i = 0; i < ARRAY_LEN(ebook_ext); i++)
+    if (!strcasecmp(ext, ebook_ext[i])) return 1;
+  return 0;
+}
+
+/* Every ebook file in the sync folder; hidden entries are passed over, and
+ * at the top the folder unsynced/, which holds books taken back out of the
+ * library rather than books waiting to go in. */
+static int walk_one(const char *path, const char *rel, const struct stat *st, void *ud) {
+  if (S_ISDIR(st->st_mode)) return strcmp(rel, "unsynced") != 0;
+  if (S_ISREG(st->st_mode) && is_ebook(rel)) found_add(ud, xstrdup(path), st);
+  return 0;
+}
+
+/* A file's name as a title: no folder, no extension, _ as a space. */
+static char *stem(const char *path) {
+  const char *base = strrchr(path, '/');
+  base = base ? base + 1 : path;
+  const char *dot = strrchr(base, '.');
+  char *t = xstrndup(base, dot && dot > base ? (size_t)(dot - base) : strlen(base));
+  for (char *p = t; *p; p++)
+    if (*p == '_') *p = ' ';
+  return t;
+}
+
+/* The first library book holding a file with path's bytes, or 0: files of
+ * the same size (stat where the index has none) are hashed, through the
+ * hashes table. */
+static long long twin_of(sqlite3 *h, const char *path, long long size) {
+  sqlite3_stmt *st;
+  long long twin = 0;
+  char mine[33] = "", theirs[33];
+  if (sqlite3_prepare_v2(h,
+                         "SELECT book, path, size FROM files WHERE book > 0 AND (size = ?1 OR size IS NULL)"
+                         " AND outcome <> ?2 ORDER BY book",
+                         -1, &st, NULL) != SQLITE_OK)
+    return 0;
+  sqlite3_bind_int64(st, 1, size);
+  sqlite3_bind_int(st, 2, OUT_MISSING);
+  while (!twin && sqlite3_step(st) == SQLITE_ROW) {
+    const char *other = (const char *)sqlite3_column_text(st, 1);
+    struct stat sb;
+    if (!other) continue;
+    if (sqlite3_column_type(st, 2) == SQLITE_NULL && (stat(other, &sb) || (long long)sb.st_size != size)) continue;
+    if (!mine[0] && db_hash_file(h, path, mine)) break;
+    if (!db_hash_file(h, other, theirs) && !strcmp(mine, theirs)) twin = sqlite3_column_int64(st, 0);
+  }
+  sqlite3_finalize(st);
+  return twin;
+}
+
+static void id_add(long long **ids, int *n, long long id) {
+  *ids = xrealloc(*ids, (size_t)(*n + 1) * sizeof **ids);
+  (*ids)[(*n)++] = id;
+}
+
+int db_stage_scan(struct db *db, const char *dir, long long **ids, int *nids, char **err) {
+  sqlite3 *h = db->h;
+  struct found f = {0};
+  sqlite3_stmt *rows = NULL, *add = NULL, *upd = NULL, *del = NULL;
+  long long *drop = NULL, *keep = NULL, *twin = NULL;
+  int ndrop = 0, rc = -1;
+  *ids = NULL;
+  *nids = 0;
+  struct stat sb;
+  if (stat(dir, &sb) || !S_ISDIR(sb.st_mode)) {
+    *err = xasprintf("the sync folder %s is not a folder", dir);
+    return -1;
+  }
+  path_walk(dir, 64, walk_one, &f);
+  /* what each file is: keep[i] its staged row (0: new), twin[i] for the new
+   * and the changed (-1: unchanged). Worked out before the transaction, so
+   * that hashing holds no lock on the index. */
+  keep = xcalloc((size_t)f.n + 1, sizeof *keep);
+  twin = xcalloc((size_t)f.n + 1, sizeof *twin);
+  if (sqlite3_prepare_v2(h, "SELECT id, path, size, mtime FROM staged", -1, &rows, NULL) != SQLITE_OK) goto sqlerr;
+  while (sqlite3_step(rows) == SQLITE_ROW) {
+    long long id = sqlite3_column_int64(rows, 0);
+    const char *path = (const char *)sqlite3_column_text(rows, 1);
+    int at = -1;
+    for (int i = 0; i < f.n && at < 0; i++)
+      if (!keep[i] && path && !strcmp(f.path[i], path)) at = i;
+    if (at < 0) { /* gone, or from an earlier sync folder */
+      drop = xrealloc(drop, (size_t)(ndrop + 1) * sizeof *drop);
+      drop[ndrop++] = id;
+      id_add(ids, nids, -id);
+      continue;
+    }
+    keep[at] = id;
+    if (sqlite3_column_int64(rows, 2) == f.size[at] && sqlite3_column_int64(rows, 3) == f.mtime[at]) twin[at] = -1;
+  }
+  sqlite3_finalize(rows);
+  rows = NULL;
+  for (int i = 0; i < f.n; i++)
+    if (twin[i] != -1) twin[i] = twin_of(h, f.path[i], f.size[i]);
+
+  if (db_exec(db, "BEGIN IMMEDIATE", err)) goto done;
+  if (sqlite3_prepare_v2(h, "INSERT INTO staged(path, size, mtime, title, added, twin) VALUES(?, ?, ?, ?, ?, ?)"
+                            " RETURNING id",
+                         -1, &add, NULL) != SQLITE_OK ||
+      sqlite3_prepare_v2(h, "UPDATE staged SET size = ?, mtime = ?, twin = ? WHERE id = ?", -1, &upd, NULL) !=
+        SQLITE_OK ||
+      sqlite3_prepare_v2(h, "DELETE FROM staged WHERE id = ?", -1, &del, NULL) != SQLITE_OK)
+    goto sqlerr;
+  for (int i = 0; i < ndrop; i++) {
+    sqlite3_bind_int64(del, 1, drop[i]);
+    if (sqlite3_step(del) != SQLITE_DONE) goto sqlerr;
+    sqlite3_reset(del);
+  }
+  for (int i = 0; i < f.n; i++) {
+    if (twin[i] == -1) continue; /* as it was */
+    sqlite3_stmt *st = keep[i] ? upd : add;
+    int k = 1;
+    if (!keep[i]) sqlite3_bind_text(st, k++, f.path[i], -1, SQLITE_STATIC);
+    sqlite3_bind_int64(st, k++, f.size[i]);
+    sqlite3_bind_int64(st, k++, f.mtime[i]);
+    if (!keep[i]) {
+      char *title = stem(f.path[i]);
+      sqlite3_bind_text(st, k++, title, -1, SQLITE_TRANSIENT);
+      free(title);
+      sqlite3_bind_int64(st, k++, (long long)time(NULL));
+    }
+    if (twin[i]) sqlite3_bind_int64(st, k++, twin[i]);
+    else sqlite3_bind_null(st, k++);
+    if (keep[i]) sqlite3_bind_int64(st, k++, keep[i]);
+    int step = sqlite3_step(st);
+    if (step != (keep[i] ? SQLITE_DONE : SQLITE_ROW)) goto sqlerr;
+    id_add(ids, nids, -(keep[i] ? keep[i] : sqlite3_column_int64(st, 0)));
+    sqlite3_reset(st);
+  }
+  if (*nids && db_stage_refresh(db, 1, err)) goto rollback;
+  if (db_exec(db, "COMMIT", err)) goto rollback;
+  rc = 0;
+  goto done;
+sqlerr:
+  *err = xasprintf("the sync folder: %s", sqlite3_errmsg(h));
+rollback:
+  if (sqlite3_get_autocommit(h) == 0) {
+    char *ignored = NULL;
+    if (db_exec(db, "ROLLBACK", &ignored)) free(ignored);
+  }
+  free(*ids);
+  *ids = NULL;
+  *nids = 0;
+done:
+  sqlite3_finalize(rows);
+  sqlite3_finalize(add);
+  sqlite3_finalize(upd);
+  sqlite3_finalize(del);
+  for (int i = 0; i < f.n; i++) free(f.path[i]);
+  free(f.path);
+  free(f.size);
+  free(f.mtime);
+  free(keep);
+  free(twin);
+  free(drop);
   return rc;
 }

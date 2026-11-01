@@ -109,7 +109,7 @@ static void extract_locked(const char *path, const struct doc_opts *o, struct do
     ddjvu_status_t st;
     while ((st = ddjvu_document_get_pageinfo(doc, page, &info)) < DDJVU_JOB_OK) doc_djvu_pump(1, NULL);
     if (st >= DDJVU_JOB_FAILED || info.dpi <= 0) {
-      doc_page_finish(pg, 0);
+      doc_page_finish(pg);
       continue;
     }
     struct walk w = {pg, 72.0f / (float)info.dpi, (float)info.height, 0};
@@ -122,7 +122,7 @@ static void extract_locked(const char *path, const struct doc_opts *o, struct do
       walk(&w, r, 1);
       ddjvu_miniexp_release(doc, r);
     }
-    doc_page_finish(pg, i < o->layout_pages);
+    doc_page_finish(pg);
   }
 done:
   doc_djvu_pump(0, NULL);

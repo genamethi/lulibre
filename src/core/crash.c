@@ -1,7 +1,8 @@
 /* When lulibre crashes: leave a trace.
  *
  * A fatal signal appends the version, the signal and a backtrace to
- * ~/.local/state/lulibre/crash.log (or $XDG_STATE_HOME/lulibre/), then lets
+ * ~/.local/state/lulibre/crash.log (or $XDG_STATE_HOME/lulibre/, or the
+ * setting path.crash), then lets
  * the handlers that were there before (notcurses' own, which gives the
  * terminal back) and the default action (a core dump) run as usual. Frames
  * are printed as binary(+0xOFFSET); `addr2line -fe $(command -v lulibre)
@@ -25,7 +26,7 @@ extern const char lulibre_build_number[], lulibre_build_commit[];
 
 static const int fatal[] = {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT};
 static struct sigaction before[sizeof fatal / sizeof fatal[0]];
-static char path[1024];
+static char path[1024], fallback[1024]; /* the one in use; the default */
 
 static void put(int fd, const char *s) {
   ssize_t r = write(fd, s, strlen(s));
@@ -65,11 +66,19 @@ static void on_fatal(int sig) {
   raise(sig);
 }
 
+const char *crash_file(void) {
+  return path;
+}
+
+void crash_at(const char *file) {
+  snprintf(path, sizeof path, "%s", file[0] ? file : fallback);
+}
+
 void crash_install(void) {
-  const char *xdg = getenv("XDG_STATE_HOME");
-  char *dir = xdg && xdg[0] ? xasprintf("%s/lulibre", xdg) : path_expand("~/.local/state/lulibre");
+  char *dir = path_xdg("XDG_STATE_HOME", "~/.local/state/lulibre");
   mkdir_p(dir);
-  snprintf(path, sizeof path, "%s/crash.log", dir);
+  snprintf(fallback, sizeof fallback, "%s/crash.log", dir);
+  snprintf(path, sizeof path, "%s", fallback);
   free(dir);
   void *warm[2];
   backtrace(warm, 2); /* loads what backtrace needs now, not inside the handler */

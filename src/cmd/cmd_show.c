@@ -5,6 +5,7 @@
 #include "app.h"
 #include "cmd/cmd.h"
 #include "core/util.h"
+#include "index/outcome.h"
 #include "doc/doc.h"
 
 static const char help[] =
@@ -69,24 +70,23 @@ int cmd_show(struct app *app, int argc, char **argv) {
   sqlite3_finalize(st);
 
   if (db_prepare(db,
-                 "SELECT id, format, path, status, error, npages, nchars, round(quality, 2),"
+                 "SELECT id, format, path, outcome, error, npages, nchars, round(quality, 2),"
                  " emb_title, emb_author, emb_subject, emb_keywords, emb_creator, emb_producer"
                  " FROM files WHERE book = ? ORDER BY id",
                  &st, &err))
     die("%s", err);
   sqlite3_bind_int64(st, 1, id);
   sqlite3_int64 first_file = 0;
-  static const char *const status[] = {"not indexed", "indexed", "failed", "missing"};
   while (sqlite3_step(st) == SQLITE_ROW) {
     if (!first_file) first_file = sqlite3_column_int64(st, 0);
     int s = sqlite3_column_int(st, 3);
     printf("\n%-10s %s\n", (const char *)sqlite3_column_text(st, 1),
            (const char *)sqlite3_column_text(st, 2));
-    printf("%-10s %s", "", status[s >= 0 && s <= 3 ? s : 0]);
-    if (s == FILE_OK)
-      printf(", %d pages, %lld characters indexed, text quality %s", sqlite3_column_int(st, 5),
+    printf("%-10s %s", "", outcome_names[s >= 0 && s < OUTCOMES ? s : 0]);
+    if (s != OUT_PENDING && s != OUT_MISSING && s != OUT_UNREADABLE && sqlite3_column_type(st, 5) != SQLITE_NULL)
+      printf(", %d pages, %lld characters, text quality %s", sqlite3_column_int(st, 5),
              (long long)sqlite3_column_int64(st, 6), (const char *)sqlite3_column_text(st, 7));
-    if (s == FILE_ERROR) printf(": %s", (const char *)sqlite3_column_text(st, 4));
+    if (s == OUT_UNREADABLE) printf(": %s", (const char *)sqlite3_column_text(st, 4));
     fputc('\n', stdout);
     static const char *const emb[] = {"e.title", "e.author", "e.subject", "e.keywords",
                                       "e.creator", "e.producer"};
@@ -111,7 +111,7 @@ int cmd_show(struct app *app, int argc, char **argv) {
              (const char *)sqlite3_column_text(st, 2));
       n++;
     }
-    if (!n) printf("(no lines kept for this page; see the layout_pages option)\n");
+    if (!n) printf("(page not read)\n");
   } else {
     if (db_prepare(db, "SELECT text FROM pages WHERE file = ? AND page = ?", &st, &err))
       die("%s", err);

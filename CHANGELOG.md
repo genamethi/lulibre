@@ -2,10 +2,52 @@
 
 Versions follow [semantic versioning](https://semver.org). The version is set in `src/version.h`.
 
-## Unreleased
+## 0.4.0
 
+**0.4.0-pre-alpha**
+
+\* 0.4.0-pre-alpha includes every change made for 0.3.0, which was not released.
+
+- Added saved reviews. A review keeps its own proposals and marks, and can be named, reopened, discarded and added to. `a`, `e` and `r` only mark; `w` writes what is marked as one batch; `:review deep` shows what a review otherwise hides.
+- Changed `:propose` to keep what it works out from a file, so a new online answer or a changed setting only ranks again. Each value is scored on its own, and review names the reading it came from.
+- Changed `:propose` to compare an online record with the file's pages before trusting it, and to tell a file's own identifiers from those it cites. The thresholds are settings.
+- Added the `pages` grammar, which reads cover sheets, cataloguing blocks, copyright lines, series and journal headings, and made `front` an example.
+- Changed a grammar with a group to run only for books of that group.
+- Added zbMATH and OpenAlex as sources, and `:enrich titles`, which looks by title for books with no identifier.
+- Added datasets on this machine: `:datasets`, `:enrich offline`. What a dataset has isn't asked of the service.
+- Added `:verify` (with `written` and `junk`), `:rewrite` (`titlecase`, `notation`, `authors`, `tags`, `levels`, `clear`) and `:capture`.
+- Added `:sync` (with `beside` and a folder), `:change`, `:enrich -i` and `:propose -i`. `y` in a review writes and adds its sync folder files.
+- Added `:remove`, with undo from calibre's recycle bin; `:embed`; `:columns`; and `:offline`, which lists, cancels, retries and restarts for what waits for the library.
+- Changed `:dupes` and `:orphans` to screens that can act. `ls` still prints.
+- Changed the journal to log what changes in calibre outside lulibre. Added `:history`, `:snapshot` and `:rollback`.
+- Added `yb` and `yk`, `:browse`, and the Configuration tab with `:config`, `:units` and `server_stop` and `server_start`.
+- Added `:new`: one of each screen is open at a time, and `:new COMMAND` opens another.
+- Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Added `store.drop` and `store.set_aside`. `store.command` says when it may run and gives back what the command printed. `uiman.form` takes `sections` for a dialog.
+- Fixed `store.command` crashing lulibre when the command had run.
+- Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
+- Changed a start with no library set to ask on a terminal, for that run. Answers are not kept unless written with `w` in the Configuration tab.
+- Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
+- Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua, and added **Write options.lua** to its screen, which installs nothing.
+- Added `w` and `a` to the Configuration tab, and `:config write [all]`: the settings go to options.lua, and init.lua is created with `require "config.options"`, or gets that line.
+- Fixed quitting during indexing waiting for every OCR already started, for minutes on a frozen screen. The terminal comes back first, and OCR stops.
+- Fixed the list, the preview and `:sync DIR` waiting behind OCR. Each tesseract now uses one thread, and the indexer leaves workers free.
+- Fixed the indexer holding the database's write lock while no file finished, which could make reading calibre's records fail.
+- Fixed files brought in during indexing, such as a sync folder's, not being read until the next change.
+
+## 0.2.1
+
+- Fixed scanned cataloguing blocks whose hyphens read as middle dots or other dashes. Previously the author's heading, with its dates, was taken as the start of the title. Now the heading is read as the author.
+- Fixed an edition statement under a title being proposed as an author.
+
+**0.2.1-beta.1**
 - Added `lulibre-dev-1.rockspec` and `make rocks`, which installs lulibre's Lua dependencies into the user-level luarocks tree.
 - Added `pixi.toml`, which provides lulibre's run-time dependencies through pixi.
+- Added `lulibre-setup`, a setup screen built beside lulibre. Basic: user or system level, pixi or not, the library, the content server; the password file is picked from a file browser and checked for its owner and mode. Advanced: the install prefix, luv, and the rest of lulibre's options. The choices are kept in `setup.conf` between runs. Install now runs `setup/install.sh` in the terminal, each command shown first, with sudo only for a system-level install; init.lua gets the chosen values, and the file as it was stays in init.lua.bak.
+- Changed an installed lulibre to read its files from beside the binary (`<prefix>/share/lulibre`), so one build installs under any prefix.
+- Changed lulibre's search path to leave Lua's own places as Lua and the environment set them. Previously `~/.luarocks` was searched ahead of `LUA_PATH_5_5` and `LUA_CPATH_5_5`, so a module there was used in place of the one the environment named, pixi's environment included. Now a prefix of modules is searched first when the option `mod_tree` names it, for luv too.
+- Changed the option `rocks_tree` to `mod_tree`, a prefix of Lua modules, searched before any other place and ignored in a pixi environment. `rocks_install` installs into it with `luarocks --tree`.
+- Changed the `?` help heading over edit, change, propose, enrich, review and the commands beside them from "Changing what a book says" to "Editing metadata, proposing and reviewing".
+- Fixed a value set in the configuration window having no effect when init.lua sets that option on two lines. Previously the value was written to the first line and the later line kept setting the option. Now the value is written to the last line, the one that takes effect.
 
 ## 0.2.0
 

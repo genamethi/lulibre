@@ -1,4 +1,5 @@
-/* Windows: a binary tree of splits whose leaves are views. */
+/* Windows: a binary tree of splits whose leaves are views, and above it a
+ * few floating windows (wm_float): boxes, or one over the whole area. */
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,10 +43,13 @@ void wm_init(struct tui *t) {
   root->a->parent = root->b->parent = root;
   t->root = root;
   t->focus = root->a;
+  wm_place_preview(t); /* as init.lua said */
 }
 
 void wm_free(struct tui *t) {
   node_free(t, t->root);
+  for (int i = 0; i < t->nfloats; i++) node_free(t, t->floats[i]);
+  t->nfloats = 0;
   t->root = t->focus = NULL;
 }
 
@@ -83,6 +87,20 @@ static void layout(struct node *n, struct rect r, int bare) {
 
 void wm_layout(struct tui *t, struct rect area) {
   layout(t->root, area, t->screen_tab != NULL);
+  for (int i = 0; i < t->nfloats; i++) {
+    struct node *f = t->floats[i];
+    if (f->full) { /* FLOAT_FULL, FLOAT_BARE */
+      f->r = area;
+      continue;
+    }
+    /* a box: its share of the area, at least a bar and a few rows, and the
+     * view inside the frame */
+    int w = (int)((float)area.w * f->fsize), h = (int)((float)area.h * f->fsize);
+    if (w < 24) w = area.w < 24 ? area.w : 24;
+    if (h < 6) h = area.h < 6 ? area.h : 6;
+    int y = area.y + (area.h - h) / 2, x = area.x + (area.w - w) / 2;
+    f->r = (struct rect){y + 1, x + 1, h - 2 > 0 ? h - 2 : 0, w - 2 > 0 ? w - 2 : 0};
+  }
 }
 
 static void draw(struct tui *t, struct node *n) {
@@ -108,6 +126,16 @@ static void draw(struct tui *t, struct node *n) {
 
 void wm_draw(struct tui *t) {
   draw(t, t->root);
+  for (int i = 0; i < t->nfloats; i++) {
+    struct node *f = t->floats[i];
+    if (!f->full) dr_frame(t->std, (struct rect){f->r.y - 1, f->r.x - 1, f->r.h + 2, f->r.w + 2}, C_DEFAULT);
+    else if (f->full == 1)
+      for (int y = 0; y < f->r.h; y++) { /* nothing of the windows under it shows through */
+        dr_style(t->std, C_DEFAULT, C_DEFAULT, 0);
+        dr_fill(t->std, f->r.y + y, f->r.x, f->r.w);
+      }
+    draw(t, f);
+  }
 }
 
 static void leaves(struct node *n, struct node **out, int *count) {
@@ -119,11 +147,64 @@ static void leaves(struct node *n, struct node **out, int *count) {
   leaves(n->b, out, count);
 }
 
+/* the tree's leaves, then the floating windows */
+static void all_leaves(struct tui *t, struct node **out, int *count) {
+  if (t->root) leaves(t->root, out, count);
+  for (int i = 0; i < t->nfloats && *count < 32; i++) out[(*count)++] = t->floats[i];
+}
+
+/* A floating window goes: its view with it (destroy), or kept (a hidden
+ * panel's). The focus goes back to a window of the tree. */
+static void unfloat(struct tui *t, struct node *f, int destroy) {
+  int at = -1;
+  for (int i = 0; i < t->nfloats; i++)
+    if (t->floats[i] == f) at = i;
+  if (at < 0) return;
+  memmove(&t->floats[at], &t->floats[at + 1], (size_t)(t->nfloats - at - 1) * sizeof *t->floats);
+  t->nfloats--;
+  if (t->focus == f) {
+    /* the window it was opened from, if it is still there (found by its
+     * state: a node may have gone), else the one on top, else the last */
+    struct node *back = f->back ? wm_leaf_of(t, f->back) : NULL;
+    if (!back && t->nfloats) back = t->floats[t->nfloats - 1];
+    if (!back && t->last_window) back = wm_leaf_of(t, t->last_window);
+    if (!back) {
+      back = t->root;
+      while (back->split) back = back->a;
+    }
+    t->focus = back;
+  }
+  if (destroy && f->cls->destroy) f->cls->destroy(t, f->state);
+  else if (f->cls->hide) f->cls->hide(t, f->state);
+  free(f);
+  tui_dirty(t);
+}
+
+struct node *wm_top(struct tui *t) {
+  return t->nfloats ? t->floats[t->nfloats - 1] : NULL;
+}
+
+struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, enum float_how how) {
+  int full = how == FLOAT_FULL ? 1 : how == FLOAT_BARE ? 2 : 0;
+  if (t->nfloats == (int)ARRAY_LEN(t->floats)) unfloat(t, t->floats[0], 1); /* the oldest makes room */
+  struct node *f = xcalloc(1, sizeof *f);
+  f->cls = cls;
+  f->state = state;
+  f->floating = 1;
+  f->full = full;
+  f->fsize = size > 0.1f && size <= 1.0f ? size : 0.6f;
+  f->back = t->focus ? t->focus->state : NULL;
+  t->floats[t->nfloats++] = f;
+  t->focus = f;
+  tui_dirty(t);
+  return f;
+}
+
 int wm_leaves(struct tui *t, struct node **out, int max) {
   struct node *all[32];
   int n = 0;
   if (!t->root) return 0;
-  leaves(t->root, all, &n);
+  all_leaves(t, all, &n);
   if (n > max) n = max;
   memcpy(out, all, (size_t)n * sizeof *out);
   return n;
@@ -133,7 +214,7 @@ struct node *wm_leaf_of(struct tui *t, void *state) {
   struct node *all[32];
   int n = 0;
   if (!state) return NULL;
-  leaves(t->root, all, &n);
+  all_leaves(t, all, &n);
   for (int i = 0; i < n; i++)
     if (all[i]->state == state) return all[i];
   return NULL;
@@ -142,6 +223,11 @@ struct node *wm_leaf_of(struct tui *t, void *state) {
 struct node *wm_at(struct tui *t, int y, int x) {
   struct node *all[32];
   int n = 0;
+  for (int i = t->nfloats - 1; i >= 0; i--) { /* the top one first; a box's frame is its own */
+    struct node *f = t->floats[i];
+    struct rect r = f->full ? f->r : (struct rect){f->r.y - 1, f->r.x - 1, f->r.h + 2, f->r.w + 2};
+    if (y >= r.y && y < r.y + r.h && x >= r.x && x < r.x + r.w) return f;
+  }
   leaves(t->root, all, &n);
   for (int i = 0; i < n; i++) {
     const struct rect *r = &all[i]->r;
@@ -153,7 +239,7 @@ struct node *wm_at(struct tui *t, int y, int x) {
 struct node *wm_find(struct tui *t, const struct view_class *cls) {
   struct node *all[32];
   int n = 0;
-  leaves(t->root, all, &n);
+  all_leaves(t, all, &n);
   if (t->focus && t->focus->cls == cls) return t->focus;
   for (int i = 0; i < n; i++)
     if (all[i]->cls == cls) return all[i];
@@ -162,8 +248,9 @@ struct node *wm_find(struct tui *t, const struct view_class *cls) {
 
 int wm_split(struct tui *t, char dir, const char *view) {
   const struct view_class *cls = view && *view ? wm_class(view) : t->focus->cls;
-  /* a panel is a script's, not something a window can be made of */
-  if (!cls || !cls->create) return -1;
+  /* a panel is a script's, not something a window can be made of; a
+   * floating window is not split */
+  if (!cls || !cls->create || t->focus->floating) return -1;
   struct node *old = t->focus;
   /* the focused leaf becomes a split holding itself and the new view */
   struct node *moved = xcalloc(1, sizeof *moved);
@@ -180,6 +267,34 @@ int wm_split(struct tui *t, char dir, const char *view) {
   t->focus = fresh;
   tui_dirty(t);
   return 0;
+}
+
+struct node *wm_tile(struct tui *t, const struct view_class *cls, void *state, float size) {
+  struct node *old = t->focus;
+  if (!old || old->floating) old = t->last_window ? wm_leaf_of(t, t->last_window) : NULL;
+  if (!old || old->floating) {
+    old = t->root;
+    while (old->split) old = old->a;
+  }
+  struct node *moved = xcalloc(1, sizeof *moved);
+  *moved = *old;
+  moved->parent = old;
+  struct node *fresh = xcalloc(1, sizeof *fresh);
+  fresh->cls = cls;
+  fresh->state = state;
+  fresh->parent = old;
+  old->split = 'v';
+  old->ratio = 1.0f - (size > 0.1f && size < 0.9f ? size : 0.5f);
+  old->a = moved;
+  old->b = fresh;
+  old->cls = NULL;
+  old->state = NULL;
+  old->under_cls = NULL;
+  old->under_state = NULL;
+  if (moved->split) moved->a->parent = moved->b->parent = moved;
+  t->focus = fresh;
+  tui_dirty(t);
+  return fresh;
 }
 
 /* Is `n` inside the subtree at `root`? */
@@ -222,6 +337,10 @@ static void close_node(struct tui *t, struct node *n) {
 }
 
 void wm_close(struct tui *t) {
+  if (t->focus->floating) {
+    unfloat(t, t->focus, 1);
+    return;
+  }
   if (!t->focus->parent) {
     tui_msg(t, 1, "cannot close the last window");
     return;
@@ -233,7 +352,8 @@ void wm_close(struct tui *t) {
  * move up into their parent), so a node pointer held across a close may be
  * dangling. This closes any leaf and leaves t->focus valid whatever it was. */
 void wm_close_leaf(struct tui *t, struct node *n) {
-  if (n && !n->split && n->parent) close_node(t, n);
+  if (n && n->floating) unfloat(t, n, 1);
+  else if (n && !n->split && n->parent) close_node(t, n);
 }
 
 /* Add a full-width window along the bottom showing an existing view state. */
@@ -290,9 +410,38 @@ struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *sta
 }
 
 /* Close the window showing this state, if there is one. */
+void wm_place(struct tui *t, const struct view_class *cls, void *state, float size, char side) {
+  if (side == 'm') wm_over_list(t, cls, state);
+  else if (side == 'f' || side == 'o') wm_float(t, cls, state, size, side == 'o' ? FLOAT_FULL : FLOAT_BOX);
+  else if (side == 't') wm_tile(t, cls, state, size);
+  else wm_dock(t, cls, state, size, side);
+}
+
+void wm_place_preview(struct tui *t) {
+  char side;
+  float size;
+  ctx_placement(KC_PREVIEW, &side, &size);
+  struct node *n = side ? wm_find(t, &view_preview) : NULL, *p = n ? n->parent : NULL;
+  if (!p) return;
+  int before = side == 'l';
+  if ((p->a == n) != before) {
+    struct node *other = p->a == n ? p->b : p->a;
+    p->a = before ? n : other;
+    p->b = before ? other : n;
+  }
+  p->split = side == 'b' ? 'h' : 'v';
+  if (size > 0) p->ratio = before ? size : 1 - size;
+  tui_dirty(t);
+}
+
 void wm_undock(struct tui *t, void *state) {
   struct node *stack[64];
   int n = 0;
+  for (int i = 0; i < t->nfloats; i++)
+    if (t->floats[i]->state == state) {
+      unfloat(t, t->floats[i], 1);
+      return;
+    }
   if (!t->root) return;
   stack[n++] = t->root;
   while (n) {
@@ -330,14 +479,24 @@ void wm_undock(struct tui *t, void *state) {
 
 void wm_set_size(struct tui *t, void *state, float size) {
   struct node *n = wm_leaf_of(t, state);
-  if (!n || !n->parent) return;
   if (size < 0.1f) size = 0.1f;
   if (size > 0.9f) size = 0.9f;
+  if (n && n->floating) {
+    n->fsize = size;
+    tui_dirty(t);
+    return;
+  }
+  if (!n || !n->parent) return;
   n->parent->ratio = n->parent->a == n ? size : 1.0f - size;
   tui_dirty(t);
 }
 
 void wm_only(struct tui *t) {
+  /* the floating windows go but the focused one; from one of them, the
+   * tree stays as it is */
+  for (int i = t->nfloats - 1; i >= 0; i--)
+    if (t->floats[i] != t->focus) unfloat(t, t->floats[i], 1);
+  if (t->focus->floating) return;
   while (t->focus->parent) {
     /* close every other window: rotate focus to a sibling subtree and back */
     struct node *keep = t->focus, *p = keep->parent;
@@ -361,14 +520,14 @@ static int is_panel(const struct node *n) { return n->cls == &view_panel; }
 static int leaves_of(struct tui *t, int panels, struct node **out) {
   struct node *all[32];
   int n = 0, k = 0;
-  leaves(t->root, all, &n);
+  all_leaves(t, all, &n);
   for (int i = 0; i < n; i++)
     if (is_panel(all[i]) == panels && all[i]->r.w > 0 && all[i]->r.h > 0) out[k++] = all[i];
   return k;
 }
 
 void wm_note_focus(struct tui *t) {
-  if (!t->focus || !t->focus->state) return;
+  if (!t->focus || !t->focus->state || t->focus->cls->modal) return; /* the pager, the picker are neither */
   if (is_panel(t->focus)) t->last_panel = t->focus->state;
   else t->last_window = t->focus->state;
 }

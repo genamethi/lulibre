@@ -21,7 +21,7 @@ static void text_extract(FILE *f, const struct doc_opts *o, struct doc_info *out
   out->pages = xcalloc((size_t)(o->pages > 0 ? o->pages : 1), sizeof *out->pages);
   while (out->n <= o->pages && (len = getline(&line, &cap, f)) >= 0) {
     if (n % PAGE_LINES == 0) {
-      if (out->n) doc_page_finish(&out->pages[out->n - 1], out->n <= o->layout_pages);
+      if (out->n) doc_page_finish(&out->pages[out->n - 1]);
       if (out->n == o->pages) break;
       out->pages[out->n].no = out->n + 1;
       out->n++;
@@ -32,7 +32,7 @@ static void text_extract(FILE *f, const struct doc_opts *o, struct doc_info *out
     n++;
   }
   if (out->n && !out->pages[out->n - 1].text)
-    doc_page_finish(&out->pages[out->n - 1], out->n <= o->layout_pages);
+    doc_page_finish(&out->pages[out->n - 1]);
   free(line);
   out->npages = out->n; /* lower bound: only the head of the file is read */
 }
@@ -66,27 +66,34 @@ void doc_extract(const char *path, const char *format, const struct doc_opts *o,
   if (is_djvu) doc_djvu_extract(path, o, out);
   else if (!is_text) doc_mupdf_extract(path, o, out); /* pdf, epub, fb2, mobi, xps, cbz */
   if (out->error) return;
+  doc_measure(out);
+}
 
+void doc_measure(struct doc_info *d) {
   sbuf all = SBUF_INIT;
-  for (int i = 0; i < out->n; i++) {
-    sb_puts(&all, out->pages[i].text ? out->pages[i].text : "");
+  for (int i = 0; i < d->n; i++) {
+    sb_puts(&all, d->pages[i].text ? d->pages[i].text : "");
     sb_putc(&all, '\n');
   }
-  out->quality = doc_text_quality(all.s ? all.s : "", &out->nchars, &out->garbled);
+  d->quality = doc_text_quality(all.s ? all.s : "", &d->nchars, &d->garbled);
   sb_free(&all);
+}
+
+void doc_page_free(struct doc_page *pg) {
+  for (int j = 0; j < pg->nlines; j++) {
+    free(pg->lines[j].text);
+    free(pg->lines[j].math);
+  }
+  free(pg->lines);
+  free(pg->text);
+  pg->lines = NULL;
+  pg->text = NULL;
+  pg->nlines = pg->cap = 0;
 }
 
 void doc_info_free(struct doc_info *d) {
   for (int i = 0; i < DOC_META_N; i++) free(d->meta[i]);
-  for (int i = 0; i < d->n; i++) {
-    struct doc_page *pg = &d->pages[i];
-    for (int j = 0; j < pg->nlines; j++) {
-      free(pg->lines[j].text);
-      free(pg->lines[j].math);
-    }
-    free(pg->lines);
-    free(pg->text);
-  }
+  for (int i = 0; i < d->n; i++) doc_page_free(&d->pages[i]);
   free(d->pages);
   free(d->error);
   memset(d, 0, sizeof *d);
@@ -112,7 +119,7 @@ struct doc_line *doc_page_add_line(struct doc_page *pg, char *text, float size, 
   return &pg->lines[pg->nlines++];
 }
 
-void doc_page_finish(struct doc_page *pg, int keep_lines) {
+void doc_page_finish(struct doc_page *pg) {
   sbuf b = SBUF_INIT;
   for (int i = 0; i < pg->nlines; i++) {
     if (i && (pg->lines[i].flags & LINE_BLOCK)) sb_putc(&b, '\n');
@@ -120,15 +127,6 @@ void doc_page_finish(struct doc_page *pg, int keep_lines) {
     sb_putc(&b, '\n');
   }
   pg->text = sb_take(&b);
-  if (!keep_lines) {
-    for (int i = 0; i < pg->nlines; i++) {
-      free(pg->lines[i].text);
-      free(pg->lines[i].math);
-    }
-    free(pg->lines);
-    pg->lines = NULL;
-    pg->nlines = pg->cap = 0;
-  }
 }
 
 /* A character that is no character: U+FFFD (what a font with no map to
@@ -190,4 +188,8 @@ double doc_text_quality(const char *s, long *nchars, double *garbled) {
   if (nchars) *nchars = chars;
   if (garbled) *garbled = chars > 0 ? (double)bad / (double)chars : 0.0;
   return tokens ? (double)good / (double)tokens : 0.0;
+}
+
+int doc_text_usable(long nchars, double garbled, double quality) {
+  return nchars >= 200 && garbled <= 0.04 && quality >= 0.2;
 }

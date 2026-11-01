@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "core/log.h"
+#include "app.h"
 #include "lua/lapi.h"
 #include "tui/tui.h"
 
@@ -15,32 +16,127 @@ static struct command {
   command_fn *fn; /* NULL for a command implemented in Lua */
   int lua_ref;
   char *help;
+  struct completion comp;
+  /* a command of lulibre's that one made in Lua stands in front of: it
+   * comes back when that one is removed (cmdman.del, :restart-scripts) */
+  command_fn *under;
+  char *under_help;
+  struct completion under_comp;
 } *cmds;
-static void command_help(struct tui *t);
+
+static void completion_free(struct completion *c, int unref) {
+  free(c->words);
+  if (unref && c->kind == COMPLETE_LUA) lapi_unref(c->ref);
+  memset(c, 0, sizeof *c);
+}
+static void command_help(struct tui *t, int plain);
 static int ncmds, capcmds;
 
-static void add(const char *name, command_fn *fn, int ref, const char *help) {
+/* comp is taken over (NULL: none) */
+static void add(const char *name, command_fn *fn, int ref, const char *help, struct completion *comp) {
+  struct completion none = {0};
+  if (!comp) comp = &none;
   for (int i = 0; i < ncmds; i++)
     if (!strcmp(cmds[i].name, name)) { /* redefining a command replaces it */
-      cmds[i].fn = fn;
-      cmds[i].lua_ref = ref;
-      free(cmds[i].help);
-      cmds[i].help = xstrdup(help ? help : "");
+      struct command *c = &cmds[i];
+      if (!c->fn) { /* the function it replaces, and what completed it */
+        lapi_unref(c->lua_ref);
+        completion_free(&c->comp, 1);
+      }
+      if (fn) { /* lulibre's own again: nothing stands in front of it */
+        if (c->fn) completion_free(&c->comp, 0); /* made again, as the scripts start again */
+        free(c->under_help);
+        completion_free(&c->under_comp, 0);
+        c->under = NULL;
+        c->under_help = NULL;
+      } else if (c->fn && !c->under) { /* Lua in front of one of lulibre's */
+        c->under = c->fn;
+        c->under_help = c->help;
+        c->under_comp = c->comp;
+        c->help = NULL;
+      } else if (c->fn) {
+        completion_free(&c->comp, 0);
+      }
+      c->fn = fn;
+      c->lua_ref = ref;
+      c->comp = *comp;
+      free(c->help);
+      c->help = xstrdup(help ? help : "");
       return;
     }
   if (ncmds == capcmds) {
     capcmds = capcmds ? capcmds * 2 : 32;
     cmds = xrealloc(cmds, (size_t)capcmds * sizeof *cmds);
   }
-  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : "")};
+  cmds[ncmds++] = (struct command){xstrdup(name), fn, ref, xstrdup(help ? help : ""), *comp, NULL, NULL, {0}};
+}
+
+/* The command made in Lua at i goes: lulibre's own comes back where there
+ * was one in its place, else the entry is removed. */
+static void drop_lua(int i, int unref) {
+  struct command *c = &cmds[i];
+  free(c->help);
+  completion_free(&c->comp, unref);
+  if (c->under) {
+    c->fn = c->under;
+    c->help = c->under_help;
+    c->comp = c->under_comp;
+    c->lua_ref = 0;
+    c->under = NULL;
+    c->under_help = NULL;
+    memset(&c->under_comp, 0, sizeof c->under_comp);
+    return;
+  }
+  free(c->name);
+  cmds[i] = cmds[--ncmds];
 }
 
 void command_register(const char *name, command_fn *fn, const char *help) {
-  add(name, fn, 0, help);
+  add(name, fn, 0, help, NULL);
 }
 
-void command_register_lua(const char *name, int ref, const char *help) {
-  add(name, NULL, ref, help);
+void command_register_lua(const char *name, int ref, const char *help, struct completion *comp) {
+  add(name, NULL, ref, help, comp);
+}
+
+void command_set_complete(const char *name, enum complete_kind kind, const char *words) {
+  for (int i = 0; i < ncmds; i++)
+    if (!strcmp(cmds[i].name, name)) {
+      completion_free(&cmds[i].comp, 0);
+      cmds[i].comp.kind = kind;
+      if (words) {
+        cmds[i].comp.words = xstrdup(words);
+        for (char *p = cmds[i].comp.words; *p; p++)
+          if (*p == ' ') *p = '\n';
+      }
+      return;
+    }
+}
+
+void commands_drop_lua(void) {
+  for (int i = 0; i < ncmds;) {
+    if (cmds[i].fn) {
+      i++;
+      continue;
+    }
+    int had = !!cmds[i].under;
+    drop_lua(i, 0); /* the lua_State is gone, and its references with it */
+    if (had) i++; /* lulibre's own is back at i; else i holds the last entry now */
+  }
+}
+
+static void c_restart_scripts(struct tui *t, const char *args) {
+  lstate_restart(t->app);
+}
+
+int command_remove_lua(const char *name) {
+  for (int i = 0; i < ncmds; i++)
+    if (!strcmp(cmds[i].name, name) && !cmds[i].fn) {
+      lapi_unref(cmds[i].lua_ref);
+      drop_lua(i, 1);
+      return 0;
+    }
+  return -1;
 }
 
 void command_each(int (*fn)(const char *name, const char *help, void *ud), void *ud) {
@@ -52,6 +148,9 @@ void commands_free(void) {
   for (int i = 0; i < ncmds; i++) {
     free(cmds[i].name);
     free(cmds[i].help);
+    free(cmds[i].under_help);
+    completion_free(&cmds[i].comp, 0);
+    completion_free(&cmds[i].under_comp, 0);
   }
   free(cmds);
   cmds = NULL;
@@ -76,6 +175,13 @@ static struct command *find(const char *name, size_t len) {
     if (strlen(aliases[i].alias) == len && !strncmp(aliases[i].alias, name, len))
       return find(aliases[i].name, strlen(aliases[i].name));
   return nprefix == 1 ? prefix : NULL;
+}
+
+const char *command_completion(const char *line, size_t len, const struct completion **comp) {
+  struct command *c = find(line, len);
+  if (!c || c->comp.kind == COMPLETE_NONE) return NULL;
+  *comp = &c->comp;
+  return c->name;
 }
 
 void tui_exec(struct tui *t, const char *line) {
@@ -290,19 +396,20 @@ static void c_preview(struct tui *t, const char *args) {
     if (!preview_position(t, &book, &page, &indexed)) tui_msg(t, 1, "there is no file in the preview");
     else if (page <= indexed) tui_msg(t, 0, "page %d is read already: the first %d pages of this file are", page, indexed);
     else {
-      char *line = xasprintf("addpages %lld %d", (long long)book, page);
-      tui_exec(t, line);
-      free(line);
+      tui_index_page(t, book, page);
     }
   } else tui_msg(t, 1, "preview scroll N | page N | graphic | zoom N | pan N | select | add");
 }
 
 static void c_index(struct tui *t, const char *args) {
-  tui_start_index(t, arg_is(args, "force"));
+  long long book;
+  int page;
+  if (sscanf(args, "%lld %d", &book, &page) == 2) tui_index_page(t, book, page); /* as far as that page */
+  else tui_start_index(t, arg_is(args, "force"));
 }
 
 static void c_reload(struct tui *t, const char *args) {
-  if (t->ix) {
+  if (t->indexing) {
     tui_msg(t, 1, "indexing is running; try again when it finishes");
     return;
   }
@@ -310,21 +417,51 @@ static void c_reload(struct tui *t, const char *args) {
     tui_msg(t, 1, "calibre's database is being read already");
     return;
   }
-  tui_mirror(t, 1, 1);
+  tui_mirror(t, 2, 1); /* asked for: every book, not only those calibre marked changed */
+}
+
+/* :set alone: every setting, lulibre's and those made in Lua, its value
+ * and where it comes from, with what it is */
+static void set_list(struct tui *t) {
+  static const char *const from[] = {[FROM_DEFAULT] = "", [FROM_STATE] = "  (saved)", [FROM_API] = "  (set)",
+                                     [FROM_CLI] = "  (command line)"};
+  struct settings *st = t->app->settings;
+  sbuf out = SBUF_INIT;
+  for (int pass = 0; pass < 2; pass++) {
+    sb_puts(&out, pass ? "\nMADE IN LUA   setman.create(name, {type=, default=, choices=, help=})\n" : "SETTINGS   :set name=value\n");
+    for (int i = 0; i < settings_count(st); i++) {
+      const struct setting_def *d = settings_def(st, i);
+      if (!!(d->flags & SETTING_MADE) != pass || d->flags & SETTING_CLI_ONLY) continue;
+      char *v = settings_format(d, settings_value(st, i));
+      sb_printf(&out, "  %-20s %s%s\n      %s%s%s%s\n", d->name, *v ? v : "\"\"", from[settings_origin(st, i)], d->help,
+                d->choices ? " (" : "", d->choices ? d->choices : "", d->choices ? ")" : "");
+      free(v);
+    }
+  }
+  tui_pager_folded(t, "settings", out.s, -1);
+  sb_free(&out);
 }
 
 static void c_set(struct tui *t, const char *args) {
   const char *eq = strchr(args, '=');
   char *err = NULL;
+  if (!*args) {
+    set_list(t);
+    return;
+  }
   if (!eq) {
-    const struct opt_def *o = config_find(args);
-    if (!o) tui_msg(t, 1, "unknown option '%s'", args);
-    else if (o->type == OPT_INT) tui_msg(t, 0, "%s=%d", o->name, config_int(&t->app->cfg, o));
-    else tui_msg(t, 0, "%s=%s", o->name, config_str(&t->app->cfg, o));
+    int i = settings_find(t->app->settings, args);
+    if (i < 0) {
+      tui_msg(t, 1, "no setting is called %s", args);
+      return;
+    }
+    char *v = settings_format(settings_def(t->app->settings, i), settings_value(t->app->settings, i));
+    tui_msg(t, 0, "%s=%s", args, v);
+    free(v);
     return;
   }
   char *name = xstrndup(args, (size_t)(eq - args));
-  if (config_set(&t->app->cfg, name, eq + 1, &err)) {
+  if (app_set(t->app, name, eq + 1, &err)) {
     tui_msg(t, 1, "%s", err);
     free(err);
   } else {
@@ -338,24 +475,40 @@ static void c_echo(struct tui *t, const char *args) {
 }
 
 static void c_help(struct tui *t, const char *args) {
-  command_help(t);
+  if (arg_is(args, "plain")) command_help(t, 1);
+  else if (*args) guides_help(t, args);
+  else command_help(t, 0);
 }
 
 static void c_source(struct tui *t, const char *args) {
-  if (arg_is(args, "config")) {
-    /* whether the window is open is decided now, as the key is read: the
-     * script's own look (:config) comes later, after any key typed since */
-    if (t->screen_tab && panel_is_open(t->screen_tab)) panel_focus(t->screen_tab);
-    else tui_exec(t, "config");
+  if (*args >= '1' && *args <= '9' && !args[1]) { /* the tab with that number */
+    char cmd[128];
+    if (!tab_command(t, *args - '1', cmd, sizeof cmd)) tui_msg(t, 0, "the bar has no tab %s", args);
+    else c_source(t, cmd + strlen("source "));
+    return;
+  }
+  int screen = *args && !arg_is(args, "sync") && !arg_is(args, "library") ? ctx_named(args) : -1;
+  if (screen >= 0 && ctx_is_tab(screen)) {
+    /* a tab screen: shown again if it is open, else its command opens it.
+     * Whether it is open is decided now, as the key is read: the script's
+     * own look comes later, after any key typed since */
+    if (t->screen_tab && panel_is_open(t->screen_tab) && panel_place(t->screen_tab) == screen)
+      panel_focus(t->screen_tab);
+    else tui_exec(t, args);
+    return;
+  }
+  if (*args && !arg_is(args, "sync") && !arg_is(args, "library")) {
+    tui_msg(t, 1, "the bar has no tab %s: library, sync, or a screen made with tab = true", args);
     return;
   }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
-  if (to && !t->app->cfg.sync_dir[0]) {
-    tui_msg(t, 1, "no sync folder is set: lulibre.o.sync_dir = \"~/some/folder\" in init.lua, or :set sync_dir=DIR");
+  if (to && !app_str(t->app, S_SYNC_DIR)[0]) {
+    tui_msg(t, 1, "no sync folder is set: :sync DIR, or :config sets path.sync and w keeps it in options.lua");
     return;
   }
   rows_set_source(t, to);
   preview_book_changed(t);
+  if (to) tui_mirror(t, 0, 0); /* the folder read again: the list follows */
 }
 
 /* ---- pickers ---- */
@@ -537,6 +690,9 @@ static void c_pick(struct tui *t, const char *args) {
 }
 
 void commands_builtin(void) {
+  edit_commands();
+  command_register("restart-scripts", c_restart_scripts,
+                   "start the scripts again in a new Lua state: init.lua runs first, as at start");
   command_register("quit", c_quit, "leave lulibre");
   command_register("move", c_move, "+N | -N | top | bottom | half-down | half-up | page-down | page-up");
   command_register("filter", c_filter, "[filter]  show only matching books; no argument shows all");
@@ -560,47 +716,121 @@ void commands_builtin(void) {
   command_register("preview", c_preview,
                    "scroll N | page N | graphic | zoom +1|-1|0 | pan N  (zoom and pan: image only)");
   command_register("pick", c_pick, "books | authors | subjects | filters  fuzzy finder");
-  command_register("index", c_index, "[force]  extract text from new or changed files");
-  command_register("reload", c_reload, "re-read calibre's metadata now");
+  command_register("index", c_index, "[force | BOOK PAGE]  extract text from new or changed files; or read a file as far as that page");
+  command_register("reload", c_reload, "read calibre's metadata again now, every book");
   command_register("source", c_source,
-                   "[library | sync | config]  the bar's tabs: the calibre library or the sync folder in the list, or the configuration window");
-  command_register("set", c_set, "name[=value]  show or change an option");
+                   "[N | library | sync | SCREEN]  the bar's tabs: the tab numbered N, the calibre library or the sync folder in the list, or a tab screen");
+  command_register("set", c_set, "[name[=value]]  show or change a setting; alone, every setting");
   command_register("echo", c_echo, "text  show a message");
-  command_register("help", c_help, "this screen");
-  command_register("help-plain", c_help, "keys and commands as one long page");
+  command_register("help", c_help, "[TOPIC | plain]  the keys, by where they work; the guides, where they speak of TOPIC; or plain, keys and commands as one long page");
+  command_set_complete("set", COMPLETE_SETTING, NULL);
+  command_set_complete("help", COMPLETE_HELP, NULL);
+  command_set_complete("filter", COMPLETE_FILTER, NULL);
+  command_set_complete("search", COMPLETE_FILTER, NULL);
+  command_set_complete("sort", COMPLETE_WORDS,
+                       "id title author year series added modified -id -title -author -year -added -modified");
+  command_set_complete("source", COMPLETE_WORDS, "library sync");
+  command_set_complete("pick", COMPLETE_WORDS, "books authors subjects filters");
+  command_set_complete("mark", COMPLETE_WORDS, "toggle all none invert");
+  command_set_complete("preview", COMPLETE_WORDS, "graphic scroll page zoom pan");
+  command_set_complete("focus", COMPLETE_WORDS, "next prev h j k l panel back");
+  command_set_complete("index", COMPLETE_WORDS, "force");
+  command_set_complete("group", COMPLETE_WORDS, "author subject series publisher year format folder none name count");
+  command_set_complete("fold", COMPLETE_WORDS, "toggle open close all none");
+  command_set_complete("move", COMPLETE_WORDS, "top bottom half-down half-up page-down page-up");
+  command_set_complete("prompt", COMPLETE_WORDS, "command search filter");
 }
 
-static void command_help(struct tui *t) {
-  sbuf h = SBUF_INIT;
-  sb_puts(&h, "KEYS\n");
+/* The places whose keys the focused window takes, the first first: a
+ * panel's screen, a form's, a panel's own; the console's; the preview's
+ * while selecting. None for the list, whose keys are the global ones. */
+static int focused_places(struct tui *t, int out[3]) {
+  const struct view_class *cls = t->focus ? t->focus->cls : NULL;
+  int n = 0;
+  if (preview_selecting(t)) {
+    out[n++] = KC_SELECT;
+  } else if (cls == &view_console) {
+    out[n++] = KC_CONSOLE;
+  } else if (cls == &view_panel) {
+    struct panel *p = t->focus->state;
+    if (panel_place(p) >= 0) out[n++] = panel_place(p);
+    if (panel_form(p)) out[n++] = KC_FORM;
+    out[n++] = KC_PANEL;
+  }
+  return n;
+}
+
+/* a link in the help: target is taken over */
+static void help_link(struct rich *h, size_t off, size_t len, char *target) {
+  rich_link(h, off, len, target);
+  free(target);
+}
+
+/* a place's keys, its title a link to what the guides say of it */
+static void help_place(struct rich *r, int place) {
+  sbuf *h = &r->text;
+  size_t at = h->len;
+  ctx_describe(place, h, 1);
+  const char *line = h->s + at, *call = strstr(line, "   keymap.set(");
+  size_t len = call && call < line + strcspn(line, "\n") ? (size_t)(call - line) : strcspn(line, "\n");
+  help_link(r, at, len, xasprintf("%s\nKeys that belong to a place", ctx_name(place)));
+}
+
+/* ? and :help: the focused window's keys first, open; then the global
+ * keys, the other places' and the commands, under headings that open and
+ * close (as they were left last time), and the guides. A key, a command or
+ * a place is a link to what the guides say of it. :help-plain shows every
+ * heading open. :help TOPIC opens the guides where they speak of TOPIC. */
+static void command_help(struct tui *t, int plain) {
+  struct rich r = {0};
+  sbuf *h = &r.text;
+  /* a screen's panel moves as any panel does: those keys come after its own */
+  int first[3], nfirst = focused_places(t, first);
+  for (int c = 0; c < nfirst; c++) {
+    help_place(&r, first[c]);
+    sb_putc(h, '\n');
+  }
+  sb_puts(h, "KEYS   keymap.set(mode, key, command [, {desc=, hidden=}])\n");
   for (int i = 0; i < t->km->n; i++) {
     const struct binding *b = &t->km->b[i];
-    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL)) || b->hidden) continue;
+    if (!(b->modes & (MODE_NORMAL | MODE_VISUAL | MODE_LIST | MODE_PREVIEW)) || b->hidden) continue;
     sbuf k = SBUF_INIT;
     key_format(&k, b->keys, b->nkeys);
-    sb_printf(&h, "  %-12s %s%s\n", k.s, b->about ? b->about : b->command,
-              b->modes == MODE_VISUAL ? "   (while selecting)" : "");
+    sb_puts(h, "  ");
+    help_link(&r, h->len, k.len,
+              b->command ? xasprintf("%s\n:%.*s", k.s, (int)strcspn(b->command, " "), b->command) : xstrdup(k.s));
+    sb_printf(h, "%-12s %s%s\n", k.s, b->about ? b->about : b->command ? b->command : "a Lua function",
+              b->modes == MODE_VISUAL ? "   (while selecting)" : b->modes == MODE_LIST ? "   (in the list)"
+              : b->modes == MODE_PREVIEW ? "   (in the preview)" : "");
     sb_free(&k);
   }
-  for (int c = 0; c < KC_N; c++) {
-    sb_putc(&h, '\n');
-    ctx_describe(c, &h, 1);
+  for (int c = 0; c < ctx_count(); c++) {
+    int shown = !ctx_action_name(c, 1); /* one with no keys of its own, the preview */
+    for (int k = 0; k < nfirst; k++) shown = shown || first[k] == c;
+    if (shown) continue;
+    sb_putc(h, '\n');
+    help_place(&r, c);
   }
-  sb_puts(&h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n");
-  for (int i = 0; i < ncmds; i++) sb_printf(&h, "  %-10s %s\n", cmds[i].name, cmds[i].help);
-  sb_puts(&h,
-          "\nSEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
+  sb_puts(h, "\nCOMMANDS   type : then the name; a unique prefix is enough\n"
+              "  A command acts on the range being selected, else on the marked books in the list, else on\n"
+              "  the book under the cursor.\n");
+  for (int i = 0; i < ncmds; i++) {
+    sb_puts(h, "  ");
+    help_link(&r, h->len, strlen(cmds[i].name), xasprintf(":%s\n%s", cmds[i].name, cmds[i].name));
+    sb_printf(h, "%-10s %s\n", cmds[i].name, cmds[i].help);
+  }
+  sb_putc(h, '\n');
+  help_link(&r, h->len, strlen("SEARCH AND FILTER"), xstrdup("filters"));
+  sb_puts(h,
+          "SEARCH AND FILTER   / jumps to matches (n and N step through them);\n"
           "                    & narrows the list to them. Both take the same terms:\n"
           "  word  \"a phrase\"        in title, authors or subject\n"
           "  author:erdos  subject:number-theory  year:>1990  fmt:djvu\n"
           "  title:~^%d+%.%d+        ~ takes a Lua pattern;  = exact;  ^ prefix\n"
           "  text:\"class field\"      full text of the indexed pages\n"
           "  author:unknown  subject:none  no:ids  is:filetitle  is:marked\n"
-          "  -term negates;  or  starts an alternative;  sort:-added orders\n"
-          "\nA command acts on the range being selected, else on the marked books in\n"
-          "the list, else on the book under the cursor.\n"
-          "\nEvery key on this page can be changed in init.lua with lulibre.map: a command line for\n"
-          "the keys at the top, an action name for the places listed after them.\n");
-  tui_pager(t, "help", h.s);
-  sb_free(&h);
+          "  -term negates;  or  starts an alternative;  sort:-added orders\n\n");
+  guides_list(t, &r);
+  rich_plain(&r);
+  tui_pager_rich(t, "help", &r, plain ? -1 : nfirst ? nfirst : 1, NULL);
 }

@@ -1,10 +1,13 @@
 /* Matching helpers, the same ones the interface uses.
  *
- *   lulibre.fold(s)                  search key: lower case, accents stripped
- *   lulibre.fuzzy(query, candidate)  score (higher is better) or nil
- *   lulibre.lower(s)  lulibre.upper(s)   case, for more than ASCII: Latin
- *                                    with accents, Greek, Cyrillic (Lua's
- *                                    string.lower knows only A to Z)
+ *   mesr.fuzzy(query, candidate)  score (higher is better) or nil
+ *                                 (l_mesr_fuzzy, in mesr's table)
+ *
+ * and expr.core, for expr (lua/expr.lua):
+ *
+ *   fold(s)          search key: lower case, accents stripped
+ *   lower(s) upper(s) case, for more than ASCII: Latin with accents,
+ *                    Greek, Cyrillic (Lua's string.lower knows only A to Z)
  */
 #include <string.h>
 
@@ -112,8 +115,12 @@ static int l_upper(lua_State *L) {
   return recase(L, to_upper);
 }
 
-void l_match_open(lua_State *L) {
-  static const luaL_Reg fns[] = {{"fold", l_fold}, {"fuzzy", l_fuzzy}, {"lower", l_lower},
-                                 {"upper", l_upper}, {NULL, NULL}};
-  luaL_setfuncs(L, fns, 0);
+int l_mesr_fuzzy(lua_State *L) {
+  return l_fuzzy(L);
+}
+
+int luaopen_expr_core(lua_State *L) {
+  static const luaL_Reg fns[] = {{"fold", l_fold}, {"lower", l_lower}, {"upper", l_upper}, {NULL, NULL}};
+  luaL_newlib(L, fns);
+  return 1;
 }

@@ -8,37 +8,42 @@ endif
 -include config.mk
 
 BIN  := build/lulibre
-SRC  := $(wildcard src/*.c src/*/*.c)
-OBJ  := $(SRC:%.c=build/%.o)
-LUA  := $(shell find lua scripts -name '*.lua' 2>/dev/null)
+SRC  := $(filter-out src/setup/%,$(wildcard src/*.c src/*/*.c))
+# libraries carried as their authors wrote them (vendor/*/README.md)
+VENDOR := vendor/lsqlite3/lsqlite3.c
+OBJ  := $(SRC:%.c=build/%.o) $(VENDOR:%.c=build/%.o)
+LUA  := $(shell find lua -name '*.lua' 2>/dev/null)
 # the guides, which :help reads
 DOCS := $(wildcard docs/*.md)
 # everything but main(), for the C unit tests to link against
 LIBOBJ := $(filter-out build/src/main.o,$(OBJ))
 UNIT := build/test/unit
+CORE := build/test/core
+# lulibre-setup: its own sources, and the parts of lulibre's it shares (the
+# drawing, the settings' definitions)
+SETUP := build/lulibre-setup
+SETUP_OBJ := $(patsubst %.c,build/%.o,$(wildcard src/setup/*.c)) \
+  build/src/tui/draw.o build/src/match/fold.o build/src/core/util.o build/src/core/log.o \
+  build/src/core/settings.o build/src/core/setdefs.o
 
 WARN     := -Wall -Wextra -Wno-unused-parameter
 CPPFLAGS += -D_GNU_SOURCE -I. -Isrc
 ALL_CFLAGS := -std=c11 $(WARN) $(CFLAGS) $(DEP_CFLAGS)
 
-all: $(BIN)
+all: $(BIN) $(SETUP)
 	@sh tools/build-status.sh $(BIN) $(VERSION) $(BINDIR)
 
 help:
 	@echo "lulibre $(or $(VERSION),(not configured yet: run ./configure)) $(if $(BUILD),($(BUILD) build) )-- targets:"
 	@echo
-	@echo "  make                 build build/lulibre, then say what was built and how it"
-	@echo "                       compares with the lulibre on PATH (version and md5)"
+	@echo "  make                 build build/lulibre and build/lulibre-setup, then say what was"
+	@echo "                       built and how it compares with the lulibre on PATH (version and md5)"
 	@echo "  make status          only that comparison"
 	@echo "  make builds          the log of builds: number, time, commit, branch, checkout"
 	@echo
-	@echo "  make check           unit tests and the quick end-to-end test (no calibre needed)"
-	@echo "  make unit            unit tests: C (build/test/unit) and Lua (test/units.lua)"
-	@echo "  make e2e             every end-to-end test: the interface, an install into a"
-	@echo "                       stage, writes without and with a content server, the forms"
-	@echo "  make check-offline   only: writes straight to a library (needs calibre, unshare)"
-	@echo "  make check-forms     only: the edit form, review, removal and orphans, by keystroke"
-	@echo "  make check-write     only: writes through a content server (the same needs)"
+	@echo "  make check           unit tests and the setup test (no calibre needed)"
+	@echo "  make unit            unit tests: C (build/test/unit, build/test/core)"
+	@echo "  make e2e             every end-to-end test"
 	@echo
 	@echo "  make install         install under PREFIX ($(PREFIX)); DESTDIR=dir stages it"
 	@echo "  make uninstall       remove what install put there"
@@ -62,7 +67,7 @@ endif
 
 # Every build has a number (tools/build-number.sh): given here, when the
 # binary is linked, which is whenever anything it is made of has changed.
-# The Lua runtime and the bundled scripts count as part of it, so a change
+# The Lua runtime counts as part of it, so a change
 # to them is a new build too, though the C is the same.
 $(BIN): $(OBJ) $(LUA) tools/build-number.sh
 	@mkdir -p build
@@ -72,6 +77,9 @@ $(BIN): $(OBJ) $(LUA) tools/build-number.sh
 	$(CC) $(ALL_CFLAGS) -c -o build/buildno.o build/buildno.c
 	$(CC) -o $@ $(OBJ) build/buildno.o $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
 
+$(SETUP): $(SETUP_OBJ)
+	$(CC) -o $@ $(SETUP_OBJ) $(LDFLAGS) $(DEP_LIBS) -lm
+
 # the log of builds: number, time, version, commit, branch, checkout
 builds:
 	@sh tools/build-number.sh $(VERSION) --log
@@ -80,9 +88,14 @@ build/%.o: %.c config.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -MMD -MP -c -o $@ $<
 
+# their code, their warnings
+build/vendor/lsqlite3/lsqlite3.o: vendor/lsqlite3/lsqlite3.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -w $(CFLAGS) $(DEP_CFLAGS) -DLSQLITE_VERSION='"0.9.7"' -MMD -MP -c -o $@ $<
+
 config.h: config.mk
 
--include $(OBJ:.o=.d)
+-include $(OBJ:.o=.d) $(SETUP_OBJ:.o=.d)
 
 status: $(BIN)
 	@sh tools/build-status.sh $(BIN) $(VERSION) $(BINDIR)
@@ -93,36 +106,45 @@ $(UNIT): test/unit.c $(LIBOBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -o $@ test/unit.c $(LIBOBJ) $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
 
-unit: $(BIN) $(UNIT)
+$(CORE): test/core.c $(LIBOBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(ALL_CFLAGS) -o $@ test/core.c $(LIBOBJ) $(LDFLAGS) -rdynamic $(DEP_LIBS) -lm -ldl
+
+unit: $(BIN) $(UNIT) $(CORE)
 	$(UNIT)
+	$(CORE)
+
+check: unit $(SETUP)
+	sh test/lint.sh
+	sh test/runtime.sh $(BIN)
+	sh test/net.sh $(BIN)
+	sh test/curl.sh $(BIN)
+	sh test/first.sh $(BIN)
 	sh test/units.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
+	sh test/places.sh $(BIN)
+	sh test/quit.sh $(BIN)
 
-check: unit
-	sh test/smoke.sh $(BIN)
-	sh test/terminal.sh $(BIN)
-
-check-offline: $(BIN)
-	sh test/offline.sh $(BIN)
-
-check-write: $(BIN)
+e2e: $(BIN) $(SETUP)
+	sh test/lint.sh
+	sh test/runtime.sh $(BIN)
+	sh test/net.sh $(BIN)
+	sh test/curl.sh $(BIN)
+	sh test/first.sh $(BIN)
+	sh test/units.sh $(BIN)
+	sh test/setup.sh $(BIN) $(SETUP)
+	sh test/places.sh $(BIN)
+	sh test/quit.sh $(BIN)
 	sh test/write.sh $(BIN)
-
-check-forms: $(BIN)
-	sh test/forms.sh $(BIN)
-
-e2e: $(BIN)
-	sh test/smoke.sh $(BIN)
-	sh test/terminal.sh $(BIN)
-	sh test/install.sh $(BIN) $(VERSION)
-	sh test/offline.sh $(BIN)
-	sh test/write.sh $(BIN)
-	sh test/forms.sh $(BIN)
+	python3 -I test/tasks.py $(BIN)
+	python3 -I test/screens.py $(BIN)
 
 # ---- the API reference (LDoc: config.ld) ----
 
 LDOC ?= ldoc
 api:
 	@command -v $(firstword $(LDOC)) >/dev/null || { echo "LDoc not found: luarocks --local install ldoc, or make api LDOC='lua path/to/ldoc.lua'"; exit 1; }
+	rm -rf build/api
 	$(LDOC) .
 	@echo "the API reference is in build/api/index.html"
 
@@ -173,4 +195,4 @@ clean:
 distclean:
 	rm -rf build config.mk config.h config.status
 
-.PHONY: all help status builds api unit check check-offline check-write check-forms e2e install datasets rocks uninstall clean distclean
+.PHONY: all help status builds api unit check e2e install datasets rocks uninstall clean distclean

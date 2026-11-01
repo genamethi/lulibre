@@ -159,4 +159,4 @@ static void draw(struct tui *t, void *state, struct rect r, int focused) {
   }
 }
 
-const struct view_class view_list = {"list", create, destroy, draw, NULL};
+const struct view_class view_list = {"list", create, destroy, draw, NULL, NULL, 0};

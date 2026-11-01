@@ -247,8 +247,7 @@ static void add_line(fz_context *ctx, struct doc_page *pg, fz_stext_line *line, 
   if (l && !(flags & LINE_ROTATED)) l->math = math_of(ctx, line, size, base_y);
 }
 
-static void extract_page(fz_context *ctx, fz_document *doc, int i, struct doc_page *pg,
-                         int keep_lines) {
+static void extract_page(fz_context *ctx, fz_document *doc, int i, struct doc_page *pg) {
   fz_stext_page *sp = NULL;
   fz_stext_options opts;
   memset(&opts, 0, sizeof opts);
@@ -273,7 +272,7 @@ static void extract_page(fz_context *ctx, fz_document *doc, int i, struct doc_pa
     fz_drop_stext_page(ctx, sp);
   fz_catch(ctx)
     fz_ignore_error(ctx);
-  doc_page_finish(pg, keep_lines);
+  doc_page_finish(pg);
 }
 
 void doc_mupdf_extract(const char *path, const struct doc_opts *o, struct doc_info *out) {
@@ -306,7 +305,7 @@ void doc_mupdf_extract(const char *path, const struct doc_opts *o, struct doc_in
     out->pages = xcalloc((size_t)n, sizeof *out->pages);
     int from = o->tail ? out->npages - n : 0;
     for (int i = 0; i < n; i++) {
-      extract_page(ctx, doc, from + i, &out->pages[i], i < o->layout_pages);
+      extract_page(ctx, doc, from + i, &out->pages[i]);
       out->n = i + 1;
     }
   }

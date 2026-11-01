@@ -1,228 +1,246 @@
 # Configuration
 
-`~/.config/lulibre/init.lua` is plain Lua. lulibre loads it at startup.
+lulibre needs no configuration beyond where the library is. Settings come
+from four places, each laid over the one below where it sets a value:
 
-    lulibre config            print init.lua with every option and the value in effect
-    lulibre config --write    write a first init.lua, if there is none
-    lulibre -o help           list the options, one per line
-    lulibre -o name=value     set an option for this run
-    :set name=value           set an option in the interface, until it closes
+1. the command line: `-o name=value`, `-L DIR`;
+2. what Lua sets: `setman.set` in init.lua or a script, and `:set` in the
+   interface;
+3. the saved state, `~/.local/state/lulibre/settings`, read only while the
+   setting `persistent` is true;
+4. the default.
+
+What init.lua sets as lulibre starts (up to its first wait) lies under the
+command line. A change made after that, by `:set`, a command, a key or a
+script, replaces the command line's value.
+
+    lulibre -o help           the settings, their values and what they do
+    lulibre -o name=value     a setting for this run
+    :set                      every setting, its value and where it is set
+    :config                   the same as a form, in the bar's Configuration tab
+    :set name                 a setting's value; :set name=value changes it
     lulibre --clean           start without init.lua
-    lulibre -C DIR            use another configuration directory (or $LULIBRE_CONFIG_DIR)
+    lulibre -C DIR            another configuration folder (or $LULIBRE_CONFIG_DIR)
 
-## Options
+A name no setting has, given with `-o` or in the saved state, is held
+while init.lua starts, for a setting a script makes (`setman.create`,
+[the API](api.md)); one nothing made is said, and lulibre goes on.
+
+`~/.config/lulibre/init.lua` is plain Lua, so you can keep your settings in any
+file, or in several ([below](#keeping-settings-elsewhere)). The standard layout,
+and the only one the Configuration tab and lulibre-setup work with, is
+`lua/config/options.lua` in the configuration folder, which init.lua loads:
 
 ```lua
-local o = lulibre.o
-o.library = "~/calibre-library"
+-- init.lua
+require "config.options"
 ```
 
-| Option | Default | |
+```lua
+-- lua/config/options.lua
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.ocr = "auto"
+opt.path.log = os.getenv("HOME") .. "/lulibre.log"
+```
+
+`lulib.opt` is the settings as a table, as Neovim's `vim.opt`: a setting
+read is `setman.get`, a setting assigned is `setman.set`. Any other name is
+a field of the table like any other, so options of your own can be kept
+there too. With `persistent` true, what this file sets is set again at each
+start, over the saved state.
+
+Two things write this file, and each has init.lua load it. They do so only
+when you ask: lulibre doesn't touch either file otherwise.
+
+- `w` in `:config` (or `:config write`) writes what you changed: every setting
+  not at its default whose value the file doesn't give already, except what the
+  command line gave for its run. A setting set back to its default loses its
+  line. `a` (or `:config write all`) does that, then adds every other setting,
+  commented out with its default.
+- **Write options.lua** on `build/lulibre-setup`'s screen, or `sh
+  setup/install.sh -s` on its plan, writes the choices made there.
+
+A line that sets a setting is replaced only when its value changes, so one
+written as an expression stays while it gives the same value; other lines
+are kept, and `options.lua.bak` has the file as it was. Where there is no
+init.lua, one is created holding only that `require`. In an init.lua without
+it, a commented-out `require "config.options"` is uncommented, or else the
+line goes at the end; `init.lua.bak` has the file as it was.
+
+### Keeping settings elsewhere
+
+Set them from any file init.lua runs, and don't use `w` and `a`: they write
+only the standard layout, and the tab says `set` for a value that came from
+your own file. To write your own scheme, `setman.ls` and `setman.info` give
+every setting, its value and where the value came from. This command keeps
+what was changed in a file of your choosing, which init.lua can `dofile`:
+
+```lua
+cmdman.create("keep", function()
+  local out = assert(io.open(setman.get("path.config") .. "/mine.lua", "a"))
+  for _, name in ipairs(setman.ls()) do
+    local i = setman.info(name)
+    if i.from == "set" then out:write(("setman.set(%q, %q)\n"):format(name, tostring(i.value))) end
+  end
+  out:close()
+end, { desc = "append the settings changed to mine.lua" })
+```
+
+Every setting Lua can set takes effect at once, except the files the
+index opens with (`path.indexdb` and the files beside it), which are read
+when it opens. `path.config` and `path.state` come from the command line
+only: they say where init.lua and the saved state are.
+
+With `persistent` true, lulibre writes the settings changed during a run
+to the saved state when it exits (and on `setman.save()`), and starts from
+them the next time; what init.lua or the command line sets still lies over
+them. A value saved there stays until it is changed or the file is
+removed.
+
+`setman.get` gives a `path.*` setting left empty as the path in use:
+`setman.get("path.indexdb")` is the index file lulibre opened.
+
+## Settings
+
+| Setting | Default | |
 |---|---|---|
-| `library` | | the calibre library folder. If not set, `$LULIBRE_LIBRARY`, or else the current directory |
-| `server` `user` `password_file` | | the calibre content server that changes go through |
-| `write_via` | `auto` | `auto` · `server` · `direct`: how changes reach calibre |
-| `server_stop` `server_start` | | shell commands that stop and start the content server. lulibre uses them for the changes that wait for the server to stop (`:offline`). If empty, those changes wait for the server's next restart |
-| `server_hook` | `false` | `true`: install `lulibre.service`, which runs `lulibre offline` before each start of the server's systemd unit (see "lulibre's systemd units" in [Workflows](workflows.md)) |
-| `opf_writer` | `off` | `server`: start the server's unit through lulibre's launcher, so calibre's own writer keeps the books' metadata.opf files current while the server runs |
-| `server_restart_at` | | a time of day, `HH:MM`, at which `lulibre-restart.timer` restarts the server every day. If empty, the server is never restarted |
-| `backup_restart` | `always` | when to copy calibre's database before the server starts: `always`, `next` (once), `never`, or a number of days (`:backup`) |
-| `backup_keep` | `5` | how many copies are kept |
-| `backup_too_old` `backup_max_age` | `warn` `7` | offer a copy at the first change of a session if the newest copy is older than this many days. `false` turns the offer off |
-| `backup_metadata` | `true` | have calibre write each changed book's metadata.opf (`calibredb backup_metadata`) whenever nothing else can: each time the content server is stopped, and after lulibre changes the library straight in its folder. Adding or removing a calibre column waits until these files are written |
-| `index` | | the index database. By default it is under `~/.local/share/lulibre/` |
-| `pages` | `6` | how many first pages of each file are indexed as text |
-| `layout_pages` | `2` | how many of those pages are also kept as lines tagged with font size |
-| `jobs` | `0` | worker threads. 0 means one per core |
-| `ocr` | `never` | `never` · `auto` · `always` |
-| `ocr_pages` `ocr_lang` | `3` `eng` | how many pages of each file OCR reads, and tesseract's language |
-| `ocr_write` | `off` | `off` · `replace` · `keep`: OCR also writes the text it read into the PDF (ocrmypdf). `keep` keeps the original in `ocr_originals` |
-| `ocr_originals` | | where `ocr_write = keep` puts the originals, outside the library. By default `ocr-originals/` under the data folder |
-| `text_fallback` | `auto` | `off` · `auto`: read garbled pages again with pdftotext, if it is installed (`:run reread`) |
-| `write_jobs` | `6` | how many `calibredb` processes run at once. Direct writes run one at a time |
-| `propose_min` | `60` | proposals with a confidence under this percentage are stored, but review doesn't show them and they don't count as waiting. Every summary says how many there are. Lower the value to see them |
-| `propose_held` | `replace` | `replace` · `keep`: when another value is proposed for the same book and field, remove the proposals under `propose_min`, or keep them all |
-| `propose_over` | `sure` | `gaps` · `sure` · `any`: whether `:propose` proposes for a field that already has a value. See [Workflows](workflows.md) |
-| `enrich_services` | `arxiv,crossref,zbmath,openlibrary,openalex` | the metadata services `:enrich` asks |
-| `arxiv_snapshot` | | a file of arXiv's records: arXiv's snapshot from Kaggle, or a hypergraph of arXiv, as `.json` or the `.zip`. If empty, lulibre uses the first of `arxiv-metadata-oai-snapshot.json`, `arxiv.json` or `arxiv.zip` in the data folder (a link works). `:enrich` reads papers from the file and asks arXiv only about papers newer than the file |
-| `weigh_sources` | `false` | `true`: a proposal's confidence combines its agreeing sources, each weighted by how often it has been right in this library (`:weigh`, `:weights`) |
-| `contact_email` | | an e-mail address sent to the metadata services with each request. If empty, nothing is sent |
-| `refs_pages` | `14` | how many closing pages of a file are read to find its bibliography |
-| `one_word_titles` | `check` | `check` · `ok` · `junk`: whether a one-word title counts as a title. With `check`, a plain capitalised word does |
-| `good_titles` | | titles, separated by commas, that always count as titles |
-| `never_titles` | | words and phrases, separated by commas, that mark a title as not a title |
-| `learned_tags` | `off` | `off` · `suggest` · `propose`: use subjects learned from the library (the phrases `:learn` finds, and the references books share). `suggest` offers them in the edit form, and `propose` also makes them proposals |
-| `learned_tags_min` | `20` | the confidence, in percent, a learned subject needs for review to show it. Used instead of `propose_min` |
-| `subject_terms` | `20` | how many marking phrases `:learn` keeps for each subject |
-| `subject_catchall` | | subjects (or their last part), separated by commas, that file a book by its form, not its topic |
-| `never_authors` | | words and phrases, separated by commas, that are never proposed as an author. They add to the built-in ranks and roles |
-| `title_case` | `auto` | `auto` · `never`: propose a title found in CAPITALS, and a catalogue's title for a book in English, in title case |
-| `math_notation` | `unicode` | `unicode` · `off`: write the mathematics in proposed titles in Unicode (SL₂(ℤ), GLₙ(ℚₚ)) |
-| `sync_dir` | | the folder of files waiting to be added |
-| `orphans_dir` | | where stray files are set aside |
-| `preview` | `text` | `text` · `image`: what the preview shows first |
-| `blitter` | `auto` | `auto` · `pixel` · `sextant` · `quadrant` · `half`: how page images are drawn |
-| `mouse` | `1` | clicks and the wheel |
-| `review_open` | `0` | `1`: review starts with every book's other fields shown |
-| `review_rows` | `field` | `field` · `all`: one row per field with the most confident proposal, or one row per proposal |
-| `review_context` | `1` | `1`: show a panel in place of the list. Review shows what the proposal under the cursor is based on, duplicates shows the copies side by side, orphans shows the whole row, and the edit form shows what the pages say. `i` hides the panel |
-| `review_reject` | `once` | `once` · `always`: whether a later run may propose a rejected value again |
-| `review_sort` | `evidence` | `evidence` · `confidence` · `disputed` · `id`: the order of books in review: best supported by their pages, most confident, most disputed, or by id |
-| `leader` | `\` | the key `<Leader>` stands for in key bindings |
-| `log_file` | | a file the log is also appended to (`$LULIBRE_LOG` does the same) |
-| `pixi_deps` | `false` | `true`: programs that features need (pdftotext, tesseract, ocrmypdf) may come from a pixi environment lulibre keeps, and lulibre offers to add a missing one |
-| `rocks_tree` | | a luarocks tree whose modules scripts may require |
-| `rocks_install` | `false` | `true`: lulibre offers to install a rock a script needs into `rocks_tree` |
-| `config_dir` | | where `init.lua`, `scripts/` and `lua/` are looked for. Reading it gives the directory in use |
+| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library; else, on a terminal, lulibre asks whether to open the library calibre opened last (`library_path` in calibre's `global.py.json`), then about calibre's content server when one is running (found among the processes, with the port it listens on); the answers hold for that run, and `w` in `:config` keeps them |
+| `path.indexdb` | | the index database; by default `<library's name>-<hash>.db` under `~/.local/share/lulibre/` |
+| `path.journaldb` `path.customdb` `path.witdb` | | the journal of changes, your own `#fields`, the wits waiting for review; by default beside the index, `<index>.journal.db` and so on |
+| `path.netdb` | | the online answers, for every library; by default `~/.local/share/lulibre/net.db` |
+| `path.config` | | where init.lua and `lua/` are; by default `~/.config/lulibre`; command line only |
+| `path.state` | | the saved settings; by default `~/.local/state/lulibre/settings`; command line only |
+| `persistent` | `false` | keep the settings changed during a run, and start from them next time |
+| `path.log` | | also append the log to this file |
+| `path.crash` | | where a crash's report goes; by default `~/.local/state/lulibre/crash.log` |
+| `jobs` | `0` | worker threads; 0 is one per core |
+| `pages` | `10` | the first pages of each file read into the index |
+| `ocr` | `auto` | `never`: no OCR; `auto`: OCR the files whose text is not usable; `always`: every file |
+| `ocr_pages` `ocr_lang` | `3` `eng` | the pages OCR reads, and tesseract's language |
+| `auto_index` | `auto` | `auto` · `ask` · `never`: read new or changed files when the interface starts |
+| `mouse` | `true` | clicks select, the wheel scrolls |
+| `leader` | `\` | the key `<Leader>` stands for |
+| `blitter` | `auto` | how page images are drawn: `auto` · `pixel` · `sextant` · `quadrant` · `half` |
+| `preview` | `text` | what the preview shows first: `text` · `image` |
+| `path.sync` | | a folder of files waiting to be added to the library: its ebook files are read with calibre's records, and each is a book in `in:sync` (2 or gS shows them) |
+| `path.modtree` | | a module prefix searched after lulibre's own modules and yours; not in a pixi environment |
+| `rank_coverage` `rank_agreement` `rank_track` | `45` `35` `20` | what ranking a parse weighs: the fields it fills, its agreement with the sources, its record of review decisions |
+| `track_after` | `100` | review decisions the journal holds before a record of decisions counts |
+| `similar_near` `similar_same` | `0.7` `0.95` | how much of one value found in another makes them near, and the same |
+| `embed` | `false` | every change to a record is also written into the book's files, once per batch |
+| `expose_modules` | `true` | the internal functions of lulibre's modules are in their tables, and redefining one changes what lulibre does; `false`: lulibre calls its own |
+| `write_jobs` | `4` | calibredb processes at once through the content server; straight to the folder, one |
+| `contact_email` | | sent to the metadata services with each request, when set |
+| `server` `user` `path.password` | | calibre's content server, which changes go through while it holds the library. lulibre adds the library's name to the address (`#calibre-library`), as calibre's server names it, unless the address has one. lulibre never reads the password: calibredb gets the file's name |
+| `server_hook` | `false` | lulibre's systemd unit runs `lulibre offline` before each start of calibre's content server's unit: calibre's records read, the changes that wait made ([workflows](workflows.md#calibres-server-and-lulibres-systemd-units)) |
+| `opf_writer` | `off` | `server`: calibre's content server starts with calibre's own opf writer, through a drop-in on its unit |
+| `server_restart_at` | | `HH:MM`: a timer restarts calibre's content server every day at that time |
 
-In Lua, the same options are read and set with `lulibre.settings.get(name)`
-and `lulibre.settings.set(name, value)`. `lulibre.settings.paths()` returns
-where everything is.
-
-### Things lulibre may do on its own
-
-These options take `"auto"` (do it), `"ask"` (ask first) or `"never"`.
-Where nobody can be asked, as in `lulibre run`, `"ask"` means no.
-
-| Option | Default | |
-|---|---|---|
-| `auto_index` | `auto` | index new or changed files at start. `ask` only says how many are waiting |
-| `repair_links` | `ask` | after calibre renames a book's folder, fix the links in your own folders that pointed at the book |
-| `carry_metadata` | `auto` | before a duplicate or orphan record is removed, keep what only that record knew as proposals |
-| `sync_propose` | `ask` | propose metadata for files new to the sync folder |
-
-### The password file
-
-`password_file` names a file that holds the content server's password and
-nothing else. lulibre never reads the file: `calibredb` gets the file's
-name and reads the password itself. Make the file readable only by you
-(`chmod 600`). lulibre warns in the console if other users can read it.
-
-The password can't be stored as a salted hash. A hash is for checking a
-password someone types, and can't be turned back into the password, but
-`calibredb` needs the password itself to log in to the server. The file's
-permissions protect the password, so keep the file out of anything that is
-copied or committed.
-
-### The config window: tab `3`
-
-The bar along the top has a tab for the config window, `3 Configuration`.
-`3`, `gC`, `:config` or a click on the tab opens the window across the
-screen, in place of the list and the preview. `1` or `2`, or a click on
-their tabs, goes back to the list.
-
-The window lists every option under its heading: lulibre's own options, and
-each script's options under the script's name. Each option shows its value,
-its default and the line of init.lua that sets it. Below the list, a panel
-says what the option under the cursor does and which values it takes.
-
-| Key | |
-|---|---|
-| `Enter` `e` | set the option. The value takes effect at once and is written to the option's line in init.lua, after the old file is saved as `init.lua.bak` |
-| `d` | reset the option to its default: the line is commented out and shows the default |
-| `E` | open init.lua in your editor (`$VISUAL`, `$EDITOR`, or else vim or vi). lulibre waits until you leave the editor, then reads init.lua again |
-| `a` | add the options that are not in init.lua, with their defaults, commented out or set (`config_add_as`) |
-| `c` | choose what is written above an added option: `full` help, the `values` it takes, or `none` (`config_comments`) |
-| `f` | show only the options that differ from their defaults |
-
-Options that are not in init.lua are added only when you press `a`.
-`config_add_core` and `config_add_scripts` change that: `never` (the
-default), `ask` (offered the first time the window opens in a session) or
-`auto` (added when lulibre starts).
-
-`config_add_as` sets how an option is added. `commented` (the default)
-adds it commented out with its default, so the default stays lulibre's and
-you get later changes to it. `set` adds it set to its default, so the value
-is yours from then on. An option without help gets no comment, whatever
-`config_comments` says.
-
-### Options of scripts
-
-A script declares its options when it starts, under a name of its own:
-
-```lua
-local opt = lulibre.option("mytags", {
-  depth = { default = 2, type = "number", help = "how many levels of subject to keep" },
-  style = { default = "short", choices = "short|long" },
-})
-if opt.depth > 1 then ... end
-```
-
-init.lua sets them by that name, before or after the script has run:
-
-```lua
-lulibre.cfg.mytags.depth = 3
-```
-
-A value set in init.lua overrides the script's own value, unless the
-script sets it with `force`. A value changed during the session (in the
-config window or with `:lua`) overrides both until lulibre closes. Every
-value is checked against the declared type and choices.
+`:config` (the bar's Configuration tab) shows every setting as a form, in
+the list's place: its value, where the value comes from, and, in a band
+below, what the setting under the cursor does, its default and what it
+takes. `e` or Enter types a value, Space takes the next of its choices
+(true or false), `d` gives it its default back and `c` shows only the
+settings not at their default. A change takes effect at once and holds
+for the run, or is kept with `persistent` true; `w` and `a` write to
+options.lua, as above. The Set column says `options.lua` for a value that
+file gives, and `set` for one that nothing will keep.
 
 ## Colours
 
 ```lua
-local c = lulibre.theme
+local c = uiman.theme
 c.border = "#7982a9"      -- the line between windows
 c.bar_bg = "#343a55"      -- a window's top line; the focused window's is `accent`
 ```
 
 The colour names are `dim accent warn error ok cursor_bg cursor_bg_blur
-visual_bg mark title border bar_bg bar_fg on_accent`. `:lua lulibre.theme()`
-lists them with their values. The defaults assume a dark terminal.
+visual_bg mark title border bar_bg bar_fg on_accent`. `uiman.theme()` returns them
+with their values. The defaults assume a dark terminal.
 
-## Keys, commands, scripts
+## Keys and commands
 
 ```lua
-lulibre.map("n", "gu", "filter author:unknown")       -- a command line
-lulibre.map("nv", "gx", function()                    -- or a function
-  lulibre.notify(#lulibre.selection() .. " selected")
+keymap.set("n", "gu", "filter author:unknown", { desc = "books by nobody" })
+keymap.set({"n", "v"}, "gx", function(o) uiman.notify(#o.selection .. " selected") end)
+cmdman.create("unlabelled", function(o) uiman.filter("author:unknown no:tags " .. o.args) end,
+           { desc = "[filter]  books with neither an author nor a subject" })
+```
+
+`<Leader>` in a key sequence stands for the key in the setting `leader`.
+`:restart-scripts` starts the scripts again in a new Lua state, init.lua
+first. See [the Lua API](api.md).
+
+lulibre finds its own modules first, then those in `~/.config/lulibre/lua/`,
+then those under the prefix `path.modtree` names, then Lua's own places as Lua
+and the environment (`LUA_PATH_5_5`, `LUA_CPATH_5_5`) set them. Nothing is
+looked for in the current directory. To change what one of lulibre's
+modules does, redefine its function: no file of yours replaces one.
+
+## One way to lay out a configuration
+
+init.lua can stay a list of `require`s, one module of `lua/config/` for
+each kind of thing:
+
+```
+~/.config/lulibre/
+  init.lua
+  lua/config/
+    options.lua     settings
+    keymaps.lua     keys
+    cmds.lua        commands
+    events.lua      what runs when something happens
+```
+
+```lua
+-- init.lua
+require "config.options"
+require "config.keymaps"
+require "config.cmds"
+require "config.events"
+```
+
+```lua
+-- lua/config/options.lua
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.ocr = "auto"
+```
+
+```lua
+-- lua/config/keymaps.lua
+keymap.set("n", "<Leader>u", "filter author:unknown", { desc = "books by nobody" })
+```
+
+```lua
+-- lua/config/cmds.lua
+cmdman.create("untagged", function(o) uiman.filter("subject:none " .. o.args) end,
+              { desc = "[filter]  books with no subject" })
+```
+
+```lua
+-- lua/config/events.lua
+evman.add("records_changed", function(ev)
+  if #ev.fields == 0 then uiman.notify(#ev.ids .. " books changed in calibre") end
 end)
-lulibre.command("unlabelled", function(args)
-  lulibre.filter("author:unknown no:tags " .. args)
-end, "[filter]  books with neither an author nor a subject")
 ```
-
-A fourth argument sets what the help overlay (`?`) shows for the key.
-`false` leaves the key out of the overlay:
-
-```lua
-lulibre.map("n", "gB", "run bib", "write the selection as BibTeX")
-lulibre.map("n", "gH", function() ... end, false)
-```
-
-`<Leader>` in a key sequence stands for the key in the `leader` option. A
-panel's name in place of the modes binds one of that panel's actions; see
-[Keys](keys.md). `:reload-cfg` (`<Leader>R`) reads `init.lua` again.
-
-`:run NAME` or `lulibre run NAME` runs the script
-`~/.config/lulibre/scripts/NAME.lua`. Modules in `~/.config/lulibre/lua/`
-can be `require`d.
-
-lulibre looks for your scripts and modules first. A script or module of
-yours with the same name as one of lulibre's (`scripts/sync.lua`,
-`lua/lulibre/edit.lua`) is used instead of lulibre's. Since your copy may
-lack what an update fixed, the console lists each such file at start, once,
-and again whenever lulibre's own file changes (`lulibre.overrides`).
-
-After your files, lulibre looks for its own in one place only: the source
-tree a build runs from, `$LULIBRE_RUNTIME`, or where `make install` put
-them. Then it looks in the rocks of `~/.luarocks` and in Lua's own places.
-Nothing is looked for in the current directory. See [the Lua API](api.md).
 
 ## Where things are kept
 
 | | |
 |---|---|
-| `~/.config/lulibre/` | `init.lua`, `scripts/`, `lua/`. For another directory, use `lulibre -C DIR`, `$LULIBRE_CONFIG_DIR`, or the option `config_dir` |
-| `~/.local/share/lulibre/NAME-HASH.db` | the index of one library. lulibre builds it from the library and can rebuild it, except for what only lulibre knows: the undo journal, proposals, staged files' metadata, saved capture rules and file hashes |
-| `~/.local/share/lulibre/NAME-HASH.history.db` `….custom.db` | beside the index, and never removed with it: the journal of changes, the snapshots, the changes that wait for the server to stop, and the custom fields |
-| `~/.local/share/lulibre/backups/NAME-HASH/` | copies of calibre's database (`:backup`) |
-| `~/.local/share/lulibre/overrides.json` | which of your replacing files the console has already listed |
-| `~/.local/state/lulibre/calibre-server.json` | written by calibre's server while it runs through lulibre's launcher (`opf_writer = "server"`) |
-| `~/.local/share/lulibre/orphans/` | stray files set aside |
+| `~/.config/lulibre/` | `init.lua`, `lua/`, `docs/` |
+| `~/.config/lulibre/docs/`, `~/.local/share/lulibre/docs/` | guides of your own, Markdown files `:help` reads after lulibre's (and their folders'): each heading is a tag, and so is what a table's first column names in `code` (a command under a `Command` heading, a setting under `Setting`, a key under `Key`) |
+| `~/.local/state/lulibre/settings` | the saved settings, while `persistent` is true |
+| `~/.local/share/lulibre/NAME-HASH.db` | the index of one library: what lulibre read from it and its files. A new version of its tables makes it again, keeping the sync folder's files |
+| `~/.local/share/lulibre/NAME-HASH.journal.db` | beside the index, and never removed with it: every operation on the library, with where each value came from |
+| `~/.local/share/lulibre/NAME-HASH.custom.db` | the fields of lulibre's own (`#name`) |
+| `~/.local/share/lulibre/NAME-HASH.wit.db` | the reviews, their wits, and what was worked out from each file (which can be deleted) |
+| `~/.local/share/lulibre/net.db` | every online answer, for every library |
 
-lulibre honours `XDG_CONFIG_HOME` and `XDG_DATA_HOME`.
+lulibre honours `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME`,
+and each file has a `path.*` setting (above) that puts it elsewhere.
 
 ## Terminals
 

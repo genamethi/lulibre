@@ -1,7 +1,7 @@
 # Filters
 
 lulibre has one filter language. `lulibre query`, `&` and `/` in the
-interface, and Lua functions such as `lulibre.ids(filter)` all use it.
+interface, and Lua functions such as `bookman.ids(filter)` all use it.
 `lulibre query -h` prints a summary.
 
     term term ...        all must hold
@@ -25,7 +25,9 @@ again.
 | Field | Matches |
 |---|---|
 | `title` `author` `tag` `publisher` `series` `lang` `path` | that field |
-| `subject` | tags hierarchically: `subject:number-theory` also matches `math/number-theory/additive` |
+| `subject` | tags by whole levels, which calibre separates with ".": `subject:number-theory` matches `math.number-theory.additive`, as `tag:=..number-theory` does |
+| `tag:=.math` | as calibre's `=.`: the tag `math`, or one inside it (`math.algebra`) |
+| `tag:=..algebra` | as calibre's `=..`: a tag with the level `algebra` anywhere in it |
 | `author:unknown` | calibre's placeholder authors |
 | `fmt` | file format: `fmt:djvu` |
 | `id` `year` | numbers: `12`, `10-20`, `>1990`, `<=2001`, `1,5,9-12` |

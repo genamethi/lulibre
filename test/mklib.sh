@@ -30,7 +30,7 @@ INSERT INTO books VALUES
   'Erdős, Paul', 'Paul Erdos/Notes (2)', '2024-01-02 00:00:00+00:00');
 INSERT INTO authors VALUES (1, 'Unknown', 'Unknown'), (2, 'Paul Erdős', 'Erdős, Paul');
 INSERT INTO books_authors_link VALUES (1, 1, 1), (2, 2, 2);
-INSERT INTO tags VALUES (1, 'math/number-theory/additive'), (2, 'cs');
+INSERT INTO tags VALUES (1, 'math.number-theory.additive'), (2, 'cs');
 INSERT INTO books_tags_link VALUES (1, 2, 1);
 INSERT INTO identifiers VALUES (1, 2, 'doi', '10.1000/xyz');
 INSERT INTO data VALUES (1, 1, 'PDF', 0, 'paper - Unknown'), (2, 2, 'TXT', 0, 'Notes - Paul Erdos');
@@ -51,6 +51,6 @@ endobj
 trailer<</Root 1 0 R/Size 6>>
 %%EOF
 PDF
-printf 'Lecture notes on additive number theory\nSecond line\n' \
+printf 'Lecture notes on additive number theory\nSecond line\nThese are notes taken at a course of lectures given over one winter, and they cover the basic results of the subject with a number of worked examples and exercises for the reader, along with notes on what to read next.\n' \
   > "$lib/Paul Erdos/Notes (2)/Notes - Paul Erdos.txt"
 

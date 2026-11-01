@@ -2,6 +2,7 @@
 
 #include "core/log.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -160,6 +161,51 @@ char *path_expand(const char *p) {
     if (home) return xasprintf("%s%s", home, p + 1);
   }
   return xstrdup(p);
+}
+
+char *path_xdg(const char *var, const char *fallback) {
+  const char *v = getenv(var);
+  return v && v[0] ? xasprintf("%s/lulibre", v) : path_expand(fallback);
+}
+
+static int visible(const struct dirent *e) {
+  return e->d_name[0] != '.';
+}
+
+static int by_name(const struct dirent **a, const struct dirent **b) {
+  return strcmp((*a)->d_name, (*b)->d_name);
+}
+
+static void walk(const char *dir, const char *rel, int depth, path_walk_fn *fn, void *ud) {
+  struct dirent **e;
+  int n = scandir(dir, &e, visible, by_name);
+  for (int i = 0; i < n; i++) {
+    char *path = xasprintf("%s/%s", dir, e[i]->d_name);
+    char *name = *rel ? xasprintf("%s/%s", rel, e[i]->d_name) : xstrdup(e[i]->d_name);
+    struct stat st;
+    if (stat(path, &st) == 0 && fn(path, name, &st, ud) && S_ISDIR(st.st_mode) && depth > 0)
+      walk(path, name, depth - 1, fn, ud);
+    free(path);
+    free(name);
+    free(e[i]);
+  }
+  if (n >= 0) free(e);
+}
+
+void path_walk(const char *dir, int depth, path_walk_fn *fn, void *ud) {
+  walk(dir, "", depth, fn, ud);
+}
+
+char *file_read(const char *path, size_t *len) {
+  FILE *f = fopen(path, "r");
+  if (!f) return NULL;
+  sbuf s = SBUF_INIT;
+  char buf[8192];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof buf, f)) > 0) sb_putn(&s, buf, n);
+  fclose(f);
+  if (len) *len = s.len;
+  return s.s ? sb_take(&s) : xstrdup("");
 }
 
 const char *path_ext(const char *p) {

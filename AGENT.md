@@ -24,11 +24,10 @@ it happens, not assumed away.
 
 ## Branches and versions
 
-- `main` is the line being developed; a release has its own branch for
-  patches (`0.1`). Work for a version is put together on an integration
-  branch (`0.2.0-dev`): each change is a branch `<version>-<name>`, merged
-  into it with `--no-ff`, and the integration branch is merged into `main`
-  when a batch is whole and passes.
+- Work for the next version is done on one branch in a separate worktree,
+  a commit per change, and reaches `main` by a `--no-ff` merge through the
+  gate below. How changes move between `main`, `alpha`, `beta` and
+  `experimental` is not decided yet.
 - A checkout someone runs lulibre from is not touched by branch work: a
   binary run from a source tree reads its Lua files from that tree as it
   needs them, so checking out or merging there breaks the program while it
@@ -102,53 +101,54 @@ it as they are touched:
 ## Before believing a report is a code bug
 
 - Read the reporter's `init.lua` first; read it, never edit it (defaults
-  belong in the repo, in what `lulibre config` writes).
-- For a crash, read `coredumpctl info` and `~/.local/state/lulibre/crash.log`
-  before reasoning from the source.
+  belong in the repo, in `src/core/setdefs.c`).
+- For a crash, read `coredumpctl info` and the crash log (the setting
+  `path.crash`, by default `~/.local/state/lulibre/crash.log`) before
+  reasoning from the source.
 
 ## Never touch
 
 - A real calibre library. Every write path is tested against a throwaway
-  library inside `unshare -rn` (`make check-offline`, `make check-write`):
-  calibre refuses direct access to any library while one of its programs
-  runs, and the namespace hides its lock.
+  library inside `unshare -rn` (`test/write.sh`, in `make e2e`), or with a
+  `store.calibre` in calibredb's place: calibre refuses direct access to
+  any library while one of its programs runs, and the namespace hides its
+  lock.
 - The user's tmux buffers and clipboard. Anything that copies is tested
   inside a private tmux server (`tmux -L ...`).
-- A real index: no marks, proposals or settings left behind when looking.
+- A real index: no marks, wits or settings left behind when looking.
 
 ## Code rules that are easy to break
 
-- Two threads own state when the interface is up, the interface's and
-  Lua's. A `lulibre.x` that touches the interface, the options or the
-  command and key tables runs through `ui_call` (`ON_UI` in
-  `src/lua/l_ui.c`); interface code never touches the Lua state, it sends a
-  message with `bridge_lua`. Worker threads run `uv_queue_work` jobs
+- Threads own state, and reach each other's by message (docs/development.md,
+  "Threads"). A `uiman.x` that touches the interface, or the command and
+  key tables, is `SEND` or `ASK` around an `x_ui` (`src/lua/l_ui.c`,
+  `src/lua/uicall.c`); interface code never touches the Lua state, it posts
+  a message to the Lua thread (`queue_post(LOOP_LUA, ...)`). Worker threads
+  run `uv_queue_work` jobs
   (indexing, hashing, extracting, copying a database): a job touches only
   what it was handed and what it opens itself, and its answer is delivered
   in the after-callback, on the loop that queued it.
 - Reentrancy is held to strictly, and the rules are in docs/development.md
   ("Reentrancy"): read them before touching shared state in C or in Lua.
   In short: no static buffers handed out, no globals for a comparator, no
-  `strerror`; in Lua, a test and a set in one step (`lulibre.claim`).
-- Lua at the prelude's top level runs before `-L` and `init.lua` are
-  applied: anything there that opens the index ends lulibre with "no
-  library" in a run without one. Put it in a task (`lulibre.spawn`).
+  `strerror`; in Lua, a task gives way only where it waits, so a test and a
+  set with no wait between them are one step.
+- Lua at the prelude's top level runs before `init.lua`: anything there
+  that opens the index ends lulibre with "no library" when only init.lua
+  names the library. Put it in a task (`taskman.spawn`).
 - luv belongs to the main Lua state, loaded once at startup; never arrange
   for a task's coroutine to be the state a C library keeps.
 - A panel reserves `g` (for `gg`), `j`, `k`, `G`, `q`, `Esc`, `Tab`, `:`.
-- A screen written in Lua never compares a key with a letter: it asks its
-  key table (`lua/lulibre/ui/keys.lua`) which action the key means, and its
-  hint and `?` help are written from that table. A new action goes into the
-  table with a label and a description.
 - C code for a place with keys of its own (a panel's movement, the line
   editor, picker, pager, console) asks `ctx_feed(KC_..., &pending, key)`
   for the action (`src/tui/ctxkeys.c`; the enums in `tui.h` follow it).
-- Nothing shown names a key literally: C uses `key_hint("the command")` or
-  `ctx_hint(place, action)`, Lua `lulibre.hint("the command")`, a screen
-  `keys:key(action)`. Keys are rebindable, and what is shown says so.
+- Nothing shown in C names a key literally: it uses `key_hint("the command")`
+  or `ctx_hint(place, action)`. Keys are rebindable, and what is shown says
+  so.
 - A command acts on what the *focused* cursor shows. With a panel that
   follows the list focused, that is the panel row's book, not the list's
-  cursor; `lulibre.selection()` settles it.
+  cursor; the `{book=, selection=}` a command's or key's function gets
+  settles it.
 - Closing a window frees its node *and its sibling's* (the sibling's
   contents move up into the parent). Never keep a `struct node *` across a
   close; `wm_close_leaf` closes a given window and keeps `t->focus` valid.
@@ -158,21 +158,20 @@ it as they are touched:
   `picker_open`) first answers a question still open as cancelled, or a
   script waiting on it waits for ever.
 - Lua code runs on 5.4 and 5.5: never assign to a `for` loop's own variable
-  (5.5 will not load the file; `make unit` compiles every Lua file).
+  (5.5 will not load the file; `make check` compiles every Lua file, in
+  `test/runtime.sh`).
 - Lua patterns work on bytes: a character outside ASCII is several, so
   `©?` or `[çc]` do not mean what they seem. Write the bytes, list the
   spellings, or replace whole sequences; test such a pattern with and
   without the character.
-- `src/core/log.h` includes the generated `<config.h>` with angle brackets,
-  because `src/core/config.h` is the options header.
 - A C module found on the default `cpath` may be built against another
   Lua's headers and crash in `luaopen_*`. Before blaming a widely used
   library, check the build environment (headers, ABI, the library linked).
 
 ## Verifying
 
-- Anything that writes lulibre's own tables in bulk (`:learn`, confirming
-  records) is tried on a copy of the index, run with `-o index=COPY`. Take
+- Anything that writes lulibre's own tables in bulk is tried on a copy of
+  the index, run with `-o path.indexdb=COPY`. Take
   the copy with `sqlite3 'file:NAME.db?mode=ro' ".backup COPY"` (a plain
   `cp` of an index in use can be torn), after removing any `COPY-wal` /
   `-shm` left from an earlier copy of that name.
@@ -204,7 +203,7 @@ it as they are touched:
   items read one by one before it is trusted.
 - A file somebody else made is opened before code is written for it.
 - Code that talks to another service is written from that service's own
-  terms, read first and linked in a comment. The rules (`net/core.lua`): one
+  terms, read first and linked in a comment. The rules (`lua/net/service.lua`): one
   request at a time, no retry after 429/503 but a pause that outlives the
   run, no fallback that multiplies requests, an empty or broken answer not
   remembered as "no such record". A parser for its answers is checked
@@ -213,27 +212,21 @@ it as they are touched:
 ## Tests
 
 - `make check` always; `make e2e` before every merge. Read its log for
-  `skipping` as well as `FAIL`: offline, write and forms skip when their
-  tools are missing, and only then.
-- A change to a form (edit, review, duplicates, orphans) gets a keystroke
-  check in `test/forms.sh`. The configuration window's check counts rows
-  down to `pages`: an option added above it moves it.
-- The interface is driven through tmux (`send-keys`, `capture-pane`), mouse
-  and paste included, as `test/smoke.sh` does.
-- Escape is sent alone and given a moment (`send-keys Escape`, `sleep
-  0.2`): with a key right behind it the terminal reads Alt and that key.
-- A step added to a long tmux session inherits what the steps before it
-  left (a filter, a closed preview, a search): put it where the state is
-  the one it needs, and leave the state as it found it.
-- A session made with `-y 30` has 29 rows for the program: find a row by
-  what is on it, never by number.
-- Keys go to whatever has the cursor when they arrive: wait for the screen
-  they are meant for (`shown ...`) before sending them.
-- A message left by an earlier step satisfies a later `shown` of the same
-  words: clear it (`Escape`) first.
-- Name a private tmux server with `-L`; a socket path under a deep `mktemp`
-  is too long. A test that starts a tmux server stops it in its EXIT trap,
-  with `|| true`.
+  `skipping` as well as `FAIL`: write skips when its tools are missing, and
+  only then.
+- A change to a screen (a `uiman.list` or `uiman.form`: review, dupes,
+  orphans) gets a keystroke check in `test/screens.py`, which drives the
+  interface on a pseudo-terminal and reads what the screen's actions wrote.
+- Escape is sent alone and given a moment: with a key right behind it the
+  terminal reads Alt and that key.
+- A step added to a long session inherits what the steps before it left (a
+  filter, a closed preview, a search): put it where the state is the one it
+  needs, and leave the state as it found it.
+- Keys go to whatever has the cursor when they arrive: give the screen they
+  are meant for time to open before sending them.
+- Anything that copies is tested inside a private tmux server, named with
+  `-L`; a socket path under a deep `mktemp` is too long. A test that starts
+  a tmux server stops it in its EXIT trap, with `|| true`.
 - Test scripts do not `rm` paths built from variables; plant and remove
   files from Lua with exact paths.
 - Thread or memory work: `./configure --sanitize=address,undefined` and
@@ -297,7 +290,7 @@ Facts found by testing and in calibre's source, which the code relies on
   in both directions, raised and reported with their cause.
 - luv and libuv: handles closed before their memory goes, callbacks after
   their task or state is gone, the loop left with nothing pending at exit.
-- Runtime dependencies: a feature names the programs it needs
-  (`lulibre.features`), says so when one is missing, and offers to install
-  it when allowed, so nothing is required up front. How friendly is setting
+- Runtime dependencies: a feature names the programs it needs, says so when
+  one is missing, and offers to install it when allowed, so nothing is
+  required up front. How friendly is setting
   lulibre up, from `./configure` to the first library?

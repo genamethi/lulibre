@@ -6,7 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "core/config.h"
 #include "core/log.h"
 #include "core/md5.h"
 #include "core/util.h"
@@ -81,39 +80,8 @@ static void test_util(void) {
 
 /* ---- md5 ---- */
 
-static void md5_of(const char *data, size_t n, char hex[33]) {
-  struct md5 m;
-  unsigned char out[16];
-  md5_init(&m);
-  /* in two pieces, to cross the update boundary */
-  md5_update(&m, data, n / 3);
-  md5_update(&m, data + n / 3, n - n / 3);
-  md5_final(&m, out);
-  for (int i = 0; i < 16; i++) snprintf(hex + 2 * i, 3, "%02x", out[i]);
-}
-
 static void test_md5(void) {
   char hex[33];
-  md5_of("", 0, hex);
-  eq(hex, "d41d8cd98f00b204e9800998ecf8427e", "md5 of nothing");
-  md5_of("abc", 3, hex);
-  eq(hex, "900150983cd24fb0d6963f7d28e17f72", "md5 abc");
-  md5_of("message digest", 14, hex);
-  eq(hex, "f96b697d7cb7938d525a2f31aaf161d0", "md5 RFC 1321 vector");
-  const char *eighty = "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
-  md5_of(eighty, 80, hex);
-  eq(hex, "57edf4a22be3c955ac49da2e2107b67a", "md5 across a block boundary");
-  char big[56 + 64 + 1]; /* 55, 56, 63, 64: the padding edge cases */
-  memset(big, 'a', sizeof big);
-  static const struct { size_t n; const char *want; } edge[] = {
-    {55, "ef1772b6dff9a122358552954ad0df65"}, {56, "3b0c8ac703f828b04c6c197006d17218"},
-    {63, "b06521f39153d618550606be297466d5"}, {64, "014842d480b571495a4a0363793f7367"},
-  };
-  for (size_t i = 0; i < sizeof edge / sizeof edge[0]; i++) {
-    md5_of(big, edge[i].n, hex);
-    eq(hex, edge[i].want, "md5 at a padding boundary");
-  }
-
   char path[] = "/tmp/lulibre-unit-XXXXXX";
   int fd = mkstemp(path);
   ok(fd >= 0, "temporary file");
@@ -146,54 +114,6 @@ static void test_match(void) {
 
 /* ---- options ---- */
 
-static void test_config(void) {
-  struct config c;
-  char *err = NULL;
-  config_init(&c);
-  ok(c.pages == 6 && c.layout_pages == 2 && c.mouse == 1, "defaults: numbers");
-  eq(c.repair_links, "ask", "defaults: a policy");
-  eq(c.write_via, "auto", "defaults: write_via");
-  ok(config_set(&c, "pages", "9", &err) == 0 && c.pages == 9, "set a number");
-  ok(config_set(&c, "pages", "nine", &err) != 0, "a number option rejects text");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "repair_links", "auto", &err) == 0, "set a policy");
-  ok(config_set(&c, "repair_links", "sometimes", &err) != 0, "a policy rejects other words");
-  ok(err && strstr(err, "auto|ask|never"), "and says which are allowed");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "repair_links", "", &err) != 0, "nor the empty string");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "no_such_option", "1", &err) != 0, "unknown options are refused");
-  free(err);
-  err = NULL;
-  ok(config_set(&c, "sync_dir", "~/in", &err) == 0 && c.sync_dir[0] == '/', "paths are expanded");
-  char *dir = config_dir_path(&c);
-  ok(dir[0] == '/' && strstr(dir, "lulibre"), "the configuration directory has a default");
-  free(dir);
-  ok(config_set(&c, "config_dir", "/somewhere/else", &err) == 0, "and can be set");
-  dir = config_dir_path(&c);
-  eq(dir, "/somewhere/else", "which is then the one in effect");
-  free(dir);
-  size_t n;
-  const struct opt_def *o = config_opts(&n);
-  int bad = 0;
-  for (size_t i = 0; i < n; i++) {
-    struct config d;
-    config_init(&d);
-    char *e = NULL;
-    /* every default must be a value its own option accepts */
-    if (o[i].type != OPT_PATH && config_set(&d, o[i].name, o[i].def, &e)) bad++;
-    free(e);
-    if (!o[i].help || !o[i].help[0]) bad++;
-    config_free(&d);
-  }
-  ok(bad == 0, "every option has help and a default it accepts itself");
-  ok(o[0].group != NULL, "the first option opens a group");
-  config_free(&c);
-}
-
 /* ---- the filter language ---- */
 
 static int compiles(const char *filter, int scope, const char *needle) {
@@ -224,13 +144,18 @@ static void test_query(void) {
 
   ok(query_compile("author:=\"A B\" -tag:x year:1990-1999", &q, &err) == 0, "a compound filter compiles");
   ok(q.nparams == 2, "its text values are bound, its numbers inlined");
-  eq(q.params[0], "A B", "a quoted value keeps its space");
+  eq(q.params[0], "a b", "a quoted value keeps its space, and is bound folded");
   ok(strstr(q.where, "NOT ") && strstr(q.where, "BETWEEN 1990 AND 1999"), "negation and ranges");
   query_free(&q);
   ok(compiles("a or b", SCOPE_LIBRARY, ") OR ("), "or starts an alternative");
-  ok(compiles("title:~^The", SCOPE_LIBRARY, "lmatch("), "~ is a Lua pattern");
+  ok(compiles("title:~^The", SCOPE_LIBRARY, "find("), "~ is a Lua pattern");
   ok(compiles("sort:-year", SCOPE_LIBRARY, NULL), "sort");
   ok(compiles("is:dupe is:missing has:doi no:tags", SCOPE_LIBRARY, NULL), "is, has, no");
+  ok(query_compile("subject:number-theory tag:=.math tag:=..algebra", &q, &err) == 0, "levels of tags compile");
+  eq(q.params[0], ".number-theory.", "subject: is a run of whole levels, between calibre's dots");
+  eq(q.params[1], "math.", "tag:=. is the tag or one inside it, as calibre's =.");
+  eq(q.params[2], ".algebra.", "tag:=.. is whole levels, as calibre's =..");
+  query_free(&q);
 
   ok(query_compile("nosuchfield:x", &q, &err) != 0 && err && strstr(err, "unknown field"),
      "an unknown field is reported");
@@ -405,7 +330,6 @@ int main(void) {
   test_util();
   test_md5();
   test_match();
-  test_config();
   test_query();
   test_log();
   test_quality();

@@ -1,0 +1,241 @@
+--- The Configuration tab (:config): every setting, lulibre's and those
+-- made in Lua, as a form in the list's place. A row is a setting: its
+-- value (a path left empty, the one lulibre works out) and where it comes
+-- from (nothing when it is the default); a band below says what the
+-- setting under the cursor does, its default and what it takes. A change
+-- takes effect at once and holds for the run (with persistent on, it is
+-- kept); w writes the settings to options.lua. One of the settings lulibre's
+-- systemd units follow is applied to them at once (units.follow).
+--
+-- Its keys are the form's (edit) and the screen config's: cycle (Space,
+-- the next of a setting's choices, or true for false), default (d), changed
+-- (c, only the settings not at their default), write (w) and all (a, the
+-- settings at their default too, commented out).
+--
+-- @library lulib._config
+local M = {}
+local own, get = require "lulib._expose" (M) -- internal functions (expose_modules)
+local options = require "lulib._options"
+
+M.screen = {
+  title = "Configuration",
+  tab = true,
+  actions = {
+    { "cycle", "<Space>", "the next of the setting's choices (true, false)" },
+    { "default", "d", "the setting back to its default" },
+    { "changed", "c", "only the settings not at their default, or every one again" },
+    { "write", "w", "write the settings to lua/config/options.lua, and have init.lua load it" },
+    { "all", "a", "as w, and every other setting too, commented out with its default" },
+  },
+  hint = { "cycle", "default", "changed", "write", "all" },
+  views = { about = { kind = "band", size = 0.3 } }, -- what the setting under the cursor does
+}
+scrnman.create("config", M.screen)
+
+-- a value as the row shows it
+function own.shown(v)
+  if v == "" then return '""' end
+  return tostring(v)
+end
+
+-- where a value comes from, as the row says it: nothing for the default,
+-- and options.lua when that file gives it
+local FROM = { default = "", saved = "saved", set = "set", ["command line"] = "command line" }
+
+function own.from(i, says)
+  if i.from == "default" then return "" end
+  local said = says[i.name]
+  if said == true or (said ~= nil and tostring(said) == tostring(i.value)) then return "options.lua" end
+  return FROM[i.from] or i.from
+end
+
+--- The settings the tab lists, in setman.ls's order (lulibre's first), as
+-- setman.info gives them; only those not at their default with changed.
+function M.settings(changed)
+  local out = {}
+  for _, name in ipairs(setman.ls()) do
+    local i = setman.info(name)
+    if not i.fixed and (not changed or i.from ~= "default") then out[#out + 1] = i end
+  end
+  return out
+end
+
+--- The band's rows for a setting: `{label, text}` each.
+--- The programs lulibre's features need, listed after the settings: `{ name, program, what it's for }`.
+M.programs = {
+  { "calibredb", "calibredb", "writing to the library" },
+  { "calibre-server", "calibre-server", "the content server, through which writes reach an open library" },
+  { "tesseract", "tesseract", "OCR: reading files with no text (the setting ocr)" },
+  { "systemctl", "systemctl", ":units, lulibre's systemd units around the content server" },
+}
+
+-- whether a program is on the PATH
+function own.installed(program)
+  for dir in (os.getenv("PATH") or ""):gmatch("[^:]+") do
+    local h = io.open(dir .. "/" .. program)
+    if h then
+      h:close()
+      return true
+    end
+  end
+  return false
+end
+
+function M.about(i)
+  if i.program then return { { "what it's for", i.used_for } } end
+  local rows = {}
+  local line, first = "", true
+  for word in (i.help ~= "" and i.help or "(no help is given for this one)"):gmatch("%S+") do
+    if #line + #word > 96 then
+      rows[#rows + 1] = { first and "what it does" or "", line }
+      first, line = false, word
+    else
+      line = line == "" and word or line .. " " .. word
+    end
+  end
+  rows[#rows + 1] = { first and "what it does" or "", line }
+  rows[#rows + 1] = { "default", get("shown")(i.default) }
+  rows[#rows + 1] = { "takes", i.choices and table.concat(i.choices, " | ")
+    or (i.type == "path" and "a path (~ is your home)" or i.type == "integer" and "an integer" or ("a " .. i.type)) }
+  local said = get("from")(i, options.says())
+  rows[#rows + 1] = { "set", i.from == "default" and "nowhere: its default"
+    or said == "options.lua" and "in lua/config/options.lua"
+    or i.from == "command line" and "the command line: for this run, w leaves it out"
+    or (i.from .. ": w writes it to options.lua") }
+  if i.made then rows[#rows + 1] = { "", "made in Lua (setman.create)", style = "dim" } end
+  return rows
+end
+
+-- the value after v among the setting's choices, or the other boolean
+function own.next(i)
+  if i.type == "boolean" then return not i.value end
+  if not i.choices then return nil end
+  for k, c in ipairs(i.choices) do
+    if c == tostring(i.value) then return i.choices[k % #i.choices + 1] end
+  end
+  return i.choices[1]
+end
+
+-- set name to v (nil: its default); its error shown; the units follow
+function own.change(name, v)
+  local ok, err = pcall(setman.set, name, v)
+  if not ok then
+    uiman.notify(tostring(err):gsub("^.-:%d+: ", ""), "error")
+    return
+  end
+  local units_ok, why = pcall(require("units").follow, name)
+  if not units_ok then uiman.notify(tostring(why), "error") end
+end
+
+--- Writes the settings not at their default to options.lua and has init.lua
+-- load it, once asked: what it will do is on the question.
+-- @tparam[opt] table o `{ all = true }`: every other setting too, commented out with its default
+function M.write(o)
+  o = o or {}
+  local items = options.pending()
+  local loads = options.loads()
+  if #items == 0 and loads and not o.all then
+    return uiman.notify(options.path() .. " says all this already, and init.lua loads it")
+  end
+  local names = {}
+  for k, it in ipairs(items) do
+    if k > 5 then
+      names[#names + 1] = ("and %d more"):format(#items - 5)
+      break
+    end
+    names[#names + 1] = it.value == nil and ("-" .. it.name) or it.name
+  end
+  local what = table.concat(names, ", ")
+  if o.all then what = what ~= "" and (what .. " and every default, commented out,") or "every default, commented out,"
+  elseif what == "" then what = "no settings yet" end
+  local link = loads and "" or loads == nil and ", and create init.lua to load it" or ", and add its require to init.lua"
+  local answer = uiman.input { prompt = ("write %s to lua/config/options.lua%s? (y/N) "):format(what, link) }
+  if not (answer and answer:lower():sub(1, 1) == "y") then return uiman.notify("nothing written") end
+  local ok, path = pcall(options.write, items, { defaults = o.all })
+  if not ok then return uiman.notify(tostring(path), "error") end
+  local linked, done = pcall(options.link)
+  if not linked then return uiman.notify(tostring(done), "error") end
+  uiman.notify(("written: %s%s"):format(path, done == "created" and ", and init.lua that loads it"
+    or done == "added" and ", and its require added to init.lua (init.lua.bak has the file before)" or ""))
+end
+
+local open_now -- the tab while it is open: :config again comes back to it
+
+--- Opens the tab, or brings it back.
+function M.open()
+  if open_now and open_now:is_open() then return open_now:focus() end
+  local changed = false
+  local list
+  local function rows()
+    list = M.settings(changed)
+    local out = {}
+    local says = options.says()
+    if not changed then
+      for _, f in ipairs(M.programs) do list[#list + 1] = { name = f[1], program = f[2], used_for = f[3] } end
+    end
+    for k, i in ipairs(list) do
+      if i.program then
+        out[k] = { "program: " .. i.name, get("installed")(i.program) and "installed" or "missing", "" }
+      else
+        out[k] = { i.name, get("shown")(setman.get(i.name)), get("from")(i, says) }
+      end
+    end
+    return out
+  end
+  local function title()
+    local kept = setman.get("persistent") and "changes are kept (persistent)" or "changes hold for this run"
+    return ("configuration   %s; w writes them to options.lua%s"):format(kept, changed and "   (only those not at their default)" or "")
+  end
+  local p <close> = uiman.panel {
+    title = title(), screen = "config", form = true, moves = true, side = "main",
+    columns = { { "Setting", 22 }, "Value", { "Set", 13 } }, rows = rows(),
+  }
+  open_now = p
+  local band <close> = uiman.panel { title = "the setting under the cursor", screen = "config", view = "about", focus = false,
+    columns = { { "", 14 }, "" }, rows = {} }
+  local function show(at)
+    local i = list[at]
+    band:rows(i and M.about(i) or {})
+    band:title(i and i.name or "the setting under the cursor")
+  end
+  show(1)
+  while true do
+    local action, at, value = p:wait()
+    if not action then break end
+    local i = list[at]
+    if i and i.program then
+      uiman.notify(i.name .. " is a program lulibre uses, not a setting")
+    elseif action == "edit" and i then
+      get("change")(i.name, value)
+    elseif action == "cycle" and i then
+      local nxt = get("next")(i)
+      if nxt == nil then uiman.notify(i.name .. " takes any value: e or Enter types one")
+      else get("change")(i.name, nxt) end
+    elseif action == "default" and i then
+      get("change")(i.name, nil)
+    elseif action == "changed" then
+      changed = not changed
+    elseif action == "write" then
+      M.write()
+    elseif action == "all" then
+      M.write { all = true }
+    end
+    if action ~= "<Move>" then
+      -- (a value set reaches the store and comes back in a turn of the loop)
+      taskman.sleep(10)
+      p:rows(rows())
+      p:title(title())
+    end
+    show(math.min(at or 1, math.max(1, #list)))
+  end
+  open_now = nil
+end
+
+cmdman.create("config", function(o)
+  local verb, rest = (o.args or ""):match("^(%a+)%s*(.*)$")
+  if verb == "write" then return M.write { all = rest == "all" } end
+  M.open()
+end, { desc = "[write [all]]  the settings, in the Configuration tab: change one, see what it does and where it is set; write: put them in options.lua, which init.lua then loads; all: every default too, commented out",
+  complete = { "write" } })
+
+return M

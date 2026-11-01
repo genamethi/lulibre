@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 
-#include <config.h> /* the generated one at the top of the tree, not core/config.h */
+#include <config.h> /* the generated one at the top of the tree */
 
 #include "core/util.h"
 

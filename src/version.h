@@ -8,9 +8,9 @@
  * ./configure reads this file, checks that it is a valid version and hands
  * it to make; `lulibre -V` and lulibre.version report it. */
 #define LULIBRE_VERSION_MAJOR 0
-#define LULIBRE_VERSION_MINOR 2
+#define LULIBRE_VERSION_MINOR 4
 #define LULIBRE_VERSION_PATCH 0
-#define LULIBRE_VERSION_PRE ""
+#define LULIBRE_VERSION_PRE "-pre-alpha"
 
 #define LULIBRE_STR_(x) #x
 #define LULIBRE_STR(x) LULIBRE_STR_(x)

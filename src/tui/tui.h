@@ -32,6 +32,7 @@ enum {
   A_BOLD = 1,
   A_ITALIC = 2,
   A_UNDERLINE = 4,
+  A_STRUCK = 8,
 };
 #define C_DEFAULT (-1)
 
@@ -50,6 +51,8 @@ const char *theme_name(int i);
 /* Fill a window's top line as its bar and leave that style set, so the
  * caller's text lands on it. */
 void dr_bar(struct ncplane *n, struct rect r, int focused);
+/* A box: r filled with bg, with a rounded border on its edge. */
+void dr_frame(struct ncplane *n, struct rect r, int bg);
 
 void dr_style(struct ncplane *n, int fg, int bg, unsigned attrs);
 void dr_fill(struct ncplane *n, int y, int x, int w);
@@ -84,6 +87,10 @@ enum mode {
   MODE_VISUAL = 2,
   MODE_PROMPT = 4, /* the bottom line is taking text: ':' or '/' */
   MODE_PICKER = 8,
+  /* keys for one view: while it has the focus, in normal mode, before the
+   * global ones (keymap.set("list", ...), keymap.set("preview", ...)) */
+  MODE_LIST = 16,
+  MODE_PREVIEW = 32,
 };
 
 #define KEYSEQ_MAX 4
@@ -92,7 +99,8 @@ struct binding {
   unsigned modes;
   uint32_t keys[KEYSEQ_MAX];
   int nkeys;
-  char *command;
+  char *command; /* NULL for a Lua function's */
+  int lua_ref;   /* the function, as its reference in the main lua_State; 0 for none */
   char *about; /* what the help overlay says the key does, when given; else the command */
   int hidden;  /* left out of the help overlay */
 };
@@ -114,8 +122,15 @@ void key_format(sbuf *out, const uint32_t *keys, int n);
  * from it. */
 int keymap_bind_as(struct keymap *km, unsigned modes, const char *spec, const char *command, const char *about,
                    int hidden);
-/* Feed one key. Returns a command to run, or NULL (pending or unbound). */
-const char *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
+/* The same with a Lua function in place of a command: ref is its reference
+ * in the main lua_State, released when no mode is left bound to it. */
+int keymap_bind_fn(struct keymap *km, unsigned modes, const char *spec, int ref, const char *about, int hidden);
+/* Takes a binding out of these modes: 0, 1 when there was none, -1 when
+ * spec is no key sequence. */
+int keymap_unbind(struct keymap *km, unsigned modes, const char *spec);
+/* Feed one key. Returns the binding to run (a command, or a Lua function),
+ * or NULL (pending or unbound). Valid until the keymap next changes. */
+const struct binding *keymap_feed(struct keymap *km, unsigned mode, uint32_t key);
 /* Does a binding in this mode begin with key and run one of these commands
  * (first words, separated by spaces)? */
 int keymap_starts(const struct keymap *km, unsigned mode, uint32_t key, const char *commands);
@@ -143,7 +158,7 @@ void tui_setup(void);
 
 /* Keys that belong to a place: each place has named actions, and its code
  * asks which action a key means. The numbers follow the tables in ctxkeys.c. */
-enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_N };
+enum { KC_PANEL, KC_LINE, KC_PICKER, KC_PAGER, KC_CONSOLE, KC_SELECT, KC_FORM, KC_PREVIEW, KC_N };
 enum { SA_LEFT = 1, SA_RIGHT, SA_UP, SA_DOWN, SA_WORD, SA_BACK, SA_START, SA_END, SA_TOP, SA_BOTTOM, SA_MARK, SA_LINE,
        SA_COPY, SA_LEAVE };
 enum { PA_DOWN = 1, PA_UP, PA_TOP, PA_BOTTOM, PA_HALF_DOWN, PA_HALF_UP, PA_PAGE_DOWN, PA_PAGE_UP, PA_CLOSE, PA_BACK };
@@ -151,7 +166,9 @@ enum { LA_ACCEPT = 1, LA_CANCEL, LA_PASTE, LA_COPY, LA_COMPLETE, LA_NEXT, LA_PRE
        LA_PREVIEW_UP, LA_PREVIEW_DOWN, LA_LEFT, LA_RIGHT, LA_HOME, LA_END, LA_BACKSPACE, LA_DELETE,
        LA_KILL_START, LA_KILL_END, LA_KILL_WORD, LA_WORD_LEFT, LA_WORD_RIGHT };
 enum { KA_ACCEPT = 1, KA_CANCEL, KA_DOWN, KA_UP, KA_PAGE_DOWN, KA_PAGE_UP };
-enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP };
+enum { GA_DOWN = 1, GA_UP, GA_PAGE_DOWN, GA_PAGE_UP, GA_TOP, GA_BOTTOM, GA_TOGGLE, GA_OPEN, GA_CLOSE, GA_ALL, GA_NONE,
+       GA_SEARCH, GA_NEXT, GA_PREV, GA_FOLLOW, GA_BACK, GA_FORWARD, GA_LEAVE };
+enum { FA_EDIT = 1, FA_DROP, FA_WRITE };
 enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERRORS, CA_WARNINGS, CA_NOTICES,
        CA_EVERYTHING, CA_CLEAR, CA_CLOSE };
 #define CTX_PENDING (-1) /* the key may be the first of two: wait for the next */
@@ -159,8 +176,38 @@ enum { CA_UP = 1, CA_DOWN, CA_HALF_UP, CA_HALF_DOWN, CA_TOP, CA_FOLLOW, CA_ERROR
 void ctx_defaults(void);
 void ctx_free(void);
 int ctx_named(const char *name); /* a place's number, or -1 */
+int ctx_count(void);             /* the places there are: lulibre's, then the screens' */
+int ctx_is_own(const char *name); /* one of lulibre's places? Any thread */
+/* A screen's place, made (or made again) from Lua: its title, its
+ * actions' names, default keys (separated by spaces) and what each does,
+ * the actions its hint line shows, where its views go (a panel's side and
+ * size; side 0 leaves it to the opener) and whether it is a tab of the
+ * bar. Its number, or -1 and *err. */
+int ctx_add(const char *name, const char *title, int n, const char *const *names, const char *const *keys,
+            const char *const *abouts, int nhint, const char *const *hint, char side, float size, int tab,
+            char **err);
+void ctx_placement(int ctx, char *side, float *size);
+/* A view of a screen, beside its main one (scrnman.create's views): where it
+ * goes; 0 when the screen has no view of that name. */
+void ctx_add_view(int ctx, const char *name, char side, float size);
+int ctx_view(int ctx, const char *name, char *side, float *size);
+/* The i-th screen that is a tab of the bar: its place, name and title; -1 past the last. */
+int ctx_tab(int i, const char **name, const char **title);
+const char *ctx_name(int ctx);
+int ctx_is_tab(int ctx);
+void ctx_drop_lua(void); /* the screens' places go (:restart-scripts) */
+/* A place's or screen's title, hint line and where its view goes, changed
+ * (scrnman.set): title NULL keeps it; nhint < 0 keeps the hint, 0 leaves
+ * none; side 0 keeps the place. */
+int ctx_set(const char *name, const char *title, int nhint, const char *const *hint, char side, float size, char **err);
+const char *ctx_action_name(int ctx, int action); /* NULL for none */
+/* The hint line: the hint's actions with the keys now on them ("a accept   e
+ * edit"); how many it has. */
+int ctx_hint_line(int ctx, sbuf *out);
+/* The same with only the actions keep says yes to. */
+int ctx_hint_line_if(int ctx, sbuf *out, int (*keep)(int action, const void *ud), const void *ud);
 /* Put a key (one, or two in a row) on an action; an empty action unbinds. */
-int ctx_bind(const char *ctx, const char *spec, const char *action, char **err);
+int ctx_bind(const char *ctx, const char *spec, const char *action, const char *desc, int hidden, char **err);
 /* The action a key means: 0 for none, CTX_PENDING while a pair is open.
  * pending holds the first key of a pair between calls; NULL where pairs are
  * not wanted. */
@@ -190,9 +237,9 @@ void le_free(struct lineedit *le);
 /* The current list: the ids matching the filter, in order, plus cursor and
  * marks. Rows themselves are fetched from the index only when drawn. */
 /* A heading of a grouped list: an author, a series, a subject (subjects
- * nest: "math/number-theory" is under "math") with the books under it. */
+ * nest: "math.number-theory" is under "math") with the books under it. */
 struct ghead {
-  char *path;        /* what it is known by: "math/number-theory" */
+  char *path;        /* what it is known by: "math.number-theory" */
   char *label;       /* its last part, as shown */
   char *sortkey;
   int depth, parent; /* parent: a heading's number, -1 at the top */
@@ -283,6 +330,10 @@ void rows_search_end(struct tui *t, const char *text, int accept);
 void rows_search_next(struct tui *t, int dir);
 int rows_hit(const struct tui *t, sqlite3_int64 id);
 
+/* ---------------------------------------------------------------- marks.c */
+
+/* Read the marks kept in the index (rows_init). */
+void rows_marks_load(struct tui *t);
 int rows_marked(const struct tui *t, sqlite3_int64 id);
 void rows_mark(struct tui *t, sqlite3_int64 id, int on);
 void rows_mark_all(struct tui *t, int how); /* 1 all in list, 0 none anywhere, -1 invert */
@@ -301,7 +352,13 @@ struct view_class {
   void (*draw)(struct tui *t, void *state, struct rect r, int focused);
   /* called when the view will not be drawn this frame (hidden or closed) */
   void (*hide)(struct tui *t, void *state);
+  /* a key for the focused view: 1 when it took it, 0 to let it go on to
+   * the global keys (input.c); NULL: none of its own */
+  int (*key)(struct tui *t, void *state, uint32_t key, const struct ncinput *ni);
+  int modal; /* while it is up, every key is its own, and the mouse only selects */
 };
+
+#define TABS_MAX 10 /* the bar's tabs: library, sync folder, and the tab screens */
 
 struct node {
   char split; /* 0 leaf; 'v' side by side; 'h' stacked */
@@ -314,9 +371,20 @@ struct node {
   const struct view_class *under_cls;
   void *under_state;
   struct rect r;
+  /* a window above the others (wm_float), outside the tree: its share of
+   * the windows' area, and how it is drawn (enum float_how) */
+  float fsize;
+  int floating, full;
+  void *back; /* the state of the window focused before it, which gets the focus back */
 };
 
-extern const struct view_class view_list, view_preview, view_panel, view_console;
+enum float_how {
+  FLOAT_BOX,  /* a framed box of its share of the area */
+  FLOAT_FULL, /* all of the area, nothing under it showing */
+  FLOAT_BARE, /* all of the area, given to the view to draw where it likes (an overlay) */
+};
+
+extern const struct view_class view_list, view_preview, view_panel, view_console, view_pager, view_picker;
 
 void wm_init(struct tui *t);
 void wm_free(struct tui *t);
@@ -352,14 +420,24 @@ struct node *wm_dock(struct tui *t, const struct view_class *cls, void *state, f
  * it is undocked; the focus stays where it is. Docks on the left when there
  * is no list window. */
 struct node *wm_over_list(struct tui *t, const struct view_class *cls, void *state);
+/* A window above the others, outside the tree, for an existing view state,
+ * drawn as how says (a box's size is its share of the windows' area). It
+ * takes the focus; wm_undock closes it as it closes the others. */
+struct node *wm_float(struct tui *t, const struct view_class *cls, void *state, float size, enum float_how how);
+/* The floating window on top, or NULL. */
+struct node *wm_top(struct tui *t);
+/* A window beside the focused one (or the last window of the tree), which
+ * is split for it; size is the new one's share. */
+struct node *wm_tile(struct tui *t, const struct view_class *cls, void *state, float size);
+/* A view where side says: over the list (m), floating (f), over every window
+ * (o), beside the focused window (t), else docked on the left (l) or along
+ * the bottom. */
+void wm_place(struct tui *t, const struct view_class *cls, void *state, float size, char side);
+/* The preview where scrnman.set put it: beside the list, below it or before it. */
+void wm_place_preview(struct tui *t);
 void wm_undock(struct tui *t, void *state);
 /* Give the docked window showing this state that share of the screen. */
 void wm_set_size(struct tui *t, void *state, float size);
-/* Start an indexing run with these options and call done when it ends; if
- * one is already under way, done is called when that one ends instead.
- * Returns 0, or -1 with *err set. Interface thread. */
-int tui_index(struct tui *t, const struct index_opts *o, void (*done)(const struct index_stats *st, void *ud),
-              void *ud, char **err);
 /* Every window, left to right and top to bottom; returns how many. */
 int wm_leaves(struct tui *t, struct node **out, int max);
 /* The window showing this state, or NULL. */
@@ -422,8 +500,9 @@ struct panel;
 /* HEAD and NOTE rows show their first cell across the whole width: a
  * heading, and text too long for a column. */
 enum { PSTYLE_NORMAL, PSTYLE_DIM, PSTYLE_ACCENT, PSTYLE_OK, PSTYLE_WARN, PSTYLE_ERROR, PSTYLE_HEAD, PSTYLE_NOTE };
-/* key is NULL when the panel has closed */
-typedef void panel_event_fn(struct panel *p, const char *key, int row, void *ud);
+/* key is NULL when the panel has closed; value is a form's edited value
+ * (with the key "edit"), else NULL */
+typedef void panel_event_fn(struct panel *p, const char *key, int row, const char *value, void *ud);
 
 /* side: 'b' along the bottom (size is a share of the height), 'l' down the
  * left (a share of the width). */
@@ -439,6 +518,12 @@ void panel_set_size(struct panel *p, float size);
  * word and separated by spaces, that its other keys may reach
  * (panel_set_pass): "preview yank" lets P and yy through. */
 void panel_set_own(struct panel *p, int n, const uint32_t *keys);
+/* The panel is a screen's (ctxkeys.c's place): a key bound to one of its
+ * actions reaches the script as the action's name, other keys not at all. */
+void panel_set_place(struct panel *p, int place);
+/* The panel is a view of a screen beside its main panel, and closes with it. */
+void panel_set_view_of(struct panel *p, int place);
+int panel_place(const struct panel *p); /* -1 for none */
 void panel_set_pass(struct panel *p, const char *commands);
 int panel_passes(const struct panel *p, uint32_t key);
 void panel_unref(struct panel *p);  /* the opener's reference */
@@ -474,6 +559,23 @@ void panel_leave_screen_tab(struct tui *t);
  * date. panels_reloaded tells every panel on screen that asked. */
 void panel_set_reloads(struct panel *p, int reloads);
 void panels_reloaded(struct tui *t);
+/* A form: the panel's rows are a record's fields, and its keys are also
+ * the place "form"'s (edit, drop, write). edit asks for the field's value
+ * on the line, with its value as it stands. In a FORM_DIRECT form the value
+ * typed goes to the event function as "edit", with the row and the value;
+ * one that FORM_STAGED keeps it as the field's change (the rows show Now
+ * and To be), drop takes a change back, and write is told as "write" for
+ * the opener to read the changes (panel_field). */
+enum { FORM_DIRECT = 1, FORM_STAGED };
+void panel_set_form(struct panel *p, int kind);
+int panel_form(const struct panel *p); /* 0 for a panel that is no form */
+/* The fields, each a name, a label, its value and (a direct form; notes
+ * may be NULL) a note in a column after it; a staged form keeps the
+ * changes of the fields still there by name. */
+void panel_set_fields(struct panel *p, int n, const char *const *names, const char *const *labels,
+                      const char *const *values, const char *const *notes);
+/* Field i's name, and its change in a staged form (NULL for none). */
+const char *panel_field(const struct panel *p, int i, const char **change);
 /* width > 0: that many columns; width <= 0: a share of what is left */
 void panel_set_columns(struct panel *p, int n, const char *const *titles, const int *widths);
 void panel_clear_rows(struct panel *p);
@@ -503,6 +605,8 @@ typedef void picker_cancel_fn(struct tui *t, void *ud);
 void picker_on_cancel(struct picker *p, picker_cancel_fn *fn);
 void picker_open(struct tui *t, struct picker *p);
 void picker_close(struct tui *t);
+/* The open picker's ud, if accept is the function it was made with; else NULL. */
+void *picker_ud_if(struct tui *t, picker_accept *accept);
 void picker_key(struct tui *t, uint32_t key, const struct ncinput *ni);
 void picker_draw(struct tui *t);
 
@@ -510,9 +614,38 @@ void picker_draw(struct tui *t);
 
 typedef void command_fn(struct tui *t, const char *args);
 
+/* What completes a command's arguments at the ':' prompt (complete.c). */
+enum complete_kind {
+  COMPLETE_NONE,
+  COMPLETE_WORDS,   /* a fixed list */
+  COMPLETE_FILTER,  /* the filter language */
+  COMPLETE_SETTING, /* setting names, then name=choice */
+  COMPLETE_COMMAND, /* command names */
+  COMPLETE_LUA,     /* a Lua function, asked by message (lapi_complete) */
+  COMPLETE_HELP,    /* the guides' tags (:help) */
+};
+struct completion {
+  enum complete_kind kind;
+  char *words; /* COMPLETE_WORDS: separated by newlines */
+  int ref;     /* COMPLETE_LUA: the function, as its reference in the main lua_State */
+};
+
 void command_register(const char *name, command_fn *fn, const char *help);
-/* A command implemented in Lua: ref is a registry reference to the function. */
-void command_register_lua(const char *name, int ref, const char *help);
+/* What completes one of lulibre's commands: kind, and for COMPLETE_WORDS
+ * the words, separated by spaces. */
+void command_set_complete(const char *name, enum complete_kind kind, const char *words);
+/* A command implemented in Lua: ref is a registry reference to the
+ * function; comp (taken over, NULL for none) what completes it. */
+void command_register_lua(const char *name, int ref, const char *help, struct completion *comp);
+/* What completes the command a line starts with (its first len bytes name
+ * it, as tui_exec finds it): its full name, and *comp; NULL for none. */
+const char *command_completion(const char *line, size_t len, const struct completion **comp);
+/* :edit and :undo (tui/edit.c) */
+void edit_commands(void);
+/* Removes a command defined in Lua: 0, or -1 when there is none. */
+int command_remove_lua(const char *name);
+/* Every command defined in Lua goes, with the lua_State (:restart-scripts). */
+void commands_drop_lua(void);
 /* Run "name args". Unknown commands report in the message line. */
 void tui_exec(struct tui *t, const char *line);
 void commands_builtin(void);
@@ -541,11 +674,14 @@ struct tui {
   uv_timer_t settle;   /* fires once the cursor has rested on a book */
   uv_timer_t ftimer;   /* live filter: runs shortly after the last keystroke */
   int settled;
+  sqlite3_int64 posted_book; /* the book EV_CURSOR last said was under the cursor */
   int dirty, quit;
 
   unsigned mode;
   struct keymap *km; /* the global keymap */
   struct node *root, *focus;
+  struct node *floats[8]; /* windows above the tree, the last on top (wm_float) */
+  int nfloats;
   struct rows rows;
   int list_rows; /* the list's rows of books when last drawn: a page */
 
@@ -561,6 +697,10 @@ struct tui {
   int hist_pos;
   char *hist_prefix; /* what was typed before Up was pressed; Up and Down look for it */
   char *comp_ctx;    /* what the completion candidates were built for (complete.c) */
+  /* a Lua function's last answer, and the comp_ctx it was asked for */
+  char *comp_got_ctx;
+  char **comp_got, **comp_got_detail;
+  int ncomp_got;
   int sugg_prefix;   /* 0: fuzzy; 1: by prefix, once something is typed; 2: by prefix, all when nothing is */
 
   input_fn *input_cb; /* PROMPT_INPUT: who gets the answer */
@@ -580,9 +720,6 @@ struct tui {
   int nbadges;
 
   struct picker *picker;
-  char *help; /* pager overlay text (help, messages, script output); NULL when closed */
-  char *pager_title;
-  int help_scroll;
   uint64_t errors_seen; /* log errors the console has shown (core/log.h) */
   void *drag;           /* the preview a mouse drag began in, while it lasts */
   /* A click in a preview moves the cursor's window there only if it turns
@@ -611,18 +748,14 @@ struct tui {
   sqlite3_int64 peek;   /* a book the preview shows instead of the list's: the one a
                          * following panel is on when the list does not hold it */
   char *preview_note;   /* shown by the preview in place of any book (panel_set_preview) */
-  /* whoever asked to be told when the indexing run ends (tui_index) */
-  void (*ix_hook[8])(const struct index_stats *st, void *ud);
-  void *ix_hook_ud[8];
-  int nix_hook;
-  int tab_x[4];         /* where the bar's tabs were drawn: columns of their edges */
-  int tab_n;            /* how many tabs it has: library, [sync folder,] configuration */
+  int tab_x[TABS_MAX + 1]; /* where the bar's tabs were drawn: columns of their edges */
+  int tab_n;               /* how many tabs it has: library, [sync folder,] the tab screens */
   struct panel *screen_tab; /* the panel that is the bar's Configuration tab, while it is open */
   /* the views last focused among the windows and among the panels, so that
    * Tab and Esc go back to them (wm_focus_panel, wm_focus_back); found again
    * by wm_leaf_of, so one that has closed is simply not found */
   void *last_window, *last_panel;
-  /* a terminal paste in progress (tui.c): keys held while they might be one
+  /* a terminal paste in progress (input.c): keys held while they might be one
    * of its markers, and the text between the markers */
   struct ncinput held[6];
   int nheld, pasting;
@@ -632,10 +765,28 @@ struct tui {
   char *msg;
   int msg_error;
 
-  struct indexer *ix;
+  int indexing; /* a run is going, on the background thread (work.h) */
+
+  int ix_again; /* records came with files while the indexer ran: it runs again */
   int ix_done, ix_total, ix_failed;
   int mirroring; /* calibre's database is being read again (tui_mirror) */
 };
+
+/* Between tui.c and the files split from it: prompt.c, input.c, render.c. */
+void suggest_clear(struct tui *t);
+void suggest_rematch(struct tui *t);
+void suggest_accept(struct tui *t);
+void draw_suggestions(struct tui *t, int bottom_y, int x);
+void history_load(struct tui *t);
+void prompt_changed(struct tui *t);
+void prompt_paste(struct tui *t);
+void prompt_key(struct tui *t, uint32_t key, const struct ncinput *ni);
+void input_read_cb(uv_poll_t *h, int status, int events);
+void bracketed_paste(int on);
+void terminal_release(struct tui *t);
+void log_arrived(void *ud);
+const char *tab_command(const struct tui *t, int i, char *buf, size_t size);
+void render_prepare_cb(uv_prepare_t *h);
 
 int tui_run(struct app *app);
 /* Hand the terminal to an editor ($VISUAL, $EDITOR, else vim, else vi) on
@@ -649,6 +800,8 @@ void tui_prompt(struct tui *t, enum prompt_kind kind, const char *initial);
 /* Ask for a line of text; cb gets the answer, or NULL if cancelled. */
 void tui_input(struct tui *t, const char *label, const char *initial, input_fn *cb, void *ud);
 void tui_input_cancel(struct tui *t); /* as if the user pressed Esc */
+/* The open question's ud, if cb is the function it answers; else NULL. */
+void *tui_input_ud_if(struct tui *t, input_fn *cb);
 void tui_prompt_cancel(struct tui *t); /* the same for whatever the bottom line is taking */
 /* Offer completions for the input prompt just opened. Texts are copied.
  * With sep set (" & " for authors), the value is a list and completion
@@ -661,19 +814,110 @@ void tui_input_suggest(struct tui *t, int n, const char *const *texts,
 void tui_input_on_change(struct tui *t, input_fn *fn);
 /* complete.c: offer completions for the ':', '&' or '/' line as it stands */
 void complete_refresh(struct tui *t);
+/* A Lua function's completions for ctx, all of it taken over (malloc'd). */
+void complete_answered(struct tui *t, char *ctx, int n, char **text, char **detail);
 const char *command_at(int i, const char **help); /* the i-th command's name; NULL past the last */
 void tui_progress(struct tui *t, const char *text); /* NULL clears */
 /* A badge in the status line under a name of the script's choosing: set again
  * to change it, with NULL text to take it away. color is a theme colour. */
 void tui_badge(struct tui *t, const char *name, const char *text, int color);
+struct rich;
+enum { PAGER_WIDTH = 76 }; /* the pager's text at its widest */
 /* Show text in a scrollable overlay. */
 void tui_pager(struct tui *t, const char *title, const char *text);
+void tui_pager_end(struct tui *t); /* the open pager shows its end */
+/* The same, with the first `open` sections open and the others as they
+ * were left the last time a text of that title was shown, else closed;
+ * open < 0: every section open. */
+void tui_pager_folded(struct tui *t, const char *title, const char *text, int open);
+void tui_pager_forget(void); /* what was opened and closed (at the end) */
+/* The same with a text of styles and links (rich.c), taken over; where is
+ * the file it is, which relative links start from (NULL: none). */
+void tui_pager_rich(struct tui *t, const char *title, struct rich *text, int open, const char *where);
+void tui_pager_at(struct tui *t, int line); /* the cursor to the line, shown at the top */
+
+/* ------------------------------------------------------------------ rich.c */
+
+/* A link in a text: its bytes, and what it names (a guide's file,
+ * file#heading, file:line, a tag; guides_follow). */
+struct pager_link {
+  size_t off, len;
+  char *target;
+};
+enum { RS_STRONG = 1, RS_EM = 2, RS_CODE = 4, RS_STRIKE = 8 };
+struct rich_span {
+  size_t off, len;
+  unsigned style; /* RS_* */
+};
+struct rich_heading {
+  int line, level;      /* the line from 0 */
+  char *text, *anchor; /* as written; as GitHub makes it (NULL in plain text) */
+};
+struct rich_cell {
+  size_t off, len;
+};
+struct rich_row { /* a table's row */
+  int line, head;
+  int ncells;
+  struct rich_cell *cells;
+};
+/* Text with styles and links: lines, each ending in a newline, with the
+ * column each line's wrapped rows start at (hang; -1 or past nlines: the
+ * pager's guess) and, when made from a source, the line of the source it
+ * comes from (src, from 1; NULL for plain text); spans of style; links;
+ * headings, which the pager opens and closes; tables' rows. Offsets are in
+ * text; all of it is the struct's. */
+struct rich {
+  sbuf text;
+  int nlines, *hang, *src;
+  struct rich_span *spans; /* in the order of their ends */
+  struct pager_link *links; /* in the order of their offsets */
+  struct rich_heading *heads;
+  struct rich_row *rows;
+  int nspans, nlinks, nheads, nrows;
+  int hang_cap, spans_cap, links_cap, heads_cap, rows_cap;
+};
+/* Markdown (CommonMark with GitHub's tables, strikethrough, task lists and
+ * links of bare addresses) as a text laid out for width columns (0: the
+ * pager's); -1 when md4c gave up, with what it made so far. */
+int md_render(const char *src, size_t n, int width, struct rich *out);
+/* The lines and headings of r's text, as plain text: a line that does not
+ * begin with a space is a heading. */
+void rich_plain(struct rich *r);
+void rich_link(struct rich *r, size_t off, size_t len, const char *target); /* target copied */
+/* the first line of r made from line `src` of its source (else from the
+ * nearest line before it) */
+int rich_line_of(const struct rich *r, int src);
+void rich_free(struct rich *r);
+
+/* ---------------------------------------------------------------- guides.c */
+
+/* The guides: the Markdown files in lulibre's docs/ and in docs/ under the
+ * configuration and data folders, indexed by their headings and the
+ * commands, keys and settings their tables name, as vim's help is by its
+ * tags. */
+int guides_help(struct tui *t, const char *topic); /* :help TOPIC; 0 when nothing is found (and said) */
+/* A link: a tag, a file (relative to `from`, the file it is in), file#heading
+ * or file:line, or several to try, separated by newlines; shown in the
+ * pager. 0 when it leads nowhere (and said), the pager untouched. */
+int guides_follow(struct tui *t, const char *target, const char *from);
+/* The guides, a line each, with a link to each, at the end of text (for ?). */
+void guides_list(struct tui *t, struct rich *text);
+/* Every tag, for completing :help, separated by newlines; the caller's. */
+char *guides_tags(struct tui *t);
+void guides_forget(void); /* the index (at the end) */
 /* Put text on the message line without logging it (tui_msg logs first). */
 void tui_show_msg(struct tui *t, int error, const char *text);
 /* The console window (view_console.c): its keys when focused, the wheel. */
 int console_key(struct tui *t, void *state, uint32_t key);
 void console_wheel(void *state, int delta);
 void tui_start_index(struct tui *t, int force);
+/* Reads one file as far as a page. */
+void tui_index_page(struct tui *t, long long book, int page);
+/* The background thread: where an index run is (phase -1 started, 0 going,
+ * 1 ended; st NULL when it has no numbers), for the status line. */
+struct index_stats;
+void tui_post_indexing(struct app *app, const struct index_stats *st, int phase);
 /* Read calibre's database again, on the Lua thread's connection so that the
  * interface draws on meanwhile; then refresh the list. told: say so when
  * done (the :reload command); otherwise a change starts the indexer. */

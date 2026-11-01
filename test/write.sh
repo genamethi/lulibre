@@ -1,387 +1,418 @@
 #!/bin/sh
-# Write-path test: everything that changes a calibre library, against a
-# throwaway library and a throwaway authenticated content server.
-#
-# It runs inside a private network namespace (unshare -rn), because calibre
-# allows one server per machine to hold its lock and because the port must
-# not collide with a real server. Skips, successfully, where that is not
-# possible or calibre is not installed. Touches nothing outside a temporary
-# directory.
+# The write path against throwaway calibre libraries, inside a private
+# network namespace (unshare -rn), where calibre's lock and server are the
+# test's own: changes straight to the library folder, the journal, undo,
+# and through a content server with embedding; calibre's records read
+# again after calibre changes them. Needs calibre and unshare.
+#   write.sh BUILT_BINARY
 set -eu
 
 bin=$(realpath "$1")
-for tool in unshare calibredb calibre-server curl; do
-  command -v $tool >/dev/null || { echo "write: $tool not found, skipping"; exit 0; }
-done
-if [ -z "${LULIBRE_WRITE_NS:-}" ]; then
-  unshare -rn true 2>/dev/null || { echo "write: cannot create a network namespace, skipping"; exit 0; }
-  exec unshare -rn env LULIBRE_WRITE_NS=1 sh "$0" "$bin"
-fi
-# skipped where luv is missing; any other failure to run a script is a failure
-probe=$("$bin" --clean run "$(dirname "$0")/luv_probe.lua" 2>&1) || case $probe in
-  *"module 'luv' not found"*) echo "write: the luv rock is not installed for this Lua version, skipping"; exit 0 ;;
-  *) echo "FAIL  write: lulibre could not run a script: $probe"; exit 1 ;;
-esac
-ip link set lo up 2>/dev/null || { echo "write: no loopback in the namespace, skipping"; exit 0; }
+src=$(cd "$(dirname "$0")" && pwd)
+command -v calibredb >/dev/null || { echo "write: calibredb not found, skipping"; exit 0; }
+command -v unshare >/dev/null || { echo "write: unshare not found, skipping"; exit 0; }
+unshare -rn true 2>/dev/null || { echo "write: no private namespace (unshare -rn), skipping"; exit 0; }
 
 t=$(mktemp -d)
-srv=
-trap '[ -n "$srv" ] && kill $srv 2>/dev/null; rm -rf "$t"' EXIT
-lib=$t/lib
-export XDG_DATA_HOME=$t/data XDG_CONFIG_HOME=$t/config
-mkdir -p "$t/src" "$XDG_CONFIG_HOME"
+trap 'rm -rf "$t"' EXIT
 
-pdf() { # file, title line, second line
-  cat > "$1" <<PDF
+cat > "$t/sql.lua" <<'LUA'
+local sql, sqlite3 = require "sql", require "lsqlite3"
+-- rows of a query of the file a path setting names: "indexdb", "journaldb"
+local function q(file, query, ...)
+  local db = sql.open(setman.get("path." .. file), sqlite3.OPEN_READONLY)
+  local rows = sql.run(db, query, ...)
+  db:close()
+  return rows
+end
+return q
+LUA
+
+cat > "$t/apply.lua" <<'LUA'
+local q = dofile(os.getenv("T") .. "/sql.lua")
+local store = require "store"
+local bookman = require "bookman"
+local function say(...) print(table.concat({ ... }, "|")) end
+local batch, err = store.apply({
+  { book = 1, field = "title", value = "Topics in Additive Combinatorics", proposal = 7,
+    proposed = "Topics in Additive Combinatorics", source = "front" },
+  { book = 1, field = "authors", value = "Terence Tao & Van Vu" },
+  { book = 1, field = "tags", value = "math", op = "add" },
+  { book = 1, field = "pubdate", value = "2006" },
+  { book = 1, field = "#partof", value = "Cambridge Studies" },
+}, "a test")
+say("apply", tostring(batch), tostring(err))
+local b = bookman.get(1)
+say("record", b.title, b.author, table.concat(b.tags, ","), b.pubdate)
+say("same", tostring(store.apply({ { book = 1, field = "title", value = "Topics in Additive Combinatorics" } })))
+say("bad", select(2, store.apply({ { book = 1, field = "pubdate", value = "soon" } })))
+local r = q("journaldb", "SELECT proposal, source FROM journal WHERE field = 'title'")[1]
+say("provenance", r.proposal, r.source)
+say("undo", tostring(store.undo(batch)))
+b = bookman.get(1)
+say("after undo", b.title, b.author)
+say("undone", q("journaldb", "SELECT count(*) AS n FROM journal WHERE batch = ? AND state = 4", batch)[1].n)
+store.apply({ { book = 1, field = "tags", value = "x, y", op = "add" }, { book = 1, field = "tags", value = "x", op = "remove" } })
+say("in order", table.concat(bookman.get(1).tags, ","))
+LUA
+
+cat > "$t/embed.lua" <<'LUA'
+local q = dofile(os.getenv("T") .. "/sql.lua")
+local store = require "store"
+setman.set("embed", true)
+print("holder|" .. store.holder())
+print("apply|" .. tostring(store.apply({ { book = 1, field = "title", value = "Embedded Title" } })))
+local f = q("indexdb", "SELECT emb_title FROM files WHERE book = 1")[1]
+print("emb|" .. tostring(f and f.emb_title))
+LUA
+
+cat > "$t/review.lua" <<'LUA'
+local q = dofile(os.getenv("T") .. "/sql.lua")
+local wit = require "wit"
+local trust = require "trust"
+local bookman = require "bookman"
+-- a parse of the scan, as the front grammar would give it, kept as wits
+wit.set(1, { { field = "title", value = "Topics in Additive Combinatorics", source = "front" },
+             { field = "authors", value = "Terence Tao & Van Vu", source = "front" } })
+local id = {}
+for _, f in ipairs(wit.get(1)) do id[f.field] = f.alts[1].id end
+print("filter|" .. #bookman.ids("is:proposed"))
+print("accept|" .. tostring(wit.accept(id.title)))
+print("reject|" .. tostring(wit.reject(id.authors)))
+print("marked|" .. bookman.get(1).title .. "|" .. #wit.get(1) .. "|" .. wit.get(1)[1].alts[1].decision)
+-- another review of its own, which writing the first leaves as it is
+local first = wit.current()
+local other = wit.new("other")
+wit.set(1, { { field = "title", value = "Another Title", source = "front" } })
+print("reviews|" .. #wit.reviews() .. "|" .. wit.reviews()[1].name .. "|" .. wit.get(1)[1].alts[1].value)
+wit.open(first)
+print("write|" .. table.concat({ wit.write() }, "|"))
+local b = bookman.get(1)
+print("decided|" .. b.title .. "|" .. b.author .. "|" .. #wit.get(1) .. "|" .. #bookman.ids("is:proposed"))
+print("other kept|" .. wit.get(1, { review = other })[1].alts[1].value)
+local r = q("journaldb", "SELECT store, field, proposal, source FROM journal WHERE batch = 1 AND field = 'authors'")[1]
+print("rejection|" .. r.store .. "|" .. r.field .. "|" .. tostring(r.proposal ~= nil) .. "|" .. r.source)
+wit.discard(other)
+print("discarded|" .. #wit.reviews() .. "|" .. #bookman.ids("is:proposed"))
+local rec = trust.records(1, 0.7, 0.95)
+print(("track|%.3f|%.3f"):format(rec.front.title, rec.front.authors))
+-- an identifier's wit, accepted: added to the record's identifiers
+wit.set(1, { { field = "identifier:isbn", value = "9780387900407", source = "lex" } })
+wit.accept(wit.get(1)[1].alts[1].id)
+print("ident accept|" .. tostring(wit.write() ~= nil))
+print("ident|" .. bookman.get(1, "identifier:isbn") .. "|" .. bookman.get(1, "authors") .. "|" .. tostring(bookman.get(99, "title")))
+LUA
+
+cat > "$t/sync.lua" <<'LUA'
+local sync = require "lulib._sync"
+local bookman = require "bookman"
+local store = require "store"
+local wit = require "wit"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+store.reload()
+local files = bookman.ids("in:sync")
+table.sort(files, function(a, b) return a > b end)
+say("sync waiting", #files)
+local a, b = files[1], files[2]
+store.apply({ { book = a, field = "title", value = "A Waiting Book" }, { book = a, field = "publisher", value = "Some House" } })
+wit.set(a, { { field = "series", value = "Waiting Series", source = "front" } })
+local out = sync.add({ a })
+say("sync add", out.added, out.held, #out.failed, out.failed[1])
+store.reload()
+local added = bookman.ids("title:\"A Waiting Book\" in:library")
+local id = added[1]
+say("sync added", #added, bookman.get(id, "title"), bookman.get(id, "publisher"), wit.get(id)[1] and wit.get(id)[1].alts[1].value)
+say("sync undo", store.undo(out.batch) ~= nil)
+store.reload()
+say("sync undone", #bookman.ids("title:\"A Waiting Book\" in:library"))
+do
+  local j = require("sql").open(setman.get("path.journaldb"), require("lsqlite3").OPEN_READONLY)
+  say("undo not outside", #require("sql").run(j, "SELECT 1 FROM journal WHERE store = 'outside' AND field = '(removed)'"))
+  j:close()
+end
+-- dropped, the file gone and its record with it; undone, both back
+store.apply({ { book = b, field = "title", value = "A Dropped Book" } })
+local path = sync.staged(b).path
+local d = sync.drop { b }
+say("sync drop", d.dropped, #d.failed, sync.staged(b) == nil, io.open(path) == nil)
+say("sync undrop", store.undo(d.batch) ~= nil, io.open(path) ~= nil, sync.staged(b) and sync.staged(b).title)
+LUA
+
+cat > "$t/remove.lua" <<'LUA'
+local remove = require "lulib._remove"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+-- a book removed, its record kept, and :undo's way back
+local ids = bookman.ids('title:"Book To Remove"')
+local batch, err = store.remove(ids)
+say("removed", batch ~= nil, err, #bookman.ids('title:"Book To Remove"'))
+say("restored", store.undo(batch) ~= nil)
+store.reload()
+local back = bookman.ids('title:"Book To Remove"')
+say("back", #back, bookman.get(back[1], "tags"), back[1] ~= ids[1])
+-- what orphans finds, and does
+local orphans = require "lulib._orphans"
+local found = orphans.scan()
+say("orphans", #found.strays, found.strays[1] and found.strays[1].action, found.strays[1] and found.strays[1].rel:match("[^/]+$"))
+for _, s in ipairs(found.strays) do s.action = "move" end
+local out = orphans.apply(found)
+say("orphans moved", out.moved, #out.failed, io.open(found.strays[1].path) == nil, out.holding ~= nil)
+-- the columns, made once nothing holds the library
+local columns = require "lulib._columns"
+local offline = require "lulib._offline"
+columns.run("")
+for _ = 1, 150 do
+  taskman.sleep(100)
+  if #offline.jobs() == 0 then break end
+end
+store.reload()
+local db = require("sql").open(setman.get("path.indexdb"), require("lsqlite3").OPEN_READONLY)
+say("columns", #require("sql").run(db, "SELECT label FROM cal_columns WHERE label IN ('partof','part','parts')"), #offline.jobs())
+db:close()
+store.apply({ { book = back[1], field = "#partof", value = "A Whole" } })
+say("push", columns.push("partof"))
+LUA
+
+cat > "$t/snap.lua" <<'LUA'
+local snapshots = require "lulib._snapshots"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+local book = bookman.ids('title:"Snap Book"')[1]
+store.apply({ { book = book, field = "title", value = "Title Then" } })
+local s = snapshots.take("plain")
+say("snap taken", s.id > 0 and 1 or 0, s.name)
+store.apply({ { book = book, field = "title", value = "Title Now" } })
+local plan = snapshots.plan(s)
+say("snap plan", #plan.changes, plan.changes[1] and plan.changes[1].value == "Title Then" and "Title Now" or "?", #plan.restore)
+local out = snapshots.rollback(s)
+say("snap back", out.applied, bookman.get(book, "title"), out.before and out.before.name:find("before going back") and "Title Now")
+snapshots.rollback(out.before)
+say("snap forward", bookman.get(book, "title"))
+-- a field changed outside
+local s2 = snapshots.take("second")
+os.execute(("calibredb --with-library %q set_metadata %d -f publisher:Outsider >/dev/null 2>&1"):format(setman.get("path.library"), book))
+store.reload()
+local p2 = snapshots.plan(s2)
+local p3 = snapshots.plan(s2, { exact = true })
+say("snap outside", p2.kept.outside, #p2.changes, #p3.changes)
+-- a book removed since
+local s3 = snapshots.take("third")
+local remove = require "lulib._remove"
+store.remove({ book })
+local back = snapshots.rollback(s3)
+store.reload()
+say("snap restored", #back.restored, #bookman.ids('title:"Title Now"'))
+-- from a copy of calibre's database
+local si, n = snapshots.import(os.getenv("T") .. "/copy.db", "old copy")
+say("snap import", si and si.id > 0 and 2 or si, n and n.values and n.values > 0)
+local h = require("lulib._history").batches()
+say("history", h[1].batch > h[#h].batch)
+LUA
+
+cat > "$t/recheck.lua" <<'LUA'
+local recheck = require "lulib._recheck"
+local bookman = require "bookman"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+local book = bookman.ids('title:"A Note on Sieve Methods"')[1]
+-- a title written by a source, which the pages do not show; what it was they do
+store.apply({ { book = book, field = "title", value = "Quantum Gravity Without Tears", proposal = 99, proposed = "Quantum Gravity Without Tears", source = "crossref" } }, "review")
+-- one typed by hand on another book is left
+local other = bookman.ids('title:"Hand Typed"')[1]
+store.apply({ { book = other, field = "title", value = "Typed Over" } }, "edit")
+local found = recheck.find()
+local first = found.changes[1]
+say("recheck", #found.changes, first and first.book == book, first and first.field, first and first.value, found.typed >= 1)
+say("recheck write", recheck.write(found) ~= nil, bookman.get(book, "title"))
+say("recheck again", #recheck.find().changes)
+LUA
+
+cat > "$t/queued.lua" <<'LUA'
+local offline = require "lulib._offline"
+local store = require "store"
+local function say(...) local p = {} for i = 1, select("#", ...) do p[i] = tostring(select(i, ...)) end print(table.concat(p, "|")) end
+-- a command that needs the library closed waits while the server holds it
+local done
+taskman.spawn(function() done = { store.command({ "add_custom_column", "waiting", "Waiting", "text" }, { label = "the column #waiting" }) } end)
+taskman.sleep(500)
+local jobs = offline.jobs()
+say("offline waits", #jobs, jobs[1] and jobs[1].state, jobs[1] and jobs[1].label)
+say("offline cancel", offline.cancel(jobs[1].batch) ~= nil, #offline.jobs())
+taskman.sleep(200)
+say("offline answered", done and done[1], done and done[2])
+LUA
+
+cat > "$t/inside.sh" <<'IN'
+#!/bin/sh
+# inside the namespace: $1 the folder, $2 the binary, $3 a PDF
+t=$1; bin=$2; pdf=$3
+export XDG_CONFIG_HOME=$t/config XDG_DATA_HOME=$t/data XDG_STATE_HOME=$t/state HOME=$t T=$t
+mkdir -p "$t/lib"
+calibredb --with-library "$t/lib" add --empty --title paper --authors Unknown >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/apply.lua" 2>&1
+echo "calibre|$(calibredb --with-library "$t/lib" list --fields title --for-machine 2>/dev/null | tr -d '\n ' )"
+rm -rf "$t/lib" "$t/data" "$t/state"
+# calibre's records read again: only the books calibre changed, as a copy of
+# every book would have them
+(
+  export XDG_DATA_HOME=$t/rr
+  r=$t/rrlib
+  mkdir -p "$r"
+  for n in one two three; do calibredb --with-library "$r" add --empty --title $n --authors "A Author" >/dev/null 2>&1; done
+  calibredb --with-library "$r" add_custom_column genre Genre text --is-multiple >/dev/null 2>&1
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  idx=$(ls "$t"/rr/lulibre/*-*.db | grep -v '\.[a-z]*\.db$')
+  sqlite3 "$idx" "UPDATE books SET sort = 'untouched' WHERE id = 3"
+  calibredb --with-library "$r" set_metadata 1 -f title:Uno -f authors:"B Author & A Author" -f tags:x >/dev/null 2>&1
+  calibredb --with-library "$r" set_custom genre 1 "poetry,history" >/dev/null 2>&1
+  calibredb --with-library "$r" remove 2 >/dev/null 2>&1
+  calibredb --with-library "$r" add --empty --title four --authors "C Author" >/dev/null 2>&1
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  echo "reread untouched|$(sqlite3 "$idx" "SELECT sort FROM books WHERE id = 3")"
+  jr=$(ls "$t"/rr/lulibre/*.journal.db)
+  echo "outside title|$(sqlite3 "$jr" "SELECT store, label, old, new FROM journal WHERE book = 1 AND field = 'title'")"
+  echo "outside removed|$(sqlite3 "$jr" "SELECT label, json_extract(old, '\$.title') FROM journal WHERE book = 2 AND field = '(removed)'")"
+  echo "outside added|$(sqlite3 "$jr" "SELECT label, json_extract(new, '\$.title') FROM journal WHERE field = '(added)'")"
+  echo "outside fresh|$(sqlite3 "$jr" "SELECT count(*) FROM journal WHERE book = 3")"
+  sqlite3 "$idx" "UPDATE books SET sort = 'three' WHERE id = 3"
+  dump() {
+    for q in "SELECT * FROM books" "SELECT * FROM book_authors ORDER BY book, ord" "SELECT * FROM authors" \
+      "SELECT * FROM tags" "SELECT * FROM book_tags ORDER BY book, tag" "SELECT rowid, * FROM books_fts ORDER BY rowid" \
+      "SELECT * FROM cal_values ORDER BY book, ord"; do sqlite3 "$idx" "$q"; done
+  }
+  dump >"$t/rr/changed"
+  sqlite3 "$idx" "DELETE FROM meta WHERE key = 'calibre_stamp'"
+  "$bin" -L "$r" query -c >/dev/null 2>&1
+  dump >"$t/rr/every"
+  cmp -s "$t/rr/changed" "$t/rr/every" && echo "reread same|yes" || diff "$t/rr/changed" "$t/rr/every"
+  echo "reread has|$(sqlite3 "$idx" "SELECT group_concat(title || ':' || authors || ':' || coalesce(tags, ''), ',') FROM books ORDER BY id")|$(sqlite3 "$idx" "SELECT group_concat(value) FROM cal_values")"
+)
+mkdir -p "$t/lib"
+calibredb --with-library "$t/lib" add "$pdf" >/dev/null 2>&1
+"$bin" -L "$t/lib" index >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/review.lua" 2>&1
+mkdir -p "$t/inbox"
+{ cat "$pdf"; echo "% one"; } > "$t/inbox/one.pdf"
+{ cat "$pdf"; echo "% another"; } > "$t/inbox/two.pdf"
+"$bin" -L "$t/lib" -o "path.sync=$t/inbox" run "$t/sync.lua" 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Book To Remove" --authors "Some Writer" --tags kept >/dev/null 2>&1
+for f in "$t"/lib/*/*/*.pdf; do stray=$(dirname "$f"); done
+echo "stray bytes" > "$stray/stray.pdf"
+"$bin" -L "$t/lib" run "$t/remove.lua" 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Snap Book" --authors "Some Writer" >/dev/null 2>&1
+cp "$t/lib/metadata.db" "$t/copy.db"
+calibredb --with-library "$t/lib" set_metadata "$(calibredb --with-library "$t/lib" list -s 'title:"Snap Book"' -f id --for-machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')" -f tags:changed >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/snap.lua" 2>&1
+# a file with a title page of its own, to be held against
+mkdir -p "$t/rc" && cd "$t/rc"
+cat > paper.pdf <<'PDF'
 %PDF-1.4
 1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
-4 0 obj<</Length 200>>stream
-BT /F1 24 Tf 72 700 Td ($2) Tj ET
-BT /F1 12 Tf 72 660 Td ($3) Tj ET
+4 0 obj<</Length 420>>stream
+BT /F1 24 Tf 72 700 Td (A Note on Sieve Methods) Tj ET
+BT /F1 12 Tf 72 620 Td (We give a short account of the classical sieve and some of its uses in additive problems.) Tj ET
+BT /F1 12 Tf 72 600 Td (The bounds are the expected ones, and the methods are those of the older literature in the field.) Tj ET
+BT /F1 12 Tf 72 580 Td (Nothing here is new, but the arguments are set out at more length than one usually finds them.) Tj ET
 endstream
 endobj
 5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
 trailer<</Root 1 0 R/Size 6>>
 %%EOF
 PDF
-}
-pdf "$t/src/knots.pdf" "Knots and Links" "Ann Lee"
-pdf "$t/src/sieve.pdf" "Sieve Notes" "Jane Roe"
-pdf "$t/src/algebra.pdf" "Commutative Algebra" "chapter"
-pdf "$t/src/new.pdf" "A New Chapter" "chapter"
-pdf "$t/src/lost.pdf" "Lost" "L. Author"
-pdf "$t/src/old.pdf" "Commutative Algebra" "an older build"
-
-cdb="calibredb --with-library $lib"
-$cdb add "$t/src/knots.pdf" --title knots --authors Unknown >/dev/null 2>&1                           # 1
-$cdb add "$t/src/sieve.pdf" --title sieve --authors Unknown >/dev/null 2>&1                           # 2
-$cdb add "$t/src/algebra.pdf" --title algebra --authors Unknown >/dev/null 2>&1                       # 3
-$cdb add --duplicates "$t/src/knots.pdf" --title "Knots and Links" --authors "Ann Lee" \
-  --tags math/topology >/dev/null 2>&1                                                                # 4: same bytes as 1
-$cdb add "$t/src/lost.pdf" --title "Lost" --authors "L. Author" >/dev/null 2>&1                      # 5: will lose its file
-$cdb add "$t/src/old.pdf" --title "Commutative Algebra" --authors "The Authors" \
-  --tags kept/tag >/dev/null 2>&1                                                                     # 6: will lose its file
-
-echo secret > "$t/pw"
-chmod 600 "$t/pw" # as a password file should be: lulibre warns of one others can read
-echo wrong > "$t/pw-wrong"
-calibre-server --userdb "$t/users.sqlite" --manage-users -- add tester secret >/dev/null 2>&1
-calibre-server --listen-on 127.0.0.1 --port 18099 --enable-auth --auth-mode basic \
-  --userdb "$t/users.sqlite" "$lib" > "$t/server.log" 2>&1 &
-srv=$!
+cd - >/dev/null
+calibredb --with-library "$t/lib" add --title "A Note on Sieve Methods" --authors "Some Writer" "$t/rc/paper.pdf" >/dev/null 2>&1
+calibredb --with-library "$t/lib" add --empty --title "Hand Typed" --authors "Some Writer" >/dev/null 2>&1
+"$bin" -L "$t/lib" index >/dev/null 2>&1
+"$bin" -L "$t/lib" run "$t/recheck.lua" 2>&1
+rm -f "$t"/data/lulibre/*.journal.db
+ip link set lo up 2>/dev/null || true
+calibre-server --port 8099 --disable-use-bonjour --enable-local-write "$t/lib" >"$t/server.log" 2>&1 &
+pid=$!
 i=0
-while ! curl -s -o /dev/null -m 1 http://127.0.0.1:18099/; do
-  i=$((i + 1))
-  [ $i -lt 150 ] || { echo "write: the test server did not start, skipping"; exit 0; }
-  sleep 0.1
-done
+while [ $i -lt 60 ] && ! grep -q 'calibre-singleinstance' /proc/net/unix 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+sleep 1
+"$bin" -L "$t/lib" -o server=http://127.0.0.1:8099 run "$t/embed.lua" 2>&1
+# a copy of the library, under the same folder name: the server holds
+# calibre's lock but has the other open
+mkdir -p "$t/copy" && cp -a "$t/lib" "$t/copy/lib"
+echo 'print("copy holder|" .. require("store").holder())' > "$t/holder.lua"
+"$bin" -L "$t/copy/lib" -o server=http://127.0.0.1:8099 run "$t/holder.lua" 2>&1
+"$bin" -L "$t/lib" -o server=http://127.0.0.1:8099 run "$t/queued.lua" 2>&1
+kill $pid; wait $pid 2>/dev/null || true
+IN
 
-pwfile=$t/pw
-run() { "$bin" --clean -L "$lib" -o server=http://127.0.0.1:18099 -o user=tester -o password_file="$pwfile" "$@"; }
-lua() { printf '%s\n' "$1" > "$t/s.lua"; run run "$t/s.lua" 2>&1; }
+# a PDF with a text layer for embedding to write into
+sh "$src/mklib.sh" "$t/seed" >/dev/null 2>&1
+out=$(unshare -rn sh "$t/inside.sh" "$t" "$bin" "$t/seed/Unknown/paper (1)/paper - Unknown.pdf")
+
 fails=0
-expect() { # description, expected, actual
-  if [ "$2" = "$3" ]; then echo "ok    $1"; else echo "FAIL  $1: expected '$2', got '$3'"; fails=$((fails + 1)); fi
+expect() { # description, expected line
+  case "$out" in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in:"; echo "$out" | sed 's/^/      /'; fails=$((fails + 1)) ;; esac
 }
-contains() { # description, needle, haystack
-  case $3 in *"$2"*) echo "ok    $1" ;; *) echo "FAIL  $1: '$2' not in: $3"; fails=$((fails + 1)) ;; esac
-}
-field() { lua "local b = lulibre.book($1) print(b and require('lulibre.edit').current(b, '$2') or 'gone')"; }
-
-contains "index"                          "0 failed" "$(run index 2>&1)"
-
-# ---- edit, undo
-contains "apply changes several fields"   "changed 1 book" "$(lua '
-  local edit = require "lulibre.edit"
-  print(edit.summary(edit.apply {
-    { id = 2, field = "title", value = "Sieve Notes" }, { id = 2, field = "authors", value = "Jane Roe & A. N. Other" },
-    { id = 2, field = "pubdate", value = "1999" }, { id = 2, field = "tags", value = "math/number-theory", op = "add" },
-    { id = 2, field = "series", value = "Notes" }, { id = 2, field = "series_index", value = "3" },
-    { id = 2, field = "identifiers", value = "doi:10.1000/xyz", op = "add" } }))')"
-expect   "title written"                  "Sieve Notes" "$(field 2 title)"
-expect   "authors written"                "Jane Roe & A. N. Other" "$(field 2 authors)"
-expect   "date written, no day slip"      "1999-01-01" "$(field 2 pubdate)"
-expect   "series index written"           "3" "$(field 2 series_index)"
-expect   "identifier written"             "doi:10.1000/xyz" "$(field 2 identifiers)"
-contains "undo"                           "undid 1 book" "$(lua '
-  local r = require("lulibre.edit").undo()
-  print(("undid %d book, skipped %d"):format(r.applied, r.skipped))')"
-expect   "undo restores the title"        "sieve" "$(field 2 title)"
-expect   "undo restores the authors"      "" "$(field 2 authors)"
-expect   "undo clears the date"           "" "$(field 2 pubdate)"
-expect   "undo clears the series"         "" "$(field 2 series)"
-pwfile=$t/pw-wrong
-contains "a wrong password is explained"  "password" "$(lua '
-  local r = require("lulibre.edit").apply { { id = 2, field = "title", value = "x" } }
-  print(r.failed[1] and r.failed[1].error)')"
-pwfile=$t/pw
-expect   "and nothing was written"        "sieve" "$(field 2 title)"
-
-# ---- proposals from the files, review, write
-contains "propose reads the title pages"  "proposals" "$(run run propose 2>&1)"
-contains "accepted proposals are written" "changed" "$(lua '
-  local proposals = require "lulibre.proposals"
-  lulibre.o.propose_min = 0 -- a title from a title page is offered at 0.55, under the default
-  for _, q in ipairs(proposals.list("pending")) do
-    if q.field == "title" and q.book == 2 then proposals.accept(q) end
-  end
-  print(require("lulibre.edit").summary(proposals.apply_accepted()))')"
-expect   "proposal landed"                "Sieve Notes" "$(field 2 title)"
-
-# ---- metadata that comes with the files (.bib beside them)
-mkdir "$t/built"
-cp "$t/src/algebra.pdf" "$t/src/new.pdf" "$t/built/"
-cat > "$t/built/built.bib" <<'BIB'
-@incollection{algebra, author = {{The Authors}}, title = {Commutative Algebra}, series = {Project},
-  number = {10}, date = {2026-07-28}, keywords = {math/algebra}, file = {algebra.pdf}}
-@incollection{new, author = {{The Authors}}, title = {A New Chapter}, series = {Project},
-  number = {11}, date = {2026-07-28}, keywords = {math/algebra}, file = {new.pdf}}
-BIB
-contains "bib-import matches by content"  "1 matched to books (1 by same file)" "$(run run bib-import "$t/built/built.bib" 2>&1)"
-lua 'local proposals = require "lulibre.proposals"
-  for _, q in ipairs(proposals.list("pending")) do if q.confidence == 1 then proposals.accept(q) end end
-  proposals.apply_accepted()' >/dev/null
-expect   "imported title"                 "Commutative Algebra" "$(field 3 title)"
-expect   "imported corporate author"      "The Authors" "$(field 3 authors)"
-expect   "imported series index"          "10" "$(field 3 series_index)"
-contains "onboard sees what is there"     "identical to book 3" "$(lua '
-  -- the listing is columns; the note is not among them, so ask the module
-  print(("identical to book %s"):format(require("lulibre.dupes").twin(arg and arg[1] or "'"$t/built/algebra.pdf"'")))')"
-contains "onboard adds only the new file" "added 1" "$(run run onboard "$t/built" --apply 2>&1)"
-expect   "onboarded with the .bib's data" "A New Chapter|The Authors|2026-07-28|11" "$(lua '
-  local b = lulibre.books([[title:="A New Chapter"]])[1]
-  local e = require "lulibre.edit"
-  print(table.concat({ b.title, b.author, e.current(b, "pubdate"), e.current(b, "series_index") }, "|"))')"
-
-# ---- duplicates
-dupes=$(run run dupes 2>&1)
-contains "dupes finds the identical pair" "1 groups, 1 surplus books" "$dupes"
-contains "dupes keeps the better record"  "keep     4" "$dupes"
-expect   "is:dupe"                        2 "$(run query -c is:dupe 2>&1)"
-contains "dupes --remove"                 "removed 1 books" "$(run run dupes --remove 2>&1)"
-expect   "the surplus copy is gone"       gone "$(field 1 title)"
-expect   "the kept copy is still there"   "Knots and Links" "$(field 4 title)"
-test -d "$lib/.caltrash" && r=yes || r=no
-expect   "removal went to the recycle bin" yes "$r"
-# a removal can be undone: the book comes back out of the recycle bin
-back=$(lua 'local r = require("lulibre.edit").undo() print(#r.restored, r.restored[1], #r.failed)')
-contains "undo restores a removed book"   "1	" "$back"
-newid=$(printf '%s' "$back" | cut -f2)
-expect   "with its title"                 "knots" "$(field "$newid" title)"
-expect   "and its file"                   "$(md5sum < "$t/src/knots.pdf")" "$(md5sum < "$(lua "print(lulibre.files($newid)[1].path)")")"
-contains "the history shows it"           "restored as book $newid" "$(lua 'print(lulibre.store("SELECT new FROM journal WHERE field = ? ORDER BY id DESC LIMIT 1", "(removed)")[1].new)')"
-contains "it can be removed again"        "removed 1 books" "$(run run dupes --remove 2>&1)"
-
-# ---- orphans: plant one of each kind, using exact paths from the index
-lua '
-  local uv = require "luv"
-  local function file(id) return lulibre.files(id)[1].path end
-  local function dir(path) return (path:match("^(.*)/[^/]*$")) end
-  local f2, f5, f6 = file(2), file(5), file(6)
-  -- 5: its file sits in a folder inside book 2
-  assert(uv.fs_mkdir(dir(f2) .. "/Lost (5)", 493))
-  assert(uv.fs_rename(f5, dir(f2) .. "/Lost (5)/" .. f5:match("[^/]*$")))
-  -- 6: its file is gone; book 3 is the same work
-  assert(uv.fs_unlink(f6))
-  -- a stray file identical to book 4s file
-  assert(uv.fs_copyfile(file(4), dir(f2) .. "/stray copy.pdf"))
-  -- a folder of the users own, with a link to where book 2 used to be
-  local root = lulibre.o.library
-  assert(uv.fs_mkdir(root .. "/To Read", 493))
-  assert(uv.fs_symlink("../Unknown/Old Name (2)/old.pdf", root .. "/To Read/moved.pdf"))' >/dev/null
-report=$(run run orphans 2>&1)
-contains "orphans: file found elsewhere"  "reattach     5" "$report"
-contains "orphans: superseded record"     "remove       6" "$report"
-contains "orphans: stray duplicate"       "[identical to book 4's file]" "$report"
-contains "orphans: broken link"           "relink   To Read/moved.pdf" "$report"
-out=$(run run orphans --apply 2>&1)
-contains "orphans --apply"                "1 given their files back, 1 records removed, 1 stray files moved out, 1 links repaired" "$out"
-contains "the removed record's tag is proposed for its copy" "1 things the removed records knew" "$out"
-expect   "the record is gone"             gone "$(field 6 title)"
-# a removed record that had no file comes back too, with what it said
-back=$(lua 'local r = require("lulibre.edit").undo() print(#r.restored, r.restored[1])')
-newid=$(printf '%s' "$back" | cut -f2)
-expect   "undo restores a file-less record" "Commutative Algebra|The Authors|kept/tag" "$(lua "
-  local b, e = lulibre.book($newid), require 'lulibre.edit'
-  print(b and table.concat({ b.title, e.current(b, 'authors'), e.current(b, 'tags') }, '|') or 'gone')")"
-contains "and is cleaned up again"        "1 records removed" "$(run run orphans --apply 2>&1)"
-test -e "$lib/To Read/moved.pdf" && r=yes || r=no
-expect   "the link resolves again"        yes "$r"
-expect   "book 5 has its file back"       indexed "$(run index >/dev/null 2>&1; lua 'print(lulibre.files(5)[1].status)')"
-contains "nothing left to clean"          "re-attach 0, remove 0 records, move 0 files out, repair 0 links" "$(run run orphans 2>&1)"
-test -n "$(find "$XDG_DATA_HOME/lulibre/orphans" -name 'stray copy.pdf')" && r=yes || r=no
-expect   "the stray file was set aside, not deleted" yes "$r"
-
-# ---- links in the user's own folders are repaired when a change renames a book's folder
-lua '
-  local uv = require "luv"
-  local f = lulibre.files(2)[1].path
-  uv.fs_unlink(lulibre.o.library .. "/To Read/moved.pdf")
-  assert(uv.fs_symlink("../" .. f:sub(#lulibre.o.library + 2), lulibre.o.library .. "/To Read/two.pdf"))' >/dev/null
-test -e "$lib/To Read/two.pdf" && r=yes || r=no
-expect   "a link to book 2"               yes "$r"
-contains "a rename with repair_links=never" "changed 1 book" "$(lua '
-  lulibre.o.repair_links = "never"
-  print(require("lulibre.edit").summary(require("lulibre.edit").apply { { id = 2, field = "title", value = "Sieve Notes II" } }))')"
-test -e "$lib/To Read/two.pdf" && r=yes || r=no
-expect   "leaves the link broken"         no "$r"
-contains "ask, with nobody to ask, says so" "lulibre orphans --apply" "$(lua '
-  lulibre.o.repair_links = "ask"
-  require("lulibre.edit").apply { { id = 2, field = "title", value = "Sieve Notes III" } }')"
-contains "auto repairs it"                "repaired 1 link" "$(lua '
-  lulibre.o.repair_links = "auto"
-  print(require("lulibre.edit").summary(require("lulibre.edit").apply { { id = 2, field = "title", value = "Sieve Notes IV" } }))')"
-test -e "$lib/To Read/two.pdf" && r=yes || r=no
-expect   "the link follows the book"      yes "$r"
-
-# ---- the sync folder
-mkdir "$t/sync" "$t/sync/sub"
-pdf "$t/sync/fresh paper.pdf" "On Fresh Things" "Nora New"
-pdf "$t/sync/sub/with-bib.pdf" "Body Text" "x"
-cp "$t/src/knots.pdf" "$t/sync/already.pdf"
-cat > "$t/sync/sub/meta.bib" <<'BIB'
-@book{b, author = {Dee, Bea and Eff, Cy}, title = {Told by the Bib}, year = {2001}, publisher = {Bib Press},
-  keywords = {from/bib}, file = {with-bib.pdf}}
-BIB
-srun() { run -o sync_dir="$t/sync" "$@"; }
-slua() { printf '%s\n' "$1" > "$t/s.lua"; srun run "$t/s.lua" 2>&1; }
-listing=$(srun sync 2>&1)
-contains "sync lists the folder"          "3 files, 3 new, 1 already in the library" "$listing"
-contains "sync: the .bib names its file"  "Told by the Bib" "$listing"
-contains "sync: a file the library has"   "= book 4" "$listing"
-expect   "staged files are not library books" 5 "$(srun query -c '' 2>&1)"
-expect   "in:sync"                        3 "$(srun query -c in:sync 2>&1)"
-expect   "in:all"                         8 "$(srun query -c in:all 2>&1)"
-expect   "is:inlibrary"                   1 "$(srun query -c 'in:sync is:inlibrary' 2>&1)"
-expect   "filters work on staged files"   1 "$(srun query -c 'in:sync author:"bea dee" tag:from/bib year:2001' 2>&1)"
-contains "staged files are indexed"       "0 failed" "$(srun index 2>&1)"
-expect   "and searchable"                 1 "$(srun query -c 'in:sync text:fresh' 2>&1)"
-contains "propose reads staged title pages" "proposals" "$(srun run propose in:sync 2>&1)"
-fresh=$(slua 'print(lulibre.ids([[in:sync title:="fresh paper"]])[1])')
-contains "editing a staged file"          "changed 1 book" "$(slua "
-  local edit = require 'lulibre.edit'
-  print(edit.summary(edit.apply {
-    { id = $fresh, field = 'title', value = 'On Fresh Things' }, { id = $fresh, field = 'authors', value = 'Nora New' },
-    { id = $fresh, field = 'tags', value = 'math/fresh', op = 'add' }, { id = $fresh, field = 'pubdate', value = '2020' } }))")"
-expect   "the edit is in the staged record" "On Fresh Things|Nora New|math/fresh|2020-01-01" "$(slua "
-  local b, e = lulibre.book($fresh), require 'lulibre.edit'
-  print(table.concat({ b.title, b.author, e.current(b, 'tags'), e.current(b, 'pubdate') }, '|'))")"
-contains "undo works on staged files"     "fresh paper" "$(slua "require('lulibre.edit').undo() print(lulibre.book($fresh).title)")"
-slua "local e = require 'lulibre.edit' e.apply { { id = $fresh, field = 'title', value = 'On Fresh Things' },
-  { id = $fresh, field = 'authors', value = 'Nora New' }, { id = $fresh, field = 'pubdate', value = '2020' } }" >/dev/null
-expect   "nothing reached calibre yet"    0 "$(srun query -c 'author:"nora new"' 2>&1)"
-# a staged file can be dropped without adding it, and brought back
-pdf "$t/sync/unwanted.pdf" "Not Wanted" "Nobody"
-srun sync >/dev/null 2>&1
-unwanted=$(slua 'print(lulibre.ids([[in:sync title:unwanted]])[1])')
-slua "require('lulibre.edit').apply { { id = $unwanted, field = 'authors', value = 'Kept With It' } }" >/dev/null
-contains "sync drop"                      "dropped 1 file" "$(srun sync drop title:unwanted 2>&1)"
-test -e "$t/sync/unwanted.pdf" && r=yes || r=no
-expect   "the file left the sync folder"  no "$r"
-expect   "and is no longer staged"        3 "$(srun query -c in:sync 2>&1)"
-expect   "but was kept, not deleted"      1 "$(find "$XDG_DATA_HOME/lulibre/dropped" -name unwanted.pdf | wc -l)"
-contains "undo puts it back"              "1" "$(slua 'local r = require("lulibre.edit").undo() print(#r.restored)')"
-test -e "$t/sync/unwanted.pdf" && r=yes || r=no
-expect   "the file is back"               yes "$r"
-expect   "with what was staged for it"    "Kept With It" "$(slua 'local b = lulibre.books([[in:sync title:unwanted]])[1] print(b and b.author)')"
-srun sync drop title:unwanted >/dev/null 2>&1
-contains "sync add"                       "added 2 to the library, 1 already there" "$(srun sync add all 2>&1)"
-expect   "added with the staged metadata" "On Fresh Things|Nora New|2020-01-01" "$(slua '
-  local b, e = lulibre.books([[in:library author:"nora new"]])[1], require "lulibre.edit"
-  print(table.concat({ b.title, b.author, e.current(b, "pubdate") }, "|"))')"
-expect   "added with the .bib's metadata" "Told by the Bib|Bea Dee & Cy Eff|Bib Press|from/bib" "$(slua '
-  local b, e = lulibre.books([[in:library title:="Told by the Bib"]])[1], require "lulibre.edit"
-  print(table.concat({ b.title, b.author, e.current(b, "publisher"), e.current(b, "tags") }, "|"))')"
-test -e "$t/sync/fresh paper.pdf" && r=yes || r=no
-expect   "sync add leaves the files"      yes "$r"
-expect   "which now all count as held"    3 "$(srun query -c 'in:sync is:inlibrary' 2>&1)"
-contains "sync move"                      "3 already there, 3 files removed from the sync folder" "$(srun sync move all 2>&1)"
-expect   "the sync folder is empty"       0 "$(find "$t/sync" -name '*.pdf' | wc -l)"
-expect   "and nothing is staged"          0 "$(srun query -c in:sync 2>&1)"
-expect   "the library gained two books"   7 "$(srun query -c '' 2>&1)"
-# ---- snapshots: changes logged (lulibre's, and those made outside it), put back, rolled forward
-step() { # a step whose output is not checked, only that it worked
-  _out=$("$@" 2>&1) || { echo "FAIL  $*: $_out"; fails=$((fails + 1)); }
-}
-outside() { calibredb --with-library http://127.0.0.1:18099 --username tester --password secret set_metadata "$@" >/dev/null 2>&1; }
-set -- $(slua 'print(table.concat(lulibre.ids("in:library"), " "))')
-b1=$1 b2=$2 b3=$3
-contains "a snapshot is taken"            'took snapshot 1, "start"' "$(srun snapshot start 2>&1)"
-t1=$(field $b1 title) t2=$(field $b2 title) p1=$(field $b1 publisher)
-step slua "local e = require 'lulibre.edit' e.apply { { id = $b1, field = 'title', value = 'Knots, Changed' },
-  { id = $b2, field = 'tags', value = 'x/y', op = 'add' } }"
-step outside $b1 --field "publisher:Outside Press"
-step outside $b2 --field "title:Outside Title"
-step slua "local e = require 'lulibre.edit' e.apply { { id = $b3, field = 'title', value = 'Algebra Changed' } }"
-expect   "changes made outside are logged" "$b1:publisher:Outside Press|$b2:title:Outside Title" "$(slua '
-  local out = {}
-  for _, r in ipairs(lulibre.sql("SELECT book, field, new FROM journal WHERE label = ? AND field NOT LIKE ? ORDER BY book", "outside", "(%")) do
-    out[#out + 1] = r.book .. ":" .. r.field .. ":" .. r.new end
-  print(table.concat(out, "|"))')"
-expect   "lulibre's own are not taken for outside ones" 0 "$(slua 'print(#lulibre.sql("SELECT 1 FROM journal WHERE label = ? AND field IN (?, ?)", "outside", "title", "tags") - 1)')"
-mkdir -p "$t/sync/non-catalog"
-pdf "$t/sync/non-catalog/handout.pdf" "A Handout" "Some Lecturer"
-step srun sync
-contains "a file from non-catalog/ is marked" "1 marked non-catalog" "$(srun sync move 'title:handout' 2>&1)"
-handout=$(slua 'print(lulibre.ids("in:library is:noncatalog")[1])')
-contains "and its arrival is logged"      "non-catalog/handout.pdf" "$(slua "print(lulibre.sql('SELECT old FROM journal WHERE field = ? AND book = ?', '(added)', $handout)[1].old)")"
-came=$(field $handout title)
-step slua "require('lulibre.edit').apply { { id = $handout, field = 'title', value = 'Edited After Adding' } }"
-plan=$(srun snapshot plan start 2>&1)
-contains "the plan: lulibre's changes"    "4 fields of 4 books put back" "$plan"
-contains "the plan: outside ones are kept" "2 fields changed outside lulibre left as they are" "$plan"
-contains "a rollback asks for --yes without a screen" "(add --yes to do it)" "$(srun snapshot rollback start 2>&1)"
-contains "rollback"                       "4 books put back (snapshot 2 is how it was before" "$(srun snapshot rollback start --yes 2>&1)"
-expect   "lulibre's changes went back"    "$t1|$came|Outside Title|Outside Press" "$(slua "
-  local e = require 'lulibre.edit'
-  print(table.concat({ lulibre.book($b1).title, lulibre.book($handout).title, lulibre.book($b2).title, e.current(lulibre.book($b1), 'publisher') }, '|'))")"
-expect   "a book added since stays, as it came" "$came" "$(field $handout title)"
-contains "a second rollback does nothing" "nothing to do" "$(srun snapshot rollback start --yes 2>&1)"
-contains "rolling forward"                "4 books put back" "$(srun snapshot rollback 2 --yes 2>&1)"
-expect   "is the changes again"           "Knots, Changed|Edited After Adding" "$(slua "print(lulibre.book($b1).title .. '|' .. lulibre.book($handout).title)")"
-contains "--exact puts back outside changes too" "4 books put back" "$(srun snapshot rollback start --exact --yes 2>&1)"
-expect   "outside changes went back"      "$t2|$p1" "$(slua "print(lulibre.book($b2).title .. '|' .. require('lulibre.edit').current(lulibre.book($b1), 'publisher'))")"
-contains "--unsync takes added books out" "1 taken out to unsynced/" "$(srun snapshot rollback start --unsync --yes 2>&1)"
-expect   "the book left the library"      gone "$(field $handout title)"
-test -e "$t/sync/unsynced/handout.pdf" && r=yes || r=no
-expect   "its file is in unsynced/"       yes "$r"
-expect   "and is not waiting to be added" 0 "$(srun query -c 'in:sync title:handout' 2>&1)"
-contains "snapshots are listed"           "taken by a rollback" "$(srun snapshot list 2>&1)"
-step srun snapshot retire start
-expect   "a retired snapshot leaves the list" 0 "$(srun snapshot list 2>&1 | grep -c '^ *1  ' || true)"
-contains "but not --all"                  "retired" "$(srun snapshot list --all 2>&1)"
-# ---- custom fields: written by lulibre, never to calibre; journaled, undone, rolled back
-cb=$(slua 'print(lulibre.ids("in:library")[1])')
-contains "a snapshot before custom fields" "took snapshot" "$(srun snapshot before custom 2>&1)"
-contains "a custom field is set"          "changed 1 book" "$(slua "local e = require 'lulibre.edit' print(e.summary(e.apply { { id = $cb, field = '#partof', value = 'A Handbook' }, { id = $cb, field = '#part', value = '3' } }))")"
-expect   "and read back"                  "A Handbook|3" "$(slua "local c = require 'lulibre.custom' print(c.get($cb, '#partof') .. '|' .. c.get($cb, '#part'))")"
-expect   "calibre knows nothing of it"    0 "$(sqlite3 "$lib/metadata.db" "select count(*) from custom_columns")"
-expect   "filters find it"                1 "$(srun query -c '#partof:handbook' 2>&1)"
-contains "undo takes it back"             "undid" "$(slua 'local r = require("lulibre.edit").undo() print("undid", r.applied)')"
-expect   "it is gone"                     "" "$(slua "print(require('lulibre.custom').get($cb, '#partof'))")"
-slua "require('lulibre.edit').apply { { id = $cb, field = '#partof', value = 'Again' } }" >/dev/null
-contains "a rollback takes it back too"   "put back" "$(srun snapshot rollback 'before custom' --yes 2>&1)"
-expect   "gone again"                     "" "$(slua "print(require('lulibre.custom').get($cb, '#partof'))")"
-
-# ---- OCR written into the PDF itself, the original kept outside the library, and undone
-if command -v ocrmypdf >/dev/null 2>&1; then
-  wid=$(slua 'print(lulibre.ids("in:library fmt:pdf")[1])')
-  before=$(slua "print(lulibre.md5(lulibre.files($wid)[1].path))")
-  out=$(srun -o ocr_write=keep -o ocr_originals="$t/originals" ocr --write id:$wid 2>&1)
-  contains "ocr --write gives the PDF a text layer" "1 PDF given a text layer" "$out"
-  expect   "the original is kept outside the library" 1 "$(find "$t/originals" -name '*.pdf' | wc -l)"
-  expect   "and is the same file"          "$before" "$(md5sum "$t"/originals/*.pdf | cut -d' ' -f1)"
-  contains "it is in the journal"           "(format)" "$(slua 'print(lulibre.sql("SELECT field FROM journal ORDER BY id DESC LIMIT 1")[1].field)')"
-  contains "undo puts the original back"   "undid" "$(slua 'local r = require("lulibre.edit").undo() print("undid", #r.restored, #r.failed)')"
-  expect   "calibre has the original again" "$before" "$(slua "print(lulibre.md5(lulibre.files($wid)[1].path))")"
-  contains "ocr_originals in the library is refused" "inside the library" "$(srun -o ocr_write=keep -o ocr_originals="$lib/x" ocr --write id:$wid 2>&1 || true)"
-else
-  echo "skip  ocr --write (no ocrmypdf)"
-fi
-contains "the config prints as Lua"       'o.sync_dir = "' "$(srun config 2>&1)"
-contains "and names the policies"         "auto | ask | never" "$(srun config 2>&1)"
-contains "a bad policy value is refused"  "is one of auto|ask|never" "$(run -o repair_links=maybe query -c '' 2>&1 || true)"
-
+expect "changes apply straight to the library folder, as one batch" "apply|1|nil"
+expect "the record has them" "record|Topics in Additive Combinatorics|Terence Tao & Van Vu|math|2006-01-01"
+expect "a change to the value held is no batch" "same|nil"
+expect "a malformed value is refused before the journal" "bad|a date is written YYYY or YYYY-MM-DD"
+expect "the journal keeps where a value came from" "provenance|7|front"
+expect "undo is a batch of its own" "undo|2"
+expect "and puts the old values back" "after undo|paper|Unknown"
+expect "the batch put back is undone, all five rows" "undone|5"
+expect "two changes to one field apply one after the other" "in order|y"
+expect "a book with wits is proposed" "filter|1"
+expect "accepting a wit only marks it" "accept|true"
+expect "rejecting a wit only marks it" "reject|true"
+expect "the marks are kept and the record is as it was" "marked|paper|2|reject"
+expect "a second review has its own proposals" "reviews|2|other|Another Title"
+expect "writing is one batch of what is marked" "write|1|2"
+expect "the record has the one, not the other, and the wits are gone" "decided|Topics in Additive Combinatorics|Unknown|0|1"
+expect "writing in one review leaves another's proposals" "other kept|Another Title"
+expect "a rejection changes nothing but is kept" "rejection|review|authors|true|front"
+expect "a discarded review's proposals go" "discarded|1|0"
+expect "a book removed" "removed|true|nil|0"
+expect "and undo brings it back" "restored|true"
+expect "under a new id, its record with it" "back|1|kept|true"
+expect "orphans finds a file with no record" "orphans|1|keep|stray.pdf"
+expect "and moves it out of the library" "orphans moved|1|0|true|true"
+expect "the columns are made once nothing holds the library" "columns|3|0"
+expect "and lulibre's values copied into them" "push|1"
+expect "a command that needs the library closed waits while the server holds it" "offline waits|1|waiting|the column #waiting"
+expect "and can be cancelled" "offline cancel|true|0"
+expect "whoever waited for it is told" "offline answered|nil|cancelled"
+expect "a change made outside lulibre is logged, field by field" "outside title|outside|outside|one|Uno"
+expect "a book removed outside lulibre, with its record" "outside removed|outside|two"
+expect "a book added outside lulibre" "outside added|outside|four"
+expect "a book nobody changed has nothing" "outside fresh|0"
+expect "a snapshot's position" "snap taken|1|plain"
+expect "a plan says what going back would do" "snap plan|1|Title Now|0"
+expect "and going back does it" "snap back|1|Title Then|Title Now"
+expect "a rollback's own snapshot rolls forward" "snap forward|Title Now"
+expect "what changed outside is left, unless exact" "snap outside|1|0|1"
+expect "a removed book comes back by a rollback" "snap restored|1|1"
+expect "a snapshot from a copy of calibre's database holds what the journal didn't see" "snap import|2|true"
+expect "history lists batches, newest first" "history|true"
+expect "recheck: a record's title the pages don't show goes back; one typed by hand stays" "recheck|1|true|title|A Note on Sieve Methods|true"
+expect "and writes it" "recheck write|true|A Note on Sieve Methods"
+expect "after which there's nothing to do" "recheck again|0"
+expect "the sync folder's files are waiting" "sync waiting|2"
+expect "a file is added, with what lulibre knows of it" "sync add|1|0|0"
+expect "with what calibredb add can't take too, and its proposals follow" "sync added|1|A Waiting Book|Some House|Waiting Series"
+expect "undo takes it back out" "sync undo|true"
+expect "of the library" "sync undone|0"
+expect "and that isn't logged as a change made outside" "undo not outside|0"
+expect "dropped, the file leaves the folder and the list" "sync drop|1|0|true|true"
+expect "undo brings it back, with its record" "sync undrop|true|true|A Dropped Book"
+expect "the track record, from the journal: one accepted, one rejected, near the prior" "track|0.583|0.417"
+expect "an identifier's wit accepted is added to the record's identifiers" "ident accept|true"
+expect "bookman.get gives one identifier by its type, an unknown author as nothing, no book as nil" "ident|9780387900407||nil"
+expect "the content server is seen to hold the library" "holder|server"
+expect "a change goes through the server" "apply|1"
+expect "a copy of the library the server has open is not reached through it" "copy holder|other"
+expect "embedding updates what the index knows of the file" "emb|Embedded Title"
+expect "calibre's records read again: a book calibre did not change is not copied again" "reread untouched|untouched"
+expect "the books it changed, added and removed are as a copy of every book has them" "reread same|yes"
+expect "and as calibre has them" "reread has|Uno:B Author & A Author:x,three:A Author:,four:C Author:|poetry,history"
 [ $fails -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

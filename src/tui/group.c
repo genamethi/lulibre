@@ -181,7 +181,10 @@ static void build(struct tui *t) {
     if (r->all[i] > 0) at[r->all[i]] = i;
   unsigned char *placed = xcalloc((size_t)r->nall + 1, 1);
 
-  int nested = !strcmp(r->group, "subject"), first_part = !strcmp(r->group, "folder");
+  /* subjects as a tree only where calibre shows tags as one */
+  char *tree = !strcmp(r->group, "subject") ? db_meta_get(&t->app->db, "calibre_hierarchical") : NULL;
+  int nested = tree && strstr(tree, "\"tags\"") != NULL, first_part = !strcmp(r->group, "folder");
+  free(tree);
   sqlite3_stmt *st;
   if (sqlite3_prepare_v2(t->app->db.h, sql_of(r->group), -1, &st, NULL) == SQLITE_OK) {
     while (sqlite3_step(st) == SQLITE_ROW) {
@@ -195,11 +198,11 @@ static void build(struct tui *t) {
         if (slash) len = (size_t)(slash - name);
         head = head_of_path(&b, name, len, name, len, -1, 0);
       } else if (nested) {
-        /* "a/b/c": under c, which is within b, which is within a */
+        /* "a.b.c": under c, which is within b, which is within a */
         size_t from = 0;
         int depth = 0;
         for (size_t i = 0; i <= len; i++) {
-          if (i < len && name[i] != '/') continue;
+          if (i < len && name[i] != '.') continue;
           if (i > from) head = head_of_path(&b, name, i, name + from, i - from, head, depth++);
           from = i + 1;
         }

@@ -6,8 +6,9 @@
 #include <string.h>
 #include <strings.h>
 
-#include "core/config.h"
 #include "core/util.h"
+#include "index/outcome.h"
+#include "match/fold.h"
 
 enum fkind {
   F_COL, F_AUTHOR, F_TAG, F_SUBJECT, F_FMT, F_NUM, F_IDENT, F_IDTYPE, F_HAS, F_NO, F_IS,
@@ -60,25 +61,13 @@ static const struct { const char *name, *sql; } is_tests[] = {
                 " OR b.title LIKE '%.dvi' OR b.title LIKE '%.tex' OR b.title LIKE '%.ps')"},
   /* a title in capitals (as far as A to Z go): what :titlecase is for */
   {"capstitle", "(b.title = upper(b.title) AND b.title <> lower(b.title) AND length(b.title) > 3)"},
-  /* confirmed as right by the user (:good) */
-  {"good", "EXISTS(SELECT 1 FROM good g WHERE g.book = b.id)"},
-  /* marked as a work no catalogue has a record of (:noncatalog) */
-  {"noncatalog", "EXISTS(SELECT 1 FROM noncatalog n WHERE n.book = b.id)"},
   {"part", "EXISTS(SELECT 1 FROM custom.data d WHERE d.book = b.id AND d.field = '#partof')"},
-  {"indexed", ANY_FILE("f.status = 1")},
-  {"unindexed", ANY_FILE("f.status = 0")},
-  {"error", ANY_FILE("f.status = 2")},
-  {"missing", "(NOT " ANY_FILE("1") " OR " ANY_FILE("f.status = 3") ")"},
-  /* thresholds measured on a maths-heavy library, where sound text scores
-   * 0.5-0.8 because formulas are full of one-letter tokens */
-  /* little text, or more than a few characters no font could map (a word's
-   * share alone is no sign: mathematics has few long words; and its symbols
-   * in private-use characters come to two or three per cent) */
-  {"needsocr", ANY_FILE("f.status = 1 AND (f.nchars < 200 OR coalesce(f.garbled, 0) > 0.04 OR f.quality < 0.2)")},
+  /* a book with a file whose text is usable; each outcome is a filter of
+   * its own too (outcome_words, index/outcome.h) */
+  {"indexed", ANY_FILE(OUTCOME_HAS_TEXT("f."))},
   {"multiformat", "(SELECT count(*) FROM files f WHERE f.book = b.id) > 1"},
   {"marked", "b.id IN (SELECT id FROM marks)"},
-  {"ocr", ANY_FILE("f.text_src = 'ocr'")},
-  {"proposed", "b.id IN (SELECT book FROM proposals WHERE status IN ('pending', 'accepted'))"},
+  {"proposed", "b.id IN (SELECT book FROM wit.wits WHERE NOT hidden)"},
   /* byte-identical to another book's file; known once :dupes has hashed them */
   {"dupe", "b.id IN (SELECT f.book FROM files f JOIN hashes h ON h.path = f.path"
            " WHERE f.book > 0 AND h.md5 IN (SELECT h2.md5 FROM hashes h2 JOIN files f2"
@@ -105,14 +94,34 @@ static void add_param(struct query *q, const char *v) {
   q->params[q->nparams++] = xstrdup(v);
 }
 
-/* SQL for "<expr> matches <val>" under the operator prefix of val. */
+/* val as the filter language compares it (fold, db/dbfuncs.c), between
+ * before and after */
+static void add_folded(struct query *q, const char *before, const char *val, const char *after) {
+  sbuf f = SBUF_INIT;
+  sb_puts(&f, before);
+  fold_utf8(&f, val, strlen(val));
+  sb_puts(&f, after);
+  add_param(q, f.s ? f.s : "");
+  sb_free(&f);
+}
+
+/* SQL for "<expr> matches <val>" under the operator prefix of val: it holds
+ * val, is val (=), starts with it (^), or matches it as a Lua pattern (~);
+ * all but the last without case or accents. */
 static void match(struct query *q, sbuf *sql, const char *expr, const char *val) {
-  const char *fn = "ihas";
-  if (*val == '=') { fn = "ieq"; val++; }
-  else if (*val == '^') { fn = "istarts"; val++; }
-  else if (*val == '~') { fn = "lmatch"; val++; }
-  sb_printf(sql, "%s(%s, ?)", fn, expr);
-  add_param(q, val);
+  if (*val == '~') {
+    sb_printf(sql, "find(%s, ?)", expr);
+    add_param(q, val + 1);
+  } else if (*val == '=') {
+    sb_printf(sql, "fold(%s) = ?", expr);
+    add_folded(q, "", val + 1, "");
+  } else if (*val == '^') {
+    sb_printf(sql, "instr(fold(%s), ?) = 1", expr);
+    add_folded(q, "", val + 1, "");
+  } else {
+    sb_printf(sql, "instr(fold(%s), ?) > 0", expr);
+    add_folded(q, "", val, "");
+  }
 }
 
 static int number_term(sbuf *sql, const char *col, const char *val, char **err) {
@@ -195,9 +204,14 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
       }
       sb_puts(sql, "EXISTS(SELECT 1 FROM book_tags bt JOIN tags t ON t.id = bt.tag"
                    " WHERE bt.book = b.id AND ");
-      if (f->kind == F_SUBJECT && !strchr("=^~", *val)) {
-        sb_puts(sql, "isubject(t.name, ?)");
-        add_param(q, val);
+      if (!strncmp(val, "=..", 3) || (f->kind == F_SUBJECT && !strchr("=^~", *val))) {
+        /* calibre's =..x: whole levels of the tag, between its dots */
+        sb_puts(sql, "instr('.' || fold(t.name) || '.', ?) > 0");
+        add_folded(q, ".", *val == '=' ? val + 3 : val, ".");
+      } else if (!strncmp(val, "=.", 2)) {
+        /* calibre's =.x: the tag x, or one inside it */
+        sb_puts(sql, "instr(fold(t.name) || '.', ?) = 1");
+        add_folded(q, "", val + 2, ".");
       } else {
         match(q, sql, "t.name", val);
       }
@@ -247,34 +261,37 @@ static int field_term(struct query *q, sbuf *sql, const struct field *f, const c
       return 0;
     }
     case F_IS: {
+      for (int o = 0; o < OUTCOMES; o++) {
+        if (strcmp(val, outcome_words[o])) continue;
+        /* missing: a file missing, or no file at all */
+        if (o == OUT_MISSING) sb_printf(sql, "(NOT " ANY_FILE("1") " OR " ANY_FILE("f.outcome = %d") ")", o);
+        else sb_printf(sql, "(" ANY_FILE("f.outcome = %d") ")", o);
+        return 0;
+      }
       const char *t = LOOKUP(is_tests, val);
       if (!t) {
         char *names = NAMES(is_tests);
+        sbuf all = SBUF_INIT;
+        sb_puts(&all, names);
+        for (int o = 0; o < OUTCOMES; o++) sb_printf(&all, ", %s", outcome_words[o]);
+        free(names);
+        names = sb_take(&all);
         *err = xasprintf("is:%s is not known; try one of: %s", val, names);
         free(names);
         return -1;
       }
-      if (!strcmp(val, "proposed"))
-        /* only what review shows: none under propose_min (learned subjects:
-         * learned_tags_min); lulibre.proposals.shown says the same */
-        sb_printf(sql, "(b.id IN (SELECT book FROM proposals WHERE status = 'accepted' OR (status = 'pending'"
-                       " AND (confidence IS NULL OR source = 'typed' OR asked = 1 OR confidence >= CASE WHEN source LIKE"
-                       " 'learned:%%' OR source LIKE 'shares references with %%' THEN %.6f ELSE %.6f END"
-                       " - 1e-9))))",
-                  config_learned_tags_min / 100.0, config_propose_min / 100.0);
-      else
-        sb_printf(sql, "(%s)", t);
+      sb_printf(sql, "(%s)", t);
       return 0;
     }
     case F_TEXT:
       if (*val == '~') {
-        sb_puts(sql, "b.id IN (SELECT f.book FROM pages p JOIN files f ON f.id = p.file"
-                     " WHERE lmatch(p.text, ?))");
+        sb_puts(sql, "b.id IN (SELECT f.book FROM lines l JOIN files f ON f.id = l.file"
+                     " WHERE find(l.text, ?))");
         add_param(q, val + 1);
         return 0;
       }
-      sb_puts(sql, "b.id IN (SELECT f.book FROM pages_fts JOIN pages p ON p.id = pages_fts.rowid"
-                   " JOIN files f ON f.id = p.file WHERE pages_fts MATCH ?)");
+      sb_puts(sql, "b.id IN (SELECT f.book FROM paragraphs_fts JOIN lines l ON l.id = paragraphs_fts.rowid"
+                   " JOIN files f ON f.id = l.file WHERE paragraphs_fts MATCH ?)");
       if (*val == '=') {
         add_param(q, val + 1); /* raw FTS5 syntax */
       } else {
@@ -434,8 +451,8 @@ int query_compile_in(const char *filter, int scope, struct query *q, char **err)
     if (f) {
       rc = field_term(q, &sql, f, val, err);
     } else {
-      sb_puts(&sql, "(ihas(b.title, ?) OR ihas(b.authors, ?) OR ihas(b.tags, ?))");
-      for (int i = 0; i < 3; i++) add_param(q, val);
+      sb_puts(&sql, "(instr(fold(b.title), ?) > 0 OR instr(fold(b.authors), ?) > 0 OR instr(fold(b.tags), ?) > 0)");
+      for (int i = 0; i < 3; i++) add_folded(q, "", val, "");
     }
     free(val);
     if (rc) goto fail;
@@ -467,6 +484,10 @@ void query_words(void (*fn)(const char *word, void *ud), void *ud) {
   }
   for (size_t i = 0; i < ARRAY_LEN(is_tests); i++) {
     snprintf(buf, sizeof buf, "is:%s", is_tests[i].name);
+    fn(buf, ud);
+  }
+  for (int o = 0; o < OUTCOMES; o++) {
+    snprintf(buf, sizeof buf, "is:%s", outcome_words[o]);
     fn(buf, ud);
   }
   for (size_t i = 0; i < ARRAY_LEN(has_tests); i++) {

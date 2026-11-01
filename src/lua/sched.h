@@ -1,16 +1,15 @@
 #ifndef LULIBRE_SCHED_H
 #define LULIBRE_SCHED_H
 
-/* Lua tasks: coroutines the loop runs a few milliseconds at a time.
+/* Lua tasks: coroutines that take turns where they wait.
  *
  * Tasks share one Lua state and one thread (the Lua thread when the
- * interface is up; see lua/bridge.h), and take turns. Functions that wait (a
- * subprocess, a timer, text extraction, a picker) park the task and hand
- * control back to the loop until their result arrives. And a task that just
- * computes is interrupted by an instruction-count hook once its time slice
- * is spent, then continued on a later loop iteration, so one busy script
- * does not starve the others. Everything here belongs to the Lua thread,
- * except sched_live and sched_failed, which any thread may call. */
+ * interface is up; see lua/bridge.h). A task runs until it waits (a
+ * subprocess, a timer, text extraction, a picker) or calls taskman.yield():
+ * between two of those, nothing else runs on its thread, so its steps there
+ * are one step for the others. A task that computes for long holds the
+ * others up, not the interface. Everything here belongs to the Lua thread,
+ * except where a function says otherwise. */
 
 struct lua_State;
 struct app;
@@ -21,8 +20,12 @@ void sched_free(struct app *app);
 
 /* The function and its nargs arguments are on top of L's stack; they are
  * moved into a new task, which starts on the next loop iteration. Returns
- * the task id. */
+ * the task id. name says what started it; NULL names it "task N". */
 int sched_spawn(struct lua_State *L, int nargs, const char *name);
+
+/* The same, but the task runs its first slice now, until it first waits,
+ * yields or ends: what it does before that is done when this returns. */
+int sched_spawn_now(struct lua_State *L, int nargs, const char *name);
 
 /* ---- for C functions that wait ----
  *
@@ -61,6 +64,35 @@ int sched_failed(const struct app *app); /* tasks that ended in an error */
 /* An error outside any task (a luv callback's) counts as a failure too:
  * `lulibre run` then exits 1. */
 void sched_note_failure(struct app *app);
+
+/* The task that is running, for another thread: how long it has run
+ * without waiting (0: none runs), and its id. Any thread. */
+long long sched_running_ms(void);
+int sched_running_id(void);
+/* Any thread: task id is to stop if it is running when the hook next
+ * looks; the caller then sends sched_watch_signal() to the thread running
+ * Lua (lua/bridge.c). */
+void sched_stop_running(int id);
+/* A run that goes 2 s without waiting is reported, by a hook a signal
+ * installs; the hook also stops a cancelled task. sched_watch_here: the
+ * calling thread runs Lua from now on, and the signal goes to it
+ * (sched_init calls it; so does the Lua thread as it starts). */
+void sched_watch_here(void);
+int sched_watch_signal(void);
+
+/* coroutine.resume and coroutine.wrap in L, as Lua's, but the coroutine a
+ * task resumes is reached by the hook too. */
+void sched_open_coroutines(struct lua_State *L);
+
+/* The tasks as they were at the last change, for the interface: sent with
+ * lapi_tasks_changed, the receiver's to free. */
+struct sched_task_list {
+  int n;
+  struct {
+    int id, cancelled;
+    char name[64];
+  } task[];
+};
 
 /* Push an array of {id=, name=, state=} onto L. */
 void sched_push_tasks(struct lua_State *L);

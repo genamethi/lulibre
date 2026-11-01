@@ -1,24 +1,18 @@
 #ifndef LULIBRE_BRIDGE_H
 #define LULIBRE_BRIDGE_H
 
-/* The two threads of the interactive program, and how they talk.
+/* The two threads of the interactive program.
  *
  * With the interface up, Lua does not run on the interface's thread. The
- * interface thread owns the terminal, the windows, the list, the options
+ * interface thread owns the terminal, the windows, the list, the settings
  * and its own event loop. The Lua thread owns the Lua state, the task
  * scheduler, a second event loop (the one luv and the timers, subprocesses
  * and worker jobs of the `lulibre` API use) and its own database connection.
- * Nothing a script does can therefore hold up a keystroke or a redraw.
- *
- *   Lua -> interface   bridge_ui / ui_call: run a function on the interface
- *                      thread and wait for it. While it runs, the Lua thread
- *                      is parked, so the function may use the Lua state.
- *   interface -> Lua   bridge_lua: queue a function for the Lua thread and
- *                      return at once. The interface never waits for Lua.
+ * They talk by messages (core/queue.h); neither waits for the other
+ * (design 34), so nothing a script does can hold up a keystroke or a redraw.
  *
  * Without the interface (`lulibre run`, or before the interface has started)
- * there is one thread and one loop, and every call below simply runs in
- * place. */
+ * there is one thread and one loop. */
 
 #include <lua.h>
 
@@ -33,18 +27,13 @@ void bridge_start(struct app *app);
  * and take the Lua state back. */
 void bridge_stop(struct app *app);
 
-/* Run fn(arg) on the interface thread; returns when it has. */
-void bridge_ui(struct app *app, void (*fn)(void *), void *arg);
-/* Run a Lua C function on the interface thread with L's current arguments.
- * ui_call returns its result count and raises its errors; ui_pcall returns
- * the status instead, leaving the results or the message on the stack. Lua
- * functions that wait must not be called this way: the function cannot
- * yield. */
-int ui_call(lua_State *L, lua_CFunction fn);
-int ui_pcall(lua_State *L, lua_CFunction fn);
-
-/* Run fn(app, arg) on the Lua thread, later; fn owns arg. */
-void bridge_lua(struct app *app, void (*fn)(struct app *, void *), void *arg);
+/* Interface thread: stop the Lua thread as bridge_stop does, without
+ * waiting for it: once it is gone, then(app) runs on the interface loop,
+ * with the old Lua state still there for it to close (:restart-scripts). */
+void bridge_restart(struct app *app, void (*then)(struct app *app));
+/* Interface thread: stop task id if it is the one running (a task that
+ * runs never reads a message; lua/sched.h). */
+void bridge_interrupt(struct app *app, int id);
 
 /* Ask the interface to redraw; from either thread. */
 void bridge_redraw(struct app *app);
