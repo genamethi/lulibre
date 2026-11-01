@@ -1,12 +1,22 @@
 # lulibre
 
-A fast, modal terminal workbench for the metadata of a [calibre](https://calibre-ebook.com)
-library: a full-text index over the first pages of every book, a filter
-language, batch editing with undo, and Lua scripting. C, notcurses, libuv.
+Lulibre is a vibe-coded extensible modal terminal workbench for
+ebook metadata and [calibre](https://calibre-ebook.com) library organization. C, notcurses, libuv.
 
-**Alpha.** It works and is tested, but it is young: try changes on a few
-books before a few hundred. Every change is journaled and `u` undoes it,
-removals included. [Changelog](CHANGELOG.md).
+I will eventually get around to ensuring that it's not slop, but
+for the time being. Don't count on it. The text reads like it was
+written by an LLM, so it's a bit nauseating to use.
+
+**Alpha.** It is very unstable and hasn't been well tested. Every change
+is journaled and `u` undoes it, removals included. Don't rely on that.
+It's unstable and a bit frustrating to use. Currently, 0.2.1 beta is
+a better experience.
+
+I can't assure the accuracy of these instructions. Mostly because
+the pace has been a bit fast. Currently fiddling with 0.4.0 alpha.0
+by hand.
+
+[Changelog](CHANGELOG.md).
 
 ## Build
 
