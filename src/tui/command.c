@@ -503,7 +503,7 @@ static void c_source(struct tui *t, const char *args) {
   }
   int to = arg_is(args, "sync") ? 1 : arg_is(args, "library") ? 0 : !t->rows.source;
   if (to && !app_str(t->app, S_SYNC_DIR)[0]) {
-    tui_msg(t, 1, "no sync folder is set: setman.set(\"path.sync\", \"~/some/folder\") in init.lua, or :set path.sync=DIR");
+    tui_msg(t, 1, "no sync folder is set: :sync DIR, or :config sets path.sync and w keeps it in options.lua");
     return;
   }
   rows_set_source(t, to);

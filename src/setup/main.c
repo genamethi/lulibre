@@ -1,7 +1,8 @@
 /* lulibre-setup: the choices of a setup, made on one screen and kept in the
  * plan, setup.conf, in the folder lulibre-setup runs from. "Install now"
  * steps back to the shell and runs setup/install.sh on the plan there, in
- * view; the screen comes back when the script is done.
+ * view; the screen comes back when the script is done. "Write options.lua"
+ * does the same for the settings alone.
  *
  * Basic is the easiest path: the level, pixi, the library and the content
  * server. Nothing is filled in: each is chosen. Advanced holds the prefix,
@@ -179,7 +180,10 @@ static void build_items(void) {
   }
   add((struct item){.kind = K_ACTION, .key = "install", .label = "Install now", .head = -1,
                     .help = "steps back to the shell and runs setup/install.sh on these choices, in view; "
-                            "this screen comes back when it is done."});
+                            "this screen comes back when it is done. It also writes options.lua, as below."});
+  add((struct item){.kind = K_ACTION, .key = "write", .label = "Write options.lua, install nothing", .head = -1,
+                    .help = "writes these choices to lua/config/options.lua in lulibre's configuration folder and has "
+                            "init.lua load it: `require \"config.options\"`, in an init.lua made for it or added to yours."});
   add((struct item){.kind = K_ACTION, .key = "quit", .label = "Save and quit", .head = -1,
                     .help = "leaves; the choices stay in the plan for the next time."});
 }
@@ -318,7 +322,7 @@ static void draw(void) {
   dr_style(n, theme.dim, C_DEFAULT, 0);
   dr_fill(n, (int)rows - 1, 0, w);
   dr_text(n, (int)rows - 1, 1, w - 2,
-          "Enter change   Space next value   e type   x unset   i install now   q quit (the plan is kept)");
+          "Enter change   Space next   e type   x unset   i install now   w write options.lua   q quit (the plan is kept)");
   notcurses_render(nc);
 }
 
@@ -384,8 +388,9 @@ static struct notcurses *terminal_start(void) {
   return n;
 }
 
-/* the basic choices not made yet, as a list for a message; NULL when all are */
-static char *missing(int *first) {
+/* the basic choices not made yet, as a list for a message; NULL when all are.
+ * The level and pixi are for installing. */
+static char *missing(int *first, int only_settings) {
   static const char *need[] = {"LEVEL", "PIXI", "LIBRARY", "SERVER", NULL};
   static const char *need_server[] = {"SERVER_URL", "SERVER_USER", "PASSWORD_FILE", NULL};
   sbuf s = SBUF_INIT;
@@ -393,7 +398,7 @@ static char *missing(int *first) {
   for (int pass = 0; pass < 2; pass++) {
     const char **keys = pass ? need_server : need;
     if (pass && !server_on()) break;
-    for (int k = 0; keys[k]; k++) {
+    for (int k = pass || !only_settings ? 0 : 2; keys[k]; k++) {
       struct item *it = item_named(keys[k]);
       if (it->value) continue;
       if (*first < 0) *first = (int)(it - items);
@@ -401,16 +406,16 @@ static char *missing(int *first) {
     }
   }
   struct item *ch = item_named("PASSWORD_CHMOD");
-  if (password_open() && !ch->value) {
+  if (!only_settings && password_open() && !ch->value) {
     if (*first < 0) *first = (int)(ch - items);
     sb_printf(&s, "%s%s", s.len ? ", " : "", "whether to make the password file mode 600");
   }
   return s.len ? sb_take(&s) : NULL;
 }
 
-static void install_now(void) {
+static void install_now(int only_settings) {
   int first;
-  char *gap = missing(&first);
+  char *gap = missing(&first, only_settings);
   if (gap) {
     say(theme.warn, "to choose first: %s", gap);
     free(gap);
@@ -421,7 +426,7 @@ static void install_now(void) {
   save();
   notcurses_stop(nc);
   nc = NULL;
-  printf("lulibre-setup: sh %s %s\n", script, plan);
+  printf("lulibre-setup: sh %s %s%s\n", script, only_settings ? "-s " : "", plan);
   fflush(stdout);
   struct sigaction ign = {.sa_handler = SIG_IGN}, old_int, old_quit;
   sigaction(SIGINT, &ign, &old_int);
@@ -431,7 +436,8 @@ static void install_now(void) {
   if (pid == 0) {
     signal(SIGINT, SIG_DFL);
     signal(SIGQUIT, SIG_DFL);
-    execl("/bin/sh", "sh", script, plan, (char *)NULL);
+    if (only_settings) execl("/bin/sh", "sh", script, "-s", plan, (char *)NULL);
+    else execl("/bin/sh", "sh", script, plan, (char *)NULL);
     _exit(127);
   } else if (pid > 0) {
     int st;
@@ -441,15 +447,15 @@ static void install_now(void) {
   }
   sigaction(SIGINT, &old_int, NULL);
   sigaction(SIGQUIT, &old_quit, NULL);
-  printf("\nlulibre-setup: the install %s. Enter goes back to the setup screen.\n",
-         status == 0 ? "is done" : "stopped");
+  const char *what = only_settings ? "writing the settings" : "the install";
+  printf("\nlulibre-setup: %s %s. Enter goes back to the setup screen.\n", what, status == 0 ? "is done" : "stopped");
   fflush(stdout);
   int c;
   while ((c = getchar()) != EOF && c != '\n') {
   }
   nc = terminal_start();
-  if (status == 0) say(theme.ok, "the install is done; its output is on the shell's screen again after quitting");
-  else say(theme.error, "the install stopped (exit %d); its output is on the shell's screen again after quitting", status);
+  if (status == 0) say(theme.ok, "%s is done; its output is on the shell's screen again after quitting", what);
+  else say(theme.error, "%s stopped (exit %d); its output is on the shell's screen again after quitting", what, status);
 }
 
 /* ---- keys ---- */
@@ -543,7 +549,7 @@ static int act(struct item *it, uint32_t k) {
   case K_ACTION:
     if (k != NCKEY_ENTER) break;
     if (!strcmp(it->key, "quit")) return 1;
-    install_now();
+    install_now(!strcmp(it->key, "write"));
     break;
   }
   return 0;
@@ -603,7 +609,8 @@ int main(int argc, char **argv) {
       for (int s = 0; s < page; s++) cur = step_visible(cur, 1);
     else if (k == (KEY_CTRL | 'u') || k == NCKEY_PGUP)
       for (int s = 0; s < page; s++) cur = step_visible(cur, -1);
-    else if (k == 'i') install_now();
+    else if (k == 'i') install_now(0);
+    else if (k == 'w') install_now(1);
     else if (k == 'x' || k == NCKEY_DEL) {
       if (it->kind != K_HEAD && it->kind != K_ACTION && it->kind != K_CHECK) set_value(it, NULL);
     } else if (k == 'e') {

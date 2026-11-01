@@ -60,7 +60,7 @@ scrnman.create("beside", {
 --- Opens the screen on the waiting files.
 function M.open()
   if (setman.get("path.sync") or "") == "" then
-    return uiman.notify('no sync folder is set: lulib.opt["path.sync"] = "~/some/folder" in init.lua', "error")
+    return uiman.notify('no sync folder is set: :sync DIR, or :config sets path.sync and w keeps it in options.lua', "error")
   end
   store.reload()
   local was = uiman.filter() -- the list is given back as it was found

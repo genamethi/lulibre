@@ -384,6 +384,7 @@ int tui_run(struct app *app) {
   log_to_stderr(0); /* the terminal is ours; the console shows the log */
   log_on_entry(log_arrived, app);
   log_debug("interface up: %d books listed from %s", t->rows.n, app_str(app, S_LIBRARY));
+  if (app->answered) tui_msg(t, 0, "your answers hold for this run: :config, then w, keeps them in options.lua");
   work_start(app);   /* from here on the library and the indexer are the background thread's */
   bridge_start(app); /* and Lua runs on its own thread */
   uv_run(loop, UV_RUN_DEFAULT);

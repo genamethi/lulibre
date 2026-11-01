@@ -2,7 +2,11 @@
 # lulibre's setup: installs what the plan (setup.conf) asks for. lulibre-setup
 # writes the plan and runs this script in the terminal; it runs on its own too:
 #
-#   sh setup/install.sh [-n] [PLAN]      -n: show the commands, run none
+#   sh setup/install.sh [-n] [-s] [PLAN]
+#
+#   -n: show the commands, run none
+#   -s: only the settings: options.lua, and an init.lua that loads it; nothing
+#       is installed
 #
 # Every command is shown before it runs. sudo is used only by the steps that
 # write outside the user's files: a system-level install, luv in the
@@ -11,10 +15,15 @@ set -eu
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 dry=no
-if [ "${1:-}" = -n ]; then
-  dry=yes
+only_settings=no
+while :; do
+  case ${1:-} in
+  -n) dry=yes ;;
+  -s) only_settings=yes ;;
+  *) break ;;
+  esac
   shift
-fi
+done
 plan=${1:-$here/setup.conf}
 
 die() {
@@ -38,8 +47,10 @@ opt() {
 . "$plan"
 
 missing=
-[ -n "$LEVEL" ] || missing="$missing level;"
-[ -n "$PIXI" ] || missing="$missing pixi;"
+if [ "$only_settings" = no ]; then
+  [ -n "$LEVEL" ] || missing="$missing level;"
+  [ -n "$PIXI" ] || missing="$missing pixi;"
+fi
 [ -n "$LIBRARY" ] || missing="$missing library;"
 [ -n "$SERVER" ] || missing="$missing content server;"
 if [ "$SERVER" = yes ]; then
@@ -48,10 +59,11 @@ if [ "$SERVER" = yes ]; then
   [ -n "$PASSWORD_FILE" ] || missing="$missing the password file;"
 fi
 [ -z "$missing" ] || die "not set in the plan:${missing%;}"
-case $LEVEL in user | system) ;; *) die "LEVEL is user or system, not '$LEVEL'" ;; esac
+[ "$only_settings" = yes ] || case $LEVEL in user | system) ;; *) die "LEVEL is user or system, not '$LEVEL'" ;; esac
 [ -f "$LIBRARY/metadata.db" ] || die "$LIBRARY holds no metadata.db: not a calibre library"
 if [ "$SERVER" = yes ] && [ ! -f "$PASSWORD_FILE" ]; then die "no password file at $PASSWORD_FILE"; fi
 
+prefix=$PREFIX
 case $LEVEL in
 user) prefix=${PREFIX:-$HOME/.local} ;;
 system) prefix=${PREFIX:-/usr/local} ;;
@@ -100,6 +112,7 @@ step "the build"
 make -s -C "$here" -q build/lulibre || die "build/lulibre is older than its sources: make builds it again"
 echo "build/lulibre is up to date"
 
+if [ "$only_settings" = no ]; then
 if [ "$PIXI" = yes ]; then
   step "pixi"
   if ! command -v pixi >/dev/null 2>&1; then
@@ -136,9 +149,10 @@ if [ "$SERVER" = yes ] && [ "$PASSWORD_CHMOD" = yes ]; then
   step "the password file"
   run chmod 600 "$PASSWORD_FILE"
 fi
+fi
 
-# the settings go to lua/config/options.lua in the configuration folder,
-# which init.lua loads; init.lua is written only where there is none
+# the settings go to lua/config/options.lua in the configuration folder, and
+# init.lua loads it: written where there is none, the line added where it lacks it
 step "the settings"
 opt path.library "$LIBRARY"
 if [ "$SERVER" = yes ]; then
@@ -152,7 +166,8 @@ else
 fi
 echo "the values for lua/config/options.lua (an empty one goes back to lulibre's default):"
 sed 's/^/  /' "$optfile"
-run "$lu" --clean run "$here/setup/options.lua" "$optfile" "$here/setup/init.lua"
+run "$lu" --clean run "$here/setup/options.lua" "$optfile"
+[ "$only_settings" = no ] || exit 0
 
 step "luv"
 if [ "$dry" = no ]; then

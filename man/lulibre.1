@@ -178,7 +178,7 @@ lists the rest, with the keys.
 The calibre library. Otherwise the setting
 .B path.library
 (in
-.IR init.lua ,
+.IR options.lua ,
 or the saved state), else
 .BR LULIBRE_LIBRARY ,
 else the current directory when it is a library; else, on a terminal,
@@ -221,10 +221,25 @@ negates.
 .SH FILES
 .TP
 .I ~/.config/lulibre/init.lua
-Plain Lua, run at startup as the first task; lulibre never writes into
-it, and lulibre-setup writes one only where there is none. Modules of your own go in
+Plain Lua, run at startup as the first task. Modules of your own go in
 .I lua/
-beside it.
+beside it. Asked to,
+.B w
+in
+.B :config
+and lulibre-setup create it, or add the line that loads
+.IR lua/config/options.lua ;
+nothing else writes it.
+.TP
+.I ~/.config/lulibre/lua/config/options.lua
+The standard file for settings, and the one
+.B :config
+writes: set through
+.BR lulib.opt ,
+loaded by
+.B require \(dqconfig.options\(dq
+in
+.IR init.lua .
 .TP
 .I ~/.local/state/lulibre/settings
 The saved settings, read and written while the setting

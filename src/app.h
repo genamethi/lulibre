@@ -20,6 +20,7 @@ struct app {
   char *state_path;          /* the saved settings: fixed at start */
   struct db db;
   int db_ready;
+  int answered; /* settings came from the questions at start (first.c) */
   struct library *library; /* calibre's library as a resource (library/library.h); the background thread's */
   uv_loop_t *loop;      /* the interface's loop; the only loop when headless */
   uv_loop_t *wloop;     /* the background thread's loop (work.h); the main loop when headless */

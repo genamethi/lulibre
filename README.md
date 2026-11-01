@@ -44,27 +44,53 @@ At run time:
 
 ## Set up
 
+    build/lulibre-setup       # one screen for what follows; runs from the build folder
+
+On that screen, **Write options.lua** (`w`) writes your choices and installs
+nothing; **Install now** (`i`) installs lulibre first. Or by hand:
+
     make install BINDIR=~/.local/bin DATADIR=~/.local/share   # or: sudo make install
 
-lulibre needs only to know where the library is: `-L DIR`,
-`$LULIBRE_LIBRARY`, or in `~/.config/lulibre/init.lua`. With none of them,
-started on a terminal, it asks whether to open the library calibre opened
-last, then whether to send changes through calibre's content server when
-one is running (with its user and password file). The answers hold for
-that run. In init.lua:
+lulibre needs no configuration to start. init.lua is plain Lua, so you can keep
+your settings in any file, or in several. The standard layout, and the only one
+the configuration screen works with, is `lua/config/options.lua`, loaded from
+init.lua, both in `~/.config/lulibre/`:
 
 ```lua
-setman.set("path.library", "~/calibre-library")
-setman.set("server", "http://127.0.0.1:8080")          -- optional: calibre's content server
-setman.set("user", "me")
-setman.set("path.password", "~/.config/calibre/password-file")
+-- init.lua
+require "config.options"
 ```
+
+```lua
+-- lua/config/options.lua
+local opt = lulib.opt
+opt.path.library = "~/calibre-library"
+opt.server = "http://127.0.0.1:8080"          -- optional: calibre's content server
+opt.user = "me"
+opt.path.password = "~/.config/calibre/password-file"
+```
+
+You don't have to write these by hand. In lulibre, `:config` lists every
+setting; `w` writes the ones you changed to options.lua, creates init.lua with
+that line (or adds the line to yours, keeping `init.lua.bak`), and asks first.
+`a` also adds every other setting, commented out with its default. Another
+scheme is a short script: see [Configuration](docs/configuration.md#keeping-settings-elsewhere).
+
+With no library set (`-L DIR`, `$LULIBRE_LIBRARY` or `path.library`), started
+on a terminal, lulibre asks whether to open the library calibre opened last,
+then whether to send changes through calibre's content server when one is
+running (with its user and password file). The answers hold for that run;
+`w` in `:config` keeps them.
 
 When calibre's content server has the library open, changes go through it;
 when nothing has it open, straight to the folder. lulibre never reads the
 password: calibredb gets the file's name.
 
-    lulibre index                 # first run: a few seconds per thousand files
+    lulibre index                 # or just start lulibre, which reads new files itself
+
+Reading a library takes minutes, because files with no usable text go through
+OCR: 2,566 books took 135 s here, on 24 threads with the files already in the
+disk cache.
 
 ## Use
 
@@ -108,7 +134,7 @@ In the interface:
 - **Fix one thing on many books.** Mark them, `e`, `Enter` on *tags*, type
   `+math/topology, -misc`, `w`.
 
-Anything else is Lua, in init.lua, a module of yours, or typed at `:lua`:
+Anything else is Lua, in a module init.lua requires, or typed at `:lua`:
 
 ```lua
 for _, book in ipairs(require("bookman").books("no:date has:doi")) do
@@ -123,8 +149,8 @@ end
 - Inside tmux the page-image preview (`P`) is drawn with block characters;
   tmux does not pass graphics through. Run directly in a terminal with the
   kitty graphics protocol, such as ghostty, lulibre asks notcurses for real
-  pixels (tested in ghostty); `setman.set("blitter", "sextant")` forces block
-  characters if it misbehaves.
+  pixels (tested in ghostty); `opt.blitter = "sextant"` in options.lua forces
+  block characters if it misbehaves.
 
 ## Documentation
 

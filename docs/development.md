@@ -25,11 +25,11 @@ one build installs under any prefix.
 
 Setup is separate from the build. `build/lulibre-setup` (src/setup/) keeps
 the choices in `setup.conf`, and `setup/install.sh` carries them out;
-`sh setup/install.sh -n` prints the commands without running them. The
-settings chosen go to `lua/config/options.lua` in the configuration
-folder, through `setup/options.lua`; where there is no init.lua, setup
-writes `setup/init.lua` there with its `require "config.options"`
-uncommented.
+`sh setup/install.sh -n` prints the commands without running them and `-s`
+does the settings alone. The settings chosen go to `lua/config/options.lua`
+in the configuration folder, through `setup/options.lua`, which calls the
+writer the Configuration tab calls too, `lua/lulib/_options.lua`: it also has
+init.lua load the file, creating one if needed.
 
 After building, `make` prints the version and md5 of the new binary next to
 those of the `lulibre` on PATH. `make status` prints the same on its own.
@@ -210,7 +210,7 @@ Where systemd keeps cores, `coredumpctl info lulibre` has the same stack.
     src/library/    calibre's library as a resource: its holder, operations, the journal, the write core's values
     src/match/      text folding, fuzzy matching, the similarity measure
     src/tui/        the interface: windows, views, keymap, commands, pickers, console, the edit form, Markdown laid out (md4c)
-    src/setup/      lulibre-setup (setup/ holds install.sh, the settings writer and the default init.lua)
+    src/setup/      lulibre-setup (setup/ holds install.sh and what runs the settings writer)
     src/lua/        Lua state, task scheduler, the threads, calls into the interface, the libraries (one l_*.c each)
     src/cmd/        command-line front ends
     lua/            the modules written in Lua: expr, lex, iter, sql, wit, net, trust, exprman, cmd

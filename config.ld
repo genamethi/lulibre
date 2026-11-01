@@ -55,6 +55,7 @@ file = {
   "lua/lulib/_taxonomy.lua",
   "lua/lulib/_template.lua",
   "lua/lulib/_config.lua",
+  "lua/lulib/_options.lua",
   "lua/lulib/_uiman.lua",
   "lua/lulib/_eval.lua",
   "lua/lulib/_prelude.lua",

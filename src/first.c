@@ -2,9 +2,9 @@
  * library set (only when stdin and stderr are terminals): the library,
  * when calibre's settings name the one it opened last; then, that taken,
  * calibre's content server, when one is running, with its user and
- * password file when it asks for them. An answer holds for this run, as
- * the command line's would: nothing is kept, so it is asked again the next
- * time nothing is set. */
+ * password file when it asks for them. An answer holds for this run, as a
+ * setting changed in the interface does: :config's w writes it to options.lua
+ * (lulib._options). Otherwise it is asked again the next time nothing is set. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,10 +44,11 @@ static int yes(const char *question) {
 /* the answer, for this run */
 static void take(struct app *app, const char *name, const char *value) {
   char *err = NULL;
-  if (settings_set(app->settings, name, value, FROM_CLI, &err)) {
+  if (settings_set(app->settings, name, value, FROM_API, &err)) {
     warnf("%s", err);
     free(err);
   }
+  app->answered = 1;
 }
 
 int first_library(struct app *app) {

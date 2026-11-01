@@ -118,7 +118,7 @@ void app_open_db(struct app *app) {
     if (env && env[0]) settings_set(app->settings, "path.library", env, FROM_CLI, &err);
     else if (access("metadata.db", R_OK) == 0) settings_set(app->settings, "path.library", ".", FROM_CLI, &err);
     else if (first_library(app)) first_server(app); /* nothing was set: the server too */
-    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or setman.set(\"path.library\", DIR) in init.lua");
+    else die("no library: pass -L DIR, set $LULIBRE_LIBRARY, or set opt.path.library in lua/config/options.lua (build/lulibre-setup writes it)");
   }
   const char *library = app_str(app, S_LIBRARY);
   char *real = realpath(library, NULL);

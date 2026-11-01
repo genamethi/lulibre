@@ -168,7 +168,7 @@ each screen made with `tab = true` ([the API](api.md)); clicking one, or
 | `restart-scripts` | a new Lua state; init.lua runs first, as at start |
 | `move` `search` `prompt` `fold` `split` `only` `preview` `pick` `source` | the commands the keys above run, for binding your own keys (`:help` lists each command's arguments) |
 | `echo text` | show a message |
-| `config` | the settings, in the bar's Configuration tab ([configuration](configuration.md)) |
+| `config [write [all]]` | the settings, in the bar's Configuration tab; `w` there, or `write`, puts them in options.lua ([configuration](configuration.md)) |
 | `units [apply]` | lulibre's systemd units around calibre's content server ([workflows](workflows.md#calibres-server-and-lulibres-systemd-units)) |
 | `help` · `help plain` · `quit` | the same as `?` · the keys and commands as one long page · the same as `q`, `ZZ` |
 

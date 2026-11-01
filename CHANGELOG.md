@@ -25,9 +25,10 @@ Versions follow [semantic versioning](https://semver.org). The version is set in
 - Added `store.add` and `store.remove`: one call for many books, the journal and undo inside it. Added `store.drop` and `store.set_aside`. `store.command` says when it may run and gives back what the command printed. `uiman.form` takes `sections` for a dialog.
 - Fixed `store.command` crashing lulibre when the command had run.
 - Changed the command line to take precedence over settings in init.lua. A setting changed while lulibre runs replaces the command line's value.
-- Changed a start with no library set to ask on a terminal, for that run. Answers are not kept.
+- Changed a start with no library set to ask on a terminal, for that run. Answers are not kept unless written with `w` in the Configuration tab.
 - Added `lulib.opt`, the settings as a table: assigning a setting sets it, reading one gets its value.
-- Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua. It writes an init.lua only when there is none.
+- Changed lulibre-setup to write settings to `lua/config/options.lua` instead of init.lua, and added **Write options.lua** to its screen, which installs nothing.
+- Added `w` and `a` to the Configuration tab, and `:config write [all]`: the settings go to options.lua, and init.lua is created with `require "config.options"`, or gets that line.
 - Fixed quitting during indexing waiting for every OCR already started, for minutes on a frozen screen. The terminal comes back first, and OCR stops.
 - Fixed the list, the preview and `:sync DIR` waiting behind OCR. Each tesseract now uses one thread, and the indexer leaves workers free.
 - Fixed the indexer holding the database's write lock while no file finished, which could make reading calibre's records fail.

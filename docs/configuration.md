@@ -26,29 +26,66 @@ A name no setting has, given with `-o` or in the saved state, is held
 while init.lua starts, for a setting a script makes (`setman.create`,
 [the API](api.md)); one nothing made is said, and lulibre goes on.
 
-`~/.config/lulibre/init.lua` is plain Lua. lulibre never writes into it;
-lulibre-setup writes one only where there is none.
+`~/.config/lulibre/init.lua` is plain Lua, so you can keep your settings in any
+file, or in several ([below](#keeping-settings-elsewhere)). The standard layout,
+and the only one the Configuration tab and lulibre-setup work with, is
+`lua/config/options.lua` in the configuration folder, which init.lua loads:
 
 ```lua
-setman.set("path.library", "~/calibre-library")
-setman.set("ocr", "auto")
+-- init.lua
+require "config.options"
 ```
 
-`lulib.opt` is the settings as a table, as Neovim's `vim.opt`: a setting
-read is `setman.get`, a setting assigned is `setman.set`.
-
 ```lua
--- lua/config/options.lua, loaded by `require "config.options"` in init.lua
+-- lua/config/options.lua
 local opt = lulib.opt
 opt.path.library = "~/calibre-library"
 opt.ocr = "auto"
 opt.path.log = os.getenv("HOME") .. "/lulibre.log"
 ```
 
-Any other name is a field of the table like any other, so options of your
-own can be kept there too. lulibre-setup writes the values chosen on its
-screen to `lua/config/options.lua`. With `persistent` true, what this file
-sets is set again at each start, over the saved state.
+`lulib.opt` is the settings as a table, as Neovim's `vim.opt`: a setting
+read is `setman.get`, a setting assigned is `setman.set`. Any other name is
+a field of the table like any other, so options of your own can be kept
+there too. With `persistent` true, what this file sets is set again at each
+start, over the saved state.
+
+Two things write this file, and each has init.lua load it. They do so only
+when you ask: lulibre doesn't touch either file otherwise.
+
+- `w` in `:config` (or `:config write`) writes what you changed: every setting
+  not at its default whose value the file doesn't give already, except what the
+  command line gave for its run. A setting set back to its default loses its
+  line. `a` (or `:config write all`) does that, then adds every other setting,
+  commented out with its default.
+- **Write options.lua** on `build/lulibre-setup`'s screen, or `sh
+  setup/install.sh -s` on its plan, writes the choices made there.
+
+A line that sets a setting is replaced only when its value changes, so one
+written as an expression stays while it gives the same value; other lines
+are kept, and `options.lua.bak` has the file as it was. Where there is no
+init.lua, one is created holding only that `require`. In an init.lua without
+it, a commented-out `require "config.options"` is uncommented, or else the
+line goes at the end; `init.lua.bak` has the file as it was.
+
+### Keeping settings elsewhere
+
+Set them from any file init.lua runs, and don't use `w` and `a`: they write
+only the standard layout, and the tab says `set` for a value that came from
+your own file. To write your own scheme, `setman.ls` and `setman.info` give
+every setting, its value and where the value came from. This command keeps
+what was changed in a file of your choosing, which init.lua can `dofile`:
+
+```lua
+cmdman.create("keep", function()
+  local out = assert(io.open(setman.get("path.config") .. "/mine.lua", "a"))
+  for _, name in ipairs(setman.ls()) do
+    local i = setman.info(name)
+    if i.from == "set" then out:write(("setman.set(%q, %q)\n"):format(name, tostring(i.value))) end
+  end
+  out:close()
+end, { desc = "append the settings changed to mine.lua" })
+```
 
 Every setting Lua can set takes effect at once, except the files the
 index opens with (`path.indexdb` and the files beside it), which are read
@@ -68,7 +105,7 @@ removed.
 
 | Setting | Default | |
 |---|---|---|
-| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library; else, on a terminal, lulibre asks whether to open the library calibre opened last (`library_path` in calibre's `global.py.json`), then about calibre's content server when one is running (found among the processes, with the port it listens on); the answers hold for that run |
+| `path.library` | | the calibre library folder; if not set, `$LULIBRE_LIBRARY`, else the current directory when it is a library; else, on a terminal, lulibre asks whether to open the library calibre opened last (`library_path` in calibre's `global.py.json`), then about calibre's content server when one is running (found among the processes, with the port it listens on); the answers hold for that run, and `w` in `:config` keeps them |
 | `path.indexdb` | | the index database; by default `<library's name>-<hash>.db` under `~/.local/share/lulibre/` |
 | `path.journaldb` `path.customdb` `path.witdb` | | the journal of changes, your own `#fields`, the wits waiting for review; by default beside the index, `<index>.journal.db` and so on |
 | `path.netdb` | | the online answers, for every library; by default `~/.local/share/lulibre/net.db` |
@@ -106,7 +143,9 @@ below, what the setting under the cursor does, its default and what it
 takes. `e` or Enter types a value, Space takes the next of its choices
 (true or false), `d` gives it its default back and `c` shows only the
 settings not at their default. A change takes effect at once and holds
-for the run, or is kept with `persistent` true.
+for the run, or is kept with `persistent` true; `w` and `a` write to
+options.lua, as above. The Set column says `options.lua` for a value that
+file gives, and `set` for one that nothing will keep.
 
 ## Colours
 

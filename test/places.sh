@@ -240,6 +240,27 @@ sleep 0.3
 $T send-keys -t s d
 sleep 0.5
 check "d gives one its default back" sh -c "! $T capture-pane -p -t s | grep -q '^.ocr  *always'"
+# w: the settings into options.lua, and init.lua loading it
+$T send-keys -t s w
+wait_for "add its require to init.lua" || true
+check "w asks, saying what it will write, and that init.lua gets the require" sh -c "$T capture-pane -p -t s | grep -q 'write pages, mine.colour to lua/config/options.lua, and add its require to init.lua'"
+$T send-keys -t s n Enter
+wait_for "nothing written" || true
+check "n writes nothing" sh -c "[ ! -e '$t/config/lulibre/lua/config/options.lua' ]"
+$T send-keys -t s w
+wait_for "add its require to init.lua" || true
+$T send-keys -t s y Enter
+wait_for "written:" || true
+check "y writes the setting there" grep -q '^opt.pages = 9$' "$t/config/lulibre/lua/config/options.lua"
+check "a dotted setting made in Lua, in brackets" grep -q '^opt\["mine.colour"\] = "blue"$' "$t/config/lulibre/lua/config/options.lua"
+check "not what the command line gave" sh -c "! grep -q 'path.library' '$t/config/lulibre/lua/config/options.lua'"
+check "and init.lua loads it" grep -q '^require "config.options"$' "$t/config/lulibre/init.lua"
+check "init.lua.bak has the file before" sh -c "! grep -q 'config.options' '$t/config/lulibre/init.lua.bak'"
+sleep 0.3
+check "the row says options.lua now" sh -c "$T capture-pane -p -t s | grep -q '^.pages  *9  .*options.lua'"
+$T send-keys -t s w
+wait_for "says all this already" || true
+check "w with nothing new says so" sh -c "$T capture-pane -p -t s | grep -q 'says all this already'"
 $T send-keys -t s q
 sleep 0.3
 $T send-keys -t s ":set pages" Enter
