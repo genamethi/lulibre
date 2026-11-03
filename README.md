@@ -174,6 +174,4 @@ covers the command line.
 ## License
 
 lulibre is under the Apache License 2.0 with LLVM Exceptions
-(`Apache-2.0 WITH LLVM-exception`): see [LICENSE](LICENSE). The libraries
-it links keep their own licenses. MuPDF's is the AGPL (version 3 or later),
-so a lulibre binary built with it is distributed under the AGPL's terms.
+(`Apache-2.0 WITH LLVM-exception`): see [LICENSE](LICENSE).
